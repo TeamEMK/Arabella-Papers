@@ -101,9 +101,12 @@ if (!isServerless) {
     // Report at boot rather than waiting for the first request to reveal a
     // broken database.
     ensureSchema().then(
-      r => console.log(r.created
-        ? `   Database: schema created (${r.statements} statements)`
-        : '   Database: schema already present'),
+      r => {
+        console.log(`   Database: ${r.created ? 'schema created' : 'schema already present'}`);
+        console.log(r.admin.seeded
+          ? `   Admin:    created ${r.admin.email}`
+          : `   Admin:    not created (${r.admin.reason})`);
+      },
       err => console.error('   Database: schema setup FAILED —', err.message),
     );
   });

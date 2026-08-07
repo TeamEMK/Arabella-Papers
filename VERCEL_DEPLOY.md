@@ -106,6 +106,8 @@ The default admin user is created along with the tables.
    | `DB_PASSWORD` | from `MYSQL_PUBLIC_URL` |
    | `DB_NAME` | `railway` — must match whichever database you loaded the schema into in Step 2 |
    | `SESSION_SECRET` | long random string (see below) |
+   | `ADMIN_EMAIL` | `admin@arabella.com` |
+   | `ADMIN_PASSWORD` | a strong password you choose — this becomes your login |
    | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | `akhileshvyas@reactwebappav.iam.gserviceaccount.com` |
    | `GOOGLE_PRIVATE_KEY` | `"-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----"` |
    | `DRIVE_FOLDER_ID` | your Drive folder ID |
@@ -120,8 +122,13 @@ Generate a session secret with:
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
-Default login is `admin@arabella.com` / `admin123` — **change it right after the
-first login.**
+Your login is the `ADMIN_EMAIL` / `ADMIN_PASSWORD` you just set. The account is
+created on the first request, and only while the `users` table is empty — it is
+never re-created or reset afterwards, so changing `ADMIN_PASSWORD` later does
+nothing. Change passwords through the app once you are in.
+
+No password or hash lives in the repo, so read access to the code grants no
+login.
 
 ---
 

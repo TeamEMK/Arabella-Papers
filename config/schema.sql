@@ -173,8 +173,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 -- =============================================
 -- DEFAULT ADMIN USER
--- password: admin123
--- Change it immediately after the first login — this hash is public.
+-- Deliberately not seeded here. A password hash committed to the repo is a
+-- password anyone with repo access knows, and rewriting history does not take
+-- it back. config/initDb.js creates the first admin from ADMIN_EMAIL and
+-- ADMIN_PASSWORD instead, hashing at runtime.
 -- =============================================
-INSERT IGNORE INTO users (emp_id, username, email, password, role, domain) VALUES
-('EMP001', 'Admin', 'admin@arabella.com', '$2a$10$tzoe.gHU168/Vvh0eM7Wg.DMIw2raSftNke.4GnIV9qcj.z5OnQ4a', 'SuperAdmin', 'Head');

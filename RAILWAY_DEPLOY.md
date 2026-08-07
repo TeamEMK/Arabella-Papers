@@ -29,6 +29,9 @@ DB_NAME          = <from MySQL MYSQL_DATABASE>
 
 SESSION_SECRET   = any_random_long_string_here
 
+ADMIN_EMAIL      = admin@arabella.com
+ADMIN_PASSWORD   = a_strong_password_you_choose
+
 GOOGLE_SERVICE_ACCOUNT_EMAIL = akhileshvyas@reactwebappav.iam.gserviceaccount.com
 GOOGLE_PRIVATE_KEY = "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
 DRIVE_FOLDER_ID  = YOUR_GOOGLE_DRIVE_FOLDER_ID
@@ -42,15 +45,25 @@ PORT             = 3000
 ## Step 4: Schema — nothing to do
 
 The app creates its own tables. `config/initDb.js` runs `config/schema.sql` on
-first boot if the database is empty, and skips it otherwise. The default admin
-user is created along with the tables.
+first boot if the database is empty, and skips it otherwise.
+
+The first admin comes from `ADMIN_EMAIL` / `ADMIN_PASSWORD`, hashed at runtime —
+there is no password or hash in the repo, so nobody gets a working login just by
+reading the code. It is created only while the `users` table is empty; after
+that, change passwords through the app.
 
 The boot log tells you which happened:
 
 ```
-Database: schema created (7 statements)
+Database: schema created
+Admin:    created admin@arabella.com
+
 Database: schema already present
+Admin:    not created (users already exist)
 ```
+
+`Admin: not created (ADMIN_PASSWORD not set)` means the tables exist but nobody
+can log in — set the variable and restart.
 
 ---
 
@@ -58,9 +71,7 @@ Database: schema already present
 
 Railway auto-deploys when you push to GitHub. Or click **Deploy** manually.
 
-Default admin login:
-- **Email**: `admin@arabella.com`
-- **Password**: `admin123`
+Log in with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` you set in Step 3.
 
 ⚠️ Change this password immediately after first login!
 
