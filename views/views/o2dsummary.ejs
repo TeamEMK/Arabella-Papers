@@ -1,0 +1,305 @@
+<div id="analyticsRoot"></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+document.getElementById('analyticsRoot').innerHTML = `
+<div class="container-fluid py-4">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-chart-pie me-2"></i>O2D Analytics Summary</h3>
+    <button class="btn btn-outline-dark smooth-ui" onclick="fetchAnalytics()"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="row g-3 mb-4" id="kpi_row">
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #0d6efd;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Total Orders</h6><h3 class="fw-bold text-primary mb-0" id="kpi_total">--</h3></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #198754;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Dispatched</h6><h3 class="fw-bold text-success mb-0" id="kpi_dispatched">--</h3></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #ffc107;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">In Progress</h6><h3 class="fw-bold text-warning mb-0" id="kpi_inprogress">--</h3></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #dc3545;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Cancelled</h6><h3 class="fw-bold text-danger mb-0" id="kpi_cancelled">--</h3></div></div></div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body p-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Start Date</label><input type="date" id="an_start" class="form-control form-control-sm" onchange="anApplyFilters()"></div>
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">End Date</label><input type="date" id="an_end" class="form-control form-control-sm" onchange="anApplyFilters()"></div>
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Team</label><select id="an_filterTeam" class="form-select form-select-sm" onchange="anApplyFilters()"><option value="">All Teams</option><option value="India Team">India Team</option><option value="Cassie">Cassie</option></select></div>
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Designer</label><select id="an_filterDesigner" class="form-select form-select-sm" onchange="anApplyFilters()"><option value="">All</option></select></div>
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Dealer</label><select id="an_filterDealer" class="form-select form-select-sm" onchange="anApplyFilters()"><option value="">All</option></select></div>
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Courier</label><select id="an_filterCourier" class="form-select form-select-sm" onchange="anApplyFilters()"><option value="">All</option></select></div>
+        <div class="col-12 text-end"><button class="btn btn-sm btn-secondary" onclick="anClearFilters()">Clear</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-header text-dark fw-bold"><i class="fas fa-palette me-2"></i>Design Status</div>
+        <div class="card-body d-flex align-items-center justify-content-center" style="height:250px;"><canvas id="chart_designStatus"></canvas></div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-header text-dark fw-bold"><i class="fas fa-user-check me-2"></i>Client Approval</div>
+        <div class="card-body d-flex align-items-center justify-content-center" style="height:250px;"><canvas id="chart_clientStatus"></canvas></div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-header text-dark fw-bold"><i class="fas fa-shipping-fast me-2"></i>Dispatch Status</div>
+        <div class="card-body d-flex align-items-center justify-content-center" style="height:250px;"><canvas id="chart_dispatchStatus"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MONTHLY TABLE -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header text-dark fw-bold"><i class="fas fa-calendar-alt me-2"></i>Monthly Breakdown</div>
+    <div class="card-body p-0">
+      <div class="table-responsive" style="max-height:300px; overflow-y:auto;">
+        <table class="table table-hover table-striped mb-0 text-nowrap">
+          <thead class="table-dark"><tr>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Month</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Total</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">India Team</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Cassie</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Dispatched</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Pending</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Cancelled</th>
+          </tr></thead>
+          <tbody id="an_monthlyBody"><tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ORDERS TABLE -->
+  <div class="card shadow-sm">
+    <div class="card-header text-dark fw-bold d-flex justify-content-between align-items-center">
+      <span><i class="fas fa-table me-2"></i>All Orders Detail</span>
+      <span class="badge bg-primary" id="an_count_badge">0 orders</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive" style="max-height:300px; overflow-y:auto;">
+        <table class="table table-hover table-sm mb-0 text-nowrap">
+          <thead class="table-dark"><tr>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Date</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">ID</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Dealer</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Client</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Team</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Designer</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Design Status</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Client Status</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Dispatch</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Courier</th>
+            <th style="position:sticky;top:0;background:#212529;color:white;">Docket</th>
+          </tr></thead>
+          <tbody id="an_tbody"><tr><td colspan="11" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+// ── CHARTS ──
+var an_charts = {};
+var an_all = [], an_filtered = [];
+
+async function fetchAnalytics() {
+  try {
+    const res = await fetch('/api/dashboards/analytics');
+    const json = await res.json();
+    an_all = json.data || [];
+    an_populateFilters(an_all);
+    anApplyFilters();
+  } catch(e) { console.error(e); }
+}
+fetchAnalytics();
+
+function an_populateFilters(data) {
+  const designers = new Set(), dealers = new Set(), couriers = new Set();
+  data.forEach(o => {
+    if(o.Designer) designers.add(o.Designer);
+    if(o.Dealer) dealers.add(o.Dealer);
+    if(o.Courier) couriers.add(o.Courier);
+  });
+  an_fillSelect('an_filterDesigner', designers);
+  an_fillSelect('an_filterDealer', dealers);
+  an_fillSelect('an_filterCourier', couriers);
+}
+function an_fillSelect(id, set) {
+  const s = document.getElementById(id); if(!s) return;
+  const cur = s.value; s.innerHTML = '<option value="">All</option>';
+  Array.from(set).filter(Boolean).sort().forEach(v => { const o=document.createElement('option'); o.value=v; o.textContent=v; s.appendChild(o); });
+  s.value = cur;
+}
+
+function anApplyFilters() {
+  const team = (document.getElementById('an_filterTeam')||{}).value||'';
+  const designer = (document.getElementById('an_filterDesigner')||{}).value||'';
+  const dealer = (document.getElementById('an_filterDealer')||{}).value||'';
+  const courier = (document.getElementById('an_filterCourier')||{}).value||'';
+  const startV = (document.getElementById('an_start')||{}).value||'';
+  const endV = (document.getElementById('an_end')||{}).value||'';
+
+  an_filtered = an_all.filter(o => {
+    if(!o || !o.ID) return false;
+    let dm = true;
+    if(startV || endV) {
+      const raw = o.RawDate || o.Date;
+      const d = raw ? new Date(raw) : null;
+      if(d && !isNaN(d)) {
+        d.setHours(0,0,0,0);
+        if(startV && d < new Date(startV)) dm = false;
+        if(endV && d > new Date(endV)) dm = false;
+      } else dm = false;
+    }
+    return dm &&
+      (!team || (o.Team||'') === team) &&
+      (!designer || (o.Designer||'').toLowerCase() === designer.toLowerCase()) &&
+      (!dealer || (o.Dealer||'').toLowerCase() === dealer.toLowerCase()) &&
+      (!courier || (o.Courier||'').toLowerCase() === courier.toLowerCase());
+  });
+
+  renderKPIs(an_filtered);
+  renderCharts(an_filtered);
+  renderMonthly(an_filtered);
+  renderTable(an_filtered);
+}
+
+function anClearFilters() {
+  ['an_filterTeam','an_filterDesigner','an_filterDealer','an_filterCourier','an_start','an_end'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  anApplyFilters();
+}
+
+function renderKPIs(data) {
+  const total = data.length;
+  const dispatched = data.filter(o => o.DispatchStatus && o.DispatchStatus.trim() !== '').length;
+  const cancelled = data.filter(o => (o.DesignStatus||'').toLowerCase().includes('cancelled') || (o.ClientStatus||'').toLowerCase().includes('cancel')).length;
+  const inProgress = total - dispatched - cancelled;
+  document.getElementById('kpi_total').textContent = total;
+  document.getElementById('kpi_dispatched').textContent = dispatched;
+  document.getElementById('kpi_inprogress').textContent = Math.max(inProgress,0);
+  document.getElementById('kpi_cancelled').textContent = cancelled;
+}
+
+function renderCharts(data) {
+  // Design Status chart
+  const dsCounts = {};
+  data.forEach(o => { const s=o.DesignStatus||'Unknown'; dsCounts[s]=(dsCounts[s]||0)+1; });
+  renderPieChart('chart_designStatus', dsCounts);
+
+  // Client Status chart
+  const csCounts = {};
+  data.forEach(o => { const s=o.ClientStatus||'Pending'; csCounts[s]=(csCounts[s]||0)+1; });
+  renderPieChart('chart_clientStatus', csCounts);
+
+  // Dispatch Status chart
+  const disCounts = {};
+  data.forEach(o => { const s=o.DispatchStatus||'Not Dispatched'; disCounts[s]=(disCounts[s]||0)+1; });
+  renderPieChart('chart_dispatchStatus', disCounts);
+}
+
+function renderPieChart(canvasId, countsObj) {
+  const labels = Object.keys(countsObj);
+  const values = Object.values(countsObj);
+  const colors = ['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1','#20c997','#fd7e14','#adb5bd','#0dcaf0','#343a40'];
+
+  if(an_charts[canvasId]) {
+    try { an_charts[canvasId].destroy(); } catch(e) {}
+    delete an_charts[canvasId];
+  }
+
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+
+  an_charts[canvasId] = new Chart(canvas, {
+    type: 'pie',
+    data: {
+      labels,
+      datasets: [{ data: values, backgroundColor: colors.slice(0, values.length), borderWidth: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/ctx.chart._metasets[0].total*100)}%)` } }
+      }
+    }
+  });
+}
+
+function renderMonthly(data) {
+  // Group by Month-Year
+  const months = {};
+  data.forEach(o => {
+    const raw = o.RawDate || o.Date;
+    const d = raw ? new Date(raw) : null;
+    if(!d || isNaN(d)) return;
+    const key = d.toLocaleString('default',{month:'short'})+' '+d.getFullYear();
+    if(!months[key]) months[key] = {total:0,india:0,cassie:0,dispatched:0,pending:0,cancelled:0};
+    months[key].total++;
+    if(o.Team === 'India Team') months[key].india++;
+    else months[key].cassie++;
+    if(o.DispatchStatus && o.DispatchStatus.trim()) months[key].dispatched++;
+    else if((o.DesignStatus||'').toLowerCase().includes('cancelled')||(o.ClientStatus||'').toLowerCase().includes('cancel')) months[key].cancelled++;
+    else months[key].pending++;
+  });
+
+  const sorted = Object.entries(months).sort((a,b) => {
+    const da = new Date('1 '+a[0]), db = new Date('1 '+b[0]);
+    return db - da;
+  });
+
+  const tbody = document.getElementById('an_monthlyBody');
+  if(!sorted.length) { tbody.innerHTML = '<tr><td colspan="7" class="text-center">No data</td></tr>'; return; }
+  tbody.innerHTML = sorted.map(([m, v]) => `
+    <tr>
+      <td class="fw-bold">${m}</td>
+      <td><span class="badge bg-primary">${v.total}</span></td>
+      <td>${v.india}</td>
+      <td>${v.cassie}</td>
+      <td><span class="badge bg-success">${v.dispatched}</span></td>
+      <td><span class="badge bg-warning">${v.pending}</span></td>
+      <td><span class="badge bg-danger">${v.cancelled}</span></td>
+    </tr>`).join('');
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('an_tbody');
+  const badge = document.getElementById('an_count_badge');
+  if(badge) badge.textContent = data.length + ' orders';
+  if(!data.length) { tbody.innerHTML = '<tr><td colspan="11" class="text-center">No data found.</td></tr>'; return; }
+
+  tbody.innerHTML = data.map(o => {
+    const ds = o.DesignStatus||'';
+    const cs = o.ClientStatus||'';
+    const disp = o.DispatchStatus||'';
+    const dsBadge = ds ? `<span class="badge ${ds.toLowerCase().includes('cancelled')?'bg-danger':ds.toLowerCase().includes('proofing')?'bg-success':'bg-secondary'}">${ds}</span>` : '';
+    const csBadge = cs ? `<span class="badge ${cs.toLowerCase().includes('final')?'bg-success':cs.toLowerCase().includes('modification')?'bg-warning':'bg-secondary'}">${cs}</span>` : '';
+    const dispBadge = disp ? `<span class="badge bg-info text-dark">${disp}</span>` : '<span class="text-muted small">—</span>';
+    return `<tr>
+      <td><small class="text-muted">${o.Date||''}</small></td>
+      <td class="fw-bold">${o.ID}</td>
+      <td>${o.Dealer||''}</td>
+      <td>${o.Client||''}</td>
+      <td><span class="badge ${o.Team==='Cassie'?'bg-dark':'bg-primary'}">${o.Team||''}</span></td>
+      <td><small>${o.Designer||''}</small></td>
+      <td>${dsBadge}</td>
+      <td>${csBadge}</td>
+      <td>${dispBadge}</td>
+      <td><small>${o.Courier||''}</small></td>
+      <td><small>${o.Docket||''}</small></td>
+    </tr>`;
+  }).join('');
+}
+</script>
+
+<style>
+.kpi-card { border-radius: 8px; }
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important; }
+</style>

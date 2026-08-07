@@ -1,0 +1,206 @@
+<div id="dispRoot"></div>
+<script>
+document.getElementById('dispRoot').innerHTML = `
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0 text-dark fw-bold">Dispatch Dashboard</h3>
+    <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="fetchDispatchData()"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+  </div>
+  <div class="card bg-light-glass mb-4 shadow-sm">
+    <button class="filter-toggle-btn btn-sm py-1 px-3 w-100 d-flex justify-content-between align-items-center rounded p-2" type="button" data-bs-toggle="collapse" data-bs-target="#dspFilterContent">
+      <span class="p-2 fw-bold"><i class="fas fa-filter me-2"></i> Filters & Search</span>
+      <i class="fas fa-chevron-down"></i>
+    </button>
+    <div id="dspFilterContent" class="collapse">
+      <div class="card-body p-2">
+        <div class="row g-2 align-items-end text-dark">
+          <div class="col-12 col-md-4"><label class="form-label fw-bold small mb-0">Search</label><input type="text" id="dsp_search" class="form-control form-control-sm" placeholder="Search by ID, Courier, Docket..." onkeyup="dspApplyFilters()"></div>
+          <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Status</label><select id="dsp_filterStatus" class="form-select form-select-sm" onchange="dspApplyFilters()"><option value="">All</option><option value="Ready">Ready</option><option value="Dispatched">Dispatched</option><option value="Delivered">Delivered</option></select></div>
+          <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Courier</label><select id="dsp_filterCourier" class="form-select form-select-sm" onchange="dspApplyFilters()"><option value="">All</option></select></div>
+          <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Dealer</label><select id="dsp_filterDealer" class="form-select form-select-sm" onchange="dspApplyFilters()"><option value="">All</option></select></div>
+          <div class="col-12 text-end"><button class="btn btn-secondary btn-sm" onclick="dspClearFilters()">Clear</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card bg-light-glass shadow-lg">
+    <div class="card-header bg-transparent border-0"><h5 class="mb-0 text-dark fw-bold"><i class="fas fa-shipping-fast me-2"></i>Dispatch Queue</h5></div>
+    <div class="card-body p-0">
+      <div class="table-responsive" style="max-height:350px;overflow-y:auto;position:relative;">
+        <table class="table table-hover table-striped mb-0 text-nowrap" style="border-collapse:separate;border-spacing:0;">
+          <thead class="table-dark">
+            <tr>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dealer</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Client</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Courier</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Docket No</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Invoice No</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Inv. Amount</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Boxes</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Weight</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Vol. Weight</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Status</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="dsp_tbody"><tr><td colspan="12" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Dispatch Edit Modal -->
+<div class="modal fade" id="dsp_editModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-primary text-white"><h5 class="modal-title">Update Dispatch: <span id="dsp_editId"></span></h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label fw-bold text-dark">Courier Name</label><input type="text" id="dsp_courier" class="form-control" placeholder="e.g., DHL" required></div>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark">Tracking / Docket No.</label><input type="text" id="dsp_docket" class="form-control" placeholder="Tracking #" required></div>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark">Invoice Number</label><input type="text" id="dsp_invoiceNo" class="form-control"></div>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark">Invoice Amount</label><input type="number" id="dsp_invoiceAmount" class="form-control"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark">Boxes</label><input type="number" id="dsp_boxes" class="form-control"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark">Weight (kg)</label><input type="text" id="dsp_weight" class="form-control"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark">Vol. Weight</label><input type="text" id="dsp_volWeight" class="form-control"></div>
+        <div class="col-12"><label class="form-label fw-bold text-dark">Status</label><select id="dsp_status" class="form-select" required><option value="Ready">Ready</option><option value="Dispatched">Dispatched</option><option value="Delivered">Delivered</option></select></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-success" onclick="dsp_submitUpdate()">Update Dispatch</button><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button></div>
+  </div></div>
+</div>
+
+<!-- View Modal -->
+<div class="modal fade" id="dsp_viewModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">Order Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body" id="dsp_viewBody"></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
+`;
+
+var dsp_data = [], dsp_editId = null;
+
+async function fetchDispatchData() {
+  try {
+    const res = await fetch('/api/dashboards/dispatch');
+    const json = await res.json();
+    dsp_data = json.data || [];
+    dsp_populateFilters(dsp_data);
+    dspApplyFilters();
+  } catch(e) { console.error(e); }
+}
+fetchDispatchData();
+
+function dsp_populateFilters(data) {
+  const couriers = new Set(), dealers = new Set();
+  data.forEach(o => { if(o.Dispatch_Courier_Name) couriers.add(o.Dispatch_Courier_Name); if(o.Dealer_name) dealers.add(o.Dealer_name); });
+  dsp_fillSelect('dsp_filterCourier', couriers);
+  dsp_fillSelect('dsp_filterDealer', dealers);
+}
+function dsp_fillSelect(id, set) {
+  const s = document.getElementById(id); if(!s) return;
+  const cur = s.value; s.innerHTML = '<option value="">All</option>';
+  Array.from(set).sort().forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; s.appendChild(o); });
+  s.value = cur;
+}
+function dspApplyFilters() {
+  const status = (document.getElementById('dsp_filterStatus')||{}).value||'';
+  const courier = (document.getElementById('dsp_filterCourier')||{}).value||'';
+  const dealer = (document.getElementById('dsp_filterDealer')||{}).value||'';
+  const search = (document.getElementById('dsp_search')||{}).value||'';
+  const filtered = dsp_data.filter(o => {
+    if(!o) return false;
+    const ds = (o.Dispatch_Status||'').toLowerCase();
+    let sm = true;
+    if(status==='Ready') sm = ds==='';
+    else if(status) sm = ds===status.toLowerCase();
+    return sm &&
+      (!courier || (o.Dispatch_Courier_Name||'').toLowerCase()===courier.toLowerCase()) &&
+      (!dealer || (o.Dealer_name||'').toLowerCase()===dealer.toLowerCase()) &&
+      (!search || JSON.stringify(o).toLowerCase().includes(search.toLowerCase()));
+  });
+  dsp_renderTable(filtered);
+}
+function dspClearFilters() {
+  ['dsp_filterStatus','dsp_filterCourier','dsp_filterDealer','dsp_search'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  dspApplyFilters();
+}
+function dsp_renderTable(data) {
+  const tbody = document.getElementById('dsp_tbody');
+  if(!data.length) { tbody.innerHTML = '<tr><td colspan="12" class="text-center">No orders found.</td></tr>'; return; }
+  tbody.innerHTML = data.map(o => {
+    const s = o.Dispatch_Status||'Ready';
+    let b = 'warning';
+    if(s.toLowerCase().includes('dispatched')) b='info';
+    if(s.toLowerCase().includes('delivered')) b='success';
+    const rd = o.rowData||{};
+    return `<tr>
+      <td class="fw-bold">${o.ID}</td>
+      <td>${o.Dealer_name||''}</td>
+      <td>${o.Client_name||''}</td>
+      <td>${o.Dispatch_Courier_Name||'-'}</td>
+      <td>${o.Docket_No||'-'}</td>
+      <td>${rd['Invoice Number']||'-'}</td>
+      <td>${rd['Invoice Amount']||'-'}</td>
+      <td>${rd['Number of Boxes']||'-'}</td>
+      <td>${rd['Weight']||'-'}</td>
+      <td>${rd['Volumetric Weigh']||'-'}</td>
+      <td><span class="badge bg-${b}">${s}</span></td>
+      <td>
+        <button class="btn btn-sm btn-info me-1" onclick='dsp_openView(${JSON.stringify(rd)})'><i class="fas fa-eye"></i></button>
+        <button class="btn btn-sm btn-primary" onclick="dsp_openEdit('${o.ID}')"><i class="fas fa-shipping-fast"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+function dsp_openView(rowData) {
+  const body = document.getElementById('dsp_viewBody');
+  const linkKeys = ['Upload the one Design file','Upload Design','Revision Design Upload','Approved Design'];
+  let html = '<div class="row">';
+  for(const key in rowData) {
+    let val = rowData[key]; if(!val||val.toString().trim()==='') continue;
+    let isLink = false;
+    if((linkKeys.includes(key)||key.toLowerCase().includes('upload'))&&val.toString().includes('http')) {
+      val = val.toString().split(/[\n,]+/).map(l=>l.trim().startsWith('http')?`<a href="${l.trim()}" target="_blank" class="btn btn-sm btn-outline-primary m-1"><i class="fas fa-external-link-alt me-1"></i>View File</a>`:'').join(''); isLink=true;
+    }
+    const col = key.toLowerCase().includes('remark')||key.length>50?'col-12':'col-md-6';
+    html += `<div class="${col} view-item"><span class="view-label">${key}</span><div class="${isLink?'':'view-value'}">${val}</div></div>`;
+  }
+  body.innerHTML = html+'</div>';
+  new bootstrap.Modal(document.getElementById('dsp_viewModal')).show();
+}
+function dsp_openEdit(id) {
+  dsp_editId = id;
+  const o = dsp_data.find(x => x.ID.toString()===id.toString());
+  document.getElementById('dsp_editId').textContent = id;
+  const rd = o?.rowData||{};
+  document.getElementById('dsp_courier').value = o?.Dispatch_Courier_Name||'';
+  document.getElementById('dsp_docket').value = o?.Docket_No||'';
+  document.getElementById('dsp_status').value = o?.Dispatch_Status||'Dispatched';
+  document.getElementById('dsp_invoiceNo').value = rd['Invoice Number']||'';
+  document.getElementById('dsp_invoiceAmount').value = rd['Invoice Amount']||'';
+  document.getElementById('dsp_boxes').value = rd['Number of Boxes']||'';
+  document.getElementById('dsp_weight').value = rd['Weight']||'';
+  document.getElementById('dsp_volWeight').value = rd['Volumetric Weigh']||'';
+  new bootstrap.Modal(document.getElementById('dsp_editModal')).show();
+}
+async function dsp_submitUpdate() {
+  const body = {
+    courier: document.getElementById('dsp_courier').value,
+    docket: document.getElementById('dsp_docket').value,
+    status: document.getElementById('dsp_status').value,
+    invoiceNo: document.getElementById('dsp_invoiceNo').value,
+    invoiceAmount: document.getElementById('dsp_invoiceAmount').value,
+    boxes: document.getElementById('dsp_boxes').value,
+    weight: document.getElementById('dsp_weight').value,
+    volWeight: document.getElementById('dsp_volWeight').value,
+    userEmail: APP_USER.email,
+    userRole: APP_USER.role,
+  };
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/dashboards/dispatch/${dsp_editId}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const json = await res.json();
+    showLoading(false);
+    if(json.success) { bootstrap.Modal.getInstance(document.getElementById('dsp_editModal')).hide(); showToast('success','Dispatch Updated!'); fetchDispatchData(); }
+    else showToast('error', json.error);
+  } catch(e) { showLoading(false); showToast('error','Server error.'); }
+}
+</script>

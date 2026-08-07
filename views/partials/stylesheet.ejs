@@ -1,0 +1,76 @@
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap");
+
+  * { box-sizing: border-box; font-family: "Poppins", sans-serif; transition: all 0.2s ease-in-out; }
+
+  html, body { width: 100%; margin: 0; padding: 0; background-color: #f4f6f9; scroll-behavior: smooth; }
+
+  #mainContent { min-height: 100vh; width: 100%; padding-top: 60px; display: flex; flex-direction: column; }
+  .content-wrapper { flex: 1; padding: 20px; display: flex; flex-direction: column; }
+  .content { width: 100%; border-radius: 8px; padding: 0; }
+
+  /* TABLE */
+  .table-responsive { overflow-x: auto; }
+  thead th { background-color: #212529 !important; color: white; white-space: nowrap; border: none; }
+  tbody td { white-space: nowrap; vertical-align: middle; }
+
+  /* GLASS CARD */
+  .bg-light-glass { background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.1); }
+  .bg-light-glass .card-header { background: transparent !important; }
+  .smooth-ui { transition: all 0.3s cubic-bezier(0.25,0.8,0.25,1); }
+  .card.smooth-ui:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.15) !important; }
+
+  /* FILTER BTN */
+  .filter-toggle-btn { background: white; border: 1px solid #dee2e6; color: #333; cursor: pointer; }
+  .filter-toggle-btn:hover { background: #f8f9fa; }
+
+  /* MODAL TEXT */
+  .modal-content label, .modal-content .form-label, .modal-content .text-muted { color: #333 !important; }
+
+  /* NAVBAR */
+  .navbar-collapse { background-color: black; }
+  .top-navbar { background-color: #212529 !important; backdrop-filter: blur(5px); box-shadow: 0 2px 10px rgba(0,0,0,0.5); padding: 0.5rem 1rem; z-index: 1000; height: 60px; }
+  .navbar-nav .nav-link { color: #f1f1f1 !important; font-size: 16px; padding: 0.5rem 1rem !important; border-radius: 5px; margin: 0 5px; transition: all 0.3s ease-in-out; }
+  .navbar-nav .nav-link:hover, .navbar-nav .nav-link.active { color: #ffcc00 !important; background: rgba(255,255,255,0.1); }
+  .navbar-toggler { background-color: white; }
+  .logout-btn { background: #e74c3c !important; color: white !important; }
+  .logout-btn:hover { background: #c0392b !important; transform: scale(1.05); }
+
+  /* LOADER */
+  .spinner { width: 60px; height: 60px; border: 5px solid rgba(255,255,255,0.1); border-top: 5px solid #ffcc00; border-radius: 50%; animation: spin 1s linear infinite; box-shadow: 0 0 20px rgba(255,204,0,0.4); }
+  .loading-text { margin-top: 15px; color: white; font-size: 14px; letter-spacing: 1px; animation: pulse 1.5s infinite; }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
+  /* UTILS */
+  .hidden { display: none !important; }
+
+  /* VIEW MODAL */
+  .view-item { margin-bottom: 12px; }
+  .view-label { color: #6c757d; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; display: block; }
+  .view-value { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 8px 12px; color: #212529; font-size: 0.9rem; word-wrap: break-word; }
+  .view-link-btn { text-decoration: none; font-size: 0.85rem; display: inline-flex; align-items: center; margin-right: 5px; }
+
+  /* RADIO CARDS */
+  .radio-group { display: flex; gap: 10px; }
+  .radio-opt { flex: 1; position: relative; cursor: pointer; }
+  .radio-opt input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .radio-box { display: flex; align-items: center; justify-content: center; padding: 10px; border: 2px solid #ced4da; border-radius: 6px; font-weight: 500; color: #495057; transition: 0.2s; height: 100%; }
+  .radio-opt input:checked + .radio-box { border-color: #0d6efd; background: #0d6efd; color: white; }
+
+  /* FILE UPLOAD */
+  .file-box { border: 2px dashed #ced4da; background: #f8f9fa; padding: 30px; text-align: center; border-radius: 8px; cursor: pointer; position: relative; transition: 0.3s; color: #6c757d; }
+  .file-box:hover { border-color: #0d6efd; background: #e9f0ff; color: #0d6efd; }
+  .file-box input { position: absolute; width: 100%; height: 100%; top: 0; left: 0; opacity: 0; cursor: pointer; }
+  .upload-icon { font-size: 32px; display: block; margin: 0 auto 10px; }
+
+  /* SWAL TOAST */
+  .swal2-toast { background: rgba(255,255,255,0.9) !important; backdrop-filter: blur(4px); border: 1px solid #ddd; }
+
+  @media (max-width: 991.98px) {
+    .navbar-nav .nav-link { margin: 5px 0; text-align: left; }
+  }
+  @media (max-width: 768px) {
+    .btn-sm { padding: 0.25rem 0.4rem; font-size: 0.75rem; }
+  }
+</style>

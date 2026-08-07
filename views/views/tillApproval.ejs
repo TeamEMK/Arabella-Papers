@@ -1,0 +1,267 @@
+<%# Till Approval Dashboard - same as GAS tillApproval.html but using fetch API %>
+<div id="tillApprovalRoot"></div>
+<script>
+// Inline the full tillApproval logic
+document.getElementById('tillApprovalRoot').innerHTML = `
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0 text-dark fw-bold">Client Approval Dashboard</h3>
+    <div class="d-flex gap-2">
+      <button class="btn btn-success smooth-ui" onclick="openBulkApprovalModal()"><i class="fas fa-layer-group me-1"></i> Bulk Client Update</button>
+      <button class="btn btn-outline-dark smooth-ui" onclick="fetchApprovalData()"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
+  </div>
+  <div class="card bg-light-glass mb-4 shadow-sm">
+    <button class="filter-toggle-btn btn-sm py-1 px-3 w-100 d-flex justify-content-between align-items-center rounded" type="button" data-bs-toggle="collapse" data-bs-target="#taFilterContent">
+      <span class="p-2 text-dark fw-bold"><i class="fas fa-filter me-2"></i> Filters & Search</span>
+      <i class="fas fa-chevron-down"></i>
+    </button>
+    <div id="taFilterContent" class="collapse">
+      <div class="card-body p-2">
+        <div class="row g-2 align-items-end">
+          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Start</label><input type="date" id="ta_startDate" class="form-control form-control-sm" onchange="taApplyFilters()"></div>
+          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">End</label><input type="date" id="ta_endDate" class="form-control form-control-sm" onchange="taApplyFilters()"></div>
+          <div class="col-12 col-md-3"><label class="form-label fw-bold small mb-0">Search</label><input type="text" id="ta_search" class="form-control form-control-sm" placeholder="ID, Dealer..." onkeyup="taApplyFilters()"></div>
+          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Client Status</label><select id="ta_filterStatus" class="form-select form-select-sm" onchange="taApplyFilters()"><option value="">All Statuses</option></select></div>
+          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Designer</label><select id="ta_filterDesigner" class="form-select form-select-sm" onchange="taApplyFilters()"><option value="">All</option></select></div>
+          <div class="col-12 text-end mt-2"><button class="btn btn-secondary btn-sm" onclick="taClearFilters()">Clear Filters</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card bg-light-glass shadow-lg">
+    <div class="card-header bg-transparent border-0"><h5 class="mb-0 text-dark fw-bold"><i class="fas fa-check-double me-2"></i>Approved Orders Awaiting Client Status</h5></div>
+    <div class="card-body p-0">
+      <div class="table-responsive" style="max-height:350px;overflow-y:auto;position:relative;">
+        <table class="table table-hover table-striped mb-0 text-nowrap" style="border-collapse:separate;border-spacing:0;">
+          <thead class="table-dark">
+            <tr>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;"><input type="checkbox" id="ta_selectAll" onclick="taToggleSelectAll(this)"></th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Time Stamp</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Actual Date</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Designer</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dealer Name</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Client Name</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Client Approval Status</th>
+            </tr>
+          </thead>
+          <tbody id="ta_tbody"><tr><td colspan="9" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- View Modal -->
+<div class="modal fade" id="ta_viewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">Order Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body" id="ta_viewModalBody"></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div>
+</div>
+
+<!-- Bulk Approval Modal -->
+<div class="modal fade" id="ta_bulkModal" tabindex="-1">
+  <div class="modal-dialog modal-xl"><div class="modal-content">
+    <div class="modal-header bg-success text-white"><h5 class="modal-title"><i class="fas fa-layer-group me-2"></i>Multi-Order Client Approval</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body p-0"><div class="table-responsive" style="max-height:500px;"><table class="table table-bordered align-middle mb-0"><thead class="sticky-top"><tr><th style="background:#fff;color:#000;">Order ID</th><th style="background:#fff;color:#000;">New Status*</th><th style="background:#fff;color:#000;">Upload Proof</th><th style="background:#fff;color:#000;">Remark</th></tr></thead><tbody id="ta_bulkBody" class="bg-white text-dark"></tbody></table></div></div>
+    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-success" id="ta_btnBulkSubmit" onclick="taSubmitBulk()"><i class="fas fa-save me-1"></i> Update All</button></div>
+  </div></div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="ta_editModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-warning text-dark"><h5 class="modal-title">Final Client Approval: <span id="ta_editId"></span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="mb-3">
+        <label class="form-label text-dark fw-bold">Client Approval Status*</label>
+        <div class="form-check mb-1"><input class="form-check-input" type="radio" name="ta_approvalStatus" id="ta_st_proofing" value="Proofing Done" checked><label class="form-check-label text-info fw-bold" for="ta_st_proofing">Proofing Done</label></div>
+        <div class="form-check mb-1"><input class="form-check-input" type="radio" name="ta_approvalStatus" id="ta_st_final" value="Final Approval For Production"><label class="form-check-label text-success" for="ta_st_final">Final Approval For Production</label></div>
+        <div class="form-check mb-1"><input class="form-check-input" type="radio" name="ta_approvalStatus" id="ta_st_mod" value="Modification Needed"><label class="form-check-label text-warning" for="ta_st_mod">Modification Needed</label></div>
+        <div class="form-check mb-1"><input class="form-check-input" type="radio" name="ta_approvalStatus" id="ta_st_reorder" value="Reorder"><label class="form-check-label text-primary" for="ta_st_reorder">Reorder</label></div>
+        <div class="form-check mb-1"><input class="form-check-input" type="radio" name="ta_approvalStatus" id="ta_st_reprint" value="Reprint"><label class="form-check-label text-dark" for="ta_st_reprint">Reprint</label></div>
+        <div class="form-check mb-1"><input class="form-check-input" type="radio" name="ta_approvalStatus" id="ta_st_sample" value="Sample"><label class="form-check-label text-secondary" for="ta_st_sample">Sample</label></div>
+        <div class="form-check mb-1"><input class="form-check-input" type="radio" name="ta_approvalStatus" id="ta_st_cancel" value="Cancel Order"><label class="form-check-label text-danger" for="ta_st_cancel">Cancel Order</label></div>
+      </div>
+      <div class="mb-3"><label class="form-label text-dark fw-bold">Final Approval Upload</label><input class="form-control" type="file" id="ta_fileUpload" accept="image/*,application/pdf"></div>
+      <div class="mb-3"><label class="form-label text-dark fw-bold">Remark</label><textarea class="form-control" id="ta_remark" rows="2" placeholder="Enter remark..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-success" onclick="taHandleApprovalSubmit()"><i class="fas fa-save me-1"></i> Save Final Status</button>
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    </div>
+  </div></div>
+</div>
+`;
+
+// ── DATA ──
+var ta_data = [], ta_filtered = [], ta_selected = new Set(), ta_editId = null;
+
+async function fetchApprovalData() {
+  try {
+    const res = await fetch('/api/dashboards/till-approval');
+    const json = await res.json();
+    ta_data = json.data || [];
+    ta_populateFilters(ta_data);
+    taApplyFilters();
+  } catch(e) { console.error(e); }
+}
+
+fetchApprovalData();
+
+function ta_populateFilters(data) {
+  const designers = new Set(), statuses = new Set();
+  data.forEach(o => { if(o.Designer) designers.add(o.Designer); if(o.Design_Approval_Status_From_Client) statuses.add(o.Design_Approval_Status_From_Client); });
+  ta_fillSelect('ta_filterDesigner', designers);
+  ta_fillSelect('ta_filterStatus', statuses);
+}
+function ta_fillSelect(id, set) {
+  const s = document.getElementById(id); if(!s) return;
+  const cur = s.value;
+  s.innerHTML = `<option value="">All</option>`;
+  Array.from(set).sort().forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; s.appendChild(o); });
+  s.value = cur;
+}
+function taApplyFilters() {
+  const status = (document.getElementById('ta_filterStatus')||{}).value||'';
+  const designer = (document.getElementById('ta_filterDesigner')||{}).value||'';
+  const search = (document.getElementById('ta_search')||{}).value||'';
+  const startV = (document.getElementById('ta_startDate')||{}).value||'';
+  const endV = (document.getElementById('ta_endDate')||{}).value||'';
+  ta_filtered = ta_data.filter(o => {
+    if(!o) return false;
+    let dm = true;
+    if(startV || endV) {
+      const parts = (o.Actual_1||'').split(/[\s/]+/);
+      const od = parts.length >= 3 ? new Date(parts[2], parts[1]-1, parts[0]) : null;
+      if(od && !isNaN(od)) {
+        if(startV && od < new Date(startV)) dm = false;
+        if(endV && od > new Date(endV)) dm = false;
+      } else dm = false;
+    }
+    const sm = !status || (o.Design_Approval_Status_From_Client||'').toLowerCase() === status.toLowerCase();
+    const dm2 = !designer || (o.Designer||'').toLowerCase() === designer.toLowerCase();
+    const srch = !search || JSON.stringify(o).toLowerCase().includes(search.toLowerCase());
+    return dm && sm && dm2 && srch;
+  });
+  ta_renderTable(ta_filtered);
+}
+function taClearFilters() {
+  ['ta_filterStatus','ta_filterDesigner','ta_search','ta_startDate','ta_endDate'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  taApplyFilters();
+}
+function ta_renderTable(data) {
+  const tbody = document.getElementById('ta_tbody');
+  if(!data.length) { tbody.innerHTML = '<tr><td colspan="9" class="text-center">No orders found.</td></tr>'; return; }
+  tbody.innerHTML = data.map(o => {
+    const badge = ta_getStatusBadge(o.Design_Approval_Status_From_Client);
+    const isChecked = ta_selected.has(o.ID.toString()) ? 'checked' : '';
+    return `<tr>
+      <td><input type="checkbox" class="ta_checkbox" value="${o.ID}" ${isChecked} onchange="ta_handleCheck('${o.ID}',this.checked)"></td>
+      <td>
+        <button class="btn btn-sm btn-info me-1" onclick='ta_openView(${JSON.stringify(o.rowData||{})})'><i class="fas fa-eye"></i></button>
+        <button class="btn btn-sm btn-warning" onclick="ta_openEdit('${o.ID}')"><i class="fas fa-edit"></i></button>
+      </td>
+      <td>${o.Timestamp||''}</td>
+      <td>${o.Actual_1||''}</td>
+      <td class="fw-bold">${o.ID}</td>
+      <td>${o.Designer||''}</td>
+      <td>${o.Dealer_name||''}</td>
+      <td>${o.Client_name||''}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+}
+function ta_getStatusBadge(s) {
+  if(!s) s = 'Proofing Done';
+  const l = s.toLowerCase();
+  let c = 'secondary';
+  if(l.includes('final')) c = 'success';
+  else if(l.includes('modification')) c = 'warning';
+  else if(l.includes('proofing')) c = 'info';
+  else if(l.includes('reorder')) c = 'primary';
+  else if(l.includes('reprint')) c = 'dark';
+  return `<span class="badge rounded-pill bg-${c}">${s}</span>`;
+}
+function ta_openView(rowData) {
+  const body = document.getElementById('ta_viewModalBody');
+  const linkKeys = ['Upload the one Design file','Upload Design','Revision Design Upload','Approved Design'];
+  let html = '<div class="row">';
+  for(const key in rowData) {
+    let val = rowData[key]; if(!val || val.toString().trim() === '') continue;
+    let isLink = false;
+    if((linkKeys.includes(key)||key.toLowerCase().includes('upload')) && val.toString().includes('http')) {
+      val = val.toString().split(/[\n,]+/).map((l,i) => l.trim().startsWith('http') ? `<a href="${l.trim()}" target="_blank" class="btn btn-sm btn-outline-primary m-1"><i class="fas fa-external-link-alt me-1"></i>View File</a>` : '').join(''); isLink = true;
+    }
+    const col = key.toLowerCase().includes('remark') || key.length > 50 ? 'col-12' : 'col-md-6';
+    html += `<div class="${col} view-item"><span class="view-label">${key}</span><div class="${isLink?'':'view-value'}">${val}</div></div>`;
+  }
+  body.innerHTML = html + '</div>';
+  new bootstrap.Modal(document.getElementById('ta_viewModal')).show();
+}
+function ta_openEdit(id) {
+  ta_editId = id;
+  const o = ta_data.find(x => x.ID.toString() === id.toString());
+  document.getElementById('ta_editId').textContent = id;
+  const s = (o?.Design_Approval_Status_From_Client||'Proofing Done').toLowerCase();
+  document.getElementById(s.includes('final')?'ta_st_final':s.includes('mod')?'ta_st_mod':s.includes('reorder')?'ta_st_reorder':s.includes('reprint')?'ta_st_reprint':s.includes('sample')?'ta_st_sample':s.includes('cancel')?'ta_st_cancel':'ta_st_proofing').checked = true;
+  document.getElementById('ta_remark').value = '';
+  document.getElementById('ta_fileUpload').value = '';
+  new bootstrap.Modal(document.getElementById('ta_editModal')).show();
+}
+async function taHandleApprovalSubmit() {
+  const approvalStatus = document.querySelector('input[name="ta_approvalStatus"]:checked')?.value;
+  if(!approvalStatus) { showToast('warning','Select a status.'); return; }
+  const remark = document.getElementById('ta_remark').value;
+  const file = document.getElementById('ta_fileUpload').files[0];
+  const formData = new FormData();
+  formData.append('approvalStatus', approvalStatus);
+  formData.append('remark', remark);
+  formData.append('userEmail', APP_USER.email);
+  if(file) formData.append('file', file);
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/dashboards/till-approval/${ta_editId}`, {method:'PUT', body:formData});
+    const json = await res.json();
+    showLoading(false);
+    if(json.success) { bootstrap.Modal.getInstance(document.getElementById('ta_editModal')).hide(); showToast('success',`Updated to: ${approvalStatus}`); fetchApprovalData(); }
+    else showToast('error', json.error);
+  } catch(e) { showLoading(false); showToast('error','Server error.'); }
+}
+function taToggleSelectAll(m) { document.querySelectorAll('.ta_checkbox').forEach(c => { c.checked = m.checked; ta_handleCheck(c.value, m.checked); }); }
+function ta_handleCheck(id, checked) { if(checked) ta_selected.add(id.toString()); else ta_selected.delete(id.toString()); }
+function openBulkApprovalModal() {
+  if(!ta_selected.size) { showToast('warning','Select at least one order.'); return; }
+  const tbody = document.getElementById('ta_bulkBody'); tbody.innerHTML = '';
+  ta_selected.forEach(id => {
+    tbody.insertAdjacentHTML('beforeend',`<tr class="ta_bulk_row" data-id="${id}">
+      <td class="fw-bold">${id}</td>
+      <td><select class="form-select form-select-sm ta_bulk_status">
+        <option value="Proofing Done">Proofing Done</option>
+        <option value="Final Approval For Production" selected>Final Approval For Production</option>
+        <option value="Modification Needed">Modification Needed</option>
+        <option value="Reorder">Reorder</option>
+        <option value="Reprint">Reprint</option>
+        <option value="Sample">Sample</option>
+        <option value="Cancel Order">Cancel Order</option>
+      </select></td>
+      <td><input type="file" class="form-control form-control-sm ta_bulk_file" accept="image/*,application/pdf"></td>
+      <td><input type="text" class="form-control form-control-sm ta_bulk_remark" placeholder="Remark..."></td>
+    </tr>`);
+  });
+  new bootstrap.Modal(document.getElementById('ta_bulkModal')).show();
+}
+async function taSubmitBulk() {
+  const rows = document.querySelectorAll('.ta_bulk_row');
+  const btn = document.getElementById('ta_btnBulkSubmit');
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+  const updates = Array.from(rows).map(r => ({ id: r.getAttribute('data-id'), status: r.querySelector('.ta_bulk_status').value, remark: r.querySelector('.ta_bulk_remark').value, userEmail: APP_USER.email }));
+  try {
+    const res = await fetch('/api/dashboards/till-approval/bulk', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates})});
+    const json = await res.json();
+    btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i> Update All';
+    if(json.success) { ta_selected.clear(); const mc = document.getElementById('ta_selectAll'); if(mc) mc.checked = false; bootstrap.Modal.getInstance(document.getElementById('ta_bulkModal')).hide(); showToast('success',`Updated ${json.count} orders.`); fetchApprovalData(); }
+    else showToast('error', json.error);
+  } catch(e) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i> Update All'; showToast('error','Server error.'); }
+}
+</script>

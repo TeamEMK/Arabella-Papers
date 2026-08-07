@@ -1,0 +1,1103 @@
+<div class="container-fluid p-2 p-md-3">
+  <!-- HEADER -->
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h3 class="mb-0 text-dark fs-4">Orders Dashboard</h3>
+    <div class="d-flex gap-1 flex-wrap">
+      <button id="btnPunch" class="btn btn-warning btn-sm smooth-ui" onclick="openOrderPunchModal()">
+        <i class="fas fa-plus"></i><span class="d-none d-md-inline ms-1">Punch Order</span>
+      </button>
+      <button id="btnDealer" class="btn btn-dark btn-sm smooth-ui" onclick="openAddDealerModal()">
+        <i class="fas fa-store"></i><span class="d-none d-md-inline ms-1">Add Dealer</span>
+      </button>
+      <button id="btnDesigner" class="btn btn-dark btn-sm smooth-ui" onclick="openAddDesignerModal()">
+        <i class="fas fa-palette"></i><span class="d-none d-md-inline ms-1">Add Designer</span>
+      </button>
+      <button id="btnManage" class="btn btn-secondary btn-sm smooth-ui" onclick="openManageDataModal()">
+        <i class="fas fa-database"></i><span class="d-none d-md-inline ms-1">Manage Data</span>
+      </button>
+      <button class="btn btn-success btn-sm" onclick="openBulkUpdateModal()">
+        <i class="fas fa-layer-group"></i> Bulk Update
+      </button>
+      <button class="btn btn-outline-dark btn-sm smooth-ui" onclick="refreshDashboard()">
+        <i class="fas fa-sync-alt me-1"></i> Refresh
+      </button>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="card bg-light-glass mt-3 mb-3 shadow-sm smooth-ui p-2">
+    <button class="filter-toggle-btn btn-sm py-1 px-3 w-100 d-flex justify-content-between align-items-center rounded p-2"
+      type="button" data-bs-toggle="collapse" data-bs-target="#filterContent">
+      <span class="text-dark fw-bold"><i class="fas fa-filter me-2"></i> Filters & Search</span>
+      <i class="fas fa-chevron-down text-dark"></i>
+    </button>
+    <div id="filterContent" class="collapse">
+      <div class="card-body p-2">
+        <div class="row g-2 align-items-end">
+          <div class="col-6 col-md-2">
+            <label class="form-label fw-bold small mb-0">Start</label>
+            <input type="date" id="startDate" class="form-control form-control-sm" onchange="applyFilters()"/>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label fw-bold small mb-0">End</label>
+            <input type="date" id="endDate" class="form-control form-control-sm" onchange="applyFilters()"/>
+          </div>
+          <div class="col-12 col-md-2">
+            <label class="form-label fw-bold small mb-0">Search</label>
+            <input type="text" id="universalSearch" class="form-control form-control-sm" placeholder="ID, Client..." onkeyup="applyFilters()"/>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label fw-bold small mb-0">Status</label>
+            <select id="filterStatus" class="form-select form-select-sm" onchange="applyFilters()">
+              <option value="">All Statuses</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-2">
+            <label class="form-label fw-bold small mb-0">Designer</label>
+            <select id="filterDesigner" class="form-select form-select-sm" onchange="applyFilters()">
+              <option value="">All Designers</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-2">
+            <label class="form-label fw-bold small mb-0">Punchers</label>
+            <select id="filterPunchBy" class="form-select form-select-sm" onchange="applyFilters()">
+              <option value="">All Punchers</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-2">
+            <label class="form-label fw-bold small mb-0">Dealers</label>
+            <select id="filterDealer" class="form-select form-select-sm" onchange="applyFilters()">
+              <option value="">All Dealers</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-bold small mb-0">Client Name</label>
+            <select id="filterClient" class="form-select form-select-sm" onchange="applyFilters()">
+              <option value="">All Clients</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-2">
+            <button class="btn btn-secondary btn-sm w-100 mt-3" onclick="clearFilters()">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="card bg-light-glass shadow-lg smooth-ui">
+    <div class="card-header bg-transparent border-0">
+      <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-list me-2"></i>Recent Orders</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive" style="max-height:350px; overflow-y:auto; position:relative;">
+        <table class="table table-hover table-striped mb-0 text-nowrap" id="ordersTable" style="border-collapse:separate; border-spacing:0;">
+          <thead class="table-dark">
+            <tr>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;"><input type="checkbox" id="selectAllOrders" onclick="toggleSelectAll(this)"></th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Date</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Email</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Punch By</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dealer Name</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Client Name</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Design Time</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Designer</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="ordersTableBody">
+            <tr><td colspan="11" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Loading data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MODALS ═══════════ -->
+
+<!-- Bulk Update Modal -->
+<div class="modal fade" id="bulkUpdateModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title"><i class="fas fa-layer-group me-2"></i>Multi-Order Individual Update</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="table-responsive" style="max-height:500px; overflow-y:auto;">
+          <table class="table table-bordered align-middle mb-0">
+            <thead class="sticky-top bg-white">
+              <tr>
+                <th>Order ID</th>
+                <th>New Status*</th>
+                <th>Upload File</th>
+                <th>Remark</th>
+              </tr>
+            </thead>
+            <tbody id="bulkUpdateTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-success" id="btnBulkSubmit" onclick="submitIndividualBulkUpdate()">
+          <i class="fas fa-save me-1"></i> Update All Selected
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Dealer Modal -->
+<div class="modal fade" id="addDealerModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title">Add/Check Dealer</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label text-dark fw-bold">Dealer Name</label>
+          <input list="newDealerList" id="newDealerName" class="form-control" required placeholder="Type to search or add new..." autocomplete="off"/>
+          <datalist id="newDealerList"></datalist>
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-dark fw-bold">Email</label>
+          <input type="email" id="newDealerEmail" class="form-control" placeholder="Enter dealer email"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-dark fw-bold">Mobile No</label>
+          <input type="text" id="newDealerMobile" class="form-control" placeholder="Enter mobile number"/>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="handleAddDealer()">Save Dealer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Designer Modal -->
+<div class="modal fade" id="addDesignerModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title">Add/Check Indian Designer</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label text-dark fw-bold">Designer Name</label>
+          <input list="newDesignerList" id="newDesignerName" class="form-control" required placeholder="Type to search or add new..." autocomplete="off"/>
+          <datalist id="newDesignerList"></datalist>
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-dark fw-bold">Email</label>
+          <input type="email" id="newDesignerEmail" class="form-control" required placeholder="Enter email"/>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="handleAddDesigner()">Save Designer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Punch Order Modal -->
+<div class="modal fade" id="orderPunchModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">New Order Punch</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="resetForm()"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label text-dark fw-bold">Email Address</label>
+            <input type="email" id="punchEmail" class="form-control" readonly style="background:#e9ecef;"/>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-dark fw-bold">Order Punched By</label>
+            <div class="radio-group">
+              <label class="radio-opt">
+                <input type="radio" name="punchedBy" value="India Team" onchange="updateDesigners('India')"/>
+                <div class="radio-box"><i class="fas fa-users me-1"></i> India Team</div>
+              </label>
+              <label class="radio-opt">
+                <input type="radio" name="punchedBy" value="Cassie" onchange="updateDesigners('Cassie')"/>
+                <div class="radio-box"><i class="fas fa-user me-1"></i> Cassie</div>
+              </label>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-dark fw-bold">Name of Dealer</label>
+            <input list="dealerList" id="punchDealerInput" class="form-control" placeholder="Search Dealer..." required autocomplete="off" onchange="validateDealerSelection(this)"/>
+            <datalist id="dealerList"></datalist>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-dark fw-bold">Client Name</label>
+            <input list="punchClientList" id="punchClientInput" class="form-control" placeholder="Search or Select Client" required autocomplete="off"/>
+            <datalist id="punchClientList"></datalist>
+          </div>
+          <div class="col-12">
+            <label class="form-label text-dark fw-bold">Remarks / Subject Line</label>
+            <textarea id="punchRemarks" class="form-control" placeholder="Enter details..." required></textarea>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-dark fw-bold">Designer</label>
+            <input list="designerList" id="designerInput" class="form-control" placeholder="Select 'Punched By' first..." required autocomplete="off" onchange="validateDesignerSelection(this)"/>
+            <datalist id="designerList"></datalist>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-dark fw-bold">Possible Design Time</label>
+            <select id="punchDesignTime" class="form-select" required>
+              <option value="" disabled selected>Select...</option>
+              <option value="10 Minutes">10 Minutes</option>
+              <option value="2 Hours">2 Hours</option>
+              <option value="4 Hours">4 Hours</option>
+              <option value="EOD">EOD</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label text-dark fw-bold">Upload Files</label>
+            <div class="file-box text-center">
+              <i class="fas fa-cloud-upload-alt upload-icon"></i>
+              <div class="file-text" id="fileText">Click or Drag files here</div>
+              <input type="file" id="fileInput" multiple accept=".pdf,.jpg,.jpeg,.png"/>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="btnSubmit" onclick="handleFormSubmit()">
+          <i class="fas fa-paper-plane me-1"></i> Submit Order
+        </button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="resetForm()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- View Modal -->
+<div class="modal fade" id="viewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">Order Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="viewModalBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Status Modal -->
+<div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title">Update Order Status: <span id="editOrderId"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label text-dark fw-bold">Design Status*</label>
+          <div class="form-check" id="optFresh"><input class="form-check-input" type="radio" name="designStatus" id="freshDesign" value="Fresh Design"><label class="form-check-label text-dark" for="freshDesign">Fresh Design</label></div>
+          <div class="form-check" id="optMod"><input class="form-check-input" type="radio" name="designStatus" id="modificationNeeded" value="Modification Needed"><label class="form-check-label text-dark" for="modificationNeeded">Modification Needed</label></div>
+          <div class="form-check" id="optProof"><input class="form-check-input" type="radio" name="designStatus" id="designProofing" value="Proofing Done"><label class="form-check-label text-info fw-bold" for="designProofing">Proofing Done</label></div>
+          <div class="form-check" id="optCancel"><input class="form-check-input" type="radio" name="designStatus" id="designCancelled" value="Cancelled"><label class="form-check-label text-danger fw-bold" for="designCancelled">Cancelled</label></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-dark fw-bold">Upload File</label>
+          <input class="form-control" type="file" id="fileUpload" accept="image/*,application/pdf"/>
+          <small class="text-muted">Max file size: 10MB</small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-dark fw-bold">Remark</label>
+          <textarea class="form-control" id="editRemark" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success" onclick="handleEditFormSubmit()"><i class="fas fa-save me-1"></i> Save Update</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Details Modal -->
+<div class="modal fade" id="editDetailsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">Edit Order Details (Correction)</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-dark">
+        <div class="row g-3 mb-3 p-2 bg-light rounded border">
+          <div class="col-md-4"><label class="small fw-bold text-muted">Order ID</label><input type="text" id="ed_ID" class="form-control-plaintext fw-bold" readonly/></div>
+          <div class="col-md-4"><label class="small fw-bold text-muted">Punched By</label><input type="text" id="ed_PunchBy" class="form-control-plaintext fw-bold" readonly/></div>
+          <div class="col-md-4"><label class="small fw-bold text-muted">User Email</label><input type="text" id="ed_Email" class="form-control-plaintext" readonly/></div>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Dealer Name</label>
+            <input list="ed_dealerList" id="ed_Dealer" class="form-control" placeholder="Search or Select Dealer" required autocomplete="off" onchange="validateDealerSelection(this)"/>
+            <datalist id="ed_dealerList"></datalist>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Client Name</label>
+            <input list="ed_clientList" id="ed_Client" class="form-control" placeholder="Search or Select Client" required autocomplete="off"/>
+            <datalist id="ed_clientList"></datalist>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Designer</label>
+            <input list="ed_designerList" id="ed_Designer" class="form-control" placeholder="Search or Select Designer" required autocomplete="off" onchange="validateDesignerSelection(this)"/>
+            <datalist id="ed_designerList"></datalist>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Possible Design Time</label>
+            <select id="ed_Time" class="form-select" required>
+              <option value="" disabled>Select...</option>
+              <option>10 Minutes</option><option>2 Hours</option><option>4 Hours</option><option>EOD</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-bold">Initial File (Replace)</label>
+            <input type="file" id="ed_File" class="form-control" accept=".pdf,.jpg,.jpeg,.png"/>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-bold">Remarks</label>
+            <textarea id="ed_Remark" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="handleEditDetailsSubmit()">Save Changes</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Manage Data Modal -->
+<div class="modal fade" id="manageDataModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-secondary text-white">
+        <h5 class="modal-title">Manage Master Data</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="p-3 bg-light border-bottom">
+          <div class="input-group">
+            <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+            <input type="text" id="manageSearchInput" class="form-control text-dark bg-white" placeholder="Search Dealers or Designers..." onkeyup="filterManageTables()"/>
+          </div>
+        </div>
+        <ul class="nav nav-tabs nav-fill" id="manageTabs">
+          <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#viewDealers">Dealers</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#viewDesigners">Designers</button></li>
+        </ul>
+        <div class="tab-content p-3">
+          <div class="tab-pane fade show active" id="viewDealers">
+            <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
+              <table class="table table-sm table-bordered table-hover mb-0">
+                <thead class="table-dark"><tr><th>Name</th><th>Email</th><th>Mobile</th><th>Action</th></tr></thead>
+                <tbody id="tbl_manage_dealers"><tr><td colspan="4" class="text-center">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="tab-pane fade" id="viewDesigners">
+            <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
+              <table class="table table-sm table-bordered table-hover mb-0">
+                <thead class="table-dark"><tr><th>India Name</th><th>India Email</th><th>Action</th><th>Overseas Name</th><th>Overseas Email</th><th>Action</th></tr></thead>
+                <tbody id="tbl_manage_designers"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══ GLOBAL STATE ═══
+var ordersData = [];
+var currentDisplaySet = [];
+var renderedCount = 0;
+var BATCH_SIZE = 50;
+var selectedOrderIds = new Set();
+var db_forms = {};
+var currentEditOrderId = null;
+
+// ═══ INIT ═══
+(function() {
+  applyPermissions();
+  fetchOrdersData();
+  fetchFormOptions();
+  setupInfiniteScroll();
+})();
+
+function setupInfiniteScroll() {
+  const container = document.querySelector('.card-body.table-responsive');
+  if (container) {
+    container.addEventListener('scroll', function() {
+      if (container.scrollTop + container.clientHeight >= container.scrollHeight - 100) {
+        renderNextBatch();
+      }
+    });
+  }
+}
+
+// ═══ DATA FETCH ═══
+async function fetchOrdersData() {
+  showTableLoading(true);
+  try {
+    const res = await fetch('/api/orders');
+    const json = await res.json();
+    ordersData = json.data || [];
+    renderAll(ordersData);
+  } catch(e) {
+    console.error(e);
+    document.getElementById('ordersTableBody').innerHTML =
+      '<tr><td colspan="11" class="text-danger text-center">Error loading data.</td></tr>';
+  }
+}
+
+function refreshDashboard() {
+  applyPermissions();
+  fetchOrdersData();
+  fetchFormOptions();
+}
+
+function renderAll(data) {
+  populateFilters(data);
+  displayOrders(data);
+}
+
+async function fetchFormOptions() {
+  try {
+    const res = await fetch('/api/dashboards/form-options');
+    const json = await res.json();
+    db_forms = json;
+  } catch(e) { console.error(e); }
+}
+
+function getUniqueClients() {
+  const clients = new Set();
+  ordersData.forEach(o => { if(o.Client_name) clients.add(o.Client_name.trim()); });
+  return Array.from(clients).sort();
+}
+
+// ═══ FILTERS ═══
+function populateFilters(data) {
+  const designers = new Set(), punchers = new Set(), dealers = new Set(), statuses = new Set(), clients = new Set();
+  data.forEach(o => {
+    if(o.Designer) designers.add(o.Designer);
+    if(o.Order_punch_by) punchers.add(o.Order_punch_by);
+    if(o.Dealer_name) dealers.add(o.Dealer_name);
+    if(o.Status) statuses.add(o.Status);
+    if(o.Client_name) clients.add(o.Client_name);
+  });
+  fillSelect('filterDesigner', designers, 'Designers');
+  fillSelect('filterPunchBy', punchers, 'Punchers');
+  fillSelect('filterDealer', dealers, 'Dealers');
+  fillSelect('filterStatus', statuses, 'Statuses');
+  fillSelect('filterClient', clients, 'Clients');
+}
+
+function fillSelect(id, set, label) {
+  const select = document.getElementById(id);
+  if (!select) return;
+  const cur = select.value;
+  select.innerHTML = `<option value="">All ${label}</option>`;
+  Array.from(set).sort().forEach(item => {
+    if(item) { const o = document.createElement('option'); o.value = item; o.textContent = item; select.appendChild(o); }
+  });
+  select.value = cur;
+}
+
+function applyFilters() {
+  if(!Array.isArray(ordersData)) return;
+  const status = document.getElementById('filterStatus').value.toLowerCase();
+  const designer = document.getElementById('filterDesigner').value.toLowerCase();
+  const punchBy = document.getElementById('filterPunchBy').value.toLowerCase();
+  const dealer = document.getElementById('filterDealer').value.toLowerCase();
+  const client = document.getElementById('filterClient').value.toLowerCase();
+  const searchTerm = document.getElementById('universalSearch').value.toLowerCase();
+  const startDateVal = document.getElementById('startDate').value;
+  const endDateVal = document.getElementById('endDate').value;
+
+  const filtered = ordersData.filter(order => {
+    if(!order) return false;
+    let dateMatch = true;
+    if (startDateVal || endDateVal) {
+      const orderDate = order.Raw_Timestamp ? new Date(order.Raw_Timestamp) : new Date(order.Timestamp);
+      if (orderDate && !isNaN(orderDate)) {
+        orderDate.setHours(0,0,0,0);
+        if (startDateVal) { const s = new Date(startDateVal); s.setHours(0,0,0,0); if(orderDate < s) dateMatch = false; }
+        if (endDateVal && dateMatch) { const e = new Date(endDateVal); e.setHours(0,0,0,0); if(orderDate > e) dateMatch = false; }
+      } else { dateMatch = false; }
+    }
+    const oStatus = order.Status ? order.Status.toLowerCase() : '';
+    const oDesigner = order.Designer ? order.Designer.toLowerCase() : '';
+    const oPunch = order.Order_punch_by ? order.Order_punch_by.toLowerCase() : '';
+    const oDealer = order.Dealer_name ? order.Dealer_name.toLowerCase() : '';
+    const oClient = order.Client_name ? order.Client_name.toLowerCase() : '';
+    const searchStr = ((order.ID||'')+' '+(oDealer)+' '+(oClient)+' '+(oDesigner)).toLowerCase();
+    return dateMatch &&
+      (status === '' || oStatus.includes(status)) &&
+      (designer === '' || oDesigner === designer) &&
+      (punchBy === '' || oPunch === punchBy) &&
+      (dealer === '' || oDealer === dealer) &&
+      (client === '' || oClient === client) &&
+      (searchTerm === '' || searchStr.includes(searchTerm));
+  });
+  displayOrders(filtered);
+}
+
+function clearFilters() {
+  ['universalSearch','filterStatus','filterDesigner','filterPunchBy','filterDealer','startDate','endDate','filterClient']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  applyFilters();
+}
+
+// ═══ TABLE RENDER ═══
+function displayOrders(data) {
+  const tbody = document.getElementById('ordersTableBody');
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  currentDisplaySet = data;
+  renderedCount = 0;
+  if(data.length === 0) { tbody.innerHTML = '<tr><td colspan="11" class="text-center">No orders found.</td></tr>'; return; }
+  renderNextBatch();
+}
+
+function renderNextBatch() {
+  if(renderedCount >= currentDisplaySet.length) return;
+  const tbody = document.getElementById('ordersTableBody');
+  const batch = currentDisplaySet.slice(renderedCount, renderedCount + BATCH_SIZE);
+  const role = APP_USER.role, domain = APP_USER.domain;
+  const isAdmin = role === 'SuperAdmin' || domain === 'Head';
+
+  batch.forEach(order => {
+    const statusBadge = getStatusBadge(order.Status);
+    const row = tbody.insertRow();
+    const isChecked = selectedOrderIds.has(order.ID.toString()) ? 'checked' : '';
+    const status = (order.Status || '').toLowerCase();
+    const isFinalized = status.includes('proofing') || status.includes('approved') || status.includes('cancelled') || status.includes('rejected');
+    const disableAttr = (role !== 'SuperAdmin' && isFinalized) ? 'disabled' : '';
+    const opacityClass = (role !== 'SuperAdmin' && isFinalized) ? 'opacity-50' : '';
+
+    // Checkbox
+    row.insertCell().innerHTML = `<input type="checkbox" class="order-checkbox" value="${order.ID}" ${isChecked} onchange="handleCheckboxChange('${order.ID}', this.checked)">`;
+
+    // Actions
+    let btns = `<button class="btn btn-sm btn-info me-1 smooth-ui" onclick='openViewModal(${JSON.stringify(order.rowData||{})})' title="View"><i class="fas fa-eye"></i></button>`;
+    if(role === 'SuperAdmin') {
+      btns += `<button class="btn btn-sm btn-primary me-1 smooth-ui" onclick="openEditDetailsModal('${order.ID}')" title="Edit"><i class="fas fa-pen"></i></button>`;
+      btns += `<button class="btn btn-sm btn-danger smooth-ui" onclick="handleDeleteOrder('${order.ID}')" title="Delete"><i class="fas fa-trash"></i></button>`;
+    }
+    btns += `<button class="btn btn-sm btn-warning me-1 smooth-ui ${opacityClass}" onclick="openEditModal('${order.ID}')" ${disableAttr} title="Update Status"><i class="fas fa-file-upload"></i></button>`;
+    row.insertCell().innerHTML = btns;
+
+    // Date
+    let dateStr = order.Timestamp || '';
+    if(order.Raw_Timestamp) { const d = new Date(order.Raw_Timestamp); if(!isNaN(d)) dateStr = d.toLocaleDateString('en-GB'); }
+    row.insertCell().textContent = dateStr;
+    row.insertCell().textContent = order.ID;
+    row.insertCell().textContent = order.Email;
+    row.insertCell().textContent = order.Order_punch_by;
+    row.insertCell().textContent = order.Dealer_name || '';
+    row.insertCell().textContent = order.Client_name;
+    row.insertCell().textContent = order.Possible_design_time;
+    row.insertCell().textContent = order.Designer;
+    row.insertCell().innerHTML = statusBadge;
+  });
+  renderedCount += batch.length;
+}
+
+function getStatusBadge(status) {
+  if(!status) status = 'Pending';
+  const l = status.toLowerCase();
+  let c = 'secondary';
+  if(l.includes('proofing')) c = 'success';
+  else if(l.includes('fresh')) c = 'info';
+  else if(l.includes('modification')) c = 'warning';
+  else if(l.includes('cancelled') || l.includes('rejected')) c = 'danger';
+  return `<span class="badge rounded-pill bg-${c}">${status}</span>`;
+}
+
+function showTableLoading(show) {
+  const tbody = document.getElementById('ordersTableBody');
+  if(show && tbody) tbody.innerHTML = '<tr><td colspan="11" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Loading data...</td></tr>';
+}
+
+// ═══ PERMISSIONS ═══
+function applyPermissions() {
+  const role = APP_USER.role, domain = APP_USER.domain;
+  const isAdmin = role === 'SuperAdmin' || domain === 'Head';
+  const isOverseas = domain === 'Overseas';
+
+  ['btnPunch','btnDealer','btnDesigner','btnManage'].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(isAdmin) { el.style.display = 'inline-block'; return; }
+    if(id === 'btnDesigner' || id === 'btnManage') { el.style.display = 'none'; return; }
+    el.style.display = isOverseas ? 'inline-block' : 'none';
+  });
+
+  // Edit modal options
+  ['optFresh','optMod','optCancel'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = isAdmin ? 'block' : 'none';
+  });
+  if(!isAdmin) {
+    const proofRadio = document.getElementById('designProofing');
+    if(proofRadio) proofRadio.checked = true;
+  }
+}
+
+// ═══ MODAL OPEN/CLOSE ═══
+function openOrderPunchModal() {
+  document.getElementById('punchEmail').value = APP_USER.email;
+  populateList('dealerList', db_forms.dealers || []);
+  populateList('punchClientList', getUniqueClients());
+  new bootstrap.Modal(document.getElementById('orderPunchModal')).show();
+}
+
+function openViewModal(rowData) {
+  const modalBody = document.getElementById('viewModalBody');
+  const isAdmin = APP_USER.role === 'SuperAdmin' || APP_USER.domain === 'Head';
+  const forbidden = ['dealer e-mail','mobile no','dealer email'];
+  const linkKeys = ['Upload the one Design file','Upload Design','Revision Design Upload','Approved Design'];
+  let html = '<div class="row">';
+  for(const key in rowData) {
+    if(!key || key === 'rowData') continue;
+    if(!isAdmin) { const kl = key.toLowerCase().trim(); if(forbidden.some(f => kl.includes(f))) continue; }
+    let value = rowData[key];
+    if(!value || value.toString().trim() === '') continue;
+    let isLink = false;
+    if((linkKeys.includes(key) || key.toLowerCase().includes('upload')) && value.toString().includes('http')) {
+      const links = value.toString().split(/[\n,]+/);
+      value = links.map((l,i) => l.trim().startsWith('http') ?
+        `<a href="${l.trim()}" target="_blank" class="btn btn-sm btn-outline-primary view-link-btn m-1"><i class="fas fa-external-link-alt me-1"></i>View File ${links.length>1?i+1:''}</a>` : '').join(' ');
+      isLink = true;
+    }
+    const col = key.toLowerCase().includes('remark') || key.length > 50 ? 'col-12' : 'col-md-6';
+    html += `<div class="${col} view-item"><span class="view-label">${key}</span><div class="${isLink?'':'view-value'}">${value}</div></div>`;
+  }
+  html += '</div>';
+  modalBody.innerHTML = html;
+  new bootstrap.Modal(document.getElementById('viewModal')).show();
+}
+
+function openEditModal(ID) {
+  document.getElementById('editModal').querySelector('form') && document.getElementById('editModal').querySelector('form').reset();
+  document.querySelectorAll('input[name="designStatus"]').forEach(r => r.checked = false);
+  currentEditOrderId = ID;
+  document.getElementById('editOrderId').textContent = ID;
+  const role = APP_USER.role, domain = APP_USER.domain;
+  const isAdmin = role === 'SuperAdmin' || domain === 'Head';
+  ['optFresh','optMod','optCancel'].forEach(id => { const el = document.getElementById(id); if(el) el.style.display = isAdmin ? 'block' : 'none'; });
+  if(!isAdmin) { const r = document.getElementById('designProofing'); if(r) r.checked = true; }
+  // Clear file input
+  document.getElementById('fileUpload').value = '';
+  document.getElementById('editRemark').value = '';
+  new bootstrap.Modal(document.getElementById('editModal')).show();
+}
+
+function openEditDetailsModal(ID) {
+  const order = ordersData.find(o => o.ID.toString() === ID.toString());
+  if(!order) { showToast('error','Order not found.'); return; }
+  currentEditOrderId = ID;
+  document.getElementById('ed_ID').value = order.ID;
+  document.getElementById('ed_PunchBy').value = order.Order_punch_by;
+  document.getElementById('ed_Email').value = order.Email;
+  populateList('ed_dealerList', db_forms.dealers || []);
+  populateList('ed_clientList', getUniqueClients());
+  const allDes = [...(db_forms.indian||[]), ...(db_forms.cassie||[])].filter((v,i,a)=>a.indexOf(v)===i).sort();
+  populateList('ed_designerList', allDes);
+  document.getElementById('ed_Dealer').value = order.Dealer_name || '';
+  document.getElementById('ed_Client').value = order.Client_name || '';
+  document.getElementById('ed_Designer').value = order.Designer || '';
+  document.getElementById('ed_Time').value = order.Possible_design_time || '';
+  document.getElementById('ed_Remark').value = (order.rowData && order.rowData.Remarks) || '';
+  new bootstrap.Modal(document.getElementById('editDetailsModal')).show();
+}
+
+// ═══ SUBMIT HANDLERS ═══
+async function handleFormSubmit() {
+  const punchedBy = document.querySelector('input[name="punchedBy"]:checked');
+  if(!punchedBy) { showToast('warning','Please select Punched By.'); return; }
+
+  const dealer = document.getElementById('punchDealerInput').value;
+  const designer = document.getElementById('designerInput').value;
+  const client = document.getElementById('punchClientInput').value;
+  const remarks = document.getElementById('punchRemarks').value;
+  const designTime = document.getElementById('punchDesignTime').value;
+
+  if(!dealer || !designer || !client || !remarks || !designTime) { showToast('warning','Please fill all required fields.'); return; }
+
+  const btn = document.getElementById('btnSubmit');
+  const origText = btn.innerHTML;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Processing...';
+  btn.disabled = true;
+
+  const formData = new FormData();
+  formData.append('email', APP_USER.email);
+  formData.append('punchedBy', punchedBy.value);
+  formData.append('dealer', dealer);
+  formData.append('client', client);
+  formData.append('remarks', remarks);
+  formData.append('designer', designer);
+  formData.append('designTime', designTime);
+  const fileInput = document.getElementById('fileInput');
+  if(fileInput.files.length > 0) {
+    Array.from(fileInput.files).forEach(f => formData.append('files', f));
+  }
+
+  try {
+    const res = await fetch('/api/orders', { method: 'POST', body: formData });
+    const json = await res.json();
+    btn.innerHTML = origText; btn.disabled = false;
+    if(json.success) {
+      bootstrap.Modal.getInstance(document.getElementById('orderPunchModal')).hide();
+      showToast('success', `Order ${json.orderId} submitted!`);
+      resetForm();
+      refreshDashboard();
+    } else { showToast('error', json.error || 'Submission failed.'); }
+  } catch(e) { btn.innerHTML = origText; btn.disabled = false; showToast('error','Server error.'); }
+}
+
+async function handleEditFormSubmit() {
+  const designStatus = document.querySelector('input[name="designStatus"]:checked');
+  if(!designStatus) { showToast('warning','Please select a status.'); return; }
+  const remark = document.getElementById('editRemark').value;
+  const file = document.getElementById('fileUpload').files[0];
+  const formData = new FormData();
+  formData.append('designStatus', designStatus.value);
+  formData.append('remark', remark);
+  formData.append('userEmail', APP_USER.email);
+  if(file) formData.append('file', file);
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/orders/${currentEditOrderId}/status`, { method: 'PUT', body: formData });
+    const json = await res.json();
+    showLoading(false);
+    bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+    if(json.success) { showToast('success','Updated!'); refreshDashboard(); }
+    else showToast('error', json.error);
+  } catch(e) { showLoading(false); showToast('error','Server error.'); }
+}
+
+async function handleEditDetailsSubmit() {
+  const dealer = document.getElementById('ed_Dealer').value;
+  const client = document.getElementById('ed_Client').value;
+  const designer = document.getElementById('ed_Designer').value;
+  const time = document.getElementById('ed_Time').value;
+  const remark = document.getElementById('ed_Remark').value;
+  const file = document.getElementById('ed_File').files[0];
+  const formData = new FormData();
+  formData.append('dealerName', dealer);
+  formData.append('clientName', client);
+  formData.append('designerName', designer);
+  formData.append('designTime', time);
+  formData.append('remark', remark);
+  if(file) formData.append('file', file);
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/orders/${currentEditOrderId}/edit`, { method: 'PUT', body: formData });
+    const json = await res.json();
+    showLoading(false);
+    if(json.success) { bootstrap.Modal.getInstance(document.getElementById('editDetailsModal')).hide(); showToast('success','Updated!'); refreshDashboard(); }
+    else showToast('error', json.error);
+  } catch(e) { showLoading(false); showToast('error','Server error.'); }
+}
+
+async function handleDeleteOrder(ID) {
+  if(!confirm('Are you sure you want to PERMANENTLY delete this order?')) return;
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/orders/${ID}`, { method: 'DELETE' });
+    const json = await res.json();
+    showLoading(false);
+    if(json.success) { showToast('success','Order Deleted.'); refreshDashboard(); }
+    else showToast('error', json.error);
+  } catch(e) { showLoading(false); showToast('error','Server error.'); }
+}
+
+// ═══ DEALER/DESIGNER MODALS ═══
+function openAddDealerModal() {
+  populateList('newDealerList', db_forms.dealers || []);
+  document.getElementById('newDealerName').value = '';
+  document.getElementById('newDealerEmail').value = '';
+  document.getElementById('newDealerMobile').value = '';
+  new bootstrap.Modal(document.getElementById('addDealerModal')).show();
+}
+function openAddDesignerModal() {
+  populateList('newDesignerList', db_forms.indian || []);
+  document.getElementById('newDesignerName').value = '';
+  document.getElementById('newDesignerEmail').value = '';
+  new bootstrap.Modal(document.getElementById('addDesignerModal')).show();
+}
+
+async function handleAddDealer() {
+  const name = document.getElementById('newDealerName').value;
+  const email = document.getElementById('newDealerEmail').value;
+  const mobile = document.getElementById('newDealerMobile').value;
+  if(!name) { showToast('warning','Dealer name required.'); return; }
+  try {
+    const res = await fetch('/api/dashboards/dealers', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name,email,mobile}) });
+    const json = await res.json();
+    if(json.success) { bootstrap.Modal.getInstance(document.getElementById('addDealerModal')).hide(); showToast('success','Dealer Added!'); fetchFormOptions(); }
+    else showToast('error', json.error);
+  } catch(e) { showToast('error','Server error.'); }
+}
+
+async function handleAddDesigner() {
+  const name = document.getElementById('newDesignerName').value;
+  const email = document.getElementById('newDesignerEmail').value;
+  if(!name || !email) { showToast('warning','Name and email required.'); return; }
+  try {
+    const res = await fetch('/api/dashboards/designers', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name,email}) });
+    const json = await res.json();
+    if(json.success) { bootstrap.Modal.getInstance(document.getElementById('addDesignerModal')).hide(); showToast('success','Designer Added!'); fetchFormOptions(); }
+    else showToast('error', json.error);
+  } catch(e) { showToast('error','Server error.'); }
+}
+
+// ═══ MANAGE DATA MODAL ═══
+function openManageDataModal() {
+  new bootstrap.Modal(document.getElementById('manageDataModal')).show();
+  loadMasterData();
+}
+async function loadMasterData() {
+  try {
+    const res = await fetch('/api/dashboards/master-data');
+    const json = await res.json();
+    renderDealerTable(json.dealers || []);
+    renderDesignerTable(json.designers || []);
+  } catch(e) { console.error(e); }
+}
+function renderDealerTable(dealers) {
+  dealers.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  const tbody = document.getElementById('tbl_manage_dealers');
+  tbody.innerHTML = dealers.map(d => `
+    <tr class="manage-row">
+      <td><input type="text" class="form-control form-control-sm border-0 bg-transparent text-dark" id="dl_name_${d.id}" value="${d.name||''}"></td>
+      <td><input type="text" class="form-control form-control-sm border-0 bg-transparent text-dark" id="dl_email_${d.id}" value="${d.email||''}"></td>
+      <td><input type="text" class="form-control form-control-sm border-0 bg-transparent text-dark" id="dl_mobile_${d.id}" value="${d.mobile||''}"></td>
+      <td class="text-center">
+        <div class="btn-group">
+          <button class="btn btn-sm btn-outline-success" onclick="saveDealer(${d.id})"><i class="fas fa-save"></i></button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteDealer(${d.id})"><i class="fas fa-trash"></i></button>
+        </div>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="4" class="text-center">No Dealers</td></tr>';
+}
+function renderDesignerTable(designers) {
+  designers.sort((a,b) => (a.india_name||'').localeCompare(b.india_name||''));
+  const tbody = document.getElementById('tbl_manage_designers');
+  tbody.innerHTML = designers.map(d => `
+    <tr class="manage-row">
+      <td><input type="text" class="form-control form-control-sm border-0 bg-transparent text-dark" id="ds_india_${d.id}" value="${d.india_name||''}" readonly></td>
+      <td><input type="text" class="form-control form-control-sm border-0 bg-transparent text-dark" id="ds_india_email_${d.id}" value="${d.india_email||''}" readonly></td>
+      <td class="text-center">
+        <div class="btn-group">
+          <button class="btn btn-sm btn-outline-primary" id="btn_edit_india_${d.id}" onclick="toggleDesignerEdit(${d.id},'india')"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-sm btn-success d-none" id="btn_save_india_${d.id}" onclick="saveDesigner(${d.id})"><i class="fas fa-save"></i></button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteDesigner(${d.id})"><i class="fas fa-trash"></i></button>
+        </div>
+      </td>
+      <td><input type="text" class="form-control form-control-sm border-0 bg-transparent text-dark" id="ds_over_${d.id}" value="${d.overseas_name||''}" readonly></td>
+      <td><input type="text" class="form-control form-control-sm border-0 bg-transparent text-dark" id="ds_over_email_${d.id}" value="${d.overseas_email||''}" readonly></td>
+      <td class="text-center">
+        <div class="btn-group">
+          <button class="btn btn-sm btn-outline-primary" id="btn_edit_over_${d.id}" onclick="toggleDesignerEdit(${d.id},'over')"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-sm btn-success d-none" id="btn_save_over_${d.id}" onclick="saveDesigner(${d.id})"><i class="fas fa-save"></i></button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteDesigner(${d.id})"><i class="fas fa-trash"></i></button>
+        </div>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="6" class="text-center">No Designers</td></tr>';
+}
+async function saveDealer(id) {
+  const name = document.getElementById(`dl_name_${id}`).value;
+  const email = document.getElementById(`dl_email_${id}`).value;
+  const mobile = document.getElementById(`dl_mobile_${id}`).value;
+  const res = await fetch(`/api/dashboards/dealers/${id}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,mobile})});
+  const json = await res.json();
+  if(json.success) { showToast('success','Dealer Updated!'); fetchFormOptions(); } else showToast('error',json.error);
+}
+function toggleDesignerEdit(id, type) {
+  const nameEl = document.getElementById(`ds_${type}_${id}`);
+  const emailEl = document.getElementById(`ds_${type}_email_${id}`);
+  const editBtn = document.getElementById(`btn_edit_${type}_${id}`);
+  const saveBtn = document.getElementById(`btn_save_${type}_${id}`);
+  nameEl.removeAttribute('readonly'); emailEl.removeAttribute('readonly');
+  nameEl.classList.replace('border-0','border'); nameEl.classList.replace('bg-transparent','bg-white');
+  emailEl.classList.replace('border-0','border'); emailEl.classList.replace('bg-transparent','bg-white');
+  editBtn.classList.add('d-none'); saveBtn.classList.remove('d-none');
+}
+async function saveDesigner(id) {
+  const indiaName = document.getElementById(`ds_india_${id}`).value;
+  const indiaEmail = document.getElementById(`ds_india_email_${id}`).value;
+  const overName = document.getElementById(`ds_over_${id}`).value;
+  const overEmail = document.getElementById(`ds_over_email_${id}`).value;
+  showLoading(true);
+  const res = await fetch(`/api/dashboards/designers/${id}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({indiaName,indiaEmail,overseasName:overName,overseasEmail:overEmail})});
+  showLoading(false);
+  const json = await res.json();
+  if(json.success) { showToast('success','Designer Updated!'); loadMasterData(); } else showToast('error',json.error);
+}
+async function deleteDealer(id) {
+  if(!confirm('Delete this dealer?')) return;
+  const res = await fetch(`/api/dashboards/dealers/${id}`, {method:'DELETE'});
+  const json = await res.json();
+  if(json.success) { showToast('success','Deleted!'); loadMasterData(); fetchFormOptions(); } else showToast('error',json.error);
+}
+async function deleteDesigner(id) {
+  if(!confirm('Delete this designer?')) return;
+  const res = await fetch(`/api/dashboards/designers/${id}`, {method:'DELETE'});
+  const json = await res.json();
+  if(json.success) { showToast('success','Deleted!'); loadMasterData(); fetchFormOptions(); } else showToast('error',json.error);
+}
+function filterManageTables() {
+  const query = document.getElementById('manageSearchInput').value.toLowerCase().trim();
+  ['tbl_manage_dealers','tbl_manage_designers'].forEach(id => {
+    const tbody = document.getElementById(id);
+    if(!tbody) return;
+    Array.from(tbody.getElementsByTagName('tr')).forEach(row => {
+      if(row.cells.length < 2) return;
+      const inputs = row.querySelectorAll('input');
+      const match = Array.from(inputs).some(inp => inp.value.toLowerCase().includes(query));
+      row.style.display = match ? '' : 'none';
+    });
+  });
+}
+
+// ═══ BULK UPDATE ═══
+function openBulkUpdateModal() {
+  if(selectedOrderIds.size === 0) { showToast('warning','Please select at least one order.'); return; }
+  const tbody = document.getElementById('bulkUpdateTableBody');
+  tbody.innerHTML = '';
+  selectedOrderIds.forEach(id => {
+    const order = ordersData.find(o => o.ID.toString() === id.toString());
+    if(order) {
+      tbody.insertAdjacentHTML('beforeend', `
+        <tr class="bulk-row" data-id="${id}">
+          <td class="fw-bold text-dark">${id}</td>
+          <td>
+            <select class="form-select form-select-sm bulk-status">
+              <option value="Fresh Design">Fresh Design</option>
+              <option value="Modification Needed">Modification Needed</option>
+              <option value="Proofing Done" selected>Proofing Done</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </td>
+          <td><input type="file" class="form-control form-control-sm bulk-file" accept="image/*,application/pdf"></td>
+          <td><input type="text" class="form-control form-control-sm bulk-remark" placeholder="Enter remark..."></td>
+        </tr>`);
+    }
+  });
+  new bootstrap.Modal(document.getElementById('bulkUpdateModal')).show();
+}
+
+async function submitIndividualBulkUpdate() {
+  const rows = document.querySelectorAll('#bulkUpdateTableBody tr.bulk-row');
+  const btn = document.getElementById('btnBulkSubmit');
+  if(!rows.length) { showToast('warning','No orders selected.'); return; }
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+  const updates = [];
+  for(const row of rows) {
+    updates.push({ id: row.getAttribute('data-id'), status: row.querySelector('.bulk-status').value, remark: row.querySelector('.bulk-remark').value, userEmail: APP_USER.email });
+  }
+  try {
+    const res = await fetch('/api/orders/bulk-status', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates})});
+    const json = await res.json();
+    btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i> Update All Selected';
+    if(json.success) {
+      selectedOrderIds.clear();
+      const mc = document.getElementById('selectAllOrders'); if(mc) mc.checked = false;
+      showToast('success',`Updated ${json.count} orders.`);
+      bootstrap.Modal.getInstance(document.getElementById('bulkUpdateModal')).hide();
+      refreshDashboard();
+    } else showToast('error', json.error);
+  } catch(e) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i> Update All Selected'; showToast('error','Server error.'); }
+}
+
+// ═══ HELPERS ═══
+function populateList(id, array) {
+  const list = document.getElementById(id);
+  if(!list) return;
+  list.innerHTML = '';
+  (array||[]).forEach(item => { if(item) { const o = document.createElement('option'); o.value = item; list.appendChild(o); }});
+}
+function updateDesigners(team) {
+  const input = document.getElementById('designerInput');
+  input.value = '';
+  if(team === 'India') { populateList('designerList', db_forms.indian||[]); input.placeholder = 'Search Indian Designer...'; }
+  else { populateList('designerList', db_forms.cassie||[]); input.placeholder = 'Search Cassie Designer...'; }
+}
+function validateDealerSelection(input) {
+  const val = input.value; if(!val) return;
+  const list = document.getElementById(input.getAttribute('list'));
+  if(!list) return;
+  const valid = Array.from(list.options).map(o => o.value);
+  if(val && !valid.includes(val)) { showToast('warning','Please select a dealer from the list only.'); input.value = ''; input.focus(); }
+}
+function validateDesignerSelection(input) {
+  const val = input.value; if(!val) return;
+  const list = document.getElementById(input.getAttribute('list'));
+  if(!list) return;
+  const valid = Array.from(list.options).map(o => o.value);
+  if(val && !valid.includes(val)) { showToast('warning','Please select a designer from the list only.'); input.value = ''; input.focus(); }
+}
+function toggleSelectAll(master) {
+  document.querySelectorAll('.order-checkbox').forEach(cb => { cb.checked = master.checked; handleCheckboxChange(cb.value, master.checked); });
+}
+function handleCheckboxChange(id, isChecked) {
+  if(isChecked) selectedOrderIds.add(id.toString());
+  else selectedOrderIds.delete(id.toString());
+}
+function resetForm() {
+  document.getElementById('punchEmail').value = APP_USER.email;
+  document.querySelector('input[name="punchedBy"]:checked') && (document.querySelector('input[name="punchedBy"]:checked').checked = false);
+  document.getElementById('punchDealerInput').value = '';
+  document.getElementById('punchClientInput').value = '';
+  document.getElementById('punchRemarks').value = '';
+  document.getElementById('designerInput').value = '';
+  document.getElementById('punchDesignTime').value = '';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('fileText').textContent = 'Click or Drag files here';
+  document.getElementById('fileText').style.color = '#6c757d';
+}
+document.getElementById('fileInput')?.addEventListener('change', function() {
+  const txt = document.getElementById('fileText');
+  if(this.files.length > 0) { txt.textContent = this.files.length + ' file(s) selected'; txt.style.color = '#198754'; txt.style.fontWeight = 'bold'; }
+  else { txt.textContent = 'Click or Drag files here'; txt.style.color = '#6c757d'; txt.style.fontWeight = 'normal'; }
+});
+</script>
+
+<style>
+  .bg-light-glass { background: rgba(255,255,255,0.1); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.2); color: white; }
+  .bg-light-glass .card-header, .bg-light-glass .card-body { background: transparent !important; }
+  #ordersTable { background: rgba(255,255,255,0.9); border-radius: 8px; }
+  #ordersTable th { background-color: #343a40; color: white; }
+  .modal-content label { color: #333 !important; }
+  .readonly { background-color: #e9ecef; cursor: not-allowed; }
+  #bulkUpdateModal thead th { background-color: #ffffff !important; color: #212529 !important; border-bottom: 1px solid #dee2e6; }
+</style>

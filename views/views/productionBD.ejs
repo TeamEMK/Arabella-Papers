@@ -1,0 +1,308 @@
+<%# Production Dashboard %>
+<div id="prodRoot"></div>
+<script>
+document.getElementById('prodRoot').innerHTML = `
+<div class="container-fluid py-4">
+  <div class="d-flex gap-2 mb-3">
+    <button class="btn btn-primary smooth-ui" onclick="prod_openBulkModal()"><i class="fas fa-industry me-1"></i> Bulk Stage Update</button>
+    <button class="btn btn-outline-dark smooth-ui text-dark" onclick="fetchProductionData()"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+  </div>
+  <div class="card bg-light-glass mb-4 shadow-sm">
+    <button class="filter-toggle-btn btn-sm py-1 px-3 w-100 d-flex justify-content-between align-items-center rounded" type="button" data-bs-toggle="collapse" data-bs-target="#prodFilterContent">
+      <span class="text-dark p-2 fw-bold"><i class="fas fa-filter me-2"></i> Filters & Search</span>
+      <i class="fas fa-chevron-down text-dark"></i>
+    </button>
+    <div id="prodFilterContent" class="collapse">
+      <div class="card-body p-2">
+        <div class="row g-2 align-items-end">
+          <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Start</label><input type="date" id="prod_startDate" class="form-control form-control-sm" onchange="prodApplyFilters()"></div>
+          <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">End</label><input type="date" id="prod_endDate" class="form-control form-control-sm" onchange="prodApplyFilters()"></div>
+          <div class="col-12 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Search</label><input type="text" id="prod_search" class="form-control form-control-sm" placeholder="ID, Dealer, Designer..." onkeyup="prodApplyFilters()"></div>
+          <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Client Name</label><select id="prod_filterClient" class="form-select form-select-sm" onchange="prodApplyFilters()"><option value="">All Clients</option></select></div>
+          <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Designer</label><select id="prod_filterDesigner" class="form-select form-select-sm" onchange="prodApplyFilters()"><option value="">All Designers</option></select></div>
+          <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Overall Status</label><select id="prod_filterStatus" class="form-select form-select-sm" onchange="prodApplyFilters()"><option value="">All</option><option value="Pending">Pending</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option></select></div>
+          <div class="col-6 col-md-2"><button class="btn btn-secondary btn-sm w-100" onclick="prodClearFilters()">Clear</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card bg-light-glass shadow-lg">
+    <div class="card-header bg-transparent border-0"><h5 class="mb-0 text-dark fw-bold"><i class="fas fa-tools me-2"></i>Orders in Production Queue</h5></div>
+    <div class="card-body p-0">
+      <div class="table-responsive" style="max-height:350px;overflow-y:auto;position:relative;">
+        <table class="table table-hover table-striped mb-0 text-nowrap" style="border-collapse:separate;border-spacing:0;">
+          <thead class="table-dark">
+            <tr>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;"><input type="checkbox" id="prod_selectAll" onclick="prodToggleSelectAll(this)"></th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Ready</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Timestamp</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Actual Date</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dealer</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Client</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Designer</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Client Approval</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;">Dye Status</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;">Block Status</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;">Laser</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;">Output</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Production Stages</th>
+            </tr>
+          </thead>
+          <tbody id="prod_tbody"><tr><td colspan="15" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- View Modal -->
+<div class="modal fade" id="prod_viewModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">Order Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body" id="prod_viewBody"></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="prod_editModal" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header bg-warning text-dark"><h5 class="modal-title">Update Production: <span id="prod_editId"></span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="row g-3 mb-3">
+        <div class="col-md-4"><label class="small fw-bold">Guest Name</label><select class="form-select" name="Guest_Name"><option value="No">No GNA</option><option value="Pending">GNA Pending</option><option value="Received">GNA Received</option><option value="Printed">GNA Printed</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Paper Cutting</label><select class="form-select" name="Paper_Cutting"><option value="Pending">Pending</option><option value="Done">Done</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Dye Status</label><select class="form-select" name="Dye_Status"><option value="Dye Status">Dye Status</option><option value="NO DIE">NO DIE</option><option value="DIE NOT RECEIVED">DIE NOT RECEIVED</option><option value="DIE CUTTING DONE">DIE CUTTING DONE</option><option value="DIE SENT">DIE SENT</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Block Status</label><select class="form-select" name="Block_Status"><option value="Block Status">Block Status</option><option value="NO BLOCK">NO BLOCK</option><option value="BLOCK NOT RECEIVED">BLOCK NOT RECEIVED</option><option value="BLOCK PRINTED">BLOCK PRINTED</option><option value="BLOCK SENT">BLOCK SENT</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Printing</label><select class="form-select" name="Printing"><option value="Pending">Pending</option><option value="Done">Done</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Edges</label><select class="form-select" name="Edges"><option value="Pending" selected>Pending</option><option value="No">No</option><option value="Done">Done</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Laser Cutting</label><select class="form-select" name="Laser_Cutting"><option value="Pending">Pending</option><option value="Done">Done</option><option value="No">No</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Output</label><select class="form-select" name="Output"><option value="Pending">Pending</option><option value="Done">Done</option><option value="No">No</option></select></div>
+        <div class="col-md-12"><label class="small fw-bold text-success">Card Assembly (Final)</label><select class="form-select border-success" name="Card_Assembly"><option value="Pending">Pending</option><option value="Done">Done</option></select></div>
+      </div>
+      <div class="mb-3"><label class="form-label fw-bold">Remark</label><textarea class="form-control" name="Remark" rows="2"></textarea></div>
+      <div class="mb-3"><label class="form-label fw-bold">Reason For Delay</label><textarea class="form-control" name="Reason_For_Delay" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-success" onclick="prod_submitUpdate()"><i class="fas fa-save me-1"></i> Save</button><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button></div>
+  </div></div>
+</div>
+
+<!-- Bulk Modal -->
+<div class="modal fade" id="prod_bulkModal" tabindex="-1">
+  <div class="modal-dialog modal-xl"><div class="modal-content">
+    <div class="modal-header bg-primary text-white"><h5 class="modal-title">Bulk Production Update</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body p-0"><div class="table-responsive" style="max-height:500px;"><table class="table table-bordered align-middle mb-0"><thead class="sticky-top"><tr><th style="background:#fff;color:#000;">ID</th><th style="background:#fff;color:#000;">Guest</th><th style="background:#fff;color:#000;">Paper</th><th style="background:#fff;color:#000;">Dye</th><th style="background:#fff;color:#000;">Block</th><th style="background:#fff;color:#000;">Print</th><th style="background:#fff;color:#000;">Edges</th><th style="background:#fff;color:#000;">Laser</th><th style="background:#fff;color:#000;">Output</th><th style="background:#fff;color:#000;">Assembly</th></tr></thead><tbody id="prod_bulkBody" class="bg-white"></tbody></table></div></div>
+    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="prod_btnBulk" onclick="prod_submitBulk()"><i class="fas fa-save me-1"></i> Update Selected</button></div>
+  </div></div>
+</div>
+`;
+
+var prod_data = [], prod_filtered = [], prod_selected = new Set(), prod_editId = null;
+const PROD_COLS = ['Guest_Name','Paper_Cutting','Dye_Status','Block_Status','Printing','Edges','Laser_Cutting','Output','Card_Assembly','Remark','Reason_For_Delay'];
+
+async function fetchProductionData() {
+  try {
+    const res = await fetch('/api/dashboards/production');
+    const json = await res.json();
+    prod_data = json.data || [];
+    prod_populateFilters(prod_data);
+    prodApplyFilters();
+  } catch(e) { console.error(e); }
+}
+fetchProductionData();
+
+function prod_populateFilters(data) {
+  const designers = new Set(), clients = new Set();
+  data.forEach(o => { if(o.Designer) designers.add(o.Designer); if(o.Client_name) clients.add(o.Client_name); });
+  prod_fillSelect('prod_filterDesigner', designers);
+  prod_fillSelect('prod_filterClient', clients);
+}
+function prod_fillSelect(id, set) {
+  const s = document.getElementById(id); if(!s) return;
+  const cur = s.value; s.innerHTML = `<option value="">All</option>`;
+  Array.from(set).sort().forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; s.appendChild(o); });
+  s.value = cur;
+}
+function prodApplyFilters() {
+  const status = (document.getElementById('prod_filterStatus')||{}).value||'';
+  const designer = (document.getElementById('prod_filterDesigner')||{}).value||'';
+  const client = (document.getElementById('prod_filterClient')||{}).value||'';
+  const search = (document.getElementById('prod_search')||{}).value||'';
+  prod_filtered = prod_data.filter(o => {
+    if(!o) return false;
+    const isCompleted = (o.Card_Assembly||'').toLowerCase().includes('done');
+    let curStatus = 'Pending';
+    if(isCompleted) curStatus = 'Completed';
+    else {
+      const steps = [o.Guest_Name,o.Paper_Cutting,o.Dye_Status,o.Block_Status,o.Printing,o.Edges,o.Laser_Cutting,o.Output];
+      if(steps.some(v => v && !['pending','no','not done','','dye status','block status'].includes((v||'').toLowerCase().trim()))) curStatus = 'In Progress';
+    }
+    return (!status || curStatus === status) &&
+      (!designer || (o.Designer||'').toLowerCase() === designer.toLowerCase()) &&
+      (!client || (o.Client_name||'').toLowerCase() === client.toLowerCase()) &&
+      (!search || JSON.stringify(o).toLowerCase().includes(search.toLowerCase()));
+  });
+  prod_renderTable(prod_filtered);
+}
+function prodClearFilters() {
+  ['prod_filterStatus','prod_filterDesigner','prod_filterClient','prod_search','prod_startDate','prod_endDate'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  prodApplyFilters();
+}
+function prod_renderTable(data) {
+  const tbody = document.getElementById('prod_tbody');
+  if(!data.length) { tbody.innerHTML = '<tr><td colspan="15" class="text-center">No orders found.</td></tr>'; return; }
+  tbody.innerHTML = data.map(o => {
+    const isChecked = prod_selected.has(o.ID.toString()) ? 'checked' : '';
+    const isReady = prod_checkReady(o);
+    const readyBtn = isReady === true ? `<button class="btn btn-sm btn-outline-primary border-0" onclick="prod_markDispatch('${o.ID}')"><i class="fas fa-paper-plane"></i></button>` : isReady === 'ALREADY_SENT' ? `<span class="text-success small fw-bold"><i class="fas fa-check-circle"></i> Sent</span>` : `<span class="text-muted opacity-50"><i class="fas fa-clock"></i></span>`;
+    const badges = prod_getStageBadges(o);
+    const clientBadge = prod_getClientBadge(o.Design_Approval_Status_From_Client);
+    return `<tr>
+      <td><input type="checkbox" class="prod_checkbox" value="${o.ID}" ${isChecked} onchange="prod_handleCheck('${o.ID}',this.checked)"></td>
+      <td><div class="d-flex gap-1"><button class="btn btn-sm btn-info" onclick='prod_openView(${JSON.stringify(o.rowData||{})})'><i class="fas fa-eye text-white"></i></button><button class="btn btn-sm btn-warning" onclick="prod_openEdit('${o.ID}')"><i class="fas fa-edit text-dark"></i></button></div></td>
+      <td class="text-center">${readyBtn}</td>
+      <td class="fw-bold">${o.ID}</td>
+      <td>${o.Timestamp||''}</td>
+      <td class="text-primary fw-bold">${o.Actual_Date||''}</td>
+      <td>${o.Dealer_name||''}</td>
+      <td>${o.Client_name||''}</td>
+      <td><small class="text-muted">${o.Designer||''}</small></td>
+      <td>${clientBadge}</td>
+      <td>${o.Dye_Status||'-'}</td>
+      <td>${o.Block_Status||'-'}</td>
+      <td>${o.Laser_Cutting||'-'}</td>
+      <td>${o.Output||'-'}</td>
+      <td>${badges}</td>
+    </tr>`;
+  }).join('');
+}
+function prod_getClientBadge(s) {
+  if(!s) return '';
+  const l = s.toLowerCase();
+  let c='secondary';
+  if(l.includes('final')) c='success';
+  else if(l.includes('modification')) c='warning';
+  else if(l.includes('reorder')) c='primary';
+  return `<span class="badge rounded-pill bg-${c}">${s}</span>`;
+}
+function prod_getStageBadges(o) {
+  const v = k => (o[k]||'').toString().trim().toLowerCase();
+  const cfg = [
+    {val:v('Guest_Name'), ok:['no','no gna','printed','gna printed'], label:'GNA'},
+    {val:v('Paper_Cutting'), ok:['done'], label:'Paper'},
+    {val:v('Dye_Status'), ok:['no die','die cutting done','die sent'], label:'Dye'},
+    {val:v('Block_Status'), ok:['no block','block printed','block sent'], label:'Block'},
+    {val:v('Printing'), ok:['done'], label:'Print'},
+    {val:v('Edges'), ok:['no','done'], label:'Edges'},
+    {val:v('Laser_Cutting'), ok:['no','done'], label:'Laser'},
+    {val:v('Output'), ok:['no','done'], label:'Output'},
+    {val:v('Card_Assembly'), ok:['done'], label:'Assembly'},
+  ];
+  return cfg.map(i => i.ok.includes(i.val) ? `<span class="badge bg-${i.label==='Assembly'?'success':'primary'} me-1 mb-1">${i.label}</span>` : '').join('');
+}
+function prod_checkReady(o) {
+  if(o.Dispatch_Status && o.Dispatch_Status.trim()) return 'ALREADY_SENT';
+  const v = k => (o[k]||'').toString().trim().toLowerCase();
+  return ['no','no gna','printed','gna printed'].includes(v('Guest_Name')) &&
+    v('Paper_Cutting')==='done' &&
+    ['no die','die cutting done','die sent'].includes(v('Dye_Status')) &&
+    ['no block','block printed','block sent'].includes(v('Block_Status')) &&
+    v('Printing')==='done' &&
+    ['no','done'].includes(v('Edges')) &&
+    ['no','done'].includes(v('Laser_Cutting')) &&
+    ['no','done'].includes(v('Output')) &&
+    v('Card_Assembly')==='done' ? true : false;
+}
+function prod_openView(rowData) {
+  const body = document.getElementById('prod_viewBody');
+  const linkKeys = ['Upload the one Design file','Upload Design','Revision Design Upload','Approved Design'];
+  let html = '<div class="row">';
+  for(const key in rowData) {
+    let val = rowData[key]; if(!val||val.toString().trim()==='') continue;
+    let isLink = false;
+    if((linkKeys.includes(key)||key.toLowerCase().includes('upload'))&&val.toString().includes('http')) {
+      val = val.toString().split(/[\n,]+/).map(l => l.trim().startsWith('http')?`<a href="${l.trim()}" target="_blank" class="btn btn-sm btn-outline-primary m-1"><i class="fas fa-external-link-alt me-1"></i>View File</a>`:'').join(''); isLink=true;
+    }
+    const col = key.toLowerCase().includes('remark')||key.length>50?'col-12':'col-md-6';
+    html += `<div class="${col} view-item"><span class="view-label">${key}</span><div class="${isLink?'':'view-value'}">${val}</div></div>`;
+  }
+  body.innerHTML = html+'</div>';
+  new bootstrap.Modal(document.getElementById('prod_viewModal')).show();
+}
+function prod_openEdit(id) {
+  prod_editId = id;
+  const o = prod_data.find(x => x.ID.toString()===id.toString());
+  document.getElementById('prod_editId').textContent = id;
+  const modal = document.getElementById('prod_editModal');
+  PROD_COLS.forEach(col => {
+    const input = modal.querySelector(`[name="${col}"]`);
+    if(input && o && o[col]) input.value = o[col];
+  });
+  new bootstrap.Modal(modal).show();
+}
+async function prod_submitUpdate() {
+  const modal = document.getElementById('prod_editModal');
+  const updateData = { userEmail: APP_USER.email };
+  PROD_COLS.forEach(col => {
+    const input = modal.querySelector(`[name="${col}"]`);
+    if(input) updateData[col] = input.value;
+  });
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/dashboards/production/${prod_editId}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(updateData)});
+    const json = await res.json();
+    showLoading(false);
+    if(json.success) { bootstrap.Modal.getInstance(modal).hide(); showToast('success','Updated!'); fetchProductionData(); }
+    else showToast('error', json.error);
+  } catch(e) { showLoading(false); showToast('error','Server error.'); }
+}
+async function prod_markDispatch(id) {
+  if(!confirm('Send this order to Dispatch Dashboard?')) return;
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/dashboards/production/${id}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({Dispatch_Status:'Ready',userEmail:APP_USER.email})});
+    const json = await res.json();
+    showLoading(false);
+    if(json.success) { showToast('success','Sent to Dispatch!'); fetchProductionData(); }
+    else showToast('error',json.error);
+  } catch(e) { showLoading(false); showToast('error','Server error.'); }
+}
+function prodToggleSelectAll(m) { document.querySelectorAll('.prod_checkbox').forEach(c => { c.checked = m.checked; prod_handleCheck(c.value, m.checked); }); }
+function prod_handleCheck(id, checked) { if(checked) prod_selected.add(id.toString()); else prod_selected.delete(id.toString()); }
+function prod_openBulkModal() {
+  if(!prod_selected.size) { showToast('warning','Select at least one order.'); return; }
+  const tbody = document.getElementById('prod_bulkBody'); tbody.innerHTML = '';
+  prod_selected.forEach(id => {
+    const o = prod_data.find(x=>x.ID.toString()===id.toString());
+    if(o) tbody.insertAdjacentHTML('beforeend',`<tr class="prod_bulk_row" data-id="${id}">
+      <td class="fw-bold">${id}</td>
+      <td>${prod_mkSel('Guest_Name',o.Guest_Name,['No','Pending','Received','Printed'])}</td>
+      <td>${prod_mkSel('Paper_Cutting',o.Paper_Cutting,['Pending','Done'])}</td>
+      <td>${prod_mkSel('Dye_Status',o.Dye_Status,['Dye Status','NO DIE','DIE NOT RECEIVED','DIE CUTTING DONE','DIE SENT'])}</td>
+      <td>${prod_mkSel('Block_Status',o.Block_Status,['Block Status','NO BLOCK','BLOCK NOT RECEIVED','BLOCK PRINTED','BLOCK SENT'])}</td>
+      <td>${prod_mkSel('Printing',o.Printing,['Pending','Done'])}</td>
+      <td>${prod_mkSel('Edges',o.Edges,['Pending','No','Done'])}</td>
+      <td>${prod_mkSel('Laser_Cutting',o.Laser_Cutting,['Pending','Done','No'])}</td>
+      <td>${prod_mkSel('Output',o.Output,['Pending','Done','No'])}</td>
+      <td>${prod_mkSel('Card_Assembly',o.Card_Assembly,['Pending','Done'])}</td>
+    </tr>`);
+  });
+  new bootstrap.Modal(document.getElementById('prod_bulkModal')).show();
+}
+function prod_mkSel(name, cur, opts) {
+  return `<select class="form-select form-select-sm prod_bulk_input" data-field="${name}">${opts.map(o=>`<option value="${o}" ${cur===o?'selected':''}>${o}</option>`).join('')}</select>`;
+}
+async function prod_submitBulk() {
+  const rows = document.querySelectorAll('.prod_bulk_row');
+  const btn = document.getElementById('prod_btnBulk');
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+  const updates = Array.from(rows).map(r => {
+    const upd = { ID: r.getAttribute('data-id'), userEmail: APP_USER.email };
+    r.querySelectorAll('.prod_bulk_input').forEach(s => { upd[s.getAttribute('data-field')] = s.value; });
+    return upd;
+  });
+  try {
+    const res = await fetch('/api/dashboards/production/bulk', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates})});
+    const json = await res.json();
+    btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i> Update Selected';
+    if(json.success) { prod_selected.clear(); const mc=document.getElementById('prod_selectAll'); if(mc) mc.checked=false; bootstrap.Modal.getInstance(document.getElementById('prod_bulkModal')).hide(); showToast('success','Bulk Updated!'); fetchProductionData(); }
+    else showToast('error', json.error);
+  } catch(e) { btn.disabled=false; btn.innerHTML='<i class="fas fa-save me-1"></i> Update Selected'; showToast('error','Server error.'); }
+}
+</script>
