@@ -21,21 +21,50 @@
       animation: fadeIn 0.8s ease-in-out;
     }
     h2 { font-size: 24px; color: white; margin-bottom: 20px; }
-    .input-group-custom { position: relative; margin-bottom: 20px; }
+    .input-group-custom { position: relative; margin-bottom: 26px; }
     .input-group-custom input {
-      width: 100%; padding: 10px; outline: none;
+      width: 100%; padding: 10px 40px 10px 0; outline: none;
       background: transparent; color: white; font-size: 16px;
       border: none; border-bottom: 1px solid rgba(255,255,255,0.3);
-      transition: 0.3s;
+      transition: border-color 0.3s;
     }
+    .input-group-custom input:focus { border-bottom-color: #ffcc00; }
+
+    /* Chrome paints autofilled fields with its own pale background and dark
+       text, which turns this white-on-dark form unreadable. The inset shadow
+       is the only way to override that background; -webkit-text-fill-color is
+       the only way to override the text. */
+    .input-group-custom input:-webkit-autofill,
+    .input-group-custom input:-webkit-autofill:hover,
+    .input-group-custom input:-webkit-autofill:focus {
+      -webkit-text-fill-color: #fff;
+      -webkit-box-shadow: 0 0 0 1000px #0a0a0a inset;
+      caret-color: #fff;
+      /* Delays Chrome's own background animation past any realistic session. */
+      transition: background-color 9999s ease-in-out 0s;
+    }
+
     .input-group-custom label {
-      position: absolute; top: 10px; left: 0; color: white;
+      position: absolute; top: 10px; left: 0; color: rgba(255,255,255,0.75);
       font-size: 16px; pointer-events: none; transition: 0.3s;
     }
+    /* :placeholder-shown rather than :valid — an autofilled field is not
+       reliably :valid before the user touches it, which left the label sitting
+       on top of the value. Each input carries placeholder=" " for this. */
     .input-group-custom input:focus ~ label,
-    .input-group-custom input:valid ~ label {
-      top: -15px; font-size: 12px; color: #ffcc00;
+    .input-group-custom input:not(:placeholder-shown) ~ label,
+    .input-group-custom input:-webkit-autofill ~ label {
+      top: -16px; font-size: 12px; color: #ffcc00;
     }
+
+    .pw-toggle {
+      position: absolute; right: 0; top: 4px;
+      background: none; border: none; padding: 6px 4px;
+      color: rgba(255,255,255,0.6); cursor: pointer; font-size: 15px;
+      transition: color 0.2s;
+    }
+    .pw-toggle:hover { color: #ffcc00; }
+    .pw-toggle:focus-visible { outline: 2px solid #ffcc00; outline-offset: 2px; border-radius: 4px; }
     .login-btn {
       width: 100%; padding: 10px; border: none;
       background: #ffcc00; color: black; font-size: 18px;
@@ -54,16 +83,20 @@
 </head>
 <body>
   <div class="login-container">
-    <img src="https://drive.google.com/thumbnail?id=1bTV0jEU5E8f0QeqBO8urDPa4BaCH1QsB" alt="Arabella Papers" class="logo"/>
+    <img src="https://drive.google.com/thumbnail?id=1bTV0jEU5E8f0QeqBO8urDPa4BaCH1QsB" alt="Arabella Papers"
+         class="logo" onerror="this.remove()"/>
     <h2>Login</h2>
     <form method="POST" action="/login" id="loginForm">
       <div class="input-group-custom">
-        <input type="email" id="email" name="email" required autocomplete="email"/>
+        <input type="email" id="email" name="email" placeholder=" " required autocomplete="email"/>
         <label for="email">Email</label>
       </div>
       <div class="input-group-custom">
-        <input type="password" id="password" name="password" required autocomplete="current-password"/>
+        <input type="password" id="password" name="password" placeholder=" " required autocomplete="current-password"/>
         <label for="password">Password</label>
+        <button type="button" class="pw-toggle" id="pwToggle" aria-label="Show password" aria-pressed="false">
+          <i class="fas fa-eye" id="pwIcon" aria-hidden="true"></i>
+        </button>
       </div>
       <button type="submit" class="login-btn" id="loginBtn">Login</button>
       <% if (error) { %>
@@ -76,6 +109,27 @@
       const btn = document.getElementById('loginBtn');
       btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Verifying...';
       btn.disabled = true;
+    });
+
+    var pwInput = document.getElementById('password');
+    var pwToggle = document.getElementById('pwToggle');
+    var pwIcon = document.getElementById('pwIcon');
+
+    pwToggle.addEventListener('click', function() {
+      var show = pwInput.type === 'password';
+      pwInput.type = show ? 'text' : 'password';
+      pwIcon.className = show ? 'fas fa-eye-slash' : 'fas fa-eye';
+      pwToggle.setAttribute('aria-pressed', String(show));
+      pwToggle.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      // Keep the caret where it was instead of dropping focus on the button.
+      pwInput.focus();
+      pwInput.setSelectionRange(pwInput.value.length, pwInput.value.length);
+    });
+
+    // Never leave a password on screen after the form is submitted or the tab
+    // is left open in the background.
+    document.getElementById('loginForm').addEventListener('submit', function() {
+      pwInput.type = 'password';
     });
   </script>
 </body>
