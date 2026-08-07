@@ -30,11 +30,36 @@ none of the limits listed at the bottom of this file.
 
 ## Step 2: Create the tables
 
-1. MySQL service → **Data** tab → **Query**
-2. Paste all of [config/schema.sql](config/schema.sql) and run it
+Railway already gives you a database called `railway`. The first two lines of
+[config/schema.sql](config/schema.sql) create a *different* database
+(`arabella_paper`) and switch to it:
 
-This creates the tables plus the default admin user. The `sessions` table is
-created automatically by the app on first boot.
+```sql
+CREATE DATABASE IF NOT EXISTS arabella_paper ...;
+USE arabella_paper;
+```
+
+**Skip those two lines** and load the rest into Railway's existing `railway`
+database. Then `DB_NAME` is `railway`. (Running them also works — Railway's root
+user may create databases — but then you must set `DB_NAME=arabella_paper`
+instead. Pick one and stay consistent, or the app will connect to an empty
+database and every query will fail with `ER_NO_SUCH_TABLE`.)
+
+**Option A — Railway web console (easiest)**
+
+1. MySQL service → **Data** tab → **Query**
+2. Paste `config/schema.sql` from line 8 onward (everything after `USE`)
+3. Run
+
+**Option B — mysql CLI from your machine**
+
+```bash
+mysql -h <public-host> -P <public-port> -u root -p railway \
+  < <(tail -n +8 config/schema.sql)
+```
+
+Either way this creates the tables plus the default admin user. The `sessions`
+table is created automatically by the app on first boot.
 
 ---
 
@@ -53,7 +78,7 @@ created automatically by the app on first boot.
    | `DB_PORT` | public proxy port, e.g. `41234` |
    | `DB_USER` | usually `root` |
    | `DB_PASSWORD` | from `MYSQL_PUBLIC_URL` |
-   | `DB_NAME` | usually `railway` |
+   | `DB_NAME` | `railway` — must match whichever database you loaded the schema into in Step 2 |
    | `SESSION_SECRET` | long random string (see below) |
    | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | `akhileshvyas@reactwebappav.iam.gserviceaccount.com` |
    | `GOOGLE_PRIVATE_KEY` | `"-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----"` |
@@ -133,6 +158,7 @@ DELETE FROM sessions WHERE expires < UNIX_TIMESTAMP();
 | Symptom | Cause |
 |---|---|
 | Requests hang, then 504 | `DB_HOST` is the private `.railway.internal` host. Use the public proxy host. |
+| `ER_NO_SUCH_TABLE` | `DB_NAME` points at a different database than the one you loaded the schema into. See Step 2. |
 | Login redirects back to `/login` forever | `SESSION_SECRET` missing, or the `sessions` table could not be created — check the DB user's privileges. |
 | 500 on every page | Function logs: Vercel → project → **Logs**. Usually a wrong `DB_*` value. |
 | `File too large` on upload | Over the 4MB per-file cap. See limits above. |
