@@ -39,11 +39,18 @@ PORT             = 3000
 
 ---
 
-## Step 4: Run Schema
+## Step 4: Schema — nothing to do
 
-1. Go to MySQL service → **Query** tab (or use any MySQL client with Railway's connection string)
-2. Paste the contents of `config/schema.sql` and run it
-3. This creates all tables and the default admin user
+The app creates its own tables. `config/initDb.js` runs `config/schema.sql` on
+first boot if the database is empty, and skips it otherwise. The default admin
+user is created along with the tables.
+
+The boot log tells you which happened:
+
+```
+Database: schema created (7 statements)
+Database: schema already present
+```
 
 ---
 

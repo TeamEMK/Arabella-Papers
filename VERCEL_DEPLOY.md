@@ -61,38 +61,31 @@ mysql -h <public-host> -P <public-port> -u root -p railway -e "SELECT VERSION();
 
 ---
 
-## Step 2: Create the tables
+## Step 2: Create the tables — nothing to do
 
-Railway already gives you a database called `railway`. The first two lines of
-[config/schema.sql](config/schema.sql) create a *different* database
-(`arabella_paper`) and switch to it:
+The app builds its own schema. [config/initDb.js](config/initDb.js) checks for
+the `users` table on the first request and, if the database is empty, runs
+[config/schema.sql](config/schema.sql) against whatever `DB_NAME` points at.
+
+It is safe to run repeatedly: every statement is `CREATE TABLE IF NOT EXISTS` or
+`INSERT IGNORE`, and the check short-circuits once the tables exist. Concurrent
+requests during a cold start share one promise, so the schema is never built
+twice in parallel.
+
+One detail worth knowing: `schema.sql` opens with
 
 ```sql
 CREATE DATABASE IF NOT EXISTS arabella_paper ...;
 USE arabella_paper;
 ```
 
-**Skip those two lines** and load the rest into Railway's existing `railway`
-database. Then `DB_NAME` is `railway`. (Running them also works — Railway's root
-user may create databases — but then you must set `DB_NAME=arabella_paper`
-instead. Pick one and stay consistent, or the app will connect to an empty
-database and every query will fail with `ER_NO_SUCH_TABLE`.)
+Hosted MySQL hands you an already-created database (Railway calls it `railway`),
+so `initDb.js` strips that header before running the statements. That is why
+`DB_NAME=railway` works even though the file names a different database. If you
+ever load the file by hand instead, skip those two lines or the tables will land
+somewhere `DB_NAME` isn't pointing.
 
-**Option A — Railway web console (easiest)**
-
-1. MySQL service → **Data** tab → **Query**
-2. Paste `config/schema.sql` from line 8 onward (everything after `USE`)
-3. Run
-
-**Option B — mysql CLI from your machine**
-
-```bash
-mysql -h <public-host> -P <public-port> -u root -p railway \
-  < <(tail -n +8 config/schema.sql)
-```
-
-Either way this creates the tables plus the default admin user. The `sessions`
-table is created automatically by the app on first boot.
+The default admin user is created along with the tables.
 
 ---
 

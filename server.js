@@ -6,6 +6,7 @@ const MySQLStore = require('express-mysql-session')(session);
 const path = require('path');
 
 const db = require('./config/db');
+const { ensureSchema } = require('./config/initDb');
 const { injectUser } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const indexRoutes = require('./routes/index');
@@ -39,6 +40,12 @@ if (isServerless) app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Build the schema on the first request against an empty database. Runs before
+// the session middleware so the store is not querying tables that don't exist.
+app.use((req, res, next) => {
+  ensureSchema().then(() => next(), next);
+});
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'arabella-secret-key-2024',
@@ -91,6 +98,14 @@ if (!isServerless) {
   app.listen(PORT, () => {
     console.log(`✅ Arabella Paper FMS running on port ${PORT}`);
     console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
+    // Report at boot rather than waiting for the first request to reveal a
+    // broken database.
+    ensureSchema().then(
+      r => console.log(r.created
+        ? `   Database: schema created (${r.statements} statements)`
+        : '   Database: schema already present'),
+      err => console.error('   Database: schema setup FAILED —', err.message),
+    );
   });
 }
 
