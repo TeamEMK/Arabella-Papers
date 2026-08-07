@@ -34,7 +34,14 @@ const TYPES = {
       { key: 'designer', header: 'Designer', aliases: ['designer name'], required: true },
       { key: 'designTime', header: 'Possible Design Time', aliases: ['design time'], required: true },
     ],
-    sample: ['orders@arabella.com', 'India Team', 'Sharma Traders', 'Hotel Grand', 'Menu card reprint', 'Ravi', '2 Hours'],
+    // Spread across the samples: both punched-by values, several design times,
+    // and a blank optional column — so the file answers "what goes here?"
+    // without anyone having to read a separate note.
+    samples: [
+      ['orders@arabella.com', 'India Team', 'Sharma Traders', 'Hotel Grand', 'Menu card reprint', 'Ravi Kumar', '2 Hours'],
+      ['orders@arabella.com', 'Cassie', 'Verma Papers', 'Cafe Mocha', 'Wedding invite - gold foil', 'Cassie', 'EOD'],
+      ['orders@arabella.com', 'India Team', 'Gupta Enterprises', 'Sunrise Hotel', '', 'Neha Sharma', '10 Minutes'],
+    ],
   },
   dealers: {
     label: 'Dealers',
@@ -43,7 +50,11 @@ const TYPES = {
       { key: 'email', header: 'Email', aliases: ['email address'], required: false },
       { key: 'mobile', header: 'Mobile No', aliases: ['mobile', 'mobile number', 'phone'], required: false },
     ],
-    sample: ['Sharma Traders', 'sharma@example.com', '9876543210'],
+    samples: [
+      ['Sharma Traders', 'sharma@example.com', '9876543210'],
+      ['Verma Papers', 'verma@example.com', '9811122233'],
+      ['Gupta Enterprises', '', ''],
+    ],
   },
   designers: {
     label: 'Designers',
@@ -51,7 +62,11 @@ const TYPES = {
       { key: 'name', header: 'Designer Name', aliases: ['name'], required: true },
       { key: 'email', header: 'Email', aliases: ['email address'], required: false },
     ],
-    sample: ['Ravi Kumar', 'ravi@example.com'],
+    samples: [
+      ['Ravi Kumar', 'ravi@example.com'],
+      ['Neha Sharma', 'neha@example.com'],
+      ['Amit Patel', ''],
+    ],
   },
 };
 
@@ -183,15 +198,38 @@ async function analyse(type, rows) {
   };
 }
 
-// GET /api/bulk/template/:type — a correctly-headed starter file
+// GET /api/bulk/template/:type — a sample file showing the exact headers and
+// the kind of value each column takes. Deliberately importable as-is: no
+// comment or instruction rows, since anything extra becomes a broken row the
+// moment someone edits this file and uploads it.
 router.get('/template/:type', canImport, (req, res) => {
   const type = TYPES[req.params.type];
   if (!type) return res.status(404).json({ success: false, error: 'Unknown import type.' });
 
-  const csv = toCsv([type.columns.map(c => c.header), type.sample]);
+  const csv = toCsv([type.columns.map(c => c.header)].concat(type.samples));
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${req.params.type}-template.csv"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${req.params.type}-sample.csv"`);
+  // Excel reads a plain UTF-8 CSV as the local codepage and mangles any
+  // non-ASCII name; the BOM is what makes it open correctly on a double-click.
   res.send('﻿' + csv);
+});
+
+// GET /api/bulk/columns/:type — what the UI shows above the file picker
+router.get('/columns/:type', canImport, (req, res) => {
+  const type = TYPES[req.params.type];
+  if (!type) return res.status(404).json({ success: false, error: 'Unknown import type.' });
+
+  res.json({
+    success: true,
+    columns: type.columns.map(c => ({
+      key: c.key,
+      header: c.header,
+      required: !!c.required,
+      allowed: c.key === 'punchedBy' ? PUNCHED_BY
+        : c.key === 'designTime' ? DESIGN_TIMES
+        : null,
+    })),
+  });
 });
 
 // POST /api/bulk/preview — parse and validate, writing nothing
