@@ -26,6 +26,10 @@ function getNavMenu(role, domain) {
     menu.push({ id: 'o2dsummary', name: 'Analytics' });
   }
 
+  if (roleStr === 'SuperAdmin' || domain === 'Head') {
+    menu.push({ id: 'bulkUpload', name: 'Bulk Upload' });
+  }
+
   if (roleStr === 'SuperAdmin') {
     menu.push({ id: 'users', name: 'Users' });
   }
