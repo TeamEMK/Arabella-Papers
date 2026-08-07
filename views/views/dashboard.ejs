@@ -173,16 +173,9 @@
           <label class="form-label text-dark fw-bold">Mobile No</label>
           <input type="text" id="newDealerMobile" class="form-control" placeholder="Enter mobile number"/>
         </div>
+        <div class="bulk-inline" data-bulk-type="dealers"></div>
       </div>
-      <div class="modal-footer d-flex justify-content-between">
-        <div class="bulk-actions">
-          <button type="button" class="btn btn-outline-dark btn-sm" onclick="goBulkUpload('dealers')">
-            <i class="fas fa-cloud-upload-alt me-1"></i> Bulk Upload
-          </button>
-          <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="downloadSample('dealers')">
-            <i class="fas fa-file-csv me-1"></i> Sample
-          </button>
-        </div>
+      <div class="modal-footer">
         <button class="btn btn-primary" onclick="handleAddDealer()">Save Dealer</button>
       </div>
     </div>
@@ -207,16 +200,9 @@
           <label class="form-label text-dark fw-bold">Email</label>
           <input type="email" id="newDesignerEmail" class="form-control" required placeholder="Enter email"/>
         </div>
+        <div class="bulk-inline" data-bulk-type="designers"></div>
       </div>
-      <div class="modal-footer d-flex justify-content-between">
-        <div class="bulk-actions">
-          <button type="button" class="btn btn-outline-dark btn-sm" onclick="goBulkUpload('designers')">
-            <i class="fas fa-cloud-upload-alt me-1"></i> Bulk Upload
-          </button>
-          <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="downloadSample('designers')">
-            <i class="fas fa-file-csv me-1"></i> Sample
-          </button>
-        </div>
+      <div class="modal-footer">
         <button class="btn btn-primary" onclick="handleAddDesigner()">Save Designer</button>
       </div>
     </div>
@@ -287,23 +273,16 @@
               <input type="file" id="fileInput" multiple accept=".pdf,.jpg,.jpeg,.png"/>
             </div>
           </div>
+          <div class="col-12">
+            <div class="bulk-inline" data-bulk-type="orders"></div>
+          </div>
         </div>
       </div>
-      <div class="modal-footer d-flex justify-content-between">
-        <div class="bulk-actions">
-          <button type="button" class="btn btn-outline-dark btn-sm" onclick="goBulkUpload('orders')">
-            <i class="fas fa-cloud-upload-alt me-1"></i> Bulk Upload
-          </button>
-          <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="downloadSample('orders')">
-            <i class="fas fa-file-csv me-1"></i> Sample
-          </button>
-        </div>
-        <div>
-          <button class="btn btn-primary" id="btnSubmit" onclick="handleFormSubmit()">
-            <i class="fas fa-paper-plane me-1"></i> Submit Order
-          </button>
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="resetForm()">Cancel</button>
-        </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="btnSubmit" onclick="handleFormSubmit()">
+          <i class="fas fa-paper-plane me-1"></i> Submit Order
+        </button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="resetForm()">Cancel</button>
       </div>
     </div>
   </div>
@@ -1117,12 +1096,18 @@ document.getElementById('fileInput')?.addEventListener('change', function() {
   else { txt.textContent = 'Click or Drag files here'; txt.style.color = '#6c757d'; txt.style.fontWeight = 'normal'; }
 });
 
-// ═══ BULK SHORTCUTS (dealer / designer / order modals) ═══
+// ═══ INLINE BULK UPLOAD (dealer / designer / order modals) ═══
 // Mirrors the server's rule in routes/api/bulk.js — a Designer can add one
-// dealer at a time here but is not allowed to import, so the buttons come out
-// rather than leading to a 403.
+// dealer at a time from these modals but may not import, so the whole section
+// comes out rather than leading to a 403.
 function canBulkUpload() {
   return APP_USER.role === 'SuperAdmin' || APP_USER.domain === 'Head';
+}
+
+function bulkEsc(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function downloadSample(type) {
@@ -1130,19 +1115,146 @@ function downloadSample(type) {
   window.location.href = '/api/bulk/template/' + type;
 }
 
-function goBulkUpload(type) {
-  document.querySelectorAll('.modal.show').forEach(function(m) {
-    const inst = bootstrap.Modal.getInstance(m);
-    if (inst) inst.hide();
+// One template mounted in three modals, so the markup does not get triplicated.
+function renderBulkInline() {
+  document.querySelectorAll('.bulk-inline').forEach(function(box) {
+    const type = box.getAttribute('data-bulk-type');
+    if (!canBulkUpload()) { box.remove(); return; }
+
+    box.innerHTML =
+      '<div class="d-flex align-items-center my-3">'
+      + '<hr class="flex-grow-1 m-0"/>'
+      + '<span class="px-2 small fw-bold text-muted text-uppercase" style="letter-spacing:.06em;">or bulk upload csv</span>'
+      + '<hr class="flex-grow-1 m-0"/>'
+      + '</div>'
+      + '<div class="d-flex flex-wrap gap-2 align-items-center">'
+      + '<input type="file" class="form-control form-control-sm bulk-file" accept=".csv,.xlsx" style="max-width:250px;"/>'
+      + '<button type="button" class="btn btn-success btn-sm fw-bold bulk-go"><i class="fas fa-upload me-1"></i>Upload CSV</button>'
+      + '<button type="button" class="btn btn-outline-secondary btn-sm bulk-sample"><i class="fas fa-download me-1"></i>Sample</button>'
+      + '</div>'
+      + '<div class="small text-muted mt-2 bulk-format">Loading format...</div>';
+
+    box.querySelector('.bulk-sample').addEventListener('click', function() { downloadSample(type); });
+    box.querySelector('.bulk-go').addEventListener('click', function() { runBulkUpload(type, box); });
+
+    loadBulkFormat(type, box);
   });
-  // Read once by the Bulk Upload view so it opens on the type you came from.
-  sessionStorage.setItem('bulkUploadType', type);
-  loadPage('bulkUpload');
 }
 
-if (!canBulkUpload()) {
-  document.querySelectorAll('.bulk-actions').forEach(function(el) { el.remove(); });
+// The format line is built from the same column config the importer validates
+// against, so it can never describe a file the server would reject.
+async function loadBulkFormat(type, box) {
+  const line = box.querySelector('.bulk-format');
+  try {
+    const res = await fetch('/api/bulk/columns/' + type);
+    const data = await res.json();
+    if (!data.success) throw new Error('failed');
+
+    const parts = data.columns.map(function(c) {
+      let s = bulkEsc(c.header);
+      if (c.allowed) s += ' (' + c.allowed.map(bulkEsc).join('/') + ')';
+      else if (c.required) s += ' (required)';
+      return s;
+    });
+    line.innerHTML = '<b>Format:</b> ' + parts.join(', ')
+      + ' &mdash; .csv or .xlsx, headers in row 1, up to 2000 rows.';
+  } catch (e) {
+    line.textContent = 'Download the sample to see the expected columns.';
+  }
 }
+
+async function runBulkUpload(type, box) {
+  const input = box.querySelector('.bulk-file');
+  const btn = box.querySelector('.bulk-go');
+  if (!input.files.length) { showToast('warning', 'Choose a file first.'); return; }
+
+  const body = new FormData();
+  body.append('type', type);
+  body.append('file', input.files[0]);
+
+  btn.disabled = true;
+  showLoading(true);
+  try {
+    // Always previewed first: a spreadsheet nobody has checked is exactly where
+    // a bad row would otherwise land silently in the table.
+    const res = await fetch('/api/bulk/preview', { method: 'POST', body: body });
+    const data = await res.json();
+    if (!data.success) { showLoading(false); await bulkAlert('error', 'Could not read that file', data.error); return; }
+
+    const ready = data.rows.filter(function(r) { return !r.errors.length && !r.data.__skip; });
+    showLoading(false);
+
+    if (!ready.length) {
+      await bulkAlert('error', 'Nothing to import', bulkProblemHtml(data));
+      return;
+    }
+
+    // A clean file imports on one click; anything else has to be looked at.
+    if (data.summary.invalid || data.summary.skipped) {
+      const go = await Swal.fire({
+        title: 'Import ' + ready.length + ' of ' + data.summary.total + ' rows?',
+        html: bulkProblemHtml(data),
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Import ' + ready.length + ' rows',
+      });
+      if (!go.isConfirmed) { btn.disabled = false; return; }
+    }
+
+    showLoading(true);
+    const imp = await fetch('/api/bulk/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: type, rows: ready.map(function(r) { return { line: r.line, data: r.data }; }) }),
+    });
+    const result = await imp.json();
+    showLoading(false);
+
+    if (!result.success) { await bulkAlert('error', 'Import failed', result.error); btn.disabled = false; return; }
+
+    input.value = '';
+    showToast('success', result.imported + ' rows imported');
+    await refreshAfterBulk(type);
+  } catch (e) {
+    showLoading(false);
+    await bulkAlert('error', 'Import failed', 'Network error. Please try again.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function bulkProblemHtml(data) {
+  const bad = data.rows.filter(function(r) { return r.errors.length || r.data.__skip; });
+  const shown = bad.slice(0, 8).map(function(r) {
+    const why = r.errors.length ? r.errors.join('; ') : r.warnings.join('; ');
+    return '<li class="text-start small">Row ' + r.line + ': ' + bulkEsc(why) + '</li>';
+  }).join('');
+  return '<div class="mb-2 small">'
+    + data.summary.ready + ' ready &middot; '
+    + data.summary.skipped + ' duplicate &middot; '
+    + data.summary.invalid + ' with errors</div>'
+    + '<ul class="mb-0">' + shown + '</ul>'
+    + (bad.length > 8 ? '<div class="small text-muted mt-1">...and ' + (bad.length - 8) + ' more</div>' : '');
+}
+
+function bulkAlert(icon, title, html) {
+  return Swal.fire({ icon: icon, title: title, html: html });
+}
+
+// Imported names have to reach the dropdowns in these same modals, or the next
+// order punch will not find the dealer that was just added.
+async function refreshAfterBulk(type) {
+  if (type === 'orders') {
+    await fetchOrdersData();
+    return;
+  }
+  await fetchFormOptions();
+  populateList('newDealerList', db_forms.dealers || []);
+  populateList('dealerList', db_forms.dealers || []);
+  populateList('newDesignerList', db_forms.indian || []);
+}
+
+renderBulkInline();
 </script>
 
 <style>
