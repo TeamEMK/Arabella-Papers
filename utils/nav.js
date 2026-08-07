@@ -26,9 +26,10 @@ function getNavMenu(role, domain) {
     menu.push({ id: 'o2dsummary', name: 'Analytics' });
   }
 
-  if (roleStr === 'SuperAdmin' || domain === 'Head') {
-    menu.push({ id: 'bulkUpload', name: 'Bulk Upload' });
-  }
+  // Bulk Upload has no tab of its own: it is reached from the Bulk Upload
+  // button inside the Add Dealer, Add Designer and New Order modals, where
+  // someone with a list to import actually is. The view itself is still
+  // permission-checked in routes/views.js.
 
   if (roleStr === 'SuperAdmin') {
     menu.push({ id: 'users', name: 'Users' });
