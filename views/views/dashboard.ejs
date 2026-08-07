@@ -174,7 +174,15 @@
           <input type="text" id="newDealerMobile" class="form-control" placeholder="Enter mobile number"/>
         </div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer d-flex justify-content-between">
+        <div class="bulk-actions">
+          <button type="button" class="btn btn-outline-dark btn-sm" onclick="goBulkUpload('dealers')">
+            <i class="fas fa-cloud-upload-alt me-1"></i> Bulk Upload
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="downloadSample('dealers')">
+            <i class="fas fa-file-csv me-1"></i> Sample
+          </button>
+        </div>
         <button class="btn btn-primary" onclick="handleAddDealer()">Save Dealer</button>
       </div>
     </div>
@@ -200,7 +208,15 @@
           <input type="email" id="newDesignerEmail" class="form-control" required placeholder="Enter email"/>
         </div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer d-flex justify-content-between">
+        <div class="bulk-actions">
+          <button type="button" class="btn btn-outline-dark btn-sm" onclick="goBulkUpload('designers')">
+            <i class="fas fa-cloud-upload-alt me-1"></i> Bulk Upload
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="downloadSample('designers')">
+            <i class="fas fa-file-csv me-1"></i> Sample
+          </button>
+        </div>
         <button class="btn btn-primary" onclick="handleAddDesigner()">Save Designer</button>
       </div>
     </div>
@@ -273,11 +289,21 @@
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-primary" id="btnSubmit" onclick="handleFormSubmit()">
-          <i class="fas fa-paper-plane me-1"></i> Submit Order
-        </button>
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="resetForm()">Cancel</button>
+      <div class="modal-footer d-flex justify-content-between">
+        <div class="bulk-actions">
+          <button type="button" class="btn btn-outline-dark btn-sm" onclick="goBulkUpload('orders')">
+            <i class="fas fa-cloud-upload-alt me-1"></i> Bulk Upload
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="downloadSample('orders')">
+            <i class="fas fa-file-csv me-1"></i> Sample
+          </button>
+        </div>
+        <div>
+          <button class="btn btn-primary" id="btnSubmit" onclick="handleFormSubmit()">
+            <i class="fas fa-paper-plane me-1"></i> Submit Order
+          </button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="resetForm()">Cancel</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1090,6 +1116,33 @@ document.getElementById('fileInput')?.addEventListener('change', function() {
   if(this.files.length > 0) { txt.textContent = this.files.length + ' file(s) selected'; txt.style.color = '#198754'; txt.style.fontWeight = 'bold'; }
   else { txt.textContent = 'Click or Drag files here'; txt.style.color = '#6c757d'; txt.style.fontWeight = 'normal'; }
 });
+
+// ═══ BULK SHORTCUTS (dealer / designer / order modals) ═══
+// Mirrors the server's rule in routes/api/bulk.js — a Designer can add one
+// dealer at a time here but is not allowed to import, so the buttons come out
+// rather than leading to a 403.
+function canBulkUpload() {
+  return APP_USER.role === 'SuperAdmin' || APP_USER.domain === 'Head';
+}
+
+function downloadSample(type) {
+  // Served as an attachment, so this downloads without leaving the page.
+  window.location.href = '/api/bulk/template/' + type;
+}
+
+function goBulkUpload(type) {
+  document.querySelectorAll('.modal.show').forEach(function(m) {
+    const inst = bootstrap.Modal.getInstance(m);
+    if (inst) inst.hide();
+  });
+  // Read once by the Bulk Upload view so it opens on the type you came from.
+  sessionStorage.setItem('bulkUploadType', type);
+  loadPage('bulkUpload');
+}
+
+if (!canBulkUpload()) {
+  document.querySelectorAll('.bulk-actions').forEach(function(el) { el.remove(); });
+}
 </script>
 
 <style>

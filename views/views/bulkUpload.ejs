@@ -242,6 +242,16 @@
     }
   };
 
+  // Arrived from the Add Dealer / Add Designer / New Order modal? Open on that
+  // type instead of making the user pick it again.
+  const requested = sessionStorage.getItem('bulkUploadType');
+  if (requested) {
+    sessionStorage.removeItem('bulkUploadType');
+    const select = document.getElementById('blk_type');
+    const known = Array.from(select.options).some(function (o) { return o.value === requested; });
+    if (known) select.value = requested;
+  }
+
   loadColumns();
 })();
 </script>
