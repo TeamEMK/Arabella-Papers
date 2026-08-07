@@ -7,9 +7,11 @@ const { generateOrderId } = require('../../utils/idgen');
 const { requireLogin } = require('../../middleware/auth');
 
 // Multer: memory storage (files go to Drive)
+// 4MB per file — Vercel rejects any request body over 4.5MB before it reaches
+// this handler, so a larger limit here would only turn into an opaque 413.
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 4 * 1024 * 1024, files: 10 },
 });
 
 // ─────────────────────────────────────────────

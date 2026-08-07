@@ -5,7 +5,8 @@ const db = require('../../config/db');
 const { uploadToDrive } = require('../../utils/drive');
 const { requireLogin } = require('../../middleware/auth');
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+// 4MB cap — Vercel rejects request bodies over 4.5MB before they reach here.
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 } });
 
 // ═══════════════════════════════════════════════
 // TILL APPROVAL DASHBOARD
