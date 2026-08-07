@@ -13,6 +13,8 @@ const indexRoutes = require('./routes/index');
 const viewsRoutes = require('./routes/views');
 const ordersApi = require('./routes/api/orders');
 const dashboardsApi = require('./routes/api/dashboards');
+const accountApi = require('./routes/api/account');
+const usersApi = require('./routes/api/users');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,6 +74,8 @@ app.use('/', indexRoutes);
 app.use('/views', viewsRoutes);
 app.use('/api/orders', ordersApi);
 app.use('/api/dashboards', dashboardsApi);
+app.use('/api/account', accountApi);
+app.use('/api/users', usersApi);
 
 // ── 404 FALLBACK ──
 app.use((req, res) => {
