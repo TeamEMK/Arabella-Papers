@@ -173,7 +173,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 -- =============================================
 -- DEFAULT ADMIN USER
--- password: admin123 (bcrypt hash)
+-- password: admin123
+-- Change it immediately after the first login — this hash is public.
 -- =============================================
 INSERT IGNORE INTO users (emp_id, username, email, password, role, domain) VALUES
-('EMP001', 'Admin', 'admin@arabella.com', '$2b$10$rQZ9uAVn4U5PJmZjXkQMKO3y8vN5ZQx6.RpTJmVuE5AoOi5MkGSHi', 'SuperAdmin', 'Head');
+('EMP001', 'Admin', 'admin@arabella.com', '$2a$10$tzoe.gHU168/Vvh0eM7Wg.DMIw2raSftNke.4GnIV9qcj.z5OnQ4a', 'SuperAdmin', 'Head');
