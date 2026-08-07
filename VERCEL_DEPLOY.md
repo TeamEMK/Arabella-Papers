@@ -10,21 +10,54 @@ none of the limits listed at the bottom of this file.
 ## Step 1: MySQL on Railway
 
 1. [railway.app](https://railway.app) → **New Project** → **+ New** → **Database** → **MySQL**
-2. Open the MySQL service → **Variables** tab
 
-> ⚠️ **Use the PUBLIC connection details, not the private ones.**
-> Railway shows a private host like `mysql.railway.internal`. That only resolves
-> inside Railway's network — Vercel cannot reach it and every request will hang
-> until it times out. You need the public TCP proxy.
+### Turn on public networking — this is not optional
 
-3. In the **Variables** tab find `MYSQL_PUBLIC_URL`. It looks like:
+A fresh Railway MySQL is reachable **only from inside Railway**. Its variables
+all point at the private domain:
 
-   ```
-   mysql://root:PASSWORD@shinkansen.proxy.rlwy.net:41234/railway
-            └─user┘ └─pass─┘ └────── host ──────┘ └port┘ └ db ┘
-   ```
+```
+MYSQLHOST = ${{RAILWAY_PRIVATE_DOMAIN}}   →  mysql.railway.internal
+MYSQLPORT = 3306
+```
 
-   Pull the five pieces out of it — those are your `DB_*` values below.
+`mysql.railway.internal` does not resolve from the public internet, so a Vercel
+function using it will hang until the request times out. There is no `DB_*`
+combination that makes the private host work from Vercel — you have to expose a
+public endpoint.
+
+2. MySQL service → **Settings** → **Networking** → **Public Networking** →
+   **TCP Proxy** → choose port `3306` → apply.
+
+Railway then generates a public address and adds two variables that did not
+exist before:
+
+| Variable | Example |
+|---|---|
+| `RAILWAY_TCP_PROXY_DOMAIN` | `shinkansen.proxy.rlwy.net` |
+| `RAILWAY_TCP_PROXY_PORT` | `41234` |
+
+`MYSQL_PUBLIC_URL` also appears once the proxy is on:
+
+```
+mysql://root:PASSWORD@shinkansen.proxy.rlwy.net:41234/railway
+        └user┘ └─pass─┘ └────── host ──────┘ └port┘ └ db ┘
+```
+
+> ⚠️ **The public port is not 3306.** The proxy listens on a random high port.
+> Copying the public host but leaving `DB_PORT=3306` is the single most common
+> way this setup fails — and it fails as a silent timeout, not a clear error.
+
+Settings → Networking shows the mapping as `<public-host>:<public-port> → :3306`.
+The left side is what you want; the `3306` on the right is the internal port the
+proxy forwards to, and never goes into `DB_PORT`.
+
+Verify the endpoint from your own machine before touching Vercel — if this
+fails, nothing deployed will work either:
+
+```bash
+mysql -h <public-host> -P <public-port> -u root -p railway -e "SELECT VERSION();"
+```
 
 ---
 
@@ -133,9 +166,11 @@ requests are fast.
 **Database connections are the thing most likely to break under load.** Every
 warm function instance holds its own pool, and Vercel runs many instances
 concurrently. [config/db.js](config/db.js) caps each pool at 2 connections when
-`VERCEL` is set for exactly this reason. If you start seeing
-`ER_CON_COUNT_ERROR` or `Too many connections`, that is the cause — raise the
-Railway plan's connection limit or move the app to Railway.
+`VERCEL` is set for exactly this reason. Railway MySQL allows 151 connections
+(`SELECT @@max_connections`), so roughly 75 concurrent warm instances would
+exhaust it — comfortable for an internal tool, not for a public traffic spike.
+If you start seeing `ER_CON_COUNT_ERROR` or `Too many connections`, that is the
+cause — raise the Railway plan's connection limit or move the app to Railway.
 
 **Every query crosses the public internet.** Vercel function → Railway public
 proxy → MySQL, on each query. On Railway both services share a private network
