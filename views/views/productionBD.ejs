@@ -94,7 +94,10 @@ document.getElementById('prodRoot').innerHTML = `
 `;
 
 var prod_data = [], prod_filtered = [], prod_selected = new Set(), prod_editId = null;
-const PROD_COLS = ['Guest_Name','Paper_Cutting','Dye_Status','Block_Status','Printing','Edges','Laser_Cutting','Output','Card_Assembly','Remark','Reason_For_Delay'];
+// var, not const: loadPage() re-runs this whole block every time the tab is
+// opened, and a repeat `const` is a parse error that kills the script before it
+// can fill #prodRoot — leaving the page blank until a full reload.
+var PROD_COLS = ['Guest_Name','Paper_Cutting','Dye_Status','Block_Status','Printing','Edges','Laser_Cutting','Output','Card_Assembly','Remark','Reason_For_Delay'];
 
 async function fetchProductionData() {
   try {
