@@ -78,12 +78,15 @@
       from { opacity: 0; transform: scale(0.9); }
       to { opacity: 1; transform: scale(1); }
     }
-    .logo { width: 80px; margin-bottom: 15px; border-radius: 8px; }
+    /* A wide wordmark, not a square mark: 80px of width left it 6px tall.
+       Sized by width, on a white plate so it does not float on the dark card. */
+    .logo { width: 100%; max-width: 240px; height: auto; margin-bottom: 18px;
+            background: #fff; border-radius: 6px; padding: 9px 12px; }
   </style>
 </head>
 <body>
   <div class="login-container">
-    <img src="https://drive.google.com/thumbnail?id=1bTV0jEU5E8f0QeqBO8urDPa4BaCH1QsB" alt="Arabella Papers"
+    <img src="/logo.jpg" alt="Arabella Papers"
          class="logo" onerror="this.remove()"/>
     <h2>Login</h2>
     <form method="POST" action="/login" id="loginForm">

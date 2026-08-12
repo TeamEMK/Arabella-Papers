@@ -36,7 +36,7 @@
 <!-- SIDE PANEL -->
 <aside class="side-panel" id="sidePanel">
   <div class="side-brand">
-    <img src="https://drive.google.com/thumbnail?id=1bTV0jEU5E8f0QeqBO8urDPa4BaCH1QsB" alt="Arabella Papers" class="side-logo" onerror="sideLogoFallback(this)"/>
+    <img src="/logo.jpg" alt="Arabella Papers" class="side-logo" onerror="sideLogoFallback(this)"/>
     <button type="button" class="side-mark" onclick="sideTogglePin()" title="Open menu">AP</button>
     <button type="button" class="side-toggle" id="sidePinBtn" onclick="sideTogglePin()" title="Keep menu open" aria-label="Keep menu open" aria-pressed="false">
       <i class="fas fa-thumbtack"></i>
@@ -253,8 +253,9 @@
   function sideOpenDrawer() { document.body.classList.add('side-open'); }
   function sideCloseDrawer() { document.body.classList.remove('side-open'); }
 
-  // The logo is a Google Drive thumbnail and Drive does not always serve it.
-  // Fall back to a wordmark rather than leaving a broken image in the panel.
+  // The logo is served from /public. Until someone drops the file in, and if it
+  // is ever renamed, fall back to a wordmark rather than leaving a broken image
+  // sitting in the panel.
   function sideLogoFallback(img) {
     img.insertAdjacentHTML('afterend', '<span class="side-wordmark">ARABELLA<small>PAPERS</small></span>');
     img.remove();

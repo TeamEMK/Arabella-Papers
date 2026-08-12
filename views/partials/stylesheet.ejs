@@ -56,7 +56,11 @@
 
   .side-brand { display: flex; align-items: center; gap: 10px; height: var(--topbar-h); min-height: var(--topbar-h);
     padding: 0 14px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-  .side-logo { height: 34px; max-width: 150px; object-fit: contain; }
+  /* The wordmark is a wide strip (roughly 13:1) on a white ground, so it is
+     sized by width and sat on a white plate — on the charcoal panel an
+     untreated white JPEG reads as a stray sticker. Swap in a transparent PNG
+     and the plate can go. */
+  .side-logo { width: 176px; height: auto; background: #fff; border-radius: 4px; padding: 6px 9px; }
   .side-wordmark { color: #ffcc00; font-weight: 600; font-size: 15px; line-height: 1.1; letter-spacing: 0.5px; }
   .side-wordmark small { display: block; color: #f1f1f1; font-size: 9px; letter-spacing: 2.5px; }
   .side-mark { display: none; width: 40px; height: 40px; border: 0; border-radius: 10px; background: #ffcc00;
