@@ -29,13 +29,13 @@ document.getElementById('prodRoot').innerHTML = `
   <div class="card bg-light-glass shadow-lg">
     <div class="card-header bg-transparent border-0"><h5 class="mb-0 text-dark fw-bold"><i class="fas fa-tools me-2"></i>Orders in Production Queue</h5></div>
     <div class="card-body p-0">
-      <div class="table-responsive" style="max-height:350px;overflow-y:auto;position:relative;">
+      <div class="table-responsive" data-fill-height style="overflow-y:auto;position:relative;">
         <table class="table table-hover table-striped mb-0 text-nowrap" style="border-collapse:separate;border-spacing:0;">
           <thead class="table-dark">
             <tr>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;"><input type="checkbox" id="prod_selectAll" onclick="prodToggleSelectAll(this)"></th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
-              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Ready</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dispatch</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Timestamp</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Actual Date</th>
@@ -152,8 +152,7 @@ function prod_renderTable(data) {
   if(!data.length) { tbody.innerHTML = '<tr><td colspan="15" class="text-center">No orders found.</td></tr>'; return; }
   tbody.innerHTML = data.map(o => {
     const isChecked = prod_selected.has(o.ID.toString()) ? 'checked' : '';
-    const isReady = prod_checkReady(o);
-    const readyBtn = isReady === true ? `<button class="btn btn-sm btn-outline-primary border-0" onclick="prod_markDispatch('${o.ID}')"><i class="fas fa-paper-plane"></i></button>` : isReady === 'ALREADY_SENT' ? `<span class="text-success small fw-bold"><i class="fas fa-check-circle"></i> Sent</span>` : `<span class="text-muted opacity-50"><i class="fas fa-clock"></i></span>`;
+    const readyBtn = prod_readyCell(o);
     const badges = prod_getStageBadges(o);
     const clientBadge = prod_getClientBadge(o.Design_Approval_Status_From_Client);
     return `<tr>
@@ -184,9 +183,12 @@ function prod_getClientBadge(s) {
   else if(l.includes('reorder')) c='primary';
   return `<span class="badge rounded-pill bg-${c}">${s}</span>`;
 }
-function prod_getStageBadges(o) {
+// One source of truth for "is this stage finished?" — the badge row, the
+// pending-stage hint and the Ready for Dispatch button all read from here, so
+// a stage can never count as done in one place and pending in another.
+function prod_stageCfg(o) {
   const v = k => (o[k]||'').toString().trim().toLowerCase();
-  const cfg = [
+  return [
     {val:v('Guest_Name'), ok:['no','no gna','printed','gna printed'], label:'GNA'},
     {val:v('Paper_Cutting'), ok:['done'], label:'Paper'},
     {val:v('Dye_Status'), ok:['no die','die cutting done','die sent'], label:'Dye'},
@@ -197,20 +199,18 @@ function prod_getStageBadges(o) {
     {val:v('Output'), ok:['no','done'], label:'Output'},
     {val:v('Card_Assembly'), ok:['done'], label:'Assembly'},
   ];
-  return cfg.map(i => i.ok.includes(i.val) ? `<span class="badge bg-${i.label==='Assembly'?'success':'primary'} me-1 mb-1">${i.label}</span>` : '').join('');
 }
-function prod_checkReady(o) {
-  if(o.Dispatch_Status && o.Dispatch_Status.trim()) return 'ALREADY_SENT';
-  const v = k => (o[k]||'').toString().trim().toLowerCase();
-  return ['no','no gna','printed','gna printed'].includes(v('Guest_Name')) &&
-    v('Paper_Cutting')==='done' &&
-    ['no die','die cutting done','die sent'].includes(v('Dye_Status')) &&
-    ['no block','block printed','block sent'].includes(v('Block_Status')) &&
-    v('Printing')==='done' &&
-    ['no','done'].includes(v('Edges')) &&
-    ['no','done'].includes(v('Laser_Cutting')) &&
-    ['no','done'].includes(v('Output')) &&
-    v('Card_Assembly')==='done' ? true : false;
+function prod_getStageBadges(o) {
+  return prod_stageCfg(o).map(i => i.ok.includes(i.val) ? `<span class="badge bg-${i.label==='Assembly'?'success':'primary'} me-1 mb-1">${i.label}</span>` : '').join('');
+}
+function prod_pendingStages(o) {
+  return prod_stageCfg(o).filter(i => !i.ok.includes(i.val)).map(i => i.label);
+}
+function prod_readyCell(o) {
+  if(o.Dispatch_Status && o.Dispatch_Status.trim()) return `<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Sent to Dispatch</span>`;
+  const pending = prod_pendingStages(o);
+  if(!pending.length) return `<button class="btn btn-sm btn-success fw-bold shadow-sm" onclick="prod_markDispatch('${o.ID}')"><i class="fas fa-paper-plane me-1"></i>Ready for Dispatch</button>`;
+  return `<span class="badge bg-secondary" title="Still pending: ${pending.join(', ')}"><i class="fas fa-clock me-1"></i>${pending.length} stage${pending.length>1?'s':''} left</span>`;
 }
 function prod_openView(rowData) {
   const body = document.getElementById('prod_viewBody');
@@ -256,13 +256,21 @@ async function prod_submitUpdate() {
   } catch(e) { showLoading(false); showToast('error','Server error.'); }
 }
 async function prod_markDispatch(id) {
-  if(!confirm('Send this order to Dispatch Dashboard?')) return;
+  const confirmed = await Swal.fire({
+    title: 'Ready for Dispatch?',
+    html: `Order <b>${id}</b> will leave the Production queue and move to the <b>Dispatch Dashboard</b>, where its invoice and tracking number are filled in.`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Move to Dispatch',
+    confirmButtonColor: '#198754',
+  });
+  if(!confirmed.isConfirmed) return;
   showLoading(true);
   try {
     const res = await fetch(`/api/dashboards/production/${id}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({Dispatch_Status:'Ready',userEmail:APP_USER.email})});
     const json = await res.json();
     showLoading(false);
-    if(json.success) { showToast('success','Sent to Dispatch!'); fetchProductionData(); }
+    if(json.success) { prod_selected.delete(id.toString()); showToast('success','Moved to Dispatch Dashboard.'); fetchProductionData(); }
     else showToast('error',json.error);
   } catch(e) { showLoading(false); showToast('error','Server error.'); }
 }

@@ -90,7 +90,7 @@
       <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-list me-2"></i>Recent Orders</h5>
     </div>
     <div class="card-body p-0">
-      <div class="table-responsive" style="max-height:350px; overflow-y:auto; position:relative;">
+      <div class="table-responsive" data-fill-height style="overflow-y:auto; position:relative;">
         <table class="table table-hover table-striped mb-0 text-nowrap" id="ordersTable" style="border-collapse:separate; border-spacing:0;">
           <thead class="table-dark">
             <tr>
@@ -187,18 +187,43 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header bg-dark text-white">
-        <h5 class="modal-title">Add/Check Indian Designer</h5>
+        <h5 class="modal-title">Add/Check Designer</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <div class="mb-3">
+          <label class="form-label text-dark fw-bold">Team</label>
+          <div class="radio-group">
+            <label class="radio-opt">
+              <input type="radio" name="designerTeam" value="India Team" checked onchange="updateDesignerTeam('India')"/>
+              <div class="radio-box"><i class="fas fa-users me-1"></i> India Team</div>
+            </label>
+            <label class="radio-opt">
+              <input type="radio" name="designerTeam" value="Cassie" onchange="updateDesignerTeam('Cassie')"/>
+              <div class="radio-box"><i class="fas fa-user me-1"></i> Cassie</div>
+            </label>
+          </div>
+          <div class="form-text">Decides which column the name is saved in, and which dropdown it shows up in when an order is punched.</div>
+        </div>
+        <div class="mb-3">
           <label class="form-label text-dark fw-bold">Designer Name</label>
-          <input list="newDesignerList" id="newDesignerName" class="form-control" required placeholder="Type to search or add new..." autocomplete="off"/>
+          <input list="newDesignerList" id="newDesignerName" class="form-control form-combo" required placeholder="Type to search or add new..." autocomplete="off"/>
           <datalist id="newDesignerList"></datalist>
         </div>
         <div class="mb-3">
           <label class="form-label text-dark fw-bold">Email</label>
           <input type="email" id="newDesignerEmail" class="form-control" required placeholder="Enter email"/>
+        </div>
+        <div class="mb-3 designer-login-box border-top pt-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="newDesignerMakeLogin" onchange="toggleDesignerLogin(this.checked)"/>
+            <label class="form-check-label text-dark fw-bold" for="newDesignerMakeLogin">Also create a login for this designer</label>
+          </div>
+          <div id="newDesignerLoginFields" class="mt-2 d-none">
+            <label class="form-label text-dark fw-bold">Password</label>
+            <input type="password" id="newDesignerPassword" class="form-control" placeholder="At least 8 characters" autocomplete="new-password"/>
+            <div class="form-text">Signs in with the email above as role <b>Designer</b>. The username is set to the designer name, which is how their own orders find their way onto their dashboard.</div>
+          </div>
         </div>
         <div class="bulk-inline" data-bulk-type="designers"></div>
       </div>
@@ -238,12 +263,12 @@
           </div>
           <div class="col-md-6">
             <label class="form-label text-dark fw-bold">Name of Dealer</label>
-            <input list="dealerList" id="punchDealerInput" class="form-control" placeholder="Search Dealer..." required autocomplete="off" onchange="validateDealerSelection(this)"/>
+            <input list="dealerList" id="punchDealerInput" class="form-control form-combo" placeholder="Search Dealer..." required autocomplete="off" onchange="validateDealerSelection(this)"/>
             <datalist id="dealerList"></datalist>
           </div>
           <div class="col-md-6">
             <label class="form-label text-dark fw-bold">Client Name</label>
-            <input list="punchClientList" id="punchClientInput" class="form-control" placeholder="Search or Select Client" required autocomplete="off"/>
+            <input list="punchClientList" id="punchClientInput" class="form-control form-combo" placeholder="Search or Select Client" required autocomplete="off"/>
             <datalist id="punchClientList"></datalist>
           </div>
           <div class="col-12">
@@ -252,7 +277,7 @@
           </div>
           <div class="col-md-6">
             <label class="form-label text-dark fw-bold">Designer</label>
-            <input list="designerList" id="designerInput" class="form-control" placeholder="Select 'Punched By' first..." required autocomplete="off" onchange="validateDesignerSelection(this)"/>
+            <input list="designerList" id="designerInput" class="form-control form-combo" placeholder="Select 'Punched By' first..." required autocomplete="off" disabled onchange="validateDesignerSelection(this)"/>
             <datalist id="designerList"></datalist>
           </div>
           <div class="col-md-6">
@@ -355,17 +380,17 @@
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label fw-bold">Dealer Name</label>
-            <input list="ed_dealerList" id="ed_Dealer" class="form-control" placeholder="Search or Select Dealer" required autocomplete="off" onchange="validateDealerSelection(this)"/>
+            <input list="ed_dealerList" id="ed_Dealer" class="form-control form-combo" placeholder="Search or Select Dealer" required autocomplete="off" onchange="validateDealerSelection(this)"/>
             <datalist id="ed_dealerList"></datalist>
           </div>
           <div class="col-md-6">
             <label class="form-label fw-bold">Client Name</label>
-            <input list="ed_clientList" id="ed_Client" class="form-control" placeholder="Search or Select Client" required autocomplete="off"/>
+            <input list="ed_clientList" id="ed_Client" class="form-control form-combo" placeholder="Search or Select Client" required autocomplete="off"/>
             <datalist id="ed_clientList"></datalist>
           </div>
           <div class="col-md-6">
             <label class="form-label fw-bold">Designer</label>
-            <input list="ed_designerList" id="ed_Designer" class="form-control" placeholder="Search or Select Designer" required autocomplete="off" onchange="validateDesignerSelection(this)"/>
+            <input list="ed_designerList" id="ed_Designer" class="form-control form-combo" placeholder="Search or Select Designer" required autocomplete="off" onchange="validateDesignerSelection(this)"/>
             <datalist id="ed_designerList"></datalist>
           </div>
           <div class="col-md-6">
@@ -678,7 +703,9 @@ function applyPermissions() {
 
 // ═══ MODAL OPEN/CLOSE ═══
 function openOrderPunchModal() {
-  document.getElementById('punchEmail').value = APP_USER.email;
+  // Closing with Escape or a backdrop click skips the Cancel button's reset, so
+  // start from a clean form here rather than trusting how it was last closed.
+  resetForm();
   populateList('dealerList', db_forms.dealers || []);
   populateList('punchClientList', getUniqueClients());
   new bootstrap.Modal(document.getElementById('orderPunchModal')).show();
@@ -854,10 +881,38 @@ function openAddDealerModal() {
   new bootstrap.Modal(document.getElementById('addDealerModal')).show();
 }
 function openAddDesignerModal() {
-  populateList('newDesignerList', db_forms.indian || []);
-  document.getElementById('newDesignerName').value = '';
+  document.querySelector('input[name="designerTeam"][value="India Team"]').checked = true;
+  updateDesignerTeam('India');
   document.getElementById('newDesignerEmail').value = '';
+  const makeLogin = document.getElementById('newDesignerMakeLogin');
+  if (makeLogin) { makeLogin.checked = false; toggleDesignerLogin(false); }
   new bootstrap.Modal(document.getElementById('addDesignerModal')).show();
+}
+
+// Creating accounts is SuperAdmin-only on the server (routes/api/users.js), and
+// this modal also opens for Head-domain users — so the option is removed for
+// them rather than failing with a 403 after they have filled it in.
+function canCreateLogin() { return APP_USER.role === 'SuperAdmin'; }
+
+function toggleDesignerLogin(on) {
+  document.getElementById('newDesignerLoginFields').classList.toggle('d-none', !on);
+  if (!on) document.getElementById('newDesignerPassword').value = '';
+}
+
+// India and Cassie designers live in different columns, so the "check whether
+// this person already exists" list has to follow the chosen team — otherwise
+// picking Cassie would still be checked against the India names.
+function updateDesignerTeam(team) {
+  populateList('newDesignerList', (team === 'Cassie' ? db_forms.cassie : db_forms.indian) || []);
+  const input = document.getElementById('newDesignerName');
+  input.value = '';
+  input.placeholder = team === 'Cassie' ? 'Type to search or add new Cassie designer...'
+                                        : 'Type to search or add new Indian designer...';
+}
+
+function selectedDesignerTeam() {
+  const picked = document.querySelector('input[name="designerTeam"]:checked');
+  return picked ? picked.value : 'India Team';
 }
 
 async function handleAddDealer() {
@@ -874,13 +929,35 @@ async function handleAddDealer() {
 }
 
 async function handleAddDesigner() {
-  const name = document.getElementById('newDesignerName').value;
-  const email = document.getElementById('newDesignerEmail').value;
+  // Trimmed once and reused for both writes: the login's username has to equal
+  // the master-list name exactly, or the designer signs in to an empty board.
+  const name = document.getElementById('newDesignerName').value.trim();
+  const email = document.getElementById('newDesignerEmail').value.trim();
   if(!name || !email) { showToast('warning','Name and email required.'); return; }
+
+  const makeLogin = document.getElementById('newDesignerMakeLogin');
+  const wantsLogin = !!(makeLogin && makeLogin.checked);
+  const password = wantsLogin ? document.getElementById('newDesignerPassword').value : '';
+  if(wantsLogin && password.length < 8) { showToast('warning','Password must be at least 8 characters.'); return; }
+
   try {
-    const res = await fetch('/api/dashboards/designers', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name,email}) });
+    // The login goes first because it is the half that can be refused — a taken
+    // email or a weak password then leaves nothing written at all, instead of a
+    // designer in the list with no way to sign in.
+    if(wantsLogin) {
+      const ures = await fetch('/api/users', { method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ username:name, email, password, role:'Designer', domain:'' }) });
+      const ujson = await ures.json();
+      if(!ujson.success) { showToast('error', ujson.error || 'Could not create the login.'); return; }
+    }
+
+    const res = await fetch('/api/dashboards/designers', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name,email,team:selectedDesignerTeam()}) });
     const json = await res.json();
-    if(json.success) { bootstrap.Modal.getInstance(document.getElementById('addDesignerModal')).hide(); showToast('success','Designer Added!'); fetchFormOptions(); }
+    if(json.success) {
+      bootstrap.Modal.getInstance(document.getElementById('addDesignerModal')).hide();
+      showToast('success', wantsLogin ? 'Designer added and login created!' : 'Designer Added!');
+      fetchFormOptions();
+    }
     else showToast('error', json.error);
   } catch(e) { showToast('error','Server error.'); }
 }
@@ -1051,9 +1128,13 @@ function populateList(id, array) {
   list.innerHTML = '';
   (array||[]).forEach(item => { if(item) { const o = document.createElement('option'); o.value = item; list.appendChild(o); }});
 }
+// The designer list depends on the team, so the field stays disabled until one
+// is picked — a greyed-out box says "not yet" where an empty enabled one just
+// looked broken.
 function updateDesigners(team) {
   const input = document.getElementById('designerInput');
   input.value = '';
+  input.disabled = false;
   if(team === 'India') { populateList('designerList', db_forms.indian||[]); input.placeholder = 'Search Indian Designer...'; }
   else { populateList('designerList', db_forms.cassie||[]); input.placeholder = 'Search Cassie Designer...'; }
 }
@@ -1084,7 +1165,13 @@ function resetForm() {
   document.getElementById('punchDealerInput').value = '';
   document.getElementById('punchClientInput').value = '';
   document.getElementById('punchRemarks').value = '';
-  document.getElementById('designerInput').value = '';
+  // Back to the locked state, including the placeholder — otherwise reopening
+  // the form still reads "Search Cassie Designer..." with nothing in the list.
+  const designer = document.getElementById('designerInput');
+  designer.value = '';
+  designer.disabled = true;
+  designer.placeholder = "Select 'Punched By' first...";
+  document.getElementById('designerList').innerHTML = '';
   document.getElementById('punchDesignTime').value = '';
   document.getElementById('fileInput').value = '';
   document.getElementById('fileText').textContent = 'Click or Drag files here';
@@ -1171,6 +1258,9 @@ async function runBulkUpload(type, box) {
   const body = new FormData();
   body.append('type', type);
   body.append('file', input.files[0]);
+  // The preview's "already exists" check compares against one team's names, so
+  // it has to know which team before it can flag anything.
+  if (type === 'designers') body.append('team', selectedDesignerTeam());
 
   btn.disabled = true;
   showLoading(true);
@@ -1205,7 +1295,13 @@ async function runBulkUpload(type, box) {
     const imp = await fetch('/api/bulk/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: type, rows: ready.map(function(r) { return { line: r.line, data: r.data }; }) }),
+      // Designers go into a different column per team, so the import has to be
+      // told which one the modal is currently set to.
+      body: JSON.stringify({
+        type: type,
+        team: type === 'designers' ? selectedDesignerTeam() : undefined,
+        rows: ready.map(function(r) { return { line: r.line, data: r.data }; }),
+      }),
     });
     const result = await imp.json();
     showLoading(false);
@@ -1251,10 +1347,11 @@ async function refreshAfterBulk(type) {
   await fetchFormOptions();
   populateList('newDealerList', db_forms.dealers || []);
   populateList('dealerList', db_forms.dealers || []);
-  populateList('newDesignerList', db_forms.indian || []);
+  populateList('newDesignerList', (selectedDesignerTeam() === 'Cassie' ? db_forms.cassie : db_forms.indian) || []);
 }
 
 renderBulkInline();
+if (!canCreateLogin()) document.querySelectorAll('.designer-login-box').forEach(function(b) { b.remove(); });
 </script>
 
 <style>

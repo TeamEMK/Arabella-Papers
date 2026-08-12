@@ -346,6 +346,11 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
     const { courier, docket, status, invoiceNo, invoiceAmount, boxes, weight, volWeight, userEmail } = req.body;
     const orderId = req.params.id;
 
+    // invoice_amount is DECIMAL and number_of_boxes is INT: an untouched input
+    // sends '', which MySQL rejects outright in strict mode and would fail the
+    // whole dispatch update. Leave those columns empty instead.
+    const num = v => (v === '' || v === undefined || v === null) ? null : v;
+
     await db.query(`
       UPDATE orders SET
         courier = ?, ups_dhl_fedex_tracking_number = ?, status_4 = ?,
@@ -353,7 +358,7 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
         weight = ?, volumetric_weight = ?, actual_4 = NOW(),
         dispatch_updated_by = ?
       WHERE order_id = ?
-    `, [courier, docket, status, invoiceNo, invoiceAmount, boxes, weight, volWeight, userEmail, orderId]);
+    `, [courier, docket, status, invoiceNo, num(invoiceAmount), num(boxes), weight, volWeight, userEmail, orderId]);
 
     res.json({ success: true });
   } catch (err) {
@@ -501,8 +506,14 @@ router.delete('/dealers/:id', requireLogin, async (req, res) => {
 // POST /api/dashboards/designers
 router.post('/designers', requireLogin, async (req, res) => {
   try {
-    const { name, email } = req.body;
-    await db.query('INSERT INTO designers (india_name, india_email) VALUES (?,?)', [name, email]);
+    const { name, email, team } = req.body;
+    // Which column the name lands in is what makes an order count as India Team
+    // or Cassie later, so the caller's choice decides it rather than always
+    // assuming India.
+    const cols = team === 'Cassie'
+      ? ['overseas_name', 'overseas_email']
+      : ['india_name', 'india_email'];
+    await db.query(`INSERT INTO designers (${cols[0]}, ${cols[1]}) VALUES (?,?)`, [name, email || '']);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

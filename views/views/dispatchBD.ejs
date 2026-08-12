@@ -26,7 +26,7 @@ document.getElementById('dispRoot').innerHTML = `
   <div class="card bg-light-glass shadow-lg">
     <div class="card-header bg-transparent border-0"><h5 class="mb-0 text-dark fw-bold"><i class="fas fa-shipping-fast me-2"></i>Dispatch Queue</h5></div>
     <div class="card-body p-0">
-      <div class="table-responsive" style="max-height:350px;overflow-y:auto;position:relative;">
+      <div class="table-responsive" data-fill-height style="overflow-y:auto;position:relative;">
         <table class="table table-hover table-striped mb-0 text-nowrap" style="border-collapse:separate;border-spacing:0;">
           <thead class="table-dark">
             <tr>
@@ -107,11 +107,10 @@ function dspApplyFilters() {
   const search = (document.getElementById('dsp_search')||{}).value||'';
   const filtered = dsp_data.filter(o => {
     if(!o) return false;
-    const ds = (o.Dispatch_Status||'').toLowerCase();
-    let sm = true;
-    if(status==='Ready') sm = ds==='';
-    else if(status) sm = ds===status.toLowerCase();
-    return sm &&
+    // Same default the table shows: an order handed over by Production carries
+    // status 'Ready', and anything blank is treated as Ready too.
+    const ds = (o.Dispatch_Status||'Ready').toLowerCase();
+    return (!status || ds===status.toLowerCase()) &&
       (!courier || (o.Dispatch_Courier_Name||'').toLowerCase()===courier.toLowerCase()) &&
       (!dealer || (o.Dealer_name||'').toLowerCase()===dealer.toLowerCase()) &&
       (!search || JSON.stringify(o).toLowerCase().includes(search.toLowerCase()));
@@ -182,18 +181,26 @@ function dsp_openEdit(id) {
   new bootstrap.Modal(document.getElementById('dsp_editModal')).show();
 }
 async function dsp_submitUpdate() {
+  const val = id => (document.getElementById(id).value||'').trim();
   const body = {
-    courier: document.getElementById('dsp_courier').value,
-    docket: document.getElementById('dsp_docket').value,
-    status: document.getElementById('dsp_status').value,
-    invoiceNo: document.getElementById('dsp_invoiceNo').value,
-    invoiceAmount: document.getElementById('dsp_invoiceAmount').value,
-    boxes: document.getElementById('dsp_boxes').value,
-    weight: document.getElementById('dsp_weight').value,
-    volWeight: document.getElementById('dsp_volWeight').value,
+    courier: val('dsp_courier'),
+    docket: val('dsp_docket'),
+    status: val('dsp_status'),
+    invoiceNo: val('dsp_invoiceNo'),
+    invoiceAmount: val('dsp_invoiceAmount'),
+    boxes: val('dsp_boxes'),
+    weight: val('dsp_weight'),
+    volWeight: val('dsp_volWeight'),
     userEmail: APP_USER.email,
     userRole: APP_USER.role,
   };
+  // The `required` attributes on these inputs do nothing — the modal is not a
+  // form and never submits — so an order could be marked Dispatched with no
+  // way to trace the parcel. Check it here instead.
+  if(body.status !== 'Ready' && (!body.courier || !body.docket)) {
+    showToast('warning','Courier name and tracking number are required before marking an order Dispatched.');
+    return;
+  }
   showLoading(true);
   try {
     const res = await fetch(`/api/dashboards/dispatch/${dsp_editId}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

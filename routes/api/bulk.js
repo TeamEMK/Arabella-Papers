@@ -146,7 +146,10 @@ function validate(type, data, context) {
   return { errors, warnings };
 }
 
-async function buildContext(type) {
+// `team` only matters for designers, whose India and Cassie names sit in
+// different columns — checking a Cassie import against the India names would
+// both miss real duplicates and reject names that are free on that side.
+async function buildContext(type, team) {
   if (type === 'orders') {
     const [dealers] = await db.query('SELECT name, email FROM dealers');
     const dealerEmails = new Map();
@@ -157,8 +160,9 @@ async function buildContext(type) {
     const [rows] = await db.query('SELECT name FROM dealers');
     return { existingNames: new Set(rows.map(r => String(r.name || '').toLowerCase())) };
   }
-  const [rows] = await db.query('SELECT india_name FROM designers');
-  return { existingNames: new Set(rows.map(r => String(r.india_name || '').toLowerCase())) };
+  const col = team === 'Cassie' ? 'overseas_name' : 'india_name';
+  const [rows] = await db.query(`SELECT ${col} AS name FROM designers`);
+  return { existingNames: new Set(rows.map(r => String(r.name || '').toLowerCase())) };
 }
 
 // Duplicates inside the file itself are invisible to a database check, since
@@ -178,8 +182,8 @@ function flagInFileDuplicates(type, results) {
   }
 }
 
-async function analyse(type, rows) {
-  const context = await buildContext(type);
+async function analyse(type, rows, team) {
+  const context = await buildContext(type, team);
   const results = rows.map(row => {
     const data = extract(type, row.values);
     const { errors, warnings } = validate(type, data, context);
@@ -248,7 +252,7 @@ router.post('/preview', canImport, upload.single('file'), async (req, res) => {
       });
     }
 
-    const { results, summary } = await analyse(type, rows);
+    const { results, summary } = await analyse(type, rows, req.body.team);
     res.json({ success: true, type, headers, summary, rows: results });
   } catch (err) {
     // An unreadable upload is the user's problem, not a fault — log the reason
@@ -272,7 +276,7 @@ async function insertChunks(sql, values) {
 // the rows is never trusted.
 router.post('/import', canImport, async (req, res) => {
   try {
-    const { type, rows } = req.body;
+    const { type, rows, team } = req.body;
     if (!TYPES[type]) return res.status(400).json({ success: false, error: 'Choose what you are importing.' });
     if (!Array.isArray(rows) || !rows.length) {
       return res.status(400).json({ success: false, error: 'Nothing to import.' });
@@ -281,7 +285,7 @@ router.post('/import', canImport, async (req, res) => {
       return res.status(400).json({ success: false, error: `Import up to ${MAX_ROWS} rows at a time.` });
     }
 
-    const context = await buildContext(type);
+    const context = await buildContext(type, team);
     const valid = [];
     const rejected = [];
     const seen = new Set();
@@ -344,8 +348,13 @@ router.post('/import', canImport, async (req, res) => {
         valid.map(d => [d.name, d.email || '', d.mobile || '']),
       );
     } else {
+      // Same rule as the single-designer route: the team picked in the modal
+      // decides the column, since that is what marks an order India vs Cassie.
+      const cols = team === 'Cassie'
+        ? ['overseas_name', 'overseas_email']
+        : ['india_name', 'india_email'];
       imported = await insertChunks(
-        'INSERT INTO designers (india_name, india_email) VALUES ?',
+        `INSERT INTO designers (${cols[0]}, ${cols[1]}) VALUES ?`,
         valid.map(d => [d.name, d.email || '']),
       );
     }

@@ -10,6 +10,13 @@
   <%- include('partials/stylesheet') %>
 </head>
 <body>
+<script>
+  // Runs before the panel paints, so a pinned sidebar does not flash as a
+  // narrow rail and then widen on every page load.
+  if (localStorage.getItem('sidePinned_arabella') === '1') {
+    document.body.classList.add('side-pinned', 'side-expanded');
+  }
+</script>
 
 <!-- LOADING OVERLAY -->
 <div id="loading" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); z-index:9999; justify-content:center; align-items:center; flex-direction:column;">
@@ -17,51 +24,64 @@
   <div class="loading-text">Loading...</div>
 </div>
 
-<!-- MAIN CONTENT -->
-<div id="mainContent">
-  <!-- TOP NAVBAR -->
-  <nav class="navbar navbar-expand-lg top-navbar fixed-top">
-    <div class="container-fluid">
-      <a class="navbar-brand">
-        <img src="https://drive.google.com/thumbnail?id=1bTV0jEU5E8f0QeqBO8urDPa4BaCH1QsB" alt="ARABELLA PAPERS" height="40" class="d-inline-block align-top"/>
-      </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown">
-        <span class="navbar-toggler-icon"></span>
+<!-- MOBILE TOP BAR (the side panel is a drawer below lg) -->
+<header class="mobile-topbar d-lg-none">
+  <button type="button" class="topbar-burger" onclick="sideOpenDrawer()" aria-label="Open menu" aria-controls="sidePanel">
+    <i class="fas fa-bars"></i>
+  </button>
+  <span class="topbar-title">Arabella Paper</span>
+  <span class="topbar-user"><%= user.username %></span>
+</header>
+
+<!-- SIDE PANEL -->
+<aside class="side-panel" id="sidePanel">
+  <div class="side-brand">
+    <img src="https://drive.google.com/thumbnail?id=1bTV0jEU5E8f0QeqBO8urDPa4BaCH1QsB" alt="Arabella Papers" class="side-logo" onerror="sideLogoFallback(this)"/>
+    <button type="button" class="side-mark" onclick="sideTogglePin()" title="Open menu">AP</button>
+    <button type="button" class="side-toggle" id="sidePinBtn" onclick="sideTogglePin()" title="Keep menu open" aria-label="Keep menu open" aria-pressed="false">
+      <i class="fas fa-thumbtack"></i>
+    </button>
+    <button type="button" class="side-close d-lg-none" onclick="sideCloseDrawer()" aria-label="Close menu">
+      <i class="fas fa-xmark"></i>
+    </button>
+  </div>
+
+  <nav class="side-nav">
+    <% navMenu.forEach(function(tab) { %>
+      <button type="button" class="side-link" id="<%= tab.id %>Tab" onclick="loadPage('<%= tab.id %>')" title="<%= tab.name %>">
+        <i class="fas <%= tab.icon %> side-icon"></i><span class="side-label"><%= tab.name %></span>
       </button>
-      <div class="collapse navbar-collapse" id="navbarNavDropdown">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="dynamicNavbar">
-          <% navMenu.forEach(function(tab) { %>
-            <li class="nav-item">
-              <button type="button" class="nav-link" id="<%= tab.id %>Tab" onclick="loadPage('<%= tab.id %>')">
-                <%= tab.name %>
-              </button>
-            </li>
-          <% }); %>
-        </ul>
-        <ul class="navbar-nav align-items-center">
-          <li class="nav-item dropdown me-3">
-            <a class="nav-link dropdown-toggle text-white fw-bold small" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="fas fa-user-circle me-1"></i>
-              <%= user.username %> <span class="opacity-75">(<%= user.role %>)</span>
-            </a>
-            <ul class="dropdown-menu dropdown-menu-end">
-              <li>
-                <button class="dropdown-item" type="button" onclick="openChangePassword()">
-                  <i class="fas fa-key me-2"></i>Change Password
-                </button>
-              </li>
-            </ul>
-          </li>
-          <li class="nav-item">
-            <form method="POST" action="/logout" style="display:inline;">
-              <button type="submit" class="nav-link logout-btn">Logout</button>
-            </form>
-          </li>
-        </ul>
-      </div>
-    </div>
+    <% }); %>
   </nav>
 
+  <div class="side-footer">
+    <div class="dropdown">
+      <button type="button" class="side-user dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" title="<%= user.username %> (<%= user.role %>)">
+        <i class="fas fa-user-circle side-icon"></i>
+        <span class="side-label">
+          <span class="side-user-name"><%= user.username %></span>
+          <span class="side-user-role"><%= user.role %></span>
+        </span>
+      </button>
+      <ul class="dropdown-menu">
+        <li>
+          <button class="dropdown-item" type="button" onclick="openChangePassword()">
+            <i class="fas fa-key me-2"></i>Change Password
+          </button>
+        </li>
+      </ul>
+    </div>
+    <form method="POST" action="/logout">
+      <button type="submit" class="side-logout" title="Logout">
+        <i class="fas fa-right-from-bracket side-icon"></i><span class="side-label">Logout</span>
+      </button>
+    </form>
+  </div>
+</aside>
+<div class="side-backdrop d-lg-none" onclick="sideCloseDrawer()"></div>
+
+<!-- MAIN CONTENT -->
+<div id="mainContent">
   <!-- CONTENT AREA -->
   <div class="content-wrapper">
     <div class="content" id="contentArea">
@@ -190,12 +210,121 @@
     }
   });
 
+  // ── SIDE PANEL ──
+  // Desktop: a narrow rail that opens while the cursor is over it. Pinning
+  // holds it open for people who would rather not have it move at all.
+  const sidePanel = document.getElementById('sidePanel');
+
+  function sideIsPinned() { return document.body.classList.contains('side-pinned'); }
+
+  function sideExpand() { document.body.classList.add('side-expanded'); }
+
+  function sideCollapse() {
+    // A dropdown opened from the panel hangs outside it, so the cursor leaves
+    // the panel to reach the menu — closing then would pull the menu away.
+    if (sideIsPinned() || sidePanel.querySelector('.dropdown-menu.show')) return;
+    document.body.classList.remove('side-expanded');
+  }
+
+  function sideSetPinned(pinned) {
+    document.body.classList.toggle('side-pinned', pinned);
+    document.body.classList.toggle('side-expanded', pinned);
+    const btn = document.getElementById('sidePinBtn');
+    btn.classList.toggle('is-pinned', pinned);
+    btn.setAttribute('aria-pressed', String(pinned));
+    btn.title = pinned ? 'Unpin menu' : 'Keep menu open';
+    localStorage.setItem('sidePinned_arabella', pinned ? '1' : '0');
+  }
+
+  function sideTogglePin() { sideSetPinned(!sideIsPinned()); }
+
+  sidePanel.addEventListener('mouseenter', sideExpand);
+  sidePanel.addEventListener('mouseleave', sideCollapse);
+  // Keyboard users never fire mouseenter — open on focus so tabbing through the
+  // nav does not leave them reading unlabelled icons.
+  sidePanel.addEventListener('focusin', sideExpand);
+  sidePanel.addEventListener('focusout', () => { if (!sidePanel.contains(document.activeElement)) sideCollapse(); });
+  // Once the menu closes the panel can collapse again — unless the cursor is
+  // still resting on it, in which case no mouseenter would fire to reopen it.
+  sidePanel.addEventListener('hidden.bs.dropdown', () => { if (!sidePanel.matches(':hover')) sideCollapse(); });
+
+  sideSetPinned(localStorage.getItem('sidePinned_arabella') === '1');
+
+  function sideOpenDrawer() { document.body.classList.add('side-open'); }
+  function sideCloseDrawer() { document.body.classList.remove('side-open'); }
+
+  // The logo is a Google Drive thumbnail and Drive does not always serve it.
+  // Fall back to a wordmark rather than leaving a broken image in the panel.
+  function sideLogoFallback(img) {
+    img.insertAdjacentHTML('afterend', '<span class="side-wordmark">ARABELLA<small>PAPERS</small></span>');
+    img.remove();
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') sideCloseDrawer(); });
+
+  // ── TABLE HEIGHT ──
+  // The dashboard tables used to be capped at a fixed 350px, which left a wide
+  // empty band under them on anything but a short screen. Give each one
+  // whatever room is actually left below it instead. Its top moves when the
+  // filter panel opens, so that has to recompute too.
+  function sizeTables() {
+    document.querySelectorAll('#contentArea [data-fill-height]').forEach(el => {
+      const top = el.getBoundingClientRect().top;
+      el.style.maxHeight = Math.max(220, window.innerHeight - top - 24) + 'px';
+    });
+  }
+
+  window.addEventListener('resize', sizeTables);
+  // Bootstrap collapse events bubble, so one listener covers every filter panel.
+  document.addEventListener('shown.bs.collapse', sizeTables);
+  document.addEventListener('hidden.bs.collapse', sizeTables);
+
+  // ── VIEW SCRIPTS ──
+  // HTML injected with innerHTML never runs its <script> tags, so each one is
+  // recreated by hand. An external one is fetched asynchronously though, and
+  // the inline script that uses the library sits right behind it — that is why
+  // Analytics threw "Chart is not defined" the first time it was opened, and
+  // only worked on the second visit once the CDN copy had landed. So wait for
+  // each library before moving on to the next script.
+  const loadedViewLibs = new Set();
+
+  async function runViewScripts(container) {
+    for (const old of Array.from(container.querySelectorAll('script'))) {
+      const src = old.getAttribute('src');
+
+      // A library already fetched stays on window even after its <script> tag
+      // is wiped by the next innerHTML, so re-running it every visit would only
+      // cost a download.
+      if (src && loadedViewLibs.has(src)) { old.remove(); continue; }
+
+      const s = document.createElement('script');
+      Array.from(old.attributes).forEach(a => s.setAttribute(a.name, a.value));
+      if (!src) s.textContent = old.textContent;
+
+      if (src) {
+        // Resolve on error too: one dead CDN should not stop the rest of the
+        // view from running.
+        await new Promise(resolve => {
+          s.onload = s.onerror = resolve;
+          old.parentNode.replaceChild(s, old);
+        });
+        loadedViewLibs.add(src);
+      } else {
+        old.parentNode.replaceChild(s, old);
+      }
+    }
+  }
+
   // ── PAGE LOADER ──
   function loadPage(page) {
     // Active tab highlight
-    document.querySelectorAll('.top-navbar .nav-link').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.side-nav .side-link').forEach(b => b.classList.remove('active'));
     const activeTab = document.getElementById(page + 'Tab');
     if (activeTab) activeTab.classList.add('active');
+
+    // On mobile the panel is a drawer sitting over the content — picking a page
+    // is the moment to get it out of the way.
+    sideCloseDrawer();
 
     // Show inline spinner
     document.getElementById('contentArea').innerHTML =
@@ -208,12 +337,12 @@
       .then(html => {
         document.getElementById('contentArea').innerHTML = html;
         // Re-execute scripts inside loaded HTML
-        Array.from(document.getElementById('contentArea').querySelectorAll('script')).forEach(old => {
-          const s = document.createElement('script');
-          Array.from(old.attributes).forEach(a => s.setAttribute(a.name, a.value));
-          s.textContent = old.textContent;
-          old.parentNode.replaceChild(s, old);
-        });
+        return runViewScripts(document.getElementById('contentArea'));
+      })
+      .then(() => {
+        // Production and Dispatch build their markup from the script above, so
+        // the tables only exist once it has run.
+        sizeTables();
       })
       .catch(err => {
         document.getElementById('contentArea').innerHTML =

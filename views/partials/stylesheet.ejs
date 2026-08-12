@@ -5,12 +5,19 @@
 
   html, body { width: 100%; margin: 0; padding: 0; background-color: #f4f6f9; scroll-behavior: smooth; }
 
-  #mainContent { min-height: 100vh; width: 100%; padding-top: 60px; display: flex; flex-direction: column; }
+  /* --side-w fits the longest label ("Production Dashboard") without clipping. */
+  :root { --side-w: 254px; --side-w-min: 76px; --topbar-h: 56px; }
+
+  #mainContent { min-height: 100vh; width: 100%; display: flex; flex-direction: column; }
   .content-wrapper { flex: 1; padding: 20px; display: flex; flex-direction: column; }
   .content { width: 100%; border-radius: 8px; padding: 0; }
 
   /* TABLE */
   .table-responsive { overflow-x: auto; }
+  /* Starting point for the dashboard tables until sizeTables() measures the
+     real space left below them — without it they would briefly run the full
+     length of the data. */
+  [data-fill-height] { max-height: calc(100vh - 260px); min-height: 220px; }
   thead th { background-color: #212529 !important; color: white; white-space: nowrap; border: none; }
   tbody td { white-space: nowrap; vertical-align: middle; }
 
@@ -20,6 +27,20 @@
   .smooth-ui { transition: all 0.3s cubic-bezier(0.25,0.8,0.25,1); }
   .card.smooth-ui:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.15) !important; }
 
+  /* COMBO INPUT
+     These fields are <input list="..."> datalists, not <select>s, so the
+     browser draws no arrow on them — sitting beside a real select they looked
+     like plain text boxes and people did not know a list was there. Borrow the
+     select's own chevron so they read as what they are. */
+  .form-combo {
+    padding-right: 2.25rem;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px 12px;
+  }
+  .form-combo:disabled { cursor: not-allowed; opacity: 0.65; }
+
   /* FILTER BTN */
   .filter-toggle-btn { background: white; border: 1px solid #dee2e6; color: #333; cursor: pointer; }
   .filter-toggle-btn:hover { background: #f8f9fa; }
@@ -27,14 +48,95 @@
   /* MODAL TEXT */
   .modal-content label, .modal-content .form-label, .modal-content .text-muted { color: #333 !important; }
 
-  /* NAVBAR */
-  .navbar-collapse { background-color: black; }
-  .top-navbar { background-color: #212529 !important; backdrop-filter: blur(5px); box-shadow: 0 2px 10px rgba(0,0,0,0.5); padding: 0.5rem 1rem; z-index: 1000; height: 60px; }
-  .navbar-nav .nav-link { color: #f1f1f1 !important; font-size: 16px; padding: 0.5rem 1rem !important; border-radius: 5px; margin: 0 5px; transition: all 0.3s ease-in-out; }
-  .navbar-nav .nav-link:hover, .navbar-nav .nav-link.active { color: #ffcc00 !important; background: rgba(255,255,255,0.1); }
-  .navbar-toggler { background-color: white; }
-  .logout-btn { background: #e74c3c !important; color: white !important; }
-  .logout-btn:hover { background: #c0392b !important; transform: scale(1.05); }
+  /* SIDE PANEL
+     Sits below Bootstrap's modal layer (backdrop 1050) so dialogs still cover
+     it, and above the sticky table headers inside the dashboards (1020). */
+  .side-panel { position: fixed; top: 0; left: 0; bottom: 0; width: var(--side-w); z-index: 1040;
+    background: #212529; display: flex; flex-direction: column; box-shadow: 2px 0 14px rgba(0,0,0,0.3); }
+
+  .side-brand { display: flex; align-items: center; gap: 10px; height: var(--topbar-h); min-height: var(--topbar-h);
+    padding: 0 14px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .side-logo { height: 34px; max-width: 150px; object-fit: contain; }
+  .side-wordmark { color: #ffcc00; font-weight: 600; font-size: 15px; line-height: 1.1; letter-spacing: 0.5px; }
+  .side-wordmark small { display: block; color: #f1f1f1; font-size: 9px; letter-spacing: 2.5px; }
+  .side-mark { display: none; width: 40px; height: 40px; border: 0; border-radius: 10px; background: #ffcc00;
+    color: #212529; font-weight: 600; font-size: 15px; align-items: center; justify-content: center; }
+  .side-toggle, .side-close { margin-left: auto; background: transparent; border: 0; color: #9aa1a8;
+    width: 32px; height: 32px; border-radius: 6px; flex: 0 0 32px;
+    display: inline-flex; align-items: center; justify-content: center; }
+  .side-toggle:hover, .side-close:hover { background: rgba(255,255,255,0.1); color: #ffcc00; }
+
+  .side-nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 12px 10px; display: flex; flex-direction: column; gap: 4px; }
+  .side-link, .side-user, .side-logout { display: flex; align-items: center; gap: 12px; width: 100%;
+    background: transparent; border: 0; border-radius: 8px; padding: 10px 12px; color: #d7dce1;
+    font-size: 14px; text-align: left; }
+  .side-link:hover, .side-user:hover { background: rgba(255,255,255,0.08); color: #ffcc00; }
+  .side-link.active { background: rgba(255,204,0,0.14); color: #ffcc00; font-weight: 600; box-shadow: inset 3px 0 0 #ffcc00; }
+  .side-icon { flex: 0 0 20px; width: 20px; text-align: center; font-size: 16px; }
+  .side-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .side-footer { border-top: 1px solid rgba(255,255,255,0.08); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .side-footer .dropdown { width: 100%; }
+  .side-user::after { margin-left: auto; flex: 0 0 auto; }
+  .side-user-name { display: block; font-weight: 600; font-size: 14px; line-height: 1.2; }
+  .side-user-role { display: block; font-size: 11px; opacity: 0.7; }
+  .side-logout { background: #e74c3c; color: #fff; }
+  .side-logout:hover { background: #c0392b; color: #fff; }
+
+  /* MOBILE TOP BAR + DRAWER BACKDROP */
+  .mobile-topbar { position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h); z-index: 1030;
+    background: #212529; display: flex; align-items: center; gap: 12px; padding: 0 14px; box-shadow: 0 2px 10px rgba(0,0,0,0.4); }
+  .topbar-burger { background: transparent; border: 0; color: #f1f1f1; font-size: 20px; padding: 4px 8px; }
+  .topbar-title { color: #ffcc00; font-weight: 600; }
+  .topbar-user { margin-left: auto; color: #d7dce1; font-size: 13px; }
+  .side-backdrop { position: fixed; inset: 0; z-index: 1035; background: rgba(0,0,0,0.5); opacity: 0; pointer-events: none; }
+
+  /* DESKTOP: a narrow icon rail that opens on hover and pushes the page across
+     with it, so the panel never sits on top of the content. */
+  @media (min-width: 992px) {
+    #mainContent { padding-left: var(--side-w-min); }
+    body.side-expanded #mainContent { padding-left: var(--side-w); }
+
+    .side-panel { width: var(--side-w-min); }
+    body.side-expanded .side-panel { width: var(--side-w); }
+
+    /* Rail: labels keep their place in the row and fade, so while the panel is
+       still animating they slide out under its edge. Hiding them outright left
+       a wide empty strip for the length of the transition. Each row clips its
+       own overflow — the panel must not, or the user menu would be cut off.
+       18px of padding is what centres a 20px icon in the 76px rail, since the
+       rows already start 10px in from the panel edge. */
+    .side-link, .side-user, .side-logout { overflow: hidden; padding-left: 18px; padding-right: 0; }
+    .side-label { opacity: 0; }
+    .side-logo, .side-wordmark, .side-toggle, .side-user::after { display: none; }
+    .side-mark { display: flex; }
+    .side-brand { justify-content: center; padding-left: 8px; padding-right: 8px; }
+
+    /* Open: labels and branding come back */
+    body.side-expanded .side-link,
+    body.side-expanded .side-user,
+    body.side-expanded .side-logout { padding-left: 12px; padding-right: 12px; }
+    body.side-expanded .side-label { opacity: 1; }
+    body.side-expanded .side-logo { display: block; }
+    body.side-expanded .side-wordmark { display: block; }
+    body.side-expanded .side-toggle { display: inline-flex; }
+    body.side-expanded .side-user::after { display: block; }
+    body.side-expanded .side-mark { display: none; }
+    body.side-expanded .side-brand { justify-content: flex-start; padding: 0 14px; }
+
+    .side-toggle.is-pinned { color: #ffcc00; background: rgba(255,204,0,0.15); transform: rotate(-45deg); }
+  }
+
+  /* MOBILE: panel slides in over the content */
+  @media (max-width: 991.98px) {
+    #mainContent { padding-top: var(--topbar-h); }
+    .side-panel { transform: translateX(-100%); }
+    body.side-open .side-panel { transform: none; }
+    body.side-open .side-backdrop { opacity: 1; pointer-events: auto; }
+    /* Collapsing to icons only applies to the docked desktop panel — as a
+       drawer there is nothing to reclaim, so the close button is the control. */
+    .side-toggle { display: none; }
+  }
 
   /* LOADER */
   .spinner { width: 60px; height: 60px; border: 5px solid rgba(255,255,255,0.1); border-top: 5px solid #ffcc00; border-radius: 50%; animation: spin 1s linear infinite; box-shadow: 0 0 20px rgba(255,204,0,0.4); }
@@ -67,9 +169,6 @@
   /* SWAL TOAST */
   .swal2-toast { background: rgba(255,255,255,0.9) !important; backdrop-filter: blur(4px); border: 1px solid #ddd; }
 
-  @media (max-width: 991.98px) {
-    .navbar-nav .nav-link { margin: 5px 0; text-align: left; }
-  }
   @media (max-width: 768px) {
     .btn-sm { padding: 0.25rem 0.4rem; font-size: 0.75rem; }
   }
