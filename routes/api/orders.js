@@ -57,13 +57,39 @@ router.get('/', requireLogin, async (req, res) => {
       Status: r.design_status,
       Timestamp: r.timestamp ? formatDate(r.timestamp) : '',
       Raw_Timestamp: r.timestamp,
-      rowData: buildRowData(r, isAdmin),
+      // The full row used to ride along on every order here. At 8000+ orders
+      // that was 79% of an 11MB response, to fill a modal opened one order at
+      // a time - it is fetched on demand now. Remarks stays because the edit
+      // form needs it without a round trip.
+      Remarks: r.remarks,
     }));
 
     res.json({ success: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// GET /api/orders/:id/details — one order's full row, for the View modal.
+// Applies the same admin check the list did, so a non-admin still does not see
+// the dealer's email.
+// ─────────────────────────────────────────────
+router.get('/:id/details', requireLogin, async (req, res) => {
+  try {
+    const user = req.session.user;
+    const role = user.role || '';
+    const isAdmin = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' ||
+      role.includes('Production Manager');
+
+    const [rows] = await db.query('SELECT * FROM orders WHERE order_id = ? AND is_deleted = 0', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ success: false, error: 'Order not found.' });
+
+    res.json({ success: true, rowData: buildRowData(rows[0], isAdmin) });
+  } catch (err) {
+    console.error('Order details failed:', err);
+    res.status(500).json({ success: false, error: 'Server error.' });
   }
 });
 

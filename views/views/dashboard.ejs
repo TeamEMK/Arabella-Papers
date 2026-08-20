@@ -636,7 +636,7 @@ function renderNextBatch() {
     row.insertCell().innerHTML = `<input type="checkbox" class="order-checkbox" value="${order.ID}" ${isChecked} onchange="handleCheckboxChange('${order.ID}', this.checked)">`;
 
     // Actions
-    let btns = `<button class="btn btn-sm btn-info me-1 smooth-ui" onclick='openViewModal(${JSON.stringify(order.rowData||{})})' title="View"><i class="fas fa-eye"></i></button>`;
+    let btns = `<button class="btn btn-sm btn-info me-1 smooth-ui" onclick="openViewModal('${order.ID}')" title="View"><i class="fas fa-eye"></i></button>`;
     if(role === 'SuperAdmin') {
       btns += `<button class="btn btn-sm btn-primary me-1 smooth-ui" onclick="openEditDetailsModal('${order.ID}')" title="Edit"><i class="fas fa-pen"></i></button>`;
       btns += `<button class="btn btn-sm btn-danger smooth-ui" onclick="handleDeleteOrder('${order.ID}')" title="Delete"><i class="fas fa-trash"></i></button>`;
@@ -711,8 +711,28 @@ function openOrderPunchModal() {
   new bootstrap.Modal(document.getElementById('orderPunchModal')).show();
 }
 
-function openViewModal(rowData) {
+// The order list no longer carries every field, so the detail is fetched for
+// the one order being opened.
+async function openViewModal(orderId) {
   const modalBody = document.getElementById('viewModalBody');
+  modalBody.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</div>';
+  new bootstrap.Modal(document.getElementById('viewModal')).show();
+
+  let rowData;
+  try {
+    const res = await fetch('/api/orders/' + encodeURIComponent(orderId) + '/details');
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Could not load this order.');
+    rowData = json.rowData;
+  } catch (e) {
+    modalBody.innerHTML = '<div class="alert alert-danger m-3">Could not load this order. Please try again.</div>';
+    return;
+  }
+
+  renderViewModal(modalBody, rowData);
+}
+
+function renderViewModal(modalBody, rowData) {
   const isAdmin = APP_USER.role === 'SuperAdmin' || APP_USER.domain === 'Head';
   const forbidden = ['dealer e-mail','mobile no','dealer email'];
   const linkKeys = ['Upload the one Design file','Upload Design','Revision Design Upload','Approved Design'];
@@ -734,7 +754,6 @@ function openViewModal(rowData) {
   }
   html += '</div>';
   modalBody.innerHTML = html;
-  new bootstrap.Modal(document.getElementById('viewModal')).show();
 }
 
 function openEditModal(ID) {
@@ -767,7 +786,7 @@ function openEditDetailsModal(ID) {
   document.getElementById('ed_Client').value = order.Client_name || '';
   document.getElementById('ed_Designer').value = order.Designer || '';
   document.getElementById('ed_Time').value = order.Possible_design_time || '';
-  document.getElementById('ed_Remark').value = (order.rowData && order.rowData.Remarks) || '';
+  document.getElementById('ed_Remark').value = order.Remarks || '';
   new bootstrap.Modal(document.getElementById('editDetailsModal')).show();
 }
 

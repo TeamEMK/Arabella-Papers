@@ -42,7 +42,7 @@ router.get('/till-approval', requireLogin, async (req, res) => {
       Dealer_name: r.dealer_name,
       Client_name: r.client_name,
       Design_Approval_Status_From_Client: r.design_approval_status_from_client || '',
-      rowData: buildFullRowData(r),
+      // rowData ab on-demand aata hai (GET /api/dashboards/order-details/:id)
     }));
 
     res.json({ success: true, data });
@@ -166,7 +166,6 @@ router.get('/production', requireLogin, async (req, res) => {
       Remark: r.remark || '',
       Reason_For_Delay: r.reason_for_delay || '',
       Dispatch_Status: r.status_4 || '',
-      rowData: buildFullRowData(r),
     }));
 
     res.json({ success: true, data });
@@ -325,7 +324,14 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       Docket_No: r.ups_dhl_fedex_tracking_number || '',
       Dispatch_Date: r.actual_4 ? new Date(r.actual_4).toLocaleString('en-GB') : '',
       Dispatch_Status: r.status_4,
-      rowData: buildFullRowData(r),
+      // This dashboard shows the invoice figures as table columns and reloads
+      // them into its edit form, so unlike the others it needs them up front -
+      // five fields rather than the whole row.
+      Invoice_Number: r.invoice_number || '',
+      Invoice_Amount: r.invoice_amount == null ? '' : r.invoice_amount,
+      Number_of_Boxes: r.number_of_boxes == null ? '' : r.number_of_boxes,
+      Weight: r.weight || '',
+      Volumetric_Weight: r.volumetric_weight || '',
     }));
 
     res.json({ success: true, data });
@@ -364,6 +370,24 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// ORDER DETAILS (View modal)
+// ═══════════════════════════════════════════════
+
+// GET /api/dashboards/order-details/:id
+// The three queue dashboards used to carry the full row for every order just to
+// fill a modal opened one at a time. They fetch it from here instead.
+router.get('/order-details/:id', requireLogin, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM orders WHERE order_id = ? AND is_deleted = 0', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ success: false, error: 'Order not found.' });
+    res.json({ success: true, rowData: buildFullRowData(rows[0]) });
+  } catch (err) {
+    console.error('Order details failed:', err);
+    res.status(500).json({ success: false, error: 'Server error.' });
   }
 });
 

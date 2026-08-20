@@ -159,7 +159,7 @@ function ta_renderTable(data) {
     return `<tr>
       <td><input type="checkbox" class="ta_checkbox" value="${o.ID}" ${isChecked} onchange="ta_handleCheck('${o.ID}',this.checked)"></td>
       <td>
-        <button class="btn btn-sm btn-info me-1" onclick='ta_openView(${JSON.stringify(o.rowData||{})})'><i class="fas fa-eye"></i></button>
+        <button class="btn btn-sm btn-info me-1" onclick="ta_openView('${o.ID}')"><i class="fas fa-eye"></i></button>
         <button class="btn btn-sm btn-warning" onclick="ta_openEdit('${o.ID}')"><i class="fas fa-edit"></i></button>
       </td>
       <td>${o.Timestamp||''}</td>
@@ -183,8 +183,22 @@ function ta_getStatusBadge(s) {
   else if(l.includes('reprint')) c = 'dark';
   return `<span class="badge rounded-pill bg-${c}">${s}</span>`;
 }
-function ta_openView(rowData) {
+async function ta_openView(orderId) {
   const body = document.getElementById('ta_viewModalBody');
+  body.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</div>';
+  new bootstrap.Modal(document.getElementById('ta_viewModal')).show();
+
+  let rowData;
+  try {
+    const res = await fetch('/api/dashboards/order-details/' + encodeURIComponent(orderId));
+    const json = await res.json();
+    if (!json.success) throw new Error();
+    rowData = json.rowData;
+  } catch (e) {
+    body.innerHTML = '<div class="alert alert-danger m-3">Could not load this order. Please try again.</div>';
+    return;
+  }
+
   const linkKeys = ['Upload the one Design file','Upload Design','Revision Design Upload','Approved Design'];
   let html = '<div class="row">';
   for(const key in rowData) {
@@ -197,7 +211,6 @@ function ta_openView(rowData) {
     html += `<div class="${col} view-item"><span class="view-label">${key}</span><div class="${isLink?'':'view-value'}">${val}</div></div>`;
   }
   body.innerHTML = html + '</div>';
-  new bootstrap.Modal(document.getElementById('ta_viewModal')).show();
 }
 function ta_openEdit(id) {
   ta_editId = id;

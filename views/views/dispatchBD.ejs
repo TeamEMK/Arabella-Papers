@@ -129,28 +129,41 @@ function dsp_renderTable(data) {
     let b = 'warning';
     if(s.toLowerCase().includes('dispatched')) b='info';
     if(s.toLowerCase().includes('delivered')) b='success';
-    const rd = o.rowData||{};
     return `<tr>
       <td class="fw-bold">${o.ID}</td>
       <td>${o.Dealer_name||''}</td>
       <td>${o.Client_name||''}</td>
       <td>${o.Dispatch_Courier_Name||'-'}</td>
       <td>${o.Docket_No||'-'}</td>
-      <td>${rd['Invoice Number']||'-'}</td>
-      <td>${rd['Invoice Amount']||'-'}</td>
-      <td>${rd['Number of Boxes']||'-'}</td>
-      <td>${rd['Weight']||'-'}</td>
-      <td>${rd['Volumetric Weigh']||'-'}</td>
+      <td>${o.Invoice_Number||'-'}</td>
+      <td>${o.Invoice_Amount||'-'}</td>
+      <td>${o.Number_of_Boxes||'-'}</td>
+      <td>${o.Weight||'-'}</td>
+      <td>${o.Volumetric_Weight||'-'}</td>
       <td><span class="badge bg-${b}">${s}</span></td>
       <td>
-        <button class="btn btn-sm btn-info me-1" onclick='dsp_openView(${JSON.stringify(rd)})'><i class="fas fa-eye"></i></button>
+        <button class="btn btn-sm btn-info me-1" onclick="dsp_openView('${o.ID}')"><i class="fas fa-eye"></i></button>
         <button class="btn btn-sm btn-primary" onclick="dsp_openEdit('${o.ID}')"><i class="fas fa-shipping-fast"></i></button>
       </td>
     </tr>`;
   }).join('');
 }
-function dsp_openView(rowData) {
+async function dsp_openView(orderId) {
   const body = document.getElementById('dsp_viewBody');
+  body.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</div>';
+  new bootstrap.Modal(document.getElementById('dsp_viewModal')).show();
+
+  let rowData;
+  try {
+    const res = await fetch('/api/dashboards/order-details/' + encodeURIComponent(orderId));
+    const json = await res.json();
+    if (!json.success) throw new Error();
+    rowData = json.rowData;
+  } catch (e) {
+    body.innerHTML = '<div class="alert alert-danger m-3">Could not load this order. Please try again.</div>';
+    return;
+  }
+
   const linkKeys = ['Upload the one Design file','Upload Design','Revision Design Upload','Approved Design'];
   let html = '<div class="row">';
   for(const key in rowData) {
@@ -163,21 +176,19 @@ function dsp_openView(rowData) {
     html += `<div class="${col} view-item"><span class="view-label">${key}</span><div class="${isLink?'':'view-value'}">${val}</div></div>`;
   }
   body.innerHTML = html+'</div>';
-  new bootstrap.Modal(document.getElementById('dsp_viewModal')).show();
 }
 function dsp_openEdit(id) {
   dsp_editId = id;
   const o = dsp_data.find(x => x.ID.toString()===id.toString());
   document.getElementById('dsp_editId').textContent = id;
-  const rd = o?.rowData||{};
   document.getElementById('dsp_courier').value = o?.Dispatch_Courier_Name||'';
   document.getElementById('dsp_docket').value = o?.Docket_No||'';
   document.getElementById('dsp_status').value = o?.Dispatch_Status||'Dispatched';
-  document.getElementById('dsp_invoiceNo').value = rd['Invoice Number']||'';
-  document.getElementById('dsp_invoiceAmount').value = rd['Invoice Amount']||'';
-  document.getElementById('dsp_boxes').value = rd['Number of Boxes']||'';
-  document.getElementById('dsp_weight').value = rd['Weight']||'';
-  document.getElementById('dsp_volWeight').value = rd['Volumetric Weigh']||'';
+  document.getElementById('dsp_invoiceNo').value = o?.Invoice_Number||'';
+  document.getElementById('dsp_invoiceAmount').value = o?.Invoice_Amount||'';
+  document.getElementById('dsp_boxes').value = o?.Number_of_Boxes||'';
+  document.getElementById('dsp_weight').value = o?.Weight||'';
+  document.getElementById('dsp_volWeight').value = o?.Volumetric_Weight||'';
   new bootstrap.Modal(document.getElementById('dsp_editModal')).show();
 }
 async function dsp_submitUpdate() {
