@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS users (
   password VARCHAR(255) NOT NULL,
   role VARCHAR(100) NOT NULL DEFAULT 'Designer',
   domain VARCHAR(100),
+  contact VARCHAR(30),
+  dob VARCHAR(30),
+  nationality VARCHAR(50),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   last_login DATETIME
 );
@@ -70,7 +73,7 @@ CREATE TABLE IF NOT EXISTS orders (
   -- Parties
   dealer_name VARCHAR(200),
   dealer_email VARCHAR(150),
-  client_name VARCHAR(200),
+  client_name VARCHAR(2000),
   
   -- Design
   india_designer VARCHAR(200),
@@ -86,6 +89,7 @@ CREATE TABLE IF NOT EXISTS orders (
   upload_design TEXT,
   approved_design TEXT,
   remarks TEXT,
+  planned_1 DATETIME,
   actual_1 DATETIME,
   doer_id VARCHAR(150),
   
