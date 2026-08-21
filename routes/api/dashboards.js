@@ -141,6 +141,7 @@ router.get('/production', requireLogin, async (req, res) => {
         AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%rejected%'
         AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%cancel%'
         AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
+        AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
       ORDER BY id DESC
     `);
 

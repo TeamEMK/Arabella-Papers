@@ -29,9 +29,14 @@ router.get('/', requireLogin, async (req, res) => {
     const name = user.username || '';
     const isAdmin = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' || role.includes('Production Manager');
 
+    // "Local Order" is a real dealer with 3576 orders behind it, but it is not
+    // work anyone tracks here - it was crowding out 41% of both this list and
+    // the production queue. The rows stay in the table and still count in
+    // Analytics; they are only kept off these two boards.
     let query = `
-      SELECT * FROM orders 
+      SELECT * FROM orders
       WHERE is_deleted = 0
+        AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
     `;
     const params = [];
 
