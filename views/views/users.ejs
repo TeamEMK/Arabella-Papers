@@ -2,7 +2,7 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h3 class="mb-0 text-dark fw-bold">User Management</h3>
     <div>
-      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold me-2" onclick="usrFetch()">
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold me-2" onclick="refreshBoard(this, usrFetch, 'users')">
         <i class="fas fa-sync-alt me-1"></i> Refresh
       </button>
       <button class="btn btn-primary fw-bold" onclick="usrOpenForm()">
@@ -135,8 +135,10 @@
       }).join('');
 
       usrRender();
+      return usrRows.length;
     } catch (err) {
       tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-danger">' + esc(err.message) + '</td></tr>';
+      throw err;
     }
   };
 
@@ -221,7 +223,7 @@
       if (data.success) {
         usrModal.hide();
         showToast('success', usrEditingId ? 'User updated' : 'User created');
-        usrFetch();
+        usrFetch().catch(() => {});
       } else {
         usrError(data.error || 'Could not save the user.');
       }
@@ -252,7 +254,7 @@
       const data = await res.json();
       if (data.success) {
         showToast('success', 'User deleted');
-        usrFetch();
+        usrFetch().catch(() => {});
       } else {
         showToast('error', data.error || 'Could not delete the user.');
       }
@@ -263,6 +265,6 @@
     }
   };
 
-  usrFetch();
+  usrFetch().catch(() => {});
 })();
 </script>

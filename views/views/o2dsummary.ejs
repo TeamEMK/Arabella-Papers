@@ -6,7 +6,7 @@ document.getElementById('analyticsRoot').innerHTML = `
   <!-- Header -->
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-chart-pie me-2"></i>O2D Analytics Summary</h3>
-    <button class="btn btn-outline-dark smooth-ui" onclick="fetchAnalytics()"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    <button class="btn btn-outline-dark smooth-ui" onclick="refreshBoard(this, fetchAnalytics, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
   </div>
 
   <!-- KPI CARDS -->
@@ -116,9 +116,10 @@ async function fetchAnalytics() {
     an_all = json.data || [];
     an_populateFilters(an_all);
     anApplyFilters();
-  } catch(e) { console.error(e); }
+    return an_all.length;
+  } catch(e) { console.error(e); throw e; }
 }
-fetchAnalytics();
+fetchAnalytics().catch(() => {});
 
 function an_populateFilters(data) {
   const designers = new Set(), dealers = new Set(), couriers = new Set();

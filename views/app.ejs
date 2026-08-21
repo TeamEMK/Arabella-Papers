@@ -263,6 +263,28 @@
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape') sideCloseDrawer(); });
 
+  // ── REFRESH BUTTONS ──
+  // A refresh that fetches the same rows and redraws them looks like nothing
+  // happened - the Dispatch queue has one order in it, so there was no visible
+  // difference at all. Spin the icon while the request is out and say what came
+  // back, so the button is visibly doing its job.
+  async function refreshBoard(btn, loader, label) {
+    const icon = btn.querySelector('i');
+    btn.disabled = true;
+    if (icon) icon.classList.add('fa-spin');
+    try {
+      const count = await loader();
+      showToast('success', typeof count === 'number'
+        ? (count + ' ' + (label || 'rows') + ' loaded')
+        : 'Refreshed');
+    } catch (e) {
+      showToast('error', 'Could not refresh. Please try again.');
+    } finally {
+      btn.disabled = false;
+      if (icon) icon.classList.remove('fa-spin');
+    }
+  }
+
   // ── TABLE HEIGHT ──
   // The dashboard tables used to be capped at a fixed 350px, which left a wide
   // empty band under them on anything but a short screen. Give each one
