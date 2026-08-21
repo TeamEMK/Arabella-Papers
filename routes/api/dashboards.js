@@ -119,32 +119,24 @@ router.get('/production', requireLogin, async (req, res) => {
     const isAuthorized = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' || role.includes('Production Manager');
     if (!isAuthorized) return res.json({ success: true, data: [] });
 
-    // An order belongs on this queue once the client has approved it - or once
-    // production has already started on it. The second half matters: work does
-    // not always wait for the approval column to be updated, and excluding
-    // every "Proofing Done" order was hiding 1298 orders that already had
-    // paper cut and printing done.
+    // Every live order, not only the client-approved ones.
+    //
+    // The approval gate was written for a flow this shop does not follow: work
+    // starts when the order arrives, and the approval column is updated later
+    // if at all. It was hiding 1298 orders that already had paper cut and
+    // printing done, and it kept every freshly punched order out of the queue
+    // the production team actually works from.
+    //
+    // So the queue is now "anything still in play": not dispatched, not
+    // rejected, not cancelled. Narrowing it again is a matter of adding the
+    // approval condition back to this WHERE clause.
     const [rows] = await db.query(`
       SELECT * FROM orders
       WHERE is_deleted = 0
         AND (status_4 IS NULL OR status_4 = '')
         AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%rejected%'
-        AND (
-          (
-            design_approval_status_from_client IS NOT NULL
-            AND design_approval_status_from_client != ''
-            AND LOWER(design_approval_status_from_client) NOT LIKE '%proofing%'
-          )
-          OR (guest_name IS NOT NULL AND guest_name != '')
-          OR (paper_cutting IS NOT NULL AND paper_cutting != '')
-          OR (printing IS NOT NULL AND printing != '')
-          OR (edges IS NOT NULL AND edges != '')
-          OR (laser_cutting IS NOT NULL AND laser_cutting != '')
-          OR (output IS NOT NULL AND output != '')
-          OR (card_assembly IS NOT NULL AND card_assembly != '')
-          OR (dye_status IS NOT NULL AND dye_status NOT IN ('', 'Dye Status'))
-          OR (block_status IS NOT NULL AND block_status NOT IN ('', 'Block Status'))
-        )
+        AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%cancel%'
+        AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
       ORDER BY id DESC
     `);
 
