@@ -104,6 +104,7 @@ async function fetchApprovalData() {
     ta_data = json.data || [];
     ta_populateFilters(ta_data);
     taApplyFilters();
+    ta_attachScroll();
   } catch(e) { console.error(e); }
 }
 
@@ -150,10 +151,41 @@ function taClearFilters() {
   ['ta_filterStatus','ta_filterDesigner','ta_search','ta_startDate','ta_endDate'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   taApplyFilters();
 }
+// 7800 rows in one innerHTML froze the tab for a second and a half. Drawn a
+// batch at a time now, extended as the table is scrolled.
+var TA_BATCH = 50;
+var ta_shown = 0, ta_display = [];
+
 function ta_renderTable(data) {
   const tbody = document.getElementById('ta_tbody');
+  if(!tbody) return;
+  ta_display = data;
+  ta_shown = 0;
+  tbody.innerHTML = '';
   if(!data.length) { tbody.innerHTML = '<tr><td colspan="9" class="text-center">No orders found.</td></tr>'; return; }
-  tbody.innerHTML = data.map(o => {
+  ta_renderNextBatch();
+}
+
+function ta_renderNextBatch() {
+  if(ta_shown >= ta_display.length) return;
+  const tbody = document.getElementById('ta_tbody');
+  if(!tbody) return;
+  const batch = ta_display.slice(ta_shown, ta_shown + TA_BATCH);
+  tbody.insertAdjacentHTML('beforeend', batch.map(ta_rowHtml).join(''));
+  ta_shown += batch.length;
+}
+
+function ta_attachScroll() {
+  const box = document.querySelector('#tillApprovalRoot [data-fill-height]');
+  if(!box || box.dataset.lazy) return;
+  box.dataset.lazy = '1';
+  box.addEventListener('scroll', function() {
+    if(box.scrollTop + box.clientHeight >= box.scrollHeight - 150) ta_renderNextBatch();
+  });
+}
+
+function ta_rowHtml(o) {
+  {
     const badge = ta_getStatusBadge(o.Design_Approval_Status_From_Client);
     const isChecked = ta_selected.has(o.ID.toString()) ? 'checked' : '';
     return `<tr>
@@ -170,7 +202,7 @@ function ta_renderTable(data) {
       <td>${o.Client_name||''}</td>
       <td>${badge}</td>
     </tr>`;
-  }).join('');
+  }
 }
 function ta_getStatusBadge(s) {
   if(!s) s = 'Proofing Done';

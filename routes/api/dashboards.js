@@ -156,27 +156,17 @@ router.get('/production', requireLogin, async (req, res) => {
       Guest_Name: r.guest_name || '',
       Paper_Cutting: r.paper_cutting || '',
       Dye_Status: r.dye_status || '',
-      Dye_Status_Actual_Time: r.dye_status_actual_time ? new Date(r.dye_status_actual_time).toLocaleString('en-GB', IST) : '',
-      NO_DIE_Actual_Time: r.no_die_actual_time ? new Date(r.no_die_actual_time).toLocaleString('en-GB', IST) : '',
-      DIE_NOT_RECEIVED_Actual_Time: r.die_not_received_actual_time ? new Date(r.die_not_received_actual_time).toLocaleString('en-GB', IST) : '',
-      DIE_CUTTING_DONE_Actual_Time: r.die_cutting_done_actual_time ? new Date(r.die_cutting_done_actual_time).toLocaleString('en-GB', IST) : '',
-      DIE_SENT_Actual_Time: r.die_sent_actual_time ? new Date(r.die_sent_actual_time).toLocaleString('en-GB', IST) : '',
       Block_Status: r.block_status || '',
-      Block_Status_Actual_Time: r.block_status_actual_time ? new Date(r.block_status_actual_time).toLocaleString('en-GB', IST) : '',
-      NO_BLOCK_Actual_Time: r.no_block_actual_time ? new Date(r.no_block_actual_time).toLocaleString('en-GB', IST) : '',
-      BLOCK_NOT_RECEIVED_Actual_Time: r.block_not_received_actual_time ? new Date(r.block_not_received_actual_time).toLocaleString('en-GB', IST) : '',
-      BLOCK_PRINTED_Actual_Time: r.block_printed_actual_time ? new Date(r.block_printed_actual_time).toLocaleString('en-GB', IST) : '',
-      BLOCK_SENT_Actual_Time: r.block_sent_actual_time ? new Date(r.block_sent_actual_time).toLocaleString('en-GB', IST) : '',
       Printing: r.printing || '',
       Edges: r.edges || '',
       Laser_Cutting: r.laser_cutting || '',
-      No_Laser_Cutting_Actual_Time: r.no_laser_cutting_actual_time ? new Date(r.no_laser_cutting_actual_time).toLocaleString('en-GB', IST) : '',
-      Done_Laser_Cutting_Actual_Time: r.done_laser_cutting_actual_time ? new Date(r.done_laser_cutting_actual_time).toLocaleString('en-GB', IST) : '',
-      Pending_Laser_Cutting_Actual_Time: r.pending_laser_cutting_actual_time ? new Date(r.pending_laser_cutting_actual_time).toLocaleString('en-GB', IST) : '',
       Output: r.output || '',
-      No_Output_Actual_Time: r.no_output_actual_time ? new Date(r.no_output_actual_time).toLocaleString('en-GB', IST) : '',
-      Output_Done_Actual_Time: r.output_done_actual_time ? new Date(r.output_done_actual_time).toLocaleString('en-GB', IST) : '',
-      Output_Pending_Actual_Time: r.output_pending_actual_time ? new Date(r.output_pending_actual_time).toLocaleString('en-GB', IST) : '',
+      // Per-stage *_actual_time fields used to be sent here too - 16 of them,
+      // formatted for every order and read by nothing. On 5000 orders that was
+      // 80k Intl formats and most of an 8MB response.
+      // The per-stage *_actual_time fields used to be sent here as well - 16
+      // of them, date-formatted for every order and read by nothing. On 5000
+      // orders that was 80k Intl formats and most of an 8MB response.
       Card_Assembly: r.card_assembly || '',
       Remark: r.remark || '',
       Reason_For_Delay: r.reason_for_delay || '',

@@ -106,6 +106,7 @@ async function fetchProductionData() {
     prod_data = json.data || [];
     prod_populateFilters(prod_data);
     prodApplyFilters();
+    prod_attachScroll();
   } catch(e) { console.error(e); }
 }
 fetchProductionData();
@@ -147,10 +148,33 @@ function prodClearFilters() {
   ['prod_filterStatus','prod_filterDesigner','prod_filterClient','prod_search','prod_startDate','prod_endDate'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   prodApplyFilters();
 }
+// Building 5000 rows in one go froze the browser for about a second and a half
+// every time this tab opened. Rows go in a batch at a time now, with more added
+// as the table is scrolled - the same thing the Orders Dashboard does.
+var PROD_BATCH = 50;
+var prod_shown = 0, prod_display = [];
+
 function prod_renderTable(data) {
   const tbody = document.getElementById('prod_tbody');
+  if(!tbody) return;
+  prod_display = data;
+  prod_shown = 0;
+  tbody.innerHTML = '';
   if(!data.length) { tbody.innerHTML = '<tr><td colspan="15" class="text-center">No orders found.</td></tr>'; return; }
-  tbody.innerHTML = data.map(o => {
+  prod_renderNextBatch();
+}
+
+function prod_renderNextBatch() {
+  if(prod_shown >= prod_display.length) return;
+  const tbody = document.getElementById('prod_tbody');
+  if(!tbody) return;
+  const batch = prod_display.slice(prod_shown, prod_shown + PROD_BATCH);
+  tbody.insertAdjacentHTML('beforeend', batch.map(prod_rowHtml).join(''));
+  prod_shown += batch.length;
+}
+
+function prod_rowHtml(o) {
+  {
     const isChecked = prod_selected.has(o.ID.toString()) ? 'checked' : '';
     const readyBtn = prod_readyCell(o);
     const badges = prod_getStageBadges(o);
@@ -172,7 +196,18 @@ function prod_renderTable(data) {
       <td>${o.Output||'-'}</td>
       <td>${badges}</td>
     </tr>`;
-  }).join('');
+  }
+}
+
+// The table body scrolls inside .table-responsive, so that is what tells us the
+// reader has reached the end of what has been drawn.
+function prod_attachScroll() {
+  const box = document.querySelector('#prodRoot [data-fill-height]');
+  if(!box || box.dataset.lazy) return;
+  box.dataset.lazy = '1';
+  box.addEventListener('scroll', function() {
+    if(box.scrollTop + box.clientHeight >= box.scrollHeight - 150) prod_renderNextBatch();
+  });
 }
 function prod_getClientBadge(s) {
   if(!s) return '';
