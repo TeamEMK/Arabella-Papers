@@ -119,14 +119,32 @@ router.get('/production', requireLogin, async (req, res) => {
     const isAuthorized = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' || role.includes('Production Manager');
     if (!isAuthorized) return res.json({ success: true, data: [] });
 
+    // An order belongs on this queue once the client has approved it - or once
+    // production has already started on it. The second half matters: work does
+    // not always wait for the approval column to be updated, and excluding
+    // every "Proofing Done" order was hiding 1298 orders that already had
+    // paper cut and printing done.
     const [rows] = await db.query(`
       SELECT * FROM orders
       WHERE is_deleted = 0
-        AND design_approval_status_from_client IS NOT NULL
-        AND design_approval_status_from_client != ''
-        AND LOWER(design_approval_status_from_client) NOT LIKE '%rejected%'
-        AND LOWER(design_approval_status_from_client) NOT LIKE '%proofing%'
         AND (status_4 IS NULL OR status_4 = '')
+        AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%rejected%'
+        AND (
+          (
+            design_approval_status_from_client IS NOT NULL
+            AND design_approval_status_from_client != ''
+            AND LOWER(design_approval_status_from_client) NOT LIKE '%proofing%'
+          )
+          OR (guest_name IS NOT NULL AND guest_name != '')
+          OR (paper_cutting IS NOT NULL AND paper_cutting != '')
+          OR (printing IS NOT NULL AND printing != '')
+          OR (edges IS NOT NULL AND edges != '')
+          OR (laser_cutting IS NOT NULL AND laser_cutting != '')
+          OR (output IS NOT NULL AND output != '')
+          OR (card_assembly IS NOT NULL AND card_assembly != '')
+          OR (dye_status IS NOT NULL AND dye_status NOT IN ('', 'Dye Status'))
+          OR (block_status IS NOT NULL AND block_status NOT IN ('', 'Block Status'))
+        )
       ORDER BY id DESC
     `);
 
