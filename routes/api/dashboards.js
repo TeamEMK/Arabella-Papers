@@ -4,6 +4,10 @@ const multer = require('multer');
 const db = require('../../config/db');
 const { uploadToDrive } = require('../../utils/drive');
 const { requireLogin } = require('../../middleware/auth');
+// Dates are stored as IST wall-clock and read back through a +05:30
+// connection. Vercel runs the server in UTC, so without naming the zone here
+// every timestamp rendered 5:30 earlier than the sheet said.
+const IST = { timeZone: 'Asia/Kolkata' };
 
 // 4MB cap — Vercel rejects request bodies over 4.5MB before they reach here.
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 } });
@@ -35,9 +39,9 @@ router.get('/till-approval', requireLogin, async (req, res) => {
 
     const data = rows.map(r => ({
       ID: r.order_id,
-      Timestamp: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB') : '',
-      Actual_1: r.actual_1 ? new Date(r.actual_1).toLocaleString('en-GB') : '',
-      Actual: r.actual_1 ? new Date(r.actual_1).toLocaleString('en-GB') : '',
+      Timestamp: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
+      Actual_1: r.actual_1 ? new Date(r.actual_1).toLocaleString('en-GB', IST) : '',
+      Actual: r.actual_1 ? new Date(r.actual_1).toLocaleString('en-GB', IST) : '',
       Designer: r.india_designer || r.overseas_designer || '',
       Dealer_name: r.dealer_name,
       Client_name: r.client_name,
@@ -142,8 +146,8 @@ router.get('/production', requireLogin, async (req, res) => {
 
     const data = rows.map(r => ({
       ID: r.order_id,
-      Timestamp: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB') : '',
-      Actual_Date: r.actual_2 ? new Date(r.actual_2).toLocaleString('en-GB') : '',
+      Timestamp: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
+      Actual_Date: r.actual_2 ? new Date(r.actual_2).toLocaleString('en-GB', IST) : '',
       Dealer_name: r.dealer_name,
       Client_name: r.client_name,
       Designer: r.india_designer || r.overseas_designer || '',
@@ -151,27 +155,27 @@ router.get('/production', requireLogin, async (req, res) => {
       Guest_Name: r.guest_name || '',
       Paper_Cutting: r.paper_cutting || '',
       Dye_Status: r.dye_status || '',
-      Dye_Status_Actual_Time: r.dye_status_actual_time ? new Date(r.dye_status_actual_time).toLocaleString('en-GB') : '',
-      NO_DIE_Actual_Time: r.no_die_actual_time ? new Date(r.no_die_actual_time).toLocaleString('en-GB') : '',
-      DIE_NOT_RECEIVED_Actual_Time: r.die_not_received_actual_time ? new Date(r.die_not_received_actual_time).toLocaleString('en-GB') : '',
-      DIE_CUTTING_DONE_Actual_Time: r.die_cutting_done_actual_time ? new Date(r.die_cutting_done_actual_time).toLocaleString('en-GB') : '',
-      DIE_SENT_Actual_Time: r.die_sent_actual_time ? new Date(r.die_sent_actual_time).toLocaleString('en-GB') : '',
+      Dye_Status_Actual_Time: r.dye_status_actual_time ? new Date(r.dye_status_actual_time).toLocaleString('en-GB', IST) : '',
+      NO_DIE_Actual_Time: r.no_die_actual_time ? new Date(r.no_die_actual_time).toLocaleString('en-GB', IST) : '',
+      DIE_NOT_RECEIVED_Actual_Time: r.die_not_received_actual_time ? new Date(r.die_not_received_actual_time).toLocaleString('en-GB', IST) : '',
+      DIE_CUTTING_DONE_Actual_Time: r.die_cutting_done_actual_time ? new Date(r.die_cutting_done_actual_time).toLocaleString('en-GB', IST) : '',
+      DIE_SENT_Actual_Time: r.die_sent_actual_time ? new Date(r.die_sent_actual_time).toLocaleString('en-GB', IST) : '',
       Block_Status: r.block_status || '',
-      Block_Status_Actual_Time: r.block_status_actual_time ? new Date(r.block_status_actual_time).toLocaleString('en-GB') : '',
-      NO_BLOCK_Actual_Time: r.no_block_actual_time ? new Date(r.no_block_actual_time).toLocaleString('en-GB') : '',
-      BLOCK_NOT_RECEIVED_Actual_Time: r.block_not_received_actual_time ? new Date(r.block_not_received_actual_time).toLocaleString('en-GB') : '',
-      BLOCK_PRINTED_Actual_Time: r.block_printed_actual_time ? new Date(r.block_printed_actual_time).toLocaleString('en-GB') : '',
-      BLOCK_SENT_Actual_Time: r.block_sent_actual_time ? new Date(r.block_sent_actual_time).toLocaleString('en-GB') : '',
+      Block_Status_Actual_Time: r.block_status_actual_time ? new Date(r.block_status_actual_time).toLocaleString('en-GB', IST) : '',
+      NO_BLOCK_Actual_Time: r.no_block_actual_time ? new Date(r.no_block_actual_time).toLocaleString('en-GB', IST) : '',
+      BLOCK_NOT_RECEIVED_Actual_Time: r.block_not_received_actual_time ? new Date(r.block_not_received_actual_time).toLocaleString('en-GB', IST) : '',
+      BLOCK_PRINTED_Actual_Time: r.block_printed_actual_time ? new Date(r.block_printed_actual_time).toLocaleString('en-GB', IST) : '',
+      BLOCK_SENT_Actual_Time: r.block_sent_actual_time ? new Date(r.block_sent_actual_time).toLocaleString('en-GB', IST) : '',
       Printing: r.printing || '',
       Edges: r.edges || '',
       Laser_Cutting: r.laser_cutting || '',
-      No_Laser_Cutting_Actual_Time: r.no_laser_cutting_actual_time ? new Date(r.no_laser_cutting_actual_time).toLocaleString('en-GB') : '',
-      Done_Laser_Cutting_Actual_Time: r.done_laser_cutting_actual_time ? new Date(r.done_laser_cutting_actual_time).toLocaleString('en-GB') : '',
-      Pending_Laser_Cutting_Actual_Time: r.pending_laser_cutting_actual_time ? new Date(r.pending_laser_cutting_actual_time).toLocaleString('en-GB') : '',
+      No_Laser_Cutting_Actual_Time: r.no_laser_cutting_actual_time ? new Date(r.no_laser_cutting_actual_time).toLocaleString('en-GB', IST) : '',
+      Done_Laser_Cutting_Actual_Time: r.done_laser_cutting_actual_time ? new Date(r.done_laser_cutting_actual_time).toLocaleString('en-GB', IST) : '',
+      Pending_Laser_Cutting_Actual_Time: r.pending_laser_cutting_actual_time ? new Date(r.pending_laser_cutting_actual_time).toLocaleString('en-GB', IST) : '',
       Output: r.output || '',
-      No_Output_Actual_Time: r.no_output_actual_time ? new Date(r.no_output_actual_time).toLocaleString('en-GB') : '',
-      Output_Done_Actual_Time: r.output_done_actual_time ? new Date(r.output_done_actual_time).toLocaleString('en-GB') : '',
-      Output_Pending_Actual_Time: r.output_pending_actual_time ? new Date(r.output_pending_actual_time).toLocaleString('en-GB') : '',
+      No_Output_Actual_Time: r.no_output_actual_time ? new Date(r.no_output_actual_time).toLocaleString('en-GB', IST) : '',
+      Output_Done_Actual_Time: r.output_done_actual_time ? new Date(r.output_done_actual_time).toLocaleString('en-GB', IST) : '',
+      Output_Pending_Actual_Time: r.output_pending_actual_time ? new Date(r.output_pending_actual_time).toLocaleString('en-GB', IST) : '',
       Card_Assembly: r.card_assembly || '',
       Remark: r.remark || '',
       Reason_For_Delay: r.reason_for_delay || '',
@@ -327,12 +331,12 @@ router.get('/dispatch', requireLogin, async (req, res) => {
 
     const data = rows.map(r => ({
       ID: r.order_id,
-      Timestamp: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB') : '',
+      Timestamp: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
       Dealer_name: r.dealer_name,
       Client_name: r.client_name,
       Dispatch_Courier_Name: r.courier || '',
       Docket_No: r.ups_dhl_fedex_tracking_number || '',
-      Dispatch_Date: r.actual_4 ? new Date(r.actual_4).toLocaleString('en-GB') : '',
+      Dispatch_Date: r.actual_4 ? new Date(r.actual_4).toLocaleString('en-GB', IST) : '',
       Dispatch_Status: r.status_4,
       // This dashboard shows the invoice figures as table columns and reloads
       // them into its edit form, so unlike the others it needs them up front -
@@ -447,7 +451,7 @@ router.get('/analytics', requireLogin, async (req, res) => {
 
         return {
           ID: r.order_id,
-          Date: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB') : '',
+          Date: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
           RawDate: r.timestamp,
           Dealer: r.dealer_name || '',
           Client: r.client_name || '',
@@ -598,7 +602,7 @@ router.get('/clients', requireLogin, async (req, res) => {
 function buildFullRowData(r) {
   return {
     'Order ID': r.order_id,
-    'Timestamp': r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB') : '',
+    'Timestamp': r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
     'Email address': r.email_address,
     'Order Punched by': r.order_punched_by,
     'Name of Dealer': r.dealer_name,
@@ -615,9 +619,9 @@ function buildFullRowData(r) {
     'Revision Design Upload': r.revision_design_upload,
     'Approved Design': r.approved_design,
     'Remarks': r.remarks,
-    'Actual_1': r.actual_1 ? new Date(r.actual_1).toLocaleString('en-GB') : '',
+    'Actual_1': r.actual_1 ? new Date(r.actual_1).toLocaleString('en-GB', IST) : '',
     'Design Approval Status From Client': r.design_approval_status_from_client,
-    'Actual_2': r.actual_2 ? new Date(r.actual_2).toLocaleString('en-GB') : '',
+    'Actual_2': r.actual_2 ? new Date(r.actual_2).toLocaleString('en-GB', IST) : '',
     'Guest Name': r.guest_name,
     'Paper Cutting': r.paper_cutting,
     'Dye Status': r.dye_status,
@@ -632,7 +636,7 @@ function buildFullRowData(r) {
     'Status_4': r.status_4,
     'Courier': r.courier,
     'UPS DHL Fedex Tracking Number': r.ups_dhl_fedex_tracking_number,
-    'Actual_4': r.actual_4 ? new Date(r.actual_4).toLocaleString('en-GB') : '',
+    'Actual_4': r.actual_4 ? new Date(r.actual_4).toLocaleString('en-GB', IST) : '',
     'Invoice Number': r.invoice_number,
     'Invoice Amount': r.invoice_amount,
     'Number of Boxes': r.number_of_boxes,

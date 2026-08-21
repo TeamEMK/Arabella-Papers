@@ -5,6 +5,10 @@ const db = require('../../config/db');
 const { uploadToDrive } = require('../../utils/drive');
 const { generateOrderId } = require('../../utils/idgen');
 const { requireLogin } = require('../../middleware/auth');
+// Dates are stored as IST wall-clock and read back through a +05:30
+// connection. Vercel runs the server in UTC, so without naming the zone here
+// every timestamp rendered 5:30 earlier than the sheet said.
+const IST = { timeZone: 'Asia/Kolkata' };
 
 // Multer: memory storage (files go to Drive)
 // 4MB per file — Vercel rejects any request body over 4.5MB before it reaches
@@ -283,13 +287,13 @@ router.post('/bulk-status', requireLogin, async (req, res) => {
 function formatDate(d) {
   if (!d) return '';
   const dt = new Date(d);
-  return dt.toLocaleDateString('en-GB');
+  return dt.toLocaleDateString('en-GB', IST);
 }
 
 function buildRowData(r, isAdmin) {
   const data = {
     'Order ID': r.order_id,
-    'Timestamp': r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB') : '',
+    'Timestamp': r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
     'Email address': r.email_address,
     'Order Punched by': r.order_punched_by,
     'Name of Dealer': r.dealer_name,
@@ -305,9 +309,9 @@ function buildRowData(r, isAdmin) {
     'Revision Design Upload': r.revision_design_upload,
     'Approved Design': r.approved_design,
     'Remarks': r.remarks,
-    'Actual_1': r.actual_1 ? new Date(r.actual_1).toLocaleString('en-GB') : '',
+    'Actual_1': r.actual_1 ? new Date(r.actual_1).toLocaleString('en-GB', IST) : '',
     'Design Approval Status From Client': r.design_approval_status_from_client,
-    'Actual_2': r.actual_2 ? new Date(r.actual_2).toLocaleString('en-GB') : '',
+    'Actual_2': r.actual_2 ? new Date(r.actual_2).toLocaleString('en-GB', IST) : '',
     'Guest Name': r.guest_name,
     'Paper Cutting': r.paper_cutting,
     'Dye Status': r.dye_status,
@@ -322,7 +326,7 @@ function buildRowData(r, isAdmin) {
     'Status_4': r.status_4,
     'Courier': r.courier,
     'UPS DHL Fedex Tracking Number': r.ups_dhl_fedex_tracking_number,
-    'Actual_4': r.actual_4 ? new Date(r.actual_4).toLocaleString('en-GB') : '',
+    'Actual_4': r.actual_4 ? new Date(r.actual_4).toLocaleString('en-GB', IST) : '',
     'Invoice Number': r.invoice_number,
     'Invoice Amount': r.invoice_amount,
     'Number of Boxes': r.number_of_boxes,
