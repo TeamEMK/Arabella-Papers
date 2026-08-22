@@ -1,7 +1,7 @@
 {
   "name": "arabella-paper-fms",
   "version": "1.0.0",
-  "description": "Arabella Paper FMS - Node.js",
+  "description": "Arabella Papers FMS - Node.js",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

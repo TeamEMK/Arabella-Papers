@@ -102,7 +102,7 @@ app.use((err, req, res, next) => {
 // On Vercel the platform owns the listener — api/index.js just exports this app.
 if (!isServerless) {
   app.listen(PORT, () => {
-    console.log(`✅ Arabella Paper FMS running on port ${PORT}`);
+    console.log(`✅ Arabella Papers FMS running on port ${PORT}`);
     console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
     // Report at boot rather than waiting for the first request to reveal a
     // broken database.
