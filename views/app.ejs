@@ -141,6 +141,29 @@
 
   const NAV_MENU = <%- JSON.stringify(navMenu) %>;
 
+  // ── EXPIRED SESSION ──
+  // Sessions outlive the tab that opened them. Every board here talks to the
+  // server through fetch, and once the session is gone each of those comes
+  // back 401 — so catch it in one place and go to the login screen, instead of
+  // letting six dashboards each invent their own error message.
+  (function () {
+    const realFetch = window.fetch;
+    let leaving = false;
+
+    window.fetch = async function (...args) {
+      const res = await realFetch.apply(this, args);
+      if (res.status !== 401) return res;
+
+      if (!leaving) {
+        leaving = true;
+        window.location.href = '/login';
+      }
+      // The browser is on its way to /login. Settling this promise would only
+      // let the caller paint an error over a page that is already leaving.
+      return new Promise(() => {});
+    };
+  })();
+
   // ── TOAST ──
   const Toast = Swal.mixin({
     toast: true, position: 'top-end', showConfirmButton: false,
