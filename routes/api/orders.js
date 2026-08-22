@@ -4,6 +4,7 @@ const multer = require('multer');
 const db = require('../../config/db');
 const { uploadToDrive } = require('../../utils/drive');
 const { generateOrderId } = require('../../utils/idgen');
+const { notifyDesignerAssigned } = require('../../utils/notify');
 const { requireLogin } = require('../../middleware/auth');
 // Dates are stored as IST wall-clock and read back through a +05:30
 // connection. Vercel runs the server in UTC, so without naming the zone here
@@ -142,6 +143,21 @@ router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
       remarks, finalLinks, 'Fresh Design'
     ]);
 
+    // Let the designer know before we answer. On Vercel the container is
+    // frozen the moment the response goes out, so anything left running after
+    // res.json() would simply never be delivered.
+    if (String(designer || '').trim()) {
+      await notifyDesignerAssigned({
+        orderId,
+        designerName: designer,
+        dealer,
+        client,
+        designTime,
+        remarks,
+        assignedBy: req.session.user && req.session.user.username,
+      });
+    }
+
     res.json({ success: true, orderId });
   } catch (err) {
     console.error(err);
@@ -227,6 +243,26 @@ router.put('/:id/edit', requireLogin, upload.single('file'), async (req, res) =>
 
     const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
+
+    // Only a genuine handover is worth a mail. Editing the dealer or the
+    // remarks leaves the designer where they were, and they should not get a
+    // "reassigned to you" notice for an order they already have.
+    const previousDesigner = order.india_designer || order.overseas_designer || '';
+    const isHandover = String(designerName || '').trim() &&
+      String(designerName).trim().toLowerCase() !== String(previousDesigner).trim().toLowerCase();
+
+    if (isHandover) {
+      await notifyDesignerAssigned({
+        orderId,
+        designerName,
+        dealer: dealerName,
+        client: clientName,
+        designTime,
+        remarks: remark,
+        assignedBy: req.session.user && req.session.user.username,
+        isReassignment: true,
+      });
+    }
 
     res.json({ success: true });
   } catch (err) {
