@@ -150,7 +150,6 @@ router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
       await notifyDesignerAssigned({
         orderId,
         designerName: designer,
-        dealer,
         client,
         designTime,
         remarks,
@@ -255,7 +254,6 @@ router.put('/:id/edit', requireLogin, upload.single('file'), async (req, res) =>
       await notifyDesignerAssigned({
         orderId,
         designerName,
-        dealer: dealerName,
         client: clientName,
         designTime,
         remarks: remark,

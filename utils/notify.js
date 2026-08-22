@@ -43,7 +43,6 @@ async function designerEmail(name) {
 function assignmentHtml(order) {
   const rows = [
     ['Order ID', order.orderId],
-    ['Dealer', order.dealer],
     ['Client', order.client],
     ['Design time', order.designTime],
     ['Remarks', order.remarks],
@@ -97,7 +96,6 @@ function assignmentText(order) {
       : 'A new design task has been assigned to you.',
     '',
     `Order ID   : ${order.orderId}`,
-    order.dealer ? `Dealer     : ${order.dealer}` : '',
     order.client ? `Client     : ${order.client}` : '',
     order.designTime ? `Design time: ${order.designTime}` : '',
     order.remarks ? `Remarks    : ${order.remarks}` : '',
