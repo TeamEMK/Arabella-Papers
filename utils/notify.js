@@ -59,9 +59,8 @@ function assignmentHtml(order) {
   return `
   <div style="background:#f4f5f7;padding:24px 12px;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
     <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #e6e8eb;">
-      <div style="background:#212529;padding:18px 24px;">
+      <div style="background:#212529;padding:22px 24px;">
         <div style="color:#ffa500;font-size:17px;font-weight:700;letter-spacing:.5px;">ARABELLA PAPERS</div>
-        <div style="color:#adb5bd;font-size:12px;margin-top:2px;">Order Flow Management System</div>
       </div>
       <div style="padding:24px;">
         <p style="margin:0 0 4px;font-size:16px;color:#212529;">Hello ${esc(order.designerName)},</p>
