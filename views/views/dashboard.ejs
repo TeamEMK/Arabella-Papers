@@ -198,10 +198,6 @@
               <input type="radio" name="designerTeam" value="India Team" checked onchange="updateDesignerTeam('India')"/>
               <div class="radio-box"><i class="fas fa-users me-1"></i> India Team</div>
             </label>
-            <label class="radio-opt">
-              <input type="radio" name="designerTeam" value="Cassie" onchange="updateDesignerTeam('Cassie')"/>
-              <div class="radio-box"><i class="fas fa-user me-1"></i> Cassie</div>
-            </label>
           </div>
           <div class="form-text">Decides which column the name is saved in, and which dropdown it shows up in when an order is punched.</div>
         </div>
@@ -252,12 +248,8 @@
             <label class="form-label text-dark fw-bold">Order Punched By</label>
             <div class="radio-group">
               <label class="radio-opt">
-                <input type="radio" name="punchedBy" value="India Team" onchange="updateDesigners('India')"/>
+                <input type="radio" name="punchedBy" value="India Team" checked onchange="updateDesigners('India')"/>
                 <div class="radio-box"><i class="fas fa-users me-1"></i> India Team</div>
-              </label>
-              <label class="radio-opt">
-                <input type="radio" name="punchedBy" value="Cassie" onchange="updateDesigners('Cassie')"/>
-                <div class="radio-box"><i class="fas fa-user me-1"></i> Cassie</div>
               </label>
             </div>
           </div>
@@ -782,6 +774,8 @@ function openEditDetailsModal(ID) {
   document.getElementById('ed_Email').value = order.Email;
   populateList('ed_dealerList', db_forms.dealers || []);
   populateList('ed_clientList', getUniqueClients());
+  // Both columns here, unlike the punch form: an old overseas order still has
+  // to be editable without its designer falling out of the list.
   const allDes = [...(db_forms.indian||[]), ...(db_forms.cassie||[])].filter((v,i,a)=>a.indexOf(v)===i).sort();
   populateList('ed_designerList', allDes);
   document.getElementById('ed_Dealer').value = order.Dealer_name || '';
@@ -920,15 +914,14 @@ function toggleDesignerLogin(on) {
   if (!on) document.getElementById('newDesignerPassword').value = '';
 }
 
-// India and Cassie designers live in different columns, so the "check whether
-// this person already exists" list has to follow the chosen team — otherwise
-// picking Cassie would still be checked against the India names.
-function updateDesignerTeam(team) {
-  populateList('newDesignerList', (team === 'Cassie' ? db_forms.cassie : db_forms.indian) || []);
+// Only the India team punches orders now, so a new designer always goes into
+// the India column and is checked against the India names. The overseas ones
+// are still on the old orders and still fill the Designer filter there.
+function updateDesignerTeam() {
+  populateList('newDesignerList', db_forms.indian || []);
   const input = document.getElementById('newDesignerName');
   input.value = '';
-  input.placeholder = team === 'Cassie' ? 'Type to search or add new Cassie designer...'
-                                        : 'Type to search or add new Indian designer...';
+  input.placeholder = 'Type to search or add new designer...';
 }
 
 function selectedDesignerTeam() {
@@ -1156,8 +1149,8 @@ function updateDesigners(team) {
   const input = document.getElementById('designerInput');
   input.value = '';
   input.disabled = false;
-  if(team === 'India') { populateList('designerList', db_forms.indian||[]); input.placeholder = 'Search Indian Designer...'; }
-  else { populateList('designerList', db_forms.cassie||[]); input.placeholder = 'Search Cassie Designer...'; }
+  populateList('designerList', db_forms.indian||[]);
+  input.placeholder = 'Search Designer...';
 }
 function validateDealerSelection(input) {
   const val = input.value; if(!val) return;
@@ -1182,17 +1175,14 @@ function handleCheckboxChange(id, isChecked) {
 }
 function resetForm() {
   document.getElementById('punchEmail').value = APP_USER.email;
-  document.querySelector('input[name="punchedBy"]:checked') && (document.querySelector('input[name="punchedBy"]:checked').checked = false);
+  const teamRadio = document.querySelector('input[name="punchedBy"][value="India Team"]');
+  if (teamRadio) teamRadio.checked = true;
   document.getElementById('punchDealerInput').value = '';
   document.getElementById('punchClientInput').value = '';
   document.getElementById('punchRemarks').value = '';
-  // Back to the locked state, including the placeholder — otherwise reopening
-  // the form still reads "Search Cassie Designer..." with nothing in the list.
-  const designer = document.getElementById('designerInput');
-  designer.value = '';
-  designer.disabled = true;
-  designer.placeholder = "Select 'Punched By' first...";
-  document.getElementById('designerList').innerHTML = '';
+  // India is the only team left, so there is nothing to pick before the
+  // designer field means anything - it opens ready to use.
+  updateDesigners('India');
   document.getElementById('punchDesignTime').value = '';
   document.getElementById('fileInput').value = '';
   document.getElementById('fileText').textContent = 'Click or Drag files here';
@@ -1368,7 +1358,7 @@ async function refreshAfterBulk(type) {
   await fetchFormOptions();
   populateList('newDealerList', db_forms.dealers || []);
   populateList('dealerList', db_forms.dealers || []);
-  populateList('newDesignerList', (selectedDesignerTeam() === 'Cassie' ? db_forms.cassie : db_forms.indian) || []);
+  populateList('newDesignerList', db_forms.indian || []);
 }
 
 renderBulkInline();
