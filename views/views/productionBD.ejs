@@ -67,8 +67,8 @@ document.getElementById('prodRoot').innerHTML = `
       <div class="row g-3 mb-3">
         <div class="col-md-4"><label class="small fw-bold">Guest Name</label><select class="form-select" name="Guest_Name"><option value="No">No GNA</option><option value="Pending">GNA Pending</option><option value="Received">GNA Received</option><option value="Printed">GNA Printed</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Paper Cutting</label><select class="form-select" name="Paper_Cutting"><option value="Pending">Pending</option><option value="Done">Done</option></select></div>
-        <div class="col-md-4"><label class="small fw-bold">Dye Status</label><select class="form-select" name="Dye_Status"><option value="Dye Status">Dye Status</option><option value="NO DIE">NO DIE</option><option value="DIE NOT RECEIVED">DIE NOT RECEIVED</option><option value="DIE CUTTING DONE">DIE CUTTING DONE</option><option value="DIE SENT">DIE SENT</option></select></div>
-        <div class="col-md-4"><label class="small fw-bold">Block Status</label><select class="form-select" name="Block_Status"><option value="Block Status">Block Status</option><option value="NO BLOCK">NO BLOCK</option><option value="BLOCK NOT RECEIVED">BLOCK NOT RECEIVED</option><option value="BLOCK PRINTED">BLOCK PRINTED</option><option value="BLOCK SENT">BLOCK SENT</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Dye Status</label><select class="form-select" name="Dye_Status"><option value="Pending">Pending</option><option value="NO DIE">NO DIE</option><option value="DIE NOT RECEIVED">DIE NOT RECEIVED</option><option value="DIE CUTTING DONE">DIE CUTTING DONE</option><option value="DIE SENT">DIE SENT</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Block Status</label><select class="form-select" name="Block_Status"><option value="Pending">Pending</option><option value="NO BLOCK">NO BLOCK</option><option value="BLOCK NOT RECEIVED">BLOCK NOT RECEIVED</option><option value="BLOCK PRINTED">BLOCK PRINTED</option><option value="BLOCK SENT">BLOCK SENT</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Printing</label><select class="form-select" name="Printing"><option value="Pending">Pending</option><option value="Done">Done</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Edges</label><select class="form-select" name="Edges"><option value="Pending" selected>Pending</option><option value="No">No</option><option value="Done">Done</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Laser Cutting</label><select class="form-select" name="Laser_Cutting"><option value="Pending">Pending</option><option value="Done">Done</option><option value="No">No</option></select></div>
@@ -303,6 +303,28 @@ async function prod_openView(orderId) {
   }
   body.innerHTML = html+'</div>';
 }
+// A stage nobody has touched is Pending. Dye and Block used to open on their
+// own label - "Dye Status", "Block Status" - which is placeholder text, not a
+// state, and 377 imported rows carry it as their value. Read those as Pending.
+function prod_stageValue(raw) {
+  const v = (raw || '').trim();
+  return (v === '' || /^(dye|block) status$/i.test(v)) ? 'Pending' : v;
+}
+
+// The sheet used wordings these dropdowns never offered - "No Dye" on 1758
+// orders, "No Block" on 1885, "No Guest List" on 1758. Setting a value a
+// select does not have leaves it blank, and saving then wrote that blank back
+// over a real answer. Give the box the option it is missing instead.
+function prod_setSelect(sel, raw) {
+  const v = prod_stageValue(raw);
+  if(v && !Array.prototype.some.call(sel.options, o => o.value === v)) {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = v;
+    sel.appendChild(opt);
+  }
+  sel.value = v;
+}
+
 function prod_openEdit(id) {
   prod_editId = id;
   const o = prod_data.find(x => x.ID.toString()===id.toString());
@@ -310,7 +332,9 @@ function prod_openEdit(id) {
   const modal = document.getElementById('prod_editModal');
   PROD_COLS.forEach(col => {
     const input = modal.querySelector(`[name="${col}"]`);
-    if(input && o && o[col]) input.value = o[col];
+    if(!input) return;
+    if(input.tagName === 'SELECT') prod_setSelect(input, o && o[col]);
+    else input.value = (o && o[col]) || '';
   });
   new bootstrap.Modal(modal).show();
 }
@@ -360,8 +384,8 @@ function prod_openBulkModal() {
       <td class="fw-bold">${id}</td>
       <td>${prod_mkSel('Guest_Name',o.Guest_Name,['No','Pending','Received','Printed'])}</td>
       <td>${prod_mkSel('Paper_Cutting',o.Paper_Cutting,['Pending','Done'])}</td>
-      <td>${prod_mkSel('Dye_Status',o.Dye_Status,['Dye Status','NO DIE','DIE NOT RECEIVED','DIE CUTTING DONE','DIE SENT'])}</td>
-      <td>${prod_mkSel('Block_Status',o.Block_Status,['Block Status','NO BLOCK','BLOCK NOT RECEIVED','BLOCK PRINTED','BLOCK SENT'])}</td>
+      <td>${prod_mkSel('Dye_Status',o.Dye_Status,['Pending','NO DIE','DIE NOT RECEIVED','DIE CUTTING DONE','DIE SENT'])}</td>
+      <td>${prod_mkSel('Block_Status',o.Block_Status,['Pending','NO BLOCK','BLOCK NOT RECEIVED','BLOCK PRINTED','BLOCK SENT'])}</td>
       <td>${prod_mkSel('Printing',o.Printing,['Pending','Done'])}</td>
       <td>${prod_mkSel('Edges',o.Edges,['Pending','No','Done'])}</td>
       <td>${prod_mkSel('Laser_Cutting',o.Laser_Cutting,['Pending','Done','No'])}</td>
@@ -372,7 +396,11 @@ function prod_openBulkModal() {
   new bootstrap.Modal(document.getElementById('prod_bulkModal')).show();
 }
 function prod_mkSel(name, cur, opts) {
-  return `<select class="form-select form-select-sm prod_bulk_input" data-field="${name}">${opts.map(o=>`<option value="${o}" ${cur===o?'selected':''}>${o}</option>`).join('')}</select>`;
+  // Same rule as the single-order modal: an answer the list does not carry
+  // still has to be selectable, or bulk update would quietly flatten it.
+  const v = prod_stageValue(cur);
+  const list = opts.indexOf(v) < 0 && v ? opts.concat([v]) : opts;
+  return `<select class="form-select form-select-sm prod_bulk_input" data-field="${name}">${list.map(o=>`<option value="${o}" ${v===o?'selected':''}>${o}</option>`).join('')}</select>`;
 }
 async function prod_submitBulk() {
   const rows = document.querySelectorAll('.prod_bulk_row');
