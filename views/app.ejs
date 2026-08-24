@@ -181,11 +181,16 @@
     return d;
   }
 
-  // Today, in the format a date input expects.
+  // Today, and the first of this month, in the format a date input expects.
   function todayValue() {
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     return now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  }
+
+  function monthStartValue() {
+    const now = new Date();
+    return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-01';
   }
 
   // ── TOAST ──
