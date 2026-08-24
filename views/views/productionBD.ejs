@@ -78,7 +78,7 @@ document.getElementById('prodRoot').innerHTML = `
       <div class="mb-3"><label class="form-label fw-bold">Remark</label><textarea class="form-control" name="Remark" rows="2"></textarea></div>
       <div class="mb-3"><label class="form-label fw-bold">Reason For Delay</label><textarea class="form-control" name="Reason_For_Delay" rows="2"></textarea></div>
     </div>
-    <div class="modal-footer"><button class="btn btn-success" onclick="prod_submitUpdate()"><i class="fas fa-save me-1"></i> Save</button><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button></div>
+    <div class="modal-footer"><button class="btn btn-primary" id="prod_editDispatchBtn" onclick="prod_dispatchFromEdit()"><i class="fas fa-paper-plane me-1"></i> Send to Dispatch</button><button class="btn btn-success" onclick="prod_submitUpdate()"><i class="fas fa-save me-1"></i> Save</button><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button></div>
   </div></div>
 </div>
 
@@ -336,22 +336,84 @@ function prod_openEdit(id) {
     if(input.tagName === 'SELECT') prod_setSelect(input, o && o[col]);
     else input.value = (o && o[col]) || '';
   });
+
+  // An order that has already gone has nowhere left to be sent.
+  const gone = !!(o && o.Dispatch_Status && o.Dispatch_Status.trim());
+  document.getElementById('prod_editDispatchBtn').classList.toggle('d-none', gone);
+
   new bootstrap.Modal(modal).show();
 }
-async function prod_submitUpdate() {
+// Whatever the modal currently shows, written back. Returns false if it did
+// not save, so callers can stop rather than carry on with stale stages.
+async function prod_saveEdit() {
   const modal = document.getElementById('prod_editModal');
   const updateData = { userEmail: APP_USER.email };
   PROD_COLS.forEach(col => {
     const input = modal.querySelector(`[name="${col}"]`);
     if(input) updateData[col] = input.value;
   });
-  showLoading(true);
   try {
     const res = await fetch(`/api/dashboards/production/${prod_editId}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(updateData)});
     const json = await res.json();
+    if(json.success) return true;
+    showToast('error', json.error);
+    return false;
+  } catch(e) { showToast('error','Server error.'); return false; }
+}
+
+async function prod_submitUpdate() {
+  showLoading(true);
+  const saved = await prod_saveEdit();
+  showLoading(false);
+  if(!saved) return;
+  bootstrap.Modal.getInstance(document.getElementById('prod_editModal')).hide();
+  showToast('success','Updated!');
+  fetchProductionData();
+}
+
+// Marking the last stage done and sending the order on are one thought, so
+// they are one button. It saves first - otherwise the stage just ticked would
+// be thrown away - and then judges readiness on what is on screen, not on the
+// copy the board was drawn from.
+async function prod_dispatchFromEdit() {
+  const modal = document.getElementById('prod_editModal');
+  const id = prod_editId;
+
+  showLoading(true);
+  const saved = await prod_saveEdit();
+  showLoading(false);
+  if(!saved) return;
+
+  const order = Object.assign({}, prod_data.find(x => x.ID.toString() === id.toString()));
+  PROD_COLS.forEach(col => {
+    const input = modal.querySelector(`[name="${col}"]`);
+    if(input) order[col] = input.value;
+  });
+
+  const pending = prod_pendingStages(order);
+  const confirmed = await Swal.fire({
+    title: pending.length ? 'Some stages are not finished' : 'Ready for Dispatch?',
+    html: pending.length
+      ? `Order <b>${id}</b> still shows <b>${pending.join(', ')}</b> unfinished.<br>Send it to the Dispatch Dashboard anyway?`
+      : `Order <b>${id}</b> will leave the Production queue and move to the <b>Dispatch Dashboard</b>, where its invoice and tracking number are filled in.`,
+    icon: pending.length ? 'warning' : 'question',
+    showCancelButton: true,
+    confirmButtonText: pending.length ? 'Send anyway' : 'Move to Dispatch',
+    confirmButtonColor: pending.length ? '#dc3545' : '#198754',
+  });
+  if(!confirmed.isConfirmed) { fetchProductionData(); return; }
+
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/dashboards/production/${id}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({Dispatch_Status:'Ready',userEmail:APP_USER.email})});
+    const json = await res.json();
     showLoading(false);
-    if(json.success) { bootstrap.Modal.getInstance(modal).hide(); showToast('success','Updated!'); fetchProductionData(); }
-    else showToast('error', json.error);
+    if(json.success) {
+      prod_selected.delete(id.toString());
+      bootstrap.Modal.getInstance(modal).hide();
+      showToast('success','Moved to Dispatch Dashboard.');
+      fetchProductionData();
+    } else showToast('error', json.error);
   } catch(e) { showLoading(false); showToast('error','Server error.'); }
 }
 async function prod_markDispatch(id) {
