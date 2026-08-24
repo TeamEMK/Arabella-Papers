@@ -66,7 +66,7 @@ document.getElementById('prodRoot').innerHTML = `
     <div class="modal-body">
       <div class="row g-3 mb-3">
         <div class="col-md-4"><label class="small fw-bold">Guest Name</label><select class="form-select" name="Guest_Name"><option value="No">No GNA</option><option value="Pending">GNA Pending</option><option value="Received">GNA Received</option><option value="Printed">GNA Printed</option></select></div>
-        <div class="col-md-4"><label class="small fw-bold">Paper Cutting</label><select class="form-select" name="Paper_Cutting"><option value="Pending">Pending</option><option value="Done">Done</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Paper Cutting</label><select class="form-select" name="Paper_Cutting"><option value="Pending">Pending</option><option value="Done">Done</option><option value="Temporary Out of Stock">Temporary Out of Stock</option><option value="Permanent Out of Stock">Permanent Out of Stock</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Dye Status</label><select class="form-select" name="Dye_Status"><option value="Pending">Pending</option><option value="NO DIE">NO DIE</option><option value="DIE NOT RECEIVED">DIE NOT RECEIVED</option><option value="DIE CUTTING DONE">DIE CUTTING DONE</option><option value="DIE SENT">DIE SENT</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Block Status</label><select class="form-select" name="Block_Status"><option value="Pending">Pending</option><option value="NO BLOCK">NO BLOCK</option><option value="BLOCK NOT RECEIVED">BLOCK NOT RECEIVED</option><option value="BLOCK PRINTED">BLOCK PRINTED</option><option value="BLOCK SENT">BLOCK SENT</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Printing</label><select class="form-select" name="Printing"><option value="Pending">Pending</option><option value="Done">Done</option></select></div>
@@ -383,7 +383,7 @@ function prod_openBulkModal() {
     if(o) tbody.insertAdjacentHTML('beforeend',`<tr class="prod_bulk_row" data-id="${id}">
       <td class="fw-bold">${id}</td>
       <td>${prod_mkSel('Guest_Name',o.Guest_Name,['No','Pending','Received','Printed'])}</td>
-      <td>${prod_mkSel('Paper_Cutting',o.Paper_Cutting,['Pending','Done'])}</td>
+      <td>${prod_mkSel('Paper_Cutting',o.Paper_Cutting,['Pending','Done','Temporary Out of Stock','Permanent Out of Stock'])}</td>
       <td>${prod_mkSel('Dye_Status',o.Dye_Status,['Pending','NO DIE','DIE NOT RECEIVED','DIE CUTTING DONE','DIE SENT'])}</td>
       <td>${prod_mkSel('Block_Status',o.Block_Status,['Pending','NO BLOCK','BLOCK NOT RECEIVED','BLOCK PRINTED','BLOCK SENT'])}</td>
       <td>${prod_mkSel('Printing',o.Printing,['Pending','Done'])}</td>
