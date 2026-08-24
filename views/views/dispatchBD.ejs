@@ -92,7 +92,7 @@ fetchDispatchData().catch(() => {});
 // The couriers this office uses, whether or not a parcel has gone out with
 // one yet, plus anything already written on an order. Another carrier is a
 // matter of adding it to this line.
-var DSP_KNOWN_COURIERS = ['DHL', 'UPS'];
+var DSP_KNOWN_COURIERS = ['DHL', 'FedEx', 'UPS'];
 
 function dsp_courierList() {
   const set = new Set(DSP_KNOWN_COURIERS);
