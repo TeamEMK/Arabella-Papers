@@ -16,6 +16,7 @@ const dashboardsApi = require('./routes/api/dashboards');
 const accountApi = require('./routes/api/account');
 const usersApi = require('./routes/api/users');
 const bulkApi = require('./routes/api/bulk');
+const logsApi = require('./routes/api/logs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -78,6 +79,7 @@ app.use('/api/dashboards', dashboardsApi);
 app.use('/api/account', accountApi);
 app.use('/api/users', usersApi);
 app.use('/api/bulk', bulkApi);
+app.use('/api/logs', logsApi);
 
 // ── 404 FALLBACK ──
 app.use((req, res) => {

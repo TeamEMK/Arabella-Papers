@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
 const { uploadToDrive } = require('../../utils/drive');
+const { logOrderUpdate } = require('../../utils/auditlog');
 const { requireLogin } = require('../../middleware/auth');
 // Dates are stored as IST wall-clock and read back through a +05:30
 // connection. Vercel runs the server in UTC, so without naming the zone here
@@ -77,6 +78,8 @@ router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req
     if (fileUrl) updates.approved_design = fileUrl;
     if (approvalStatus === 'Rejected') updates.design_status = 'Rejected';
 
+    await logOrderUpdate(orderId, updates, req.session.user || userEmail);
+
     const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
 
@@ -95,6 +98,11 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
 
     let count = 0;
     for (const u of updates) {
+      await logOrderUpdate(u.id, {
+        design_approval_status_from_client: u.status,
+        remarks: u.remark,
+      }, req.session.user || u.userEmail);
+
       await db.query(`
         UPDATE orders SET
           design_approval_status_from_client = ?,
@@ -256,6 +264,8 @@ router.put('/production/:id', requireLogin, async (req, res) => {
 
     if (!Object.keys(updates).length) return res.json({ success: true });
 
+    await logOrderUpdate(orderId, updates, req.session.user || u.userEmail);
+
     const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
 
@@ -274,7 +284,7 @@ router.post('/production/bulk', requireLogin, async (req, res) => {
 
     for (const u of updates) {
       // Reuse single update logic by calling it internally
-      await updateProductionOrder(u.ID, u);
+      await updateProductionOrder(u.ID, u, req.session.user);
     }
     res.json({ success: true, count: updates.length });
   } catch (err) {
@@ -283,7 +293,7 @@ router.post('/production/bulk', requireLogin, async (req, res) => {
 });
 
 // Helper for bulk production
-async function updateProductionOrder(orderId, u) {
+async function updateProductionOrder(orderId, u, user) {
   const now = new Date();
   const updates = {};
 
@@ -306,6 +316,9 @@ async function updateProductionOrder(orderId, u) {
   if (u.userEmail) updates.production_updated_by = u.userEmail;
 
   if (!Object.keys(updates).length) return;
+
+  await logOrderUpdate(orderId, updates, user || u.userEmail);
+
   const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
   await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
 }
@@ -377,6 +390,17 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
     // sends '', which MySQL rejects outright in strict mode and would fail the
     // whole dispatch update. Leave those columns empty instead.
     const num = v => (v === '' || v === undefined || v === null) ? null : v;
+
+    await logOrderUpdate(orderId, {
+      courier,
+      ups_dhl_fedex_tracking_number: docket,
+      status_4: status,
+      invoice_number: invoiceNo,
+      invoice_amount: num(invoiceAmount),
+      number_of_boxes: num(boxes),
+      weight,
+      volumetric_weight: volWeight,
+    }, req.session.user || userEmail);
 
     await db.query(`
       UPDATE orders SET

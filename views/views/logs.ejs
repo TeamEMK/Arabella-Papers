@@ -1,0 +1,185 @@
+<%# Order Logs — who changed what, and when %>
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-clock-rotate-left me-2"></i>Order Logs</h3>
+    <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, logFetch, 'entries')">
+      <i class="fas fa-sync-alt me-1"></i> Refresh
+    </button>
+  </div>
+
+  <div class="card bg-light-glass mb-4 shadow-sm">
+    <button class="filter-toggle-btn btn-sm py-1 px-3 w-100 d-flex justify-content-between align-items-center rounded" type="button" data-bs-toggle="collapse" data-bs-target="#logFilterContent">
+      <span class="p-2 text-dark fw-bold"><i class="fas fa-filter me-2"></i> Filters &amp; Search</span>
+      <i class="fas fa-chevron-down text-dark"></i>
+    </button>
+    <div id="logFilterContent" class="collapse show">
+      <div class="card-body p-2">
+        <div class="row g-2 align-items-end text-dark">
+          <div class="col-6 col-md-2">
+            <label class="form-label fw-bold small mb-0">Start</label>
+            <input type="date" id="log_from" class="form-control form-control-sm" onchange="logFetch()">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label fw-bold small mb-0">End</label>
+            <input type="date" id="log_to" class="form-control form-control-sm" onchange="logFetch()">
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label fw-bold small mb-0">Order ID</label>
+            <input type="text" id="log_orderId" class="form-control form-control-sm" placeholder="K-159756" onkeyup="logSearchSoon()">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label fw-bold small mb-0">Changed By</label>
+            <select id="log_changedBy" class="form-select form-select-sm" onchange="logFetch()"><option value="">Everyone</option></select>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label fw-bold small mb-0">Action</label>
+            <select id="log_action" class="form-select form-select-sm" onchange="logFetch()"><option value="">All</option></select>
+          </div>
+          <div class="col-12 text-end mt-2">
+            <button class="btn btn-secondary btn-sm" onclick="logClearFilters()">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card bg-light-glass shadow-lg">
+    <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+      <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-list me-2"></i>Change History</h5>
+      <span class="badge bg-primary" id="log_count">—</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive" data-fill-height style="overflow-y:auto;position:relative;">
+        <table class="table table-hover table-striped mb-0 text-nowrap" style="border-collapse:separate;border-spacing:0;">
+          <thead class="table-dark">
+            <tr>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Date &amp; Time</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Order ID</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Changed By</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">What</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">From</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">To</th>
+            </tr>
+          </thead>
+          <tbody id="log_tbody">
+            <tr><td colspan="7" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  let logTimer = null;
+
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function actionBadge(action) {
+    const tone = action === 'Created' ? 'success'
+      : action === 'Deleted' ? 'danger'
+      : action === 'Imported' ? 'secondary'
+      : 'primary';
+    return '<span class="badge bg-' + tone + '">' + esc(action) + '</span>';
+  }
+
+  // A value long enough to break the table gets trimmed, with the whole thing
+  // on hover - a Drive link is 90 characters of nothing anyone reads.
+  function value(v, muted) {
+    const text = String(v || '');
+    if (!text) return '<span class="text-muted">—</span>';
+    const short = text.length > 60 ? text.slice(0, 60) + '…' : text;
+    return '<span class="' + (muted ? 'text-muted' : 'fw-bold') + '" title="' + esc(text) + '">' + esc(short) + '</span>';
+  }
+
+  function fill(id, values, allLabel) {
+    const s = document.getElementById(id);
+    if (!s) return;
+    const current = s.value;
+    s.innerHTML = '<option value="">' + allLabel + '</option>';
+    values.forEach(function (v) {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      s.appendChild(o);
+    });
+    s.value = current;
+  }
+
+  window.logFetch = async function () {
+    const tbody = document.getElementById('log_tbody');
+    const params = new URLSearchParams();
+    const put = (key, id) => {
+      const v = (document.getElementById(id) || {}).value || '';
+      if (v.trim()) params.set(key, v.trim());
+    };
+    put('from', 'log_from');
+    put('to', 'log_to');
+    put('orderId', 'log_orderId');
+    put('changedBy', 'log_changedBy');
+    put('action', 'log_action');
+
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr>';
+
+    const res = await fetch('/api/logs?' + params.toString());
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Could not load the logs.');
+
+    fill('log_changedBy', json.people || [], 'Everyone');
+    fill('log_action', json.actions || [], 'All');
+
+    document.getElementById('log_count').textContent = json.total > json.shown
+      ? json.shown + ' of ' + json.total + ' entries'
+      : json.total + ' entries';
+
+    if (!json.data.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">Nothing recorded for this filter.</td></tr>';
+      return json.total;
+    }
+
+    tbody.innerHTML = json.data.map(function (r) {
+      return '<tr>'
+        + '<td class="text-muted">' + esc(r.When) + '</td>'
+        + '<td class="fw-bold">' + esc(r.Order_ID) + '</td>'
+        + '<td>' + esc(r.Changed_By) + '</td>'
+        + '<td>' + actionBadge(r.Action) + '</td>'
+        + '<td>' + esc(r.Field) + '</td>'
+        + '<td>' + value(r.Old_Value, true) + '</td>'
+        + '<td>' + value(r.New_Value, false) + '</td>'
+        + '</tr>';
+    }).join('');
+
+    // The cap is only worth mentioning when it actually cut something off.
+    if (json.total > json.shown) {
+      tbody.insertAdjacentHTML('beforeend',
+        '<tr><td colspan="7" class="text-center py-3 text-muted small">'
+        + 'Showing the newest ' + json.shown + ' of ' + json.total
+        + ' — narrow the dates or the order ID to see the rest.</td></tr>');
+    }
+
+    return json.total;
+  };
+
+  // Typing an order ID should not fire a query per keystroke.
+  window.logSearchSoon = function () {
+    clearTimeout(logTimer);
+    logTimer = setTimeout(function () { logFetch().catch(function () {}); }, 400);
+  };
+
+  window.logClearFilters = function () {
+    ['log_from', 'log_to', 'log_orderId', 'log_changedBy', 'log_action']
+      .forEach(function (id) { const el = document.getElementById(id); if (el) el.value = ''; });
+    logFetch().catch(function () {});
+  };
+
+  logFetch().catch(function (err) {
+    document.getElementById('log_tbody').innerHTML =
+      '<tr><td colspan="7" class="text-center py-4 text-danger">' + esc(err.message) + '</td></tr>';
+  });
+})();
+</script>

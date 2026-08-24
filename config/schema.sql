@@ -36,6 +36,24 @@ CREATE TABLE IF NOT EXISTS activity_log (
 );
 
 -- =============================================
+-- ORDER LOGS TABLE
+-- Who changed what on an order, and when. One row per field that actually
+-- changed, so a saved-but-untouched form leaves nothing behind.
+-- =============================================
+CREATE TABLE IF NOT EXISTS order_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id VARCHAR(20) NOT NULL,
+  action VARCHAR(40) NOT NULL,
+  field VARCHAR(80),
+  old_value VARCHAR(500),
+  new_value VARCHAR(500),
+  changed_by VARCHAR(150),
+  changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_order_logs_order (order_id),
+  INDEX idx_order_logs_when (changed_at)
+);
+
+-- =============================================
 -- DEALERS TABLE
 -- =============================================
 CREATE TABLE IF NOT EXISTS dealers (

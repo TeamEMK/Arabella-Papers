@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
+const { logOrderEvent } = require('../../utils/auditlog');
 const { requireRole } = require('../../middleware/auth');
 const { readRows, normalizeHeader, toCsv } = require('../../utils/sheet');
 const { generateOrderIds } = require('../../utils/idgen');
@@ -344,6 +345,12 @@ router.post('/import', canImport, async (req, res) => {
          VALUES ?`,
         values,
       );
+
+      // Imported orders get the same trail as punched ones, so the log can
+      // answer "where did this row come from" months later.
+      for (let i = 0; i < valid.length; i++) {
+        await logOrderEvent(ids[i], 'Imported', (valid[i].dealer || '-') + ' / ' + (valid[i].client || '-'), req.session.user);
+      }
     } else if (type === 'dealers') {
       imported = await insertChunks(
         'INSERT INTO dealers (name, email, mobile) VALUES ?',
