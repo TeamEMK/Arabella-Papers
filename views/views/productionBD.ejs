@@ -128,8 +128,25 @@ function prodApplyFilters() {
   const designer = (document.getElementById('prod_filterDesigner')||{}).value||'';
   const client = (document.getElementById('prod_filterClient')||{}).value||'';
   const search = (document.getElementById('prod_search')||{}).value||'';
+  // The two date boxes have been sitting here since the board was written
+  // without anything reading them - whatever you picked, the queue never
+  // moved. They narrow by the date the order was punched, the same as the
+  // Orders dashboard.
+  const startV = (document.getElementById('prod_startDate')||{}).value||'';
+  const endV = (document.getElementById('prod_endDate')||{}).value||'';
+
   prod_filtered = prod_data.filter(o => {
     if(!o) return false;
+    let dm = true;
+    if(startV || endV) {
+      const od = parseDMY(o.Timestamp);
+      if(od) {
+        const s = dayStart(startV), e = dayEnd(endV);
+        if(s && od < s) dm = false;
+        if(e && od > e) dm = false;
+      } else dm = false;
+    }
+    if(!dm) return false;
     const isCompleted = (o.Card_Assembly||'').toLowerCase().includes('done');
     let curStatus = 'Pending';
     if(isCompleted) curStatus = 'Completed';
