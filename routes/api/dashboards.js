@@ -441,6 +441,58 @@ router.get('/order-details/:id', requireLogin, async (req, res) => {
 // ═══════════════════════════════════════════════
 
 // GET /api/dashboards/analytics
+// PUT /api/dashboards/quick/:id — the two things Analytics lets you set
+// without leaving the report.
+//
+// It writes one field and nothing else on purpose. The obvious shortcut was to
+// reuse the Till Approval route for the re-order flag, but that route also
+// writes the remarks column, so a caller with nothing to say there would blank
+// whatever the designer had written.
+router.put('/quick/:id', requireLogin, async (req, res) => {
+  try {
+    const user = req.session.user;
+    if (user.role !== 'SuperAdmin' && user.domain !== 'Head') {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const orderId = req.params.id;
+    const [rows] = await db.query('SELECT order_id FROM orders WHERE order_id = ? AND is_deleted = 0', [orderId]);
+    if (!rows.length) return res.status(404).json({ success: false, error: 'No such order.' });
+
+    const updates = {};
+    const now = new Date();
+
+    if (req.body.clientStatus !== undefined) {
+      const status = String(req.body.clientStatus || '').trim();
+      if (!status) return res.json({ success: false, error: 'Pick a status.' });
+      updates.design_approval_status_from_client = status;
+      updates.actual_2 = now;
+      updates.approval_updated_by = user.email || '';
+    }
+
+    if (req.body.reasonForDelay !== undefined) {
+      const reason = String(req.body.reasonForDelay || '').trim();
+      if (!reason) return res.json({ success: false, error: 'Write the reason.' });
+      updates.reason_for_delay = reason;
+      updates.reason_for_delay_actual_time = now;
+    }
+
+    if (!Object.keys(updates).length) {
+      return res.json({ success: false, error: 'Nothing to update.' });
+    }
+
+    await logOrderUpdate(orderId, updates, user);
+
+    const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
+    await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Quick update failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/dashboards/today — the four numbers the Analytics cards carry
 // underneath their own. Deliberately its own endpoint: it answers "what
 // happened today" and must not move when someone changes the date range, and

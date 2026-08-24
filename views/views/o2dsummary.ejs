@@ -6,7 +6,46 @@ document.getElementById('analyticsRoot').innerHTML = `
   <!-- Header -->
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-chart-pie me-2"></i>O2D Analytics Summary</h3>
-    <button class="btn btn-outline-dark smooth-ui" onclick="refreshBoard(this, fetchAnalytics, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary smooth-ui" onclick="anOpenQuick('reorder')"><i class="fas fa-rotate-left me-1"></i> Mark Re-order</button>
+      <button class="btn btn-warning smooth-ui text-dark" onclick="anOpenQuick('delay')"><i class="fas fa-clock me-1"></i> Reason For Delay</button>
+      <button class="btn btn-outline-dark smooth-ui" onclick="refreshBoard(this, fetchAnalytics, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
+  </div>
+
+  <!-- QUICK ENTRY MODAL -->
+  <div class="modal fade" id="an_quickModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="an_quickTitle">Mark Re-order</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="an_quickError" class="alert alert-danger py-2 small d-none"></div>
+        <div class="mb-3">
+          <label class="form-label fw-bold text-dark">Order ID</label>
+          <input list="an_orderList" id="an_quickOrder" class="form-control form-combo" placeholder="K-159756" autocomplete="off" oninput="anQuickLookup()">
+          <datalist id="an_orderList"></datalist>
+          <div class="form-text" id="an_quickFound">Type or pick an order.</div>
+        </div>
+        <div class="mb-3 d-none" id="an_quickStatusBox">
+          <label class="form-label fw-bold text-dark">Mark as</label>
+          <select id="an_quickStatus" class="form-select">
+            <option value="Reorder">Reorder</option>
+            <option value="Reprint">Reprint</option>
+            <option value="Sample">Sample</option>
+          </select>
+        </div>
+        <div class="mb-3 d-none" id="an_quickReasonBox">
+          <label class="form-label fw-bold text-dark">Reason For Delay</label>
+          <textarea id="an_quickReason" class="form-control" rows="3" placeholder="Why is this order running late?"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success" id="an_quickSave" onclick="anQuickSave()"><i class="fas fa-save me-1"></i> Save</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div></div>
   </div>
 
   <!-- KPI CARDS -->
@@ -126,6 +165,97 @@ document.getElementById('an_start').value = monthStartValue();
 document.getElementById('an_end').value = todayValue();
 
 fetchAnalytics().catch(() => {});
+
+// ── QUICK ENTRY ──
+// Two things people were opening the Production board to do, from the report
+// where they noticed the problem. Both write one field and nothing else.
+var an_quickMode = 'reorder';
+
+function anOpenQuick(mode) {
+  an_quickMode = mode;
+  const reorder = mode === 'reorder';
+
+  document.getElementById('an_quickTitle').textContent = reorder ? 'Mark Re-order' : 'Reason For Delay';
+  document.getElementById('an_quickStatusBox').classList.toggle('d-none', !reorder);
+  document.getElementById('an_quickReasonBox').classList.toggle('d-none', reorder);
+  document.getElementById('an_quickError').classList.add('d-none');
+  document.getElementById('an_quickOrder').value = '';
+  document.getElementById('an_quickReason').value = '';
+  document.getElementById('an_quickStatus').value = 'Reorder';
+  document.getElementById('an_quickFound').textContent = 'Type or pick an order.';
+  document.getElementById('an_quickFound').className = 'form-text';
+
+  // The board already holds every order, so the list costs nothing and saves
+  // typing an ID wrong.
+  const list = document.getElementById('an_orderList');
+  list.innerHTML = '';
+  an_all.slice(0, 400).forEach(function (o) {
+    const opt = document.createElement('option');
+    opt.value = o.ID;
+    list.appendChild(opt);
+  });
+
+  new bootstrap.Modal(document.getElementById('an_quickModal')).show();
+}
+
+// Naming the order back to the reader is the difference between "K-159756"
+// and "K-159756 — Phyllis Roth / BAUM", which is what catches a typo.
+function anQuickLookup() {
+  const id = (document.getElementById('an_quickOrder').value || '').trim();
+  const found = document.getElementById('an_quickFound');
+  if (!id) {
+    found.textContent = 'Type or pick an order.';
+    found.className = 'form-text';
+    return;
+  }
+  const o = an_all.find(function (x) { return String(x.ID).toLowerCase() === id.toLowerCase(); });
+  if (!o) {
+    found.textContent = 'No order with that ID on this board.';
+    found.className = 'form-text text-danger';
+    return;
+  }
+  found.textContent = (o.Dealer || '-') + ' / ' + (o.Client || '-')
+    + ' — currently ' + (o.ClientStatus || 'no client status');
+  found.className = 'form-text text-success';
+}
+
+async function anQuickSave() {
+  const id = (document.getElementById('an_quickOrder').value || '').trim();
+  const err = document.getElementById('an_quickError');
+  const fail = function (message) {
+    err.textContent = message;
+    err.classList.remove('d-none');
+  };
+  err.classList.add('d-none');
+
+  if (!id) return fail('Enter the order ID.');
+
+  const body = an_quickMode === 'reorder'
+    ? { clientStatus: document.getElementById('an_quickStatus').value }
+    : { reasonForDelay: (document.getElementById('an_quickReason').value || '').trim() };
+
+  if (an_quickMode === 'delay' && !body.reasonForDelay) return fail('Write the reason for the delay.');
+
+  const btn = document.getElementById('an_quickSave');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/dashboards/quick/' + encodeURIComponent(id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (!json.success) return fail(json.error || 'Could not save.');
+
+    bootstrap.Modal.getInstance(document.getElementById('an_quickModal')).hide();
+    showToast('success', an_quickMode === 'reorder' ? 'Order marked.' : 'Reason saved.');
+    fetchAnalytics().catch(function () {});
+  } catch (e) {
+    fail('Network error. Please try again.');
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 // ── TODAY ──
 // The number under each card. It ignores every filter above it on purpose:
