@@ -119,6 +119,12 @@ async function fetchAnalytics() {
     return an_all.length;
   } catch(e) { console.error(e); throw e; }
 }
+// This board opens on today. Set the range before the first fetch so the
+// numbers are never briefly the whole eight thousand and then today's dozen.
+// Clear puts every order back.
+document.getElementById('an_start').value = todayValue();
+document.getElementById('an_end').value = todayValue();
+
 fetchAnalytics().catch(() => {});
 
 function an_populateFilters(data) {
@@ -154,9 +160,9 @@ function anApplyFilters() {
       const raw = o.RawDate || o.Date;
       const d = raw ? new Date(raw) : null;
       if(d && !isNaN(d)) {
-        d.setHours(0,0,0,0);
-        if(startV && d < new Date(startV)) dm = false;
-        if(endV && d > new Date(endV)) dm = false;
+        const s = dayStart(startV), e = dayEnd(endV);
+        if(s && d < s) dm = false;
+        if(e && d > e) dm = false;
       } else dm = false;
     }
     return dm &&

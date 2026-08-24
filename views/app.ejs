@@ -164,6 +164,30 @@
     };
   })();
 
+  // ── DATE FILTERS ──
+  // A date input hands back "2026-08-24", and new Date() reads that as UTC
+  // midnight — half past five in the morning here. Compared against an order
+  // stamped at local midnight, the first day of every range fell outside it.
+  // Build the boundary from the parts instead, in the reader's own zone.
+  function dayStart(value) {
+    if (!value) return null;
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function dayEnd(value) {
+    const d = dayStart(value);
+    if (d) d.setHours(23, 59, 59, 999);
+    return d;
+  }
+
+  // Today, in the format a date input expects.
+  function todayValue() {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  }
+
   // ── TOAST ──
   const Toast = Swal.mixin({
     toast: true, position: 'top-end', showConfirmButton: false,
