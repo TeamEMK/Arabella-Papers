@@ -57,7 +57,7 @@ document.getElementById('dispRoot').innerHTML = `
     <div class="modal-header bg-primary text-white"><h5 class="modal-title">Update Dispatch: <span id="dsp_editId"></span></h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <div class="row g-3">
-        <div class="col-md-6"><label class="form-label fw-bold text-dark">Courier Name</label><input type="text" id="dsp_courier" class="form-control" placeholder="e.g., DHL" required></div>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark">Courier Name</label><select id="dsp_courier" class="form-select"></select></div>
         <div class="col-md-6"><label class="form-label fw-bold text-dark">Tracking / Docket No.</label><input type="text" id="dsp_docket" class="form-control" placeholder="Tracking #" required></div>
         <div class="col-md-6"><label class="form-label fw-bold text-dark">Invoice Number</label><input type="text" id="dsp_invoiceNo" class="form-control"></div>
         <div class="col-md-6"><label class="form-label fw-bold text-dark">Invoice Amount</label><input type="number" id="dsp_invoiceAmount" class="form-control"></div>
@@ -89,10 +89,24 @@ async function fetchDispatchData() {
 }
 fetchDispatchData().catch(() => {});
 
+// The couriers this office uses, whether or not a parcel has gone out with
+// one yet, plus anything already written on an order. Another carrier is a
+// matter of adding it to this line.
+var DSP_KNOWN_COURIERS = ['DHL', 'UPS'];
+
+function dsp_courierList() {
+  const set = new Set(DSP_KNOWN_COURIERS);
+  dsp_data.forEach(o => {
+    const c = (o.Dispatch_Courier_Name||'').trim();
+    if(c) set.add(c);
+  });
+  return Array.from(set).sort((a,b) => a.localeCompare(b));
+}
+
 function dsp_populateFilters(data) {
-  const couriers = new Set(), dealers = new Set();
-  data.forEach(o => { if(o.Dispatch_Courier_Name) couriers.add(o.Dispatch_Courier_Name); if(o.Dealer_name) dealers.add(o.Dealer_name); });
-  dsp_fillSelect('dsp_filterCourier', couriers);
+  const dealers = new Set();
+  data.forEach(o => { if(o.Dealer_name) dealers.add(o.Dealer_name); });
+  dsp_fillSelect('dsp_filterCourier', new Set(dsp_courierList()));
   dsp_fillSelect('dsp_filterDealer', dealers);
 }
 function dsp_fillSelect(id, set) {
@@ -178,11 +192,31 @@ async function dsp_openView(orderId) {
   }
   body.innerHTML = html+'</div>';
 }
+function dsp_fillCourierSelect(current) {
+  const s = document.getElementById('dsp_courier');
+  const cur = (current||'').trim();
+  const list = dsp_courierList();
+  // An order can carry a courier nobody uses any more. Keep it selectable so
+  // editing the docket number does not quietly rewrite who carried it.
+  if(cur && list.indexOf(cur) < 0) list.push(cur);
+
+  s.innerHTML = '';
+  const add = (value, text) => {
+    const o = document.createElement('option');
+    o.value = value; o.textContent = text;
+    s.appendChild(o);
+  };
+  add('', 'Select courier');
+  list.forEach(v => add(v, v));
+
+  s.value = cur;
+}
+
 function dsp_openEdit(id) {
   dsp_editId = id;
   const o = dsp_data.find(x => x.ID.toString()===id.toString());
   document.getElementById('dsp_editId').textContent = id;
-  document.getElementById('dsp_courier').value = o?.Dispatch_Courier_Name||'';
+  dsp_fillCourierSelect(o?.Dispatch_Courier_Name||'');
   document.getElementById('dsp_docket').value = o?.Docket_No||'';
   document.getElementById('dsp_status').value = o?.Dispatch_Status||'Dispatched';
   document.getElementById('dsp_invoiceNo').value = o?.Invoice_Number||'';
