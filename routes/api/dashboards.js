@@ -322,11 +322,15 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
+    // status_4 is only set by this dashboard, so on its own it showed the 24
+    // orders handled since the system went live and hid the 1770 the sheet
+    // recorded as dispatched before that. A dispatch date is the same fact
+    // written down differently, so an order carrying one belongs here too.
     const [rows] = await db.query(`
       SELECT * FROM orders
       WHERE is_deleted = 0
-        AND status_4 IS NOT NULL AND status_4 != ''
-      ORDER BY id DESC
+        AND ((status_4 IS NOT NULL AND status_4 != '') OR actual_4 IS NOT NULL)
+      ORDER BY COALESCE(actual_4, timestamp) DESC, id DESC
     `);
 
     const data = rows.map(r => ({
@@ -337,7 +341,10 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       Dispatch_Courier_Name: r.courier || '',
       Docket_No: r.ups_dhl_fedex_tracking_number || '',
       Dispatch_Date: r.actual_4 ? new Date(r.actual_4).toLocaleString('en-GB', IST) : '',
-      Dispatch_Status: r.status_4,
+      // A parcel with a dispatch date has gone, whatever the status column
+      // says - the board reads a blank status as "Ready", which would put
+      // 1760 delivered orders back in the queue.
+      Dispatch_Status: r.status_4 || (r.actual_4 ? 'Dispatched' : ''),
       // This dashboard shows the invoice figures as table columns and reloads
       // them into its edit form, so unlike the others it needs them up front -
       // five fields rather than the whole row.

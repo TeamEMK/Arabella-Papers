@@ -14,6 +14,8 @@ document.getElementById('dispRoot').innerHTML = `
     <div id="dspFilterContent" class="collapse">
       <div class="card-body p-2">
         <div class="row g-2 align-items-end text-dark">
+          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Start</label><input type="date" id="dsp_startDate" class="form-control form-control-sm" onchange="dspApplyFilters()"></div>
+          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">End</label><input type="date" id="dsp_endDate" class="form-control form-control-sm" onchange="dspApplyFilters()"></div>
           <div class="col-12 col-md-4"><label class="form-label fw-bold small mb-0">Search</label><input type="text" id="dsp_search" class="form-control form-control-sm" placeholder="Search by ID, Courier, Docket..." onkeyup="dspApplyFilters()"></div>
           <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Status</label><select id="dsp_filterStatus" class="form-select form-select-sm" onchange="dspApplyFilters()"><option value="">All</option><option value="Ready">Ready</option><option value="Dispatched">Dispatched</option><option value="Delivered">Delivered</option></select></div>
           <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Courier</label><select id="dsp_filterCourier" class="form-select form-select-sm" onchange="dspApplyFilters()"><option value="">All</option></select></div>
@@ -31,6 +33,7 @@ document.getElementById('dispRoot').innerHTML = `
           <thead class="table-dark">
             <tr>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dispatch Date</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dealer</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Client</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Courier</th>
@@ -44,7 +47,7 @@ document.getElementById('dispRoot').innerHTML = `
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
             </tr>
           </thead>
-          <tbody id="dsp_tbody"><tr><td colspan="12" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="dsp_tbody"><tr><td colspan="13" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -120,8 +123,20 @@ function dspApplyFilters() {
   const courier = (document.getElementById('dsp_filterCourier')||{}).value||'';
   const dealer = (document.getElementById('dsp_filterDealer')||{}).value||'';
   const search = (document.getElementById('dsp_search')||{}).value||'';
+  const startV = (document.getElementById('dsp_startDate')||{}).value||'';
+  const endV = (document.getElementById('dsp_endDate')||{}).value||'';
+
   const filtered = dsp_data.filter(o => {
     if(!o) return false;
+    // Narrowed by the day the parcel went out, which is the date on the row.
+    // An order still waiting has no dispatch date, so a range excludes it.
+    if(startV || endV) {
+      const d = parseDMY(o.Dispatch_Date);
+      if(!d) return false;
+      const s = dayStart(startV), e = dayEnd(endV);
+      if(s && d < s) return false;
+      if(e && d > e) return false;
+    }
     // Same default the table shows: an order handed over by Production carries
     // status 'Ready', and anything blank is treated as Ready too.
     const ds = (o.Dispatch_Status||'Ready').toLowerCase();
@@ -133,12 +148,12 @@ function dspApplyFilters() {
   dsp_renderTable(filtered);
 }
 function dspClearFilters() {
-  ['dsp_filterStatus','dsp_filterCourier','dsp_filterDealer','dsp_search'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  ['dsp_filterStatus','dsp_filterCourier','dsp_filterDealer','dsp_search','dsp_startDate','dsp_endDate'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   dspApplyFilters();
 }
 function dsp_renderTable(data) {
   const tbody = document.getElementById('dsp_tbody');
-  if(!data.length) { tbody.innerHTML = '<tr><td colspan="12" class="text-center">No orders found.</td></tr>'; return; }
+  if(!data.length) { tbody.innerHTML = '<tr><td colspan="13" class="text-center">No orders found.</td></tr>'; return; }
   tbody.innerHTML = data.map(o => {
     const s = o.Dispatch_Status||'Ready';
     let b = 'warning';
@@ -146,6 +161,7 @@ function dsp_renderTable(data) {
     if(s.toLowerCase().includes('delivered')) b='success';
     return `<tr>
       <td class="fw-bold">${o.ID}</td>
+      <td>${o.Dispatch_Date||'-'}</td>
       <td>${o.Dealer_name||''}</td>
       <td>${o.Client_name||''}</td>
       <td>${o.Dispatch_Courier_Name||'-'}</td>
