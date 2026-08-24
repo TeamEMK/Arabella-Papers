@@ -32,8 +32,8 @@ router.get('/', requireLogin, async (req, res) => {
 
     // "Local Order" is a real dealer with 3576 orders behind it, but it is not
     // work anyone tracks here - it was crowding out 41% of both this list and
-    // the production queue. The rows stay in the table and still count in
-    // Analytics; they are only kept off these two boards.
+    // the production queue, and padding every total on Analytics. The rows
+    // stay in the table; they are only kept off the boards.
     let query = `
       SELECT * FROM orders
       WHERE is_deleted = 0

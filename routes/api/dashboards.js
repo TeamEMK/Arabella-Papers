@@ -410,7 +410,14 @@ router.get('/analytics', requireLogin, async (req, res) => {
     const canSeeAll = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' ||
       role.includes('Production Manager');
 
-    let query = `SELECT * FROM orders WHERE is_deleted = 0`;
+    // "Local Order" is off the Orders and Production boards already. It was
+    // still padding the totals here - 3576 rows the business does not track,
+    // in every count and chart on the page.
+    let query = `
+      SELECT * FROM orders
+      WHERE is_deleted = 0
+        AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
+    `;
     const params = [];
 
     if (!canSeeAll) {
