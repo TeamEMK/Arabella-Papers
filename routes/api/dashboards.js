@@ -441,6 +441,62 @@ router.get('/order-details/:id', requireLogin, async (req, res) => {
 // ═══════════════════════════════════════════════
 
 // GET /api/dashboards/analytics
+// GET /api/dashboards/today — the four numbers the Analytics cards carry
+// underneath their own. Deliberately its own endpoint: it answers "what
+// happened today" and must not move when someone changes the date range, and
+// it is small enough to re-ask every couple of minutes without reloading a
+// board of 5000 rows to do it.
+router.get('/today', requireLogin, async (req, res) => {
+  try {
+    const user = req.session.user;
+    if (user.role !== 'SuperAdmin' && user.domain !== 'Head') {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+
+    // Today according to the office, not the database server - Railway runs in
+    // UTC, so between midnight and half past five CURDATE() is still yesterday
+    // here and the cards would sit on the previous day's numbers.
+    const today = new Date().toLocaleDateString('en-CA', IST);
+
+    const live = `is_deleted = 0 AND LOWER(IFNULL(dealer_name, '')) <> 'local order'`;
+    const cancelled = `(LOWER(IFNULL(design_status, '')) LIKE '%cancel%'
+                        OR LOWER(IFNULL(design_approval_status_from_client, '')) LIKE '%cancel%')`;
+
+    const count = async (sql, params) => {
+      const [[row]] = await db.query(sql, params);
+      return row.c;
+    };
+
+    const [total, dispatched, inProgress, cancelledToday] = await Promise.all([
+      // Orders punched today.
+      count(`SELECT COUNT(*) AS c FROM orders WHERE ${live} AND DATE(timestamp) = ?`, [today]),
+      // Parcels that actually went out today, whenever the order was punched.
+      count(`SELECT COUNT(*) AS c FROM orders WHERE ${live} AND DATE(actual_4) = ?`, [today]),
+      // Of today's intake, what is still moving.
+      count(
+        `SELECT COUNT(*) AS c FROM orders
+          WHERE ${live} AND DATE(timestamp) = ?
+            AND IFNULL(status_4, '') = '' AND NOT ${cancelled}`,
+        [today]
+      ),
+      // Cancelling leaves no date of its own on the order, so this comes from
+      // the change log - which means it counts from the day logging started.
+      count(
+        `SELECT COUNT(DISTINCT order_id) AS c FROM order_logs
+          WHERE DATE(changed_at) = ?
+            AND field IN ('Design Status', 'Client Approval')
+            AND LOWER(IFNULL(new_value, '')) LIKE '%cancel%'`,
+        [today]
+      ),
+    ]);
+
+    res.json({ success: true, date: today, total, dispatched, inProgress, cancelled: cancelledToday });
+  } catch (err) {
+    console.error("Today's numbers failed:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.get('/analytics', requireLogin, async (req, res) => {
   try {
     const user = req.session.user;
