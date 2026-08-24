@@ -260,8 +260,15 @@ function prod_stageCfg(o) {
     {val:v('Card_Assembly'), ok:['done'], label:'Assembly'},
   ];
 }
+// Every stage, every row - green for done, red for not. Only the finished
+// ones used to be drawn, so a row with three badges could mean six stages
+// outstanding or two, and the reader had to remember the full list to tell.
 function prod_getStageBadges(o) {
-  return prod_stageCfg(o).map(i => i.ok.includes(i.val) ? `<span class="badge bg-${i.label==='Assembly'?'success':'primary'} me-1 mb-1">${i.label}</span>` : '').join('');
+  return prod_stageCfg(o).map(i => {
+    const done = i.ok.includes(i.val);
+    const title = (i.val || 'not set').replace(/"/g, '&quot;');
+    return `<span class="badge bg-${done?'success':'danger'} me-1 mb-1" title="${i.label}: ${title}">${i.label}</span>`;
+  }).join('');
 }
 function prod_pendingStages(o) {
   return prod_stageCfg(o).filter(i => !i.ok.includes(i.val)).map(i => i.label);
