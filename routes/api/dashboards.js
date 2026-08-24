@@ -123,17 +123,17 @@ router.get('/production', requireLogin, async (req, res) => {
     const isAuthorized = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' || role.includes('Production Manager');
     if (!isAuthorized) return res.json({ success: true, data: [] });
 
-    // Every live order, not only the client-approved ones.
+    // An order reaches production once the client has signed it off - and it
+    // stays there once the floor has started on it, whatever the approval
+    // column says.
     //
-    // The approval gate was written for a flow this shop does not follow: work
-    // starts when the order arrives, and the approval column is updated later
-    // if at all. It was hiding 1298 orders that already had paper cut and
-    // printing done, and it kept every freshly punched order out of the queue
-    // the production team actually works from.
-    //
-    // So the queue is now "anything still in play": not dispatched, not
-    // rejected, not cancelled. Narrowing it again is a matter of adding the
-    // approval condition back to this WHERE clause.
+    // That second half matters. The gate was lifted entirely while the sheet
+    // was the source of truth, because back then approval was recorded late
+    // if at all: 3612 orders still read "Proofing Done", and 1295 of those
+    // have paper cut, printing or assembly already done. Gating on approval
+    // alone would take all of that off the board while the work sits on the
+    // floor. So anything already under way stays visible, and only genuinely
+    // new orders have to wait for the client.
     const [rows] = await db.query(`
       SELECT * FROM orders
       WHERE is_deleted = 0
@@ -142,6 +142,15 @@ router.get('/production', requireLogin, async (req, res) => {
         AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%cancel%'
         AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
         AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
+        AND (
+          TRIM(IFNULL(design_approval_status_from_client, '')) IN
+            ('Final Approval For Production', 'Reorder', 'Reprint', 'Sample')
+          OR LOWER(IFNULL(paper_cutting, ''))  LIKE '%done%'
+          OR LOWER(IFNULL(printing, ''))       LIKE '%done%'
+          OR LOWER(IFNULL(card_assembly, ''))  LIKE '%done%'
+          OR LOWER(IFNULL(dye_status, ''))     LIKE '%done%'
+          OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
+        )
       ORDER BY id DESC
     `);
 
