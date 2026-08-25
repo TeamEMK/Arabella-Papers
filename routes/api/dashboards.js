@@ -153,7 +153,10 @@ router.get('/production', requireLogin, async (req, res) => {
         AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%cancel%'
         AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
         AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
-      ORDER BY id DESC
+      -- Newest order first. Sorting by id gave nearly the same list, because
+      -- ids happen to run with time - but the board is read by date, so it
+      -- says date.
+      ORDER BY timestamp DESC, id DESC
     `);
 
     const data = rows.map(r => ({
