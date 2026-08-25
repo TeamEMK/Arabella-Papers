@@ -5,6 +5,7 @@ const db = require('../../config/db');
 const { uploadToDrive } = require('../../utils/drive');
 const { generateOrderId } = require('../../utils/idgen');
 const { notifyDesignerAssigned } = require('../../utils/notify');
+const { logOrderUpdate, logOrderEvent } = require('../../utils/auditlog');
 const { requireLogin } = require('../../middleware/auth');
 // Dates are stored as IST wall-clock and read back through a +05:30
 // connection. Vercel runs the server in UTC, so without naming the zone here
@@ -32,8 +33,8 @@ router.get('/', requireLogin, async (req, res) => {
 
     // "Local Order" is a real dealer with 3576 orders behind it, but it is not
     // work anyone tracks here - it was crowding out 41% of both this list and
-    // the production queue. The rows stay in the table and still count in
-    // Analytics; they are only kept off these two boards.
+    // the production queue, and padding every total on Analytics. The rows
+    // stay in the table; they are only kept off the boards.
     let query = `
       SELECT * FROM orders
       WHERE is_deleted = 0
@@ -143,6 +144,8 @@ router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
       remarks, finalLinks, 'Fresh Design'
     ]);
 
+    await logOrderEvent(orderId, 'Created', (dealer || '-') + ' / ' + (client || '-'), req.session.user);
+
     // Let the designer know before we answer. On Vercel the container is
     // frozen the moment the response goes out, so anything left running after
     // res.json() would simply never be delivered.
@@ -199,6 +202,8 @@ router.put('/:id/status', requireLogin, upload.single('file'), async (req, res) 
       else updates.upload_design = fileUrl;
     }
 
+    await logOrderUpdate(orderId, updates, req.session.user);
+
     const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     const values = [...Object.values(updates), orderId];
 
@@ -240,6 +245,8 @@ router.put('/:id/edit', requireLogin, upload.single('file'), async (req, res) =>
       updates.upload_design_file = fileUrl;
     }
 
+    await logOrderUpdate(orderId, updates, req.session.user);
+
     const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
 
@@ -278,6 +285,7 @@ router.delete('/:id', requireLogin, async (req, res) => {
     if (user.role !== 'SuperAdmin') {
       return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
+    await logOrderEvent(req.params.id, 'Deleted', '', user);
     await db.query('DELETE FROM orders WHERE order_id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
@@ -300,6 +308,13 @@ router.post('/bulk-status', requireLogin, async (req, res) => {
 
       const newRev = (rows[0].no_of_design_revision || 0) + 1;
       const clientStatus = u.status !== 'Cancelled' ? 'Proofing Done' : '';
+
+      await logOrderUpdate(u.id, {
+        design_status: u.status,
+        remarks: u.remark,
+        no_of_design_revision: newRev,
+        design_approval_status_from_client: clientStatus,
+      }, req.session.user);
 
       await db.query(`
         UPDATE orders SET

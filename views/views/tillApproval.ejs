@@ -134,11 +134,11 @@ function taApplyFilters() {
     if(!o) return false;
     let dm = true;
     if(startV || endV) {
-      const parts = (o.Actual_1||'').split(/[\s/]+/);
-      const od = parts.length >= 3 ? new Date(parts[2], parts[1]-1, parts[0]) : null;
-      if(od && !isNaN(od)) {
-        if(startV && od < new Date(startV)) dm = false;
-        if(endV && od > new Date(endV)) dm = false;
+      const od = parseDMY(o.Actual_1);
+      if(od) {
+        const s = dayStart(startV), e = dayEnd(endV);
+        if(s && od < s) dm = false;
+        if(e && od > e) dm = false;
       } else dm = false;
     }
     const sm = !status || (o.Design_Approval_Status_From_Client||'').toLowerCase() === status.toLowerCase();

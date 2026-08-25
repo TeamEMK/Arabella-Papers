@@ -14,6 +14,8 @@ document.getElementById('dispRoot').innerHTML = `
     <div id="dspFilterContent" class="collapse">
       <div class="card-body p-2">
         <div class="row g-2 align-items-end text-dark">
+          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Start</label><input type="date" id="dsp_startDate" class="form-control form-control-sm" onchange="dspApplyFilters()"></div>
+          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">End</label><input type="date" id="dsp_endDate" class="form-control form-control-sm" onchange="dspApplyFilters()"></div>
           <div class="col-12 col-md-4"><label class="form-label fw-bold small mb-0">Search</label><input type="text" id="dsp_search" class="form-control form-control-sm" placeholder="Search by ID, Courier, Docket..." onkeyup="dspApplyFilters()"></div>
           <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Status</label><select id="dsp_filterStatus" class="form-select form-select-sm" onchange="dspApplyFilters()"><option value="">All</option><option value="Ready">Ready</option><option value="Dispatched">Dispatched</option><option value="Delivered">Delivered</option></select></div>
           <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Courier</label><select id="dsp_filterCourier" class="form-select form-select-sm" onchange="dspApplyFilters()"><option value="">All</option></select></div>
@@ -31,6 +33,7 @@ document.getElementById('dispRoot').innerHTML = `
           <thead class="table-dark">
             <tr>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dispatch Date</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dealer</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Client</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Courier</th>
@@ -44,7 +47,7 @@ document.getElementById('dispRoot').innerHTML = `
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
             </tr>
           </thead>
-          <tbody id="dsp_tbody"><tr><td colspan="12" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="dsp_tbody"><tr><td colspan="13" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -57,13 +60,13 @@ document.getElementById('dispRoot').innerHTML = `
     <div class="modal-header bg-primary text-white"><h5 class="modal-title">Update Dispatch: <span id="dsp_editId"></span></h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <div class="row g-3">
-        <div class="col-md-6"><label class="form-label fw-bold text-dark">Courier Name</label><input type="text" id="dsp_courier" class="form-control" placeholder="e.g., DHL" required></div>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark">Courier Name</label><select id="dsp_courier" class="form-select"></select></div>
         <div class="col-md-6"><label class="form-label fw-bold text-dark">Tracking / Docket No.</label><input type="text" id="dsp_docket" class="form-control" placeholder="Tracking #" required></div>
         <div class="col-md-6"><label class="form-label fw-bold text-dark">Invoice Number</label><input type="text" id="dsp_invoiceNo" class="form-control"></div>
         <div class="col-md-6"><label class="form-label fw-bold text-dark">Invoice Amount</label><input type="number" id="dsp_invoiceAmount" class="form-control"></div>
-        <div class="col-md-4"><label class="form-label fw-bold text-dark">Boxes</label><input type="number" id="dsp_boxes" class="form-control"></div>
-        <div class="col-md-4"><label class="form-label fw-bold text-dark">Weight (kg)</label><input type="text" id="dsp_weight" class="form-control"></div>
-        <div class="col-md-4"><label class="form-label fw-bold text-dark">Vol. Weight</label><input type="text" id="dsp_volWeight" class="form-control"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark">Boxes</label><input type="number" id="dsp_boxes" class="form-control" min="1" step="1"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark">Weight (kg)</label><input type="number" id="dsp_weight" class="form-control" min="1" step="any"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark">Vol. Weight</label><input type="number" id="dsp_volWeight" class="form-control" min="1" step="any"></div>
         <div class="col-12"><label class="form-label fw-bold text-dark">Status</label><select id="dsp_status" class="form-select" required><option value="Ready">Ready</option><option value="Dispatched">Dispatched</option><option value="Delivered">Delivered</option></select></div>
       </div>
     </div>
@@ -89,10 +92,24 @@ async function fetchDispatchData() {
 }
 fetchDispatchData().catch(() => {});
 
+// The couriers this office uses, whether or not a parcel has gone out with
+// one yet, plus anything already written on an order. Another carrier is a
+// matter of adding it to this line.
+var DSP_KNOWN_COURIERS = ['DHL', 'FedEx', 'UPS'];
+
+function dsp_courierList() {
+  const set = new Set(DSP_KNOWN_COURIERS);
+  dsp_data.forEach(o => {
+    const c = (o.Dispatch_Courier_Name||'').trim();
+    if(c) set.add(c);
+  });
+  return Array.from(set).sort((a,b) => a.localeCompare(b));
+}
+
 function dsp_populateFilters(data) {
-  const couriers = new Set(), dealers = new Set();
-  data.forEach(o => { if(o.Dispatch_Courier_Name) couriers.add(o.Dispatch_Courier_Name); if(o.Dealer_name) dealers.add(o.Dealer_name); });
-  dsp_fillSelect('dsp_filterCourier', couriers);
+  const dealers = new Set();
+  data.forEach(o => { if(o.Dealer_name) dealers.add(o.Dealer_name); });
+  dsp_fillSelect('dsp_filterCourier', new Set(dsp_courierList()));
   dsp_fillSelect('dsp_filterDealer', dealers);
 }
 function dsp_fillSelect(id, set) {
@@ -106,8 +123,20 @@ function dspApplyFilters() {
   const courier = (document.getElementById('dsp_filterCourier')||{}).value||'';
   const dealer = (document.getElementById('dsp_filterDealer')||{}).value||'';
   const search = (document.getElementById('dsp_search')||{}).value||'';
+  const startV = (document.getElementById('dsp_startDate')||{}).value||'';
+  const endV = (document.getElementById('dsp_endDate')||{}).value||'';
+
   const filtered = dsp_data.filter(o => {
     if(!o) return false;
+    // Narrowed by the day the parcel went out, which is the date on the row.
+    // An order still waiting has no dispatch date, so a range excludes it.
+    if(startV || endV) {
+      const d = parseDMY(o.Dispatch_Date);
+      if(!d) return false;
+      const s = dayStart(startV), e = dayEnd(endV);
+      if(s && d < s) return false;
+      if(e && d > e) return false;
+    }
     // Same default the table shows: an order handed over by Production carries
     // status 'Ready', and anything blank is treated as Ready too.
     const ds = (o.Dispatch_Status||'Ready').toLowerCase();
@@ -119,12 +148,12 @@ function dspApplyFilters() {
   dsp_renderTable(filtered);
 }
 function dspClearFilters() {
-  ['dsp_filterStatus','dsp_filterCourier','dsp_filterDealer','dsp_search'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  ['dsp_filterStatus','dsp_filterCourier','dsp_filterDealer','dsp_search','dsp_startDate','dsp_endDate'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   dspApplyFilters();
 }
 function dsp_renderTable(data) {
   const tbody = document.getElementById('dsp_tbody');
-  if(!data.length) { tbody.innerHTML = '<tr><td colspan="12" class="text-center">No orders found.</td></tr>'; return; }
+  if(!data.length) { tbody.innerHTML = '<tr><td colspan="13" class="text-center">No orders found.</td></tr>'; return; }
   tbody.innerHTML = data.map(o => {
     const s = o.Dispatch_Status||'Ready';
     let b = 'warning';
@@ -132,6 +161,7 @@ function dsp_renderTable(data) {
     if(s.toLowerCase().includes('delivered')) b='success';
     return `<tr>
       <td class="fw-bold">${o.ID}</td>
+      <td>${o.Dispatch_Date||'-'}</td>
       <td>${o.Dealer_name||''}</td>
       <td>${o.Client_name||''}</td>
       <td>${o.Dispatch_Courier_Name||'-'}</td>
@@ -178,11 +208,31 @@ async function dsp_openView(orderId) {
   }
   body.innerHTML = html+'</div>';
 }
+function dsp_fillCourierSelect(current) {
+  const s = document.getElementById('dsp_courier');
+  const cur = (current||'').trim();
+  const list = dsp_courierList();
+  // An order can carry a courier nobody uses any more. Keep it selectable so
+  // editing the docket number does not quietly rewrite who carried it.
+  if(cur && list.indexOf(cur) < 0) list.push(cur);
+
+  s.innerHTML = '';
+  const add = (value, text) => {
+    const o = document.createElement('option');
+    o.value = value; o.textContent = text;
+    s.appendChild(o);
+  };
+  add('', 'Select courier');
+  list.forEach(v => add(v, v));
+
+  s.value = cur;
+}
+
 function dsp_openEdit(id) {
   dsp_editId = id;
   const o = dsp_data.find(x => x.ID.toString()===id.toString());
   document.getElementById('dsp_editId').textContent = id;
-  document.getElementById('dsp_courier').value = o?.Dispatch_Courier_Name||'';
+  dsp_fillCourierSelect(o?.Dispatch_Courier_Name||'');
   document.getElementById('dsp_docket').value = o?.Docket_No||'';
   document.getElementById('dsp_status').value = o?.Dispatch_Status||'Dispatched';
   document.getElementById('dsp_invoiceNo').value = o?.Invoice_Number||'';
@@ -212,6 +262,17 @@ async function dsp_submitUpdate() {
   if(body.status !== 'Ready' && (!body.courier || !body.docket)) {
     showToast('warning','Courier name and tracking number are required before marking an order Dispatched.');
     return;
+  }
+  // Boxes and the two weights each count something real, so nothing below
+  // one and never a negative. min= on the inputs is decoration for the same
+  // reason as above — the modal never submits, so nothing enforces it.
+  for(const [label, raw] of [['Boxes', body.boxes], ['Weight', body.weight], ['Vol. Weight', body.volWeight]]) {
+    if(raw === '') continue;
+    const n = Number(raw);
+    if(!isFinite(n) || n < 1) {
+      showToast('warning', label + ' must be 1 or more.');
+      return;
+    }
   }
   showLoading(true);
   try {

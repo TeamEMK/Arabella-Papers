@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
 const { uploadToDrive } = require('../../utils/drive');
+const { logOrderUpdate } = require('../../utils/auditlog');
 const { requireLogin } = require('../../middleware/auth');
 // Dates are stored as IST wall-clock and read back through a +05:30
 // connection. Vercel runs the server in UTC, so without naming the zone here
@@ -77,6 +78,8 @@ router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req
     if (fileUrl) updates.approved_design = fileUrl;
     if (approvalStatus === 'Rejected') updates.design_status = 'Rejected';
 
+    await logOrderUpdate(orderId, updates, req.session.user || userEmail);
+
     const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
 
@@ -95,6 +98,11 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
 
     let count = 0;
     for (const u of updates) {
+      await logOrderUpdate(u.id, {
+        design_approval_status_from_client: u.status,
+        remarks: u.remark,
+      }, req.session.user || u.userEmail);
+
       await db.query(`
         UPDATE orders SET
           design_approval_status_from_client = ?,
@@ -123,17 +131,17 @@ router.get('/production', requireLogin, async (req, res) => {
     const isAuthorized = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' || role.includes('Production Manager');
     if (!isAuthorized) return res.json({ success: true, data: [] });
 
-    // Every live order, not only the client-approved ones.
+    // An order reaches production once the client has signed it off - and it
+    // stays there once the floor has started on it, whatever the approval
+    // column says.
     //
-    // The approval gate was written for a flow this shop does not follow: work
-    // starts when the order arrives, and the approval column is updated later
-    // if at all. It was hiding 1298 orders that already had paper cut and
-    // printing done, and it kept every freshly punched order out of the queue
-    // the production team actually works from.
-    //
-    // So the queue is now "anything still in play": not dispatched, not
-    // rejected, not cancelled. Narrowing it again is a matter of adding the
-    // approval condition back to this WHERE clause.
+    // That second half matters. The gate was lifted entirely while the sheet
+    // was the source of truth, because back then approval was recorded late
+    // if at all: 3612 orders still read "Proofing Done", and 1295 of those
+    // have paper cut, printing or assembly already done. Gating on approval
+    // alone would take all of that off the board while the work sits on the
+    // floor. So anything already under way stays visible, and only genuinely
+    // new orders have to wait for the client.
     const [rows] = await db.query(`
       SELECT * FROM orders
       WHERE is_deleted = 0
@@ -142,6 +150,15 @@ router.get('/production', requireLogin, async (req, res) => {
         AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%cancel%'
         AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
         AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
+        AND (
+          TRIM(IFNULL(design_approval_status_from_client, '')) IN
+            ('Final Approval For Production', 'Reorder', 'Reprint', 'Sample')
+          OR LOWER(IFNULL(paper_cutting, ''))  LIKE '%done%'
+          OR LOWER(IFNULL(printing, ''))       LIKE '%done%'
+          OR LOWER(IFNULL(card_assembly, ''))  LIKE '%done%'
+          OR LOWER(IFNULL(dye_status, ''))     LIKE '%done%'
+          OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
+        )
       ORDER BY id DESC
     `);
 
@@ -247,6 +264,8 @@ router.put('/production/:id', requireLogin, async (req, res) => {
 
     if (!Object.keys(updates).length) return res.json({ success: true });
 
+    await logOrderUpdate(orderId, updates, req.session.user || u.userEmail);
+
     const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
 
@@ -265,7 +284,7 @@ router.post('/production/bulk', requireLogin, async (req, res) => {
 
     for (const u of updates) {
       // Reuse single update logic by calling it internally
-      await updateProductionOrder(u.ID, u);
+      await updateProductionOrder(u.ID, u, req.session.user);
     }
     res.json({ success: true, count: updates.length });
   } catch (err) {
@@ -274,7 +293,7 @@ router.post('/production/bulk', requireLogin, async (req, res) => {
 });
 
 // Helper for bulk production
-async function updateProductionOrder(orderId, u) {
+async function updateProductionOrder(orderId, u, user) {
   const now = new Date();
   const updates = {};
 
@@ -297,6 +316,9 @@ async function updateProductionOrder(orderId, u) {
   if (u.userEmail) updates.production_updated_by = u.userEmail;
 
   if (!Object.keys(updates).length) return;
+
+  await logOrderUpdate(orderId, updates, user || u.userEmail);
+
   const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
   await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
 }
@@ -313,11 +335,15 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
+    // status_4 is only set by this dashboard, so on its own it showed the 24
+    // orders handled since the system went live and hid the 1770 the sheet
+    // recorded as dispatched before that. A dispatch date is the same fact
+    // written down differently, so an order carrying one belongs here too.
     const [rows] = await db.query(`
       SELECT * FROM orders
       WHERE is_deleted = 0
-        AND status_4 IS NOT NULL AND status_4 != ''
-      ORDER BY id DESC
+        AND ((status_4 IS NOT NULL AND status_4 != '') OR actual_4 IS NOT NULL)
+      ORDER BY COALESCE(actual_4, timestamp) DESC, id DESC
     `);
 
     const data = rows.map(r => ({
@@ -328,7 +354,10 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       Dispatch_Courier_Name: r.courier || '',
       Docket_No: r.ups_dhl_fedex_tracking_number || '',
       Dispatch_Date: r.actual_4 ? new Date(r.actual_4).toLocaleString('en-GB', IST) : '',
-      Dispatch_Status: r.status_4,
+      // A parcel with a dispatch date has gone, whatever the status column
+      // says - the board reads a blank status as "Ready", which would put
+      // 1760 delivered orders back in the queue.
+      Dispatch_Status: r.status_4 || (r.actual_4 ? 'Dispatched' : ''),
       // This dashboard shows the invoice figures as table columns and reloads
       // them into its edit form, so unlike the others it needs them up front -
       // five fields rather than the whole row.
@@ -361,6 +390,17 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
     // sends '', which MySQL rejects outright in strict mode and would fail the
     // whole dispatch update. Leave those columns empty instead.
     const num = v => (v === '' || v === undefined || v === null) ? null : v;
+
+    await logOrderUpdate(orderId, {
+      courier,
+      ups_dhl_fedex_tracking_number: docket,
+      status_4: status,
+      invoice_number: invoiceNo,
+      invoice_amount: num(invoiceAmount),
+      number_of_boxes: num(boxes),
+      weight,
+      volumetric_weight: volWeight,
+    }, req.session.user || userEmail);
 
     await db.query(`
       UPDATE orders SET
@@ -401,6 +441,114 @@ router.get('/order-details/:id', requireLogin, async (req, res) => {
 // ═══════════════════════════════════════════════
 
 // GET /api/dashboards/analytics
+// PUT /api/dashboards/quick/:id — the two things Analytics lets you set
+// without leaving the report.
+//
+// It writes one field and nothing else on purpose. The obvious shortcut was to
+// reuse the Till Approval route for the re-order flag, but that route also
+// writes the remarks column, so a caller with nothing to say there would blank
+// whatever the designer had written.
+router.put('/quick/:id', requireLogin, async (req, res) => {
+  try {
+    const user = req.session.user;
+    if (user.role !== 'SuperAdmin' && user.domain !== 'Head') {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const orderId = req.params.id;
+    const [rows] = await db.query('SELECT order_id FROM orders WHERE order_id = ? AND is_deleted = 0', [orderId]);
+    if (!rows.length) return res.status(404).json({ success: false, error: 'No such order.' });
+
+    const updates = {};
+    const now = new Date();
+
+    if (req.body.clientStatus !== undefined) {
+      const status = String(req.body.clientStatus || '').trim();
+      if (!status) return res.json({ success: false, error: 'Pick a status.' });
+      updates.design_approval_status_from_client = status;
+      updates.actual_2 = now;
+      updates.approval_updated_by = user.email || '';
+    }
+
+    if (req.body.reasonForDelay !== undefined) {
+      const reason = String(req.body.reasonForDelay || '').trim();
+      if (!reason) return res.json({ success: false, error: 'Write the reason.' });
+      updates.reason_for_delay = reason;
+      updates.reason_for_delay_actual_time = now;
+    }
+
+    if (!Object.keys(updates).length) {
+      return res.json({ success: false, error: 'Nothing to update.' });
+    }
+
+    await logOrderUpdate(orderId, updates, user);
+
+    const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
+    await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Quick update failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/dashboards/today — the four numbers the Analytics cards carry
+// underneath their own. Deliberately its own endpoint: it answers "what
+// happened today" and must not move when someone changes the date range, and
+// it is small enough to re-ask every couple of minutes without reloading a
+// board of 5000 rows to do it.
+router.get('/today', requireLogin, async (req, res) => {
+  try {
+    const user = req.session.user;
+    if (user.role !== 'SuperAdmin' && user.domain !== 'Head') {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+
+    // Today according to the office, not the database server - Railway runs in
+    // UTC, so between midnight and half past five CURDATE() is still yesterday
+    // here and the cards would sit on the previous day's numbers.
+    const today = new Date().toLocaleDateString('en-CA', IST);
+
+    const live = `is_deleted = 0 AND LOWER(IFNULL(dealer_name, '')) <> 'local order'`;
+    const cancelled = `(LOWER(IFNULL(design_status, '')) LIKE '%cancel%'
+                        OR LOWER(IFNULL(design_approval_status_from_client, '')) LIKE '%cancel%')`;
+
+    const count = async (sql, params) => {
+      const [[row]] = await db.query(sql, params);
+      return row.c;
+    };
+
+    const [total, dispatched, inProgress, cancelledToday] = await Promise.all([
+      // Orders punched today.
+      count(`SELECT COUNT(*) AS c FROM orders WHERE ${live} AND DATE(timestamp) = ?`, [today]),
+      // Parcels that actually went out today, whenever the order was punched.
+      count(`SELECT COUNT(*) AS c FROM orders WHERE ${live} AND DATE(actual_4) = ?`, [today]),
+      // Of today's intake, what is still moving.
+      count(
+        `SELECT COUNT(*) AS c FROM orders
+          WHERE ${live} AND DATE(timestamp) = ?
+            AND IFNULL(status_4, '') = '' AND NOT ${cancelled}`,
+        [today]
+      ),
+      // Cancelling leaves no date of its own on the order, so this comes from
+      // the change log - which means it counts from the day logging started.
+      count(
+        `SELECT COUNT(DISTINCT order_id) AS c FROM order_logs
+          WHERE DATE(changed_at) = ?
+            AND field IN ('Design Status', 'Client Approval')
+            AND LOWER(IFNULL(new_value, '')) LIKE '%cancel%'`,
+        [today]
+      ),
+    ]);
+
+    res.json({ success: true, date: today, total, dispatched, inProgress, cancelled: cancelledToday });
+  } catch (err) {
+    console.error("Today's numbers failed:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.get('/analytics', requireLogin, async (req, res) => {
   try {
     const user = req.session.user;
@@ -410,7 +558,14 @@ router.get('/analytics', requireLogin, async (req, res) => {
     const canSeeAll = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' ||
       role.includes('Production Manager');
 
-    let query = `SELECT * FROM orders WHERE is_deleted = 0`;
+    // "Local Order" is off the Orders and Production boards already. It was
+    // still padding the totals here - 3576 rows the business does not track,
+    // in every count and chart on the page.
+    let query = `
+      SELECT * FROM orders
+      WHERE is_deleted = 0
+        AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
+    `;
     const params = [];
 
     if (!canSeeAll) {

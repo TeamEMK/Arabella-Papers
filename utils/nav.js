@@ -35,6 +35,10 @@ function getNavMenu(role, domain) {
   // someone with a list to import actually is. The view itself is still
   // permission-checked in routes/views.js.
 
+  if (roleStr === 'SuperAdmin' || domain === 'Head') {
+    menu.push({ id: 'logs', name: 'Logs', icon: 'fa-clock-rotate-left' });
+  }
+
   if (roleStr === 'SuperAdmin') {
     menu.push({ id: 'users', name: 'Users', icon: 'fa-users' });
   }

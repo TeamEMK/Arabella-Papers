@@ -164,6 +164,47 @@
     };
   })();
 
+  // ── DATE FILTERS ──
+  // A date input hands back "2026-08-24", and new Date() reads that as UTC
+  // midnight — half past five in the morning here. Compared against an order
+  // stamped at local midnight, the first day of every range fell outside it.
+  // Build the boundary from the parts instead, in the reader's own zone.
+  function dayStart(value) {
+    if (!value) return null;
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function dayEnd(value) {
+    const d = dayStart(value);
+    if (d) d.setHours(23, 59, 59, 999);
+    return d;
+  }
+
+  // Today, and the first of this month, in the format a date input expects.
+  function todayValue() {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  }
+
+  // The boards print a date as "19/08/2026, 23:25:20". new Date() reads that
+  // as month 19 and gives up. Splitting on the slashes leaves "2026," as the
+  // year, which is just as invalid — that is why a date range on Client
+  // Approval used to empty the table. Take the three numbers off the front and
+  // ignore the clock.
+  function parseDMY(text) {
+    const m = String(text || '').match(/^\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (!m) return null;
+    const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+    return isNaN(d) ? null : d;
+  }
+
+  function monthStartValue() {
+    const now = new Date();
+    return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-01';
+  }
+
   // ── TOAST ──
   const Toast = Swal.mixin({
     toast: true, position: 'top-end', showConfirmButton: false,

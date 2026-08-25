@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
+const { logOrderEvent } = require('../../utils/auditlog');
 const { requireRole } = require('../../middleware/auth');
 const { readRows, normalizeHeader, toCsv } = require('../../utils/sheet');
 const { generateOrderIds } = require('../../utils/idgen');
@@ -17,7 +18,9 @@ const MAX_ROWS = 2000;
 const CHUNK = 100;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const PUNCHED_BY = ['India Team', 'Cassie'];
+// Cassie stopped punching orders; the overseas name lives on the old rows
+// only. A bulk file naming it would create a new one.
+const PUNCHED_BY = ['India Team'];
 const DESIGN_TIMES = ['10 Minutes', '2 Hours', '4 Hours', 'EOD'];
 
 // Accepts whichever of these the user's header says, so a sheet exported from
@@ -39,7 +42,7 @@ const TYPES = {
     // without anyone having to read a separate note.
     samples: [
       ['orders@arabella.com', 'India Team', 'Sharma Traders', 'Hotel Grand', 'Menu card reprint', 'Ravi Kumar', '2 Hours'],
-      ['orders@arabella.com', 'Cassie', 'Verma Papers', 'Cafe Mocha', 'Wedding invite - gold foil', 'Cassie', 'EOD'],
+      ['orders@arabella.com', 'India Team', 'Verma Papers', 'Cafe Mocha', 'Wedding invite - gold foil', 'Priya Sharma', 'EOD'],
       ['orders@arabella.com', 'India Team', 'Gupta Enterprises', 'Sunrise Hotel', '', 'Neha Sharma', '10 Minutes'],
     ],
   },
@@ -116,7 +119,7 @@ function validate(type, data, context) {
 
     const punched = matchOne(PUNCHED_BY, data.punchedBy);
     if (data.punchedBy && !punched) {
-      errors.push('Order Punched By must be "India Team" or "Cassie"');
+      errors.push('Order Punched By must be "India Team"');
     } else if (punched) {
       data.punchedBy = punched;
     }
@@ -342,6 +345,12 @@ router.post('/import', canImport, async (req, res) => {
          VALUES ?`,
         values,
       );
+
+      // Imported orders get the same trail as punched ones, so the log can
+      // answer "where did this row come from" months later.
+      for (let i = 0; i < valid.length; i++) {
+        await logOrderEvent(ids[i], 'Imported', (valid[i].dealer || '-') + ' / ' + (valid[i].client || '-'), req.session.user);
+      }
     } else if (type === 'dealers') {
       imported = await insertChunks(
         'INSERT INTO dealers (name, email, mobile) VALUES ?',

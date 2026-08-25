@@ -20,7 +20,7 @@ document.getElementById('prodRoot').innerHTML = `
           <div class="col-12 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Search</label><input type="text" id="prod_search" class="form-control form-control-sm" placeholder="ID, Dealer, Designer..." onkeyup="prodApplyFilters()"></div>
           <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Client Name</label><select id="prod_filterClient" class="form-select form-select-sm" onchange="prodApplyFilters()"><option value="">All Clients</option></select></div>
           <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Designer</label><select id="prod_filterDesigner" class="form-select form-select-sm" onchange="prodApplyFilters()"><option value="">All Designers</option></select></div>
-          <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Overall Status</label><select id="prod_filterStatus" class="form-select form-select-sm" onchange="prodApplyFilters()"><option value="">All</option><option value="Pending">Pending</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option></select></div>
+          <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Overall Status</label><select id="prod_filterStatus" class="form-select form-select-sm" onchange="prodApplyFilters()"><option value="">All</option><option value="Pending">Pending</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option><option disabled>──────────</option><option value="Reorder">Re-order</option><option value="Sample">Sampling</option></select></div>
           <div class="col-6 col-md-2"><button class="btn btn-secondary btn-sm w-100" onclick="prodClearFilters()">Clear</button></div>
         </div>
       </div>
@@ -37,7 +37,6 @@ document.getElementById('prodRoot').innerHTML = `
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dispatch</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
-              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Timestamp</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Actual Date</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dealer</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Client</th>
@@ -50,7 +49,7 @@ document.getElementById('prodRoot').innerHTML = `
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Production Stages</th>
             </tr>
           </thead>
-          <tbody id="prod_tbody"><tr><td colspan="15" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="prod_tbody"><tr><td colspan="14" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -66,10 +65,10 @@ document.getElementById('prodRoot').innerHTML = `
     <div class="modal-header bg-warning text-dark"><h5 class="modal-title">Update Production: <span id="prod_editId"></span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <div class="row g-3 mb-3">
-        <div class="col-md-4"><label class="small fw-bold">Guest Name</label><select class="form-select" name="Guest_Name"><option value="No">No GNA</option><option value="Pending">GNA Pending</option><option value="Received">GNA Received</option><option value="Printed">GNA Printed</option></select></div>
-        <div class="col-md-4"><label class="small fw-bold">Paper Cutting</label><select class="form-select" name="Paper_Cutting"><option value="Pending">Pending</option><option value="Done">Done</option></select></div>
-        <div class="col-md-4"><label class="small fw-bold">Dye Status</label><select class="form-select" name="Dye_Status"><option value="Dye Status">Dye Status</option><option value="NO DIE">NO DIE</option><option value="DIE NOT RECEIVED">DIE NOT RECEIVED</option><option value="DIE CUTTING DONE">DIE CUTTING DONE</option><option value="DIE SENT">DIE SENT</option></select></div>
-        <div class="col-md-4"><label class="small fw-bold">Block Status</label><select class="form-select" name="Block_Status"><option value="Block Status">Block Status</option><option value="NO BLOCK">NO BLOCK</option><option value="BLOCK NOT RECEIVED">BLOCK NOT RECEIVED</option><option value="BLOCK PRINTED">BLOCK PRINTED</option><option value="BLOCK SENT">BLOCK SENT</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Guest Name</label><select class="form-select" name="Guest_Name"><option value="Pending">Pending</option><option value="No">No GNA</option><option value="GNA Pending">GNA Pending</option><option value="Received">GNA Received</option><option value="Printed">GNA Printed</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Paper Cutting</label><select class="form-select" name="Paper_Cutting"><option value="Pending">Pending</option><option value="Done">Done</option><option value="Temporary Out of Stock">Temporary Out of Stock</option><option value="Permanent Out of Stock">Permanent Out of Stock</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Dye Status</label><select class="form-select" name="Dye_Status"><option value="Pending">Pending</option><option value="NO DIE">NO DIE</option><option value="DIE NOT RECEIVED">DIE NOT RECEIVED</option><option value="DIE CUTTING DONE">DIE CUTTING DONE</option><option value="DIE SENT">DIE SENT</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Block Status</label><select class="form-select" name="Block_Status"><option value="Pending">Pending</option><option value="NO BLOCK">NO BLOCK</option><option value="BLOCK NOT RECEIVED">BLOCK NOT RECEIVED</option><option value="BLOCK PRINTED">BLOCK PRINTED</option><option value="BLOCK SENT">BLOCK SENT</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Printing</label><select class="form-select" name="Printing"><option value="Pending">Pending</option><option value="Done">Done</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Edges</label><select class="form-select" name="Edges"><option value="Pending" selected>Pending</option><option value="No">No</option><option value="Done">Done</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Laser Cutting</label><select class="form-select" name="Laser_Cutting"><option value="Pending">Pending</option><option value="Done">Done</option><option value="No">No</option></select></div>
@@ -79,7 +78,7 @@ document.getElementById('prodRoot').innerHTML = `
       <div class="mb-3"><label class="form-label fw-bold">Remark</label><textarea class="form-control" name="Remark" rows="2"></textarea></div>
       <div class="mb-3"><label class="form-label fw-bold">Reason For Delay</label><textarea class="form-control" name="Reason_For_Delay" rows="2"></textarea></div>
     </div>
-    <div class="modal-footer"><button class="btn btn-success" onclick="prod_submitUpdate()"><i class="fas fa-save me-1"></i> Save</button><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button></div>
+    <div class="modal-footer"><button class="btn btn-primary" id="prod_editDispatchBtn" onclick="prod_dispatchFromEdit()"><i class="fas fa-paper-plane me-1"></i> Send to Dispatch</button><button class="btn btn-success" onclick="prod_submitUpdate()"><i class="fas fa-save me-1"></i> Save</button><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button></div>
   </div></div>
 </div>
 
@@ -129,8 +128,25 @@ function prodApplyFilters() {
   const designer = (document.getElementById('prod_filterDesigner')||{}).value||'';
   const client = (document.getElementById('prod_filterClient')||{}).value||'';
   const search = (document.getElementById('prod_search')||{}).value||'';
+  // The two date boxes have been sitting here since the board was written
+  // without anything reading them - whatever you picked, the queue never
+  // moved. They narrow by the date the order was punched, the same as the
+  // Orders dashboard.
+  const startV = (document.getElementById('prod_startDate')||{}).value||'';
+  const endV = (document.getElementById('prod_endDate')||{}).value||'';
+
   prod_filtered = prod_data.filter(o => {
     if(!o) return false;
+    let dm = true;
+    if(startV || endV) {
+      const od = parseDMY(o.Timestamp);
+      if(od) {
+        const s = dayStart(startV), e = dayEnd(endV);
+        if(s && od < s) dm = false;
+        if(e && od > e) dm = false;
+      } else dm = false;
+    }
+    if(!dm) return false;
     const isCompleted = (o.Card_Assembly||'').toLowerCase().includes('done');
     let curStatus = 'Pending';
     if(isCompleted) curStatus = 'Completed';
@@ -138,7 +154,16 @@ function prodApplyFilters() {
       const steps = [o.Guest_Name,o.Paper_Cutting,o.Dye_Status,o.Block_Status,o.Printing,o.Edges,o.Laser_Cutting,o.Output];
       if(steps.some(v => v && !['pending','no','not done','','dye status','block status'].includes((v||'').toLowerCase().trim()))) curStatus = 'In Progress';
     }
-    return (!status || curStatus === status) &&
+    // Pending / In Progress / Completed say how far production has got.
+    // Re-order and Sampling say what kind of job it is, which is not a stage
+    // at all - it is what the client approval column was set to.
+    const kind = (o.Design_Approval_Status_From_Client||'').trim().toLowerCase();
+    const statusMatch = !status
+      || (status === 'Reorder' || status === 'Sample'
+            ? kind === status.toLowerCase()
+            : curStatus === status);
+
+    return statusMatch &&
       (!designer || (o.Designer||'').toLowerCase() === designer.toLowerCase()) &&
       (!client || (o.Client_name||'').toLowerCase() === client.toLowerCase()) &&
       (!search || JSON.stringify(o).toLowerCase().includes(search.toLowerCase()));
@@ -161,7 +186,7 @@ function prod_renderTable(data) {
   prod_display = data;
   prod_shown = 0;
   tbody.innerHTML = '';
-  if(!data.length) { tbody.innerHTML = '<tr><td colspan="15" class="text-center">No orders found.</td></tr>'; return; }
+  if(!data.length) { tbody.innerHTML = '<tr><td colspan="14" class="text-center">No orders found.</td></tr>'; return; }
   prod_renderNextBatch();
 }
 
@@ -185,7 +210,6 @@ function prod_rowHtml(o) {
       <td><div class="d-flex gap-1"><button class="btn btn-sm btn-info" onclick="prod_openView('${o.ID}')"><i class="fas fa-eye text-white"></i></button><button class="btn btn-sm btn-warning" onclick="prod_openEdit('${o.ID}')"><i class="fas fa-edit text-dark"></i></button></div></td>
       <td class="text-center">${readyBtn}</td>
       <td class="fw-bold">${o.ID}</td>
-      <td>${o.Timestamp||''}</td>
       <td class="text-primary fw-bold">${o.Actual_Date||''}</td>
       <td>${o.Dealer_name||''}</td>
       <td>${o.Client_name||''}</td>
@@ -236,8 +260,15 @@ function prod_stageCfg(o) {
     {val:v('Card_Assembly'), ok:['done'], label:'Assembly'},
   ];
 }
+// Every stage, every row - green for done, red for not. Only the finished
+// ones used to be drawn, so a row with three badges could mean six stages
+// outstanding or two, and the reader had to remember the full list to tell.
 function prod_getStageBadges(o) {
-  return prod_stageCfg(o).map(i => i.ok.includes(i.val) ? `<span class="badge bg-${i.label==='Assembly'?'success':'primary'} me-1 mb-1">${i.label}</span>` : '').join('');
+  return prod_stageCfg(o).map(i => {
+    const done = i.ok.includes(i.val);
+    const title = (i.val || 'not set').replace(/"/g, '&quot;');
+    return `<span class="badge bg-${done?'success':'danger'} me-1 mb-1" title="${i.label}: ${title}">${i.label}</span>`;
+  }).join('');
 }
 function prod_pendingStages(o) {
   return prod_stageCfg(o).filter(i => !i.ok.includes(i.val)).map(i => i.label);
@@ -279,6 +310,28 @@ async function prod_openView(orderId) {
   }
   body.innerHTML = html+'</div>';
 }
+// A stage nobody has touched is Pending. Dye and Block used to open on their
+// own label - "Dye Status", "Block Status" - which is placeholder text, not a
+// state, and 377 imported rows carry it as their value. Read those as Pending.
+function prod_stageValue(raw) {
+  const v = (raw || '').trim();
+  return (v === '' || /^(dye|block) status$/i.test(v)) ? 'Pending' : v;
+}
+
+// The sheet used wordings these dropdowns never offered - "No Dye" on 1758
+// orders, "No Block" on 1885, "No Guest List" on 1758. Setting a value a
+// select does not have leaves it blank, and saving then wrote that blank back
+// over a real answer. Give the box the option it is missing instead.
+function prod_setSelect(sel, raw) {
+  const v = prod_stageValue(raw);
+  if(v && !Array.prototype.some.call(sel.options, o => o.value === v)) {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = v;
+    sel.appendChild(opt);
+  }
+  sel.value = v;
+}
+
 function prod_openEdit(id) {
   prod_editId = id;
   const o = prod_data.find(x => x.ID.toString()===id.toString());
@@ -286,24 +339,88 @@ function prod_openEdit(id) {
   const modal = document.getElementById('prod_editModal');
   PROD_COLS.forEach(col => {
     const input = modal.querySelector(`[name="${col}"]`);
-    if(input && o && o[col]) input.value = o[col];
+    if(!input) return;
+    if(input.tagName === 'SELECT') prod_setSelect(input, o && o[col]);
+    else input.value = (o && o[col]) || '';
   });
+
+  // An order that has already gone has nowhere left to be sent.
+  const gone = !!(o && o.Dispatch_Status && o.Dispatch_Status.trim());
+  document.getElementById('prod_editDispatchBtn').classList.toggle('d-none', gone);
+
   new bootstrap.Modal(modal).show();
 }
-async function prod_submitUpdate() {
+// Whatever the modal currently shows, written back. Returns false if it did
+// not save, so callers can stop rather than carry on with stale stages.
+async function prod_saveEdit() {
   const modal = document.getElementById('prod_editModal');
   const updateData = { userEmail: APP_USER.email };
   PROD_COLS.forEach(col => {
     const input = modal.querySelector(`[name="${col}"]`);
     if(input) updateData[col] = input.value;
   });
-  showLoading(true);
   try {
     const res = await fetch(`/api/dashboards/production/${prod_editId}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(updateData)});
     const json = await res.json();
+    if(json.success) return true;
+    showToast('error', json.error);
+    return false;
+  } catch(e) { showToast('error','Server error.'); return false; }
+}
+
+async function prod_submitUpdate() {
+  showLoading(true);
+  const saved = await prod_saveEdit();
+  showLoading(false);
+  if(!saved) return;
+  bootstrap.Modal.getInstance(document.getElementById('prod_editModal')).hide();
+  showToast('success','Updated!');
+  fetchProductionData();
+}
+
+// Marking the last stage done and sending the order on are one thought, so
+// they are one button. It saves first - otherwise the stage just ticked would
+// be thrown away - and then judges readiness on what is on screen, not on the
+// copy the board was drawn from.
+async function prod_dispatchFromEdit() {
+  const modal = document.getElementById('prod_editModal');
+  const id = prod_editId;
+
+  showLoading(true);
+  const saved = await prod_saveEdit();
+  showLoading(false);
+  if(!saved) return;
+
+  const order = Object.assign({}, prod_data.find(x => x.ID.toString() === id.toString()));
+  PROD_COLS.forEach(col => {
+    const input = modal.querySelector(`[name="${col}"]`);
+    if(input) order[col] = input.value;
+  });
+
+  const pending = prod_pendingStages(order);
+  const confirmed = await Swal.fire({
+    title: pending.length ? 'Some stages are not finished' : 'Ready for Dispatch?',
+    html: pending.length
+      ? `Order <b>${id}</b> still shows <b>${pending.join(', ')}</b> unfinished.<br>Send it to the Dispatch Dashboard anyway?`
+      : `Order <b>${id}</b> will leave the Production queue and move to the <b>Dispatch Dashboard</b>, where its invoice and tracking number are filled in.`,
+    icon: pending.length ? 'warning' : 'question',
+    showCancelButton: true,
+    confirmButtonText: pending.length ? 'Send anyway' : 'Move to Dispatch',
+    confirmButtonColor: pending.length ? '#dc3545' : '#198754',
+  });
+  if(!confirmed.isConfirmed) { fetchProductionData(); return; }
+
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/dashboards/production/${id}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({Dispatch_Status:'Ready',userEmail:APP_USER.email})});
+    const json = await res.json();
     showLoading(false);
-    if(json.success) { bootstrap.Modal.getInstance(modal).hide(); showToast('success','Updated!'); fetchProductionData(); }
-    else showToast('error', json.error);
+    if(json.success) {
+      prod_selected.delete(id.toString());
+      bootstrap.Modal.getInstance(modal).hide();
+      showToast('success','Moved to Dispatch Dashboard.');
+      fetchProductionData();
+    } else showToast('error', json.error);
   } catch(e) { showLoading(false); showToast('error','Server error.'); }
 }
 async function prod_markDispatch(id) {
@@ -334,10 +451,10 @@ function prod_openBulkModal() {
     const o = prod_data.find(x=>x.ID.toString()===id.toString());
     if(o) tbody.insertAdjacentHTML('beforeend',`<tr class="prod_bulk_row" data-id="${id}">
       <td class="fw-bold">${id}</td>
-      <td>${prod_mkSel('Guest_Name',o.Guest_Name,['No','Pending','Received','Printed'])}</td>
-      <td>${prod_mkSel('Paper_Cutting',o.Paper_Cutting,['Pending','Done'])}</td>
-      <td>${prod_mkSel('Dye_Status',o.Dye_Status,['Dye Status','NO DIE','DIE NOT RECEIVED','DIE CUTTING DONE','DIE SENT'])}</td>
-      <td>${prod_mkSel('Block_Status',o.Block_Status,['Block Status','NO BLOCK','BLOCK NOT RECEIVED','BLOCK PRINTED','BLOCK SENT'])}</td>
+      <td>${prod_mkSel('Guest_Name',o.Guest_Name,['Pending','No','GNA Pending','Received','Printed'])}</td>
+      <td>${prod_mkSel('Paper_Cutting',o.Paper_Cutting,['Pending','Done','Temporary Out of Stock','Permanent Out of Stock'])}</td>
+      <td>${prod_mkSel('Dye_Status',o.Dye_Status,['Pending','NO DIE','DIE NOT RECEIVED','DIE CUTTING DONE','DIE SENT'])}</td>
+      <td>${prod_mkSel('Block_Status',o.Block_Status,['Pending','NO BLOCK','BLOCK NOT RECEIVED','BLOCK PRINTED','BLOCK SENT'])}</td>
       <td>${prod_mkSel('Printing',o.Printing,['Pending','Done'])}</td>
       <td>${prod_mkSel('Edges',o.Edges,['Pending','No','Done'])}</td>
       <td>${prod_mkSel('Laser_Cutting',o.Laser_Cutting,['Pending','Done','No'])}</td>
@@ -348,7 +465,11 @@ function prod_openBulkModal() {
   new bootstrap.Modal(document.getElementById('prod_bulkModal')).show();
 }
 function prod_mkSel(name, cur, opts) {
-  return `<select class="form-select form-select-sm prod_bulk_input" data-field="${name}">${opts.map(o=>`<option value="${o}" ${cur===o?'selected':''}>${o}</option>`).join('')}</select>`;
+  // Same rule as the single-order modal: an answer the list does not carry
+  // still has to be selectable, or bulk update would quietly flatten it.
+  const v = prod_stageValue(cur);
+  const list = opts.indexOf(v) < 0 && v ? opts.concat([v]) : opts;
+  return `<select class="form-select form-select-sm prod_bulk_input" data-field="${name}">${list.map(o=>`<option value="${o}" ${v===o?'selected':''}>${o}</option>`).join('')}</select>`;
 }
 async function prod_submitBulk() {
   const rows = document.querySelectorAll('.prod_bulk_row');

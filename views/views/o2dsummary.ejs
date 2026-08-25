@@ -6,15 +6,54 @@ document.getElementById('analyticsRoot').innerHTML = `
   <!-- Header -->
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-chart-pie me-2"></i>O2D Analytics Summary</h3>
-    <button class="btn btn-outline-dark smooth-ui" onclick="refreshBoard(this, fetchAnalytics, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary smooth-ui" onclick="anOpenQuick('reorder')"><i class="fas fa-rotate-left me-1"></i> Mark Re-order</button>
+      <button class="btn btn-warning smooth-ui text-dark" onclick="anOpenQuick('delay')"><i class="fas fa-clock me-1"></i> Reason For Delay</button>
+      <button class="btn btn-outline-dark smooth-ui" onclick="refreshBoard(this, fetchAnalytics, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
+  </div>
+
+  <!-- QUICK ENTRY MODAL -->
+  <div class="modal fade" id="an_quickModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="an_quickTitle">Mark Re-order</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="an_quickError" class="alert alert-danger py-2 small d-none"></div>
+        <div class="mb-3">
+          <label class="form-label fw-bold text-dark">Order ID</label>
+          <input list="an_orderList" id="an_quickOrder" class="form-control form-combo" placeholder="K-159756" autocomplete="off" oninput="anQuickLookup()">
+          <datalist id="an_orderList"></datalist>
+          <div class="form-text" id="an_quickFound">Type or pick an order.</div>
+        </div>
+        <div class="mb-3 d-none" id="an_quickStatusBox">
+          <label class="form-label fw-bold text-dark">Mark as</label>
+          <select id="an_quickStatus" class="form-select">
+            <option value="Reorder">Reorder</option>
+            <option value="Reprint">Reprint</option>
+            <option value="Sample">Sample</option>
+          </select>
+        </div>
+        <div class="mb-3 d-none" id="an_quickReasonBox">
+          <label class="form-label fw-bold text-dark">Reason For Delay</label>
+          <textarea id="an_quickReason" class="form-control" rows="3" placeholder="Why is this order running late?"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success" id="an_quickSave" onclick="anQuickSave()"><i class="fas fa-save me-1"></i> Save</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div></div>
   </div>
 
   <!-- KPI CARDS -->
   <div class="row g-3 mb-4" id="kpi_row">
-    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #0d6efd;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Total Orders</h6><h3 class="fw-bold text-primary mb-0" id="kpi_total">--</h3></div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #198754;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Dispatched</h6><h3 class="fw-bold text-success mb-0" id="kpi_dispatched">--</h3></div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #ffc107;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">In Progress</h6><h3 class="fw-bold text-warning mb-0" id="kpi_inprogress">--</h3></div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #dc3545;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Cancelled</h6><h3 class="fw-bold text-danger mb-0" id="kpi_cancelled">--</h3></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #0d6efd;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Total Orders</h6><h3 class="fw-bold text-primary mb-0" id="kpi_total">--</h3><div class="kpi-today mt-2 pt-2 border-top d-flex justify-content-between align-items-baseline"><span class="text-muted small">Today</span><span class="fw-bold text-primary" id="kpi_today_total">--</span></div></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #198754;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Dispatched</h6><h3 class="fw-bold text-success mb-0" id="kpi_dispatched">--</h3><div class="kpi-today mt-2 pt-2 border-top d-flex justify-content-between align-items-baseline"><span class="text-muted small">Today</span><span class="fw-bold text-success" id="kpi_today_dispatched">--</span></div></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #ffc107;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">In Progress</h6><h3 class="fw-bold text-warning mb-0" id="kpi_inprogress">--</h3><div class="kpi-today mt-2 pt-2 border-top d-flex justify-content-between align-items-baseline"><span class="text-muted small">Today</span><span class="fw-bold text-warning" id="kpi_today_inprogress">--</span></div></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #dc3545;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Cancelled</h6><h3 class="fw-bold text-danger mb-0" id="kpi_cancelled">--</h3><div class="kpi-today mt-2 pt-2 border-top d-flex justify-content-between align-items-baseline"><span class="text-muted small">Today</span><span class="fw-bold text-danger" id="kpi_today_cancelled">--</span></div></div></div></div>
   </div>
 
   <!-- FILTERS -->
@@ -119,7 +158,135 @@ async function fetchAnalytics() {
     return an_all.length;
   } catch(e) { console.error(e); throw e; }
 }
+// This board opens on the current month, first to today. Set the range before
+// the first fetch so the numbers are never briefly the whole eight thousand
+// and then this month's few hundred. Clear puts every order back.
+document.getElementById('an_start').value = monthStartValue();
+document.getElementById('an_end').value = todayValue();
+
 fetchAnalytics().catch(() => {});
+
+// ── QUICK ENTRY ──
+// Two things people were opening the Production board to do, from the report
+// where they noticed the problem. Both write one field and nothing else.
+var an_quickMode = 'reorder';
+
+function anOpenQuick(mode) {
+  an_quickMode = mode;
+  const reorder = mode === 'reorder';
+
+  document.getElementById('an_quickTitle').textContent = reorder ? 'Mark Re-order' : 'Reason For Delay';
+  document.getElementById('an_quickStatusBox').classList.toggle('d-none', !reorder);
+  document.getElementById('an_quickReasonBox').classList.toggle('d-none', reorder);
+  document.getElementById('an_quickError').classList.add('d-none');
+  document.getElementById('an_quickOrder').value = '';
+  document.getElementById('an_quickReason').value = '';
+  document.getElementById('an_quickStatus').value = 'Reorder';
+  document.getElementById('an_quickFound').textContent = 'Type or pick an order.';
+  document.getElementById('an_quickFound').className = 'form-text';
+
+  // The board already holds every order, so the list costs nothing and saves
+  // typing an ID wrong.
+  const list = document.getElementById('an_orderList');
+  list.innerHTML = '';
+  an_all.slice(0, 400).forEach(function (o) {
+    const opt = document.createElement('option');
+    opt.value = o.ID;
+    list.appendChild(opt);
+  });
+
+  new bootstrap.Modal(document.getElementById('an_quickModal')).show();
+}
+
+// Naming the order back to the reader is the difference between "K-159756"
+// and "K-159756 — Phyllis Roth / BAUM", which is what catches a typo.
+function anQuickLookup() {
+  const id = (document.getElementById('an_quickOrder').value || '').trim();
+  const found = document.getElementById('an_quickFound');
+  if (!id) {
+    found.textContent = 'Type or pick an order.';
+    found.className = 'form-text';
+    return;
+  }
+  const o = an_all.find(function (x) { return String(x.ID).toLowerCase() === id.toLowerCase(); });
+  if (!o) {
+    found.textContent = 'No order with that ID on this board.';
+    found.className = 'form-text text-danger';
+    return;
+  }
+  found.textContent = (o.Dealer || '-') + ' / ' + (o.Client || '-')
+    + ' — currently ' + (o.ClientStatus || 'no client status');
+  found.className = 'form-text text-success';
+}
+
+async function anQuickSave() {
+  const id = (document.getElementById('an_quickOrder').value || '').trim();
+  const err = document.getElementById('an_quickError');
+  const fail = function (message) {
+    err.textContent = message;
+    err.classList.remove('d-none');
+  };
+  err.classList.add('d-none');
+
+  if (!id) return fail('Enter the order ID.');
+
+  const body = an_quickMode === 'reorder'
+    ? { clientStatus: document.getElementById('an_quickStatus').value }
+    : { reasonForDelay: (document.getElementById('an_quickReason').value || '').trim() };
+
+  if (an_quickMode === 'delay' && !body.reasonForDelay) return fail('Write the reason for the delay.');
+
+  const btn = document.getElementById('an_quickSave');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/dashboards/quick/' + encodeURIComponent(id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (!json.success) return fail(json.error || 'Could not save.');
+
+    bootstrap.Modal.getInstance(document.getElementById('an_quickModal')).hide();
+    showToast('success', an_quickMode === 'reorder' ? 'Order marked.' : 'Reason saved.');
+    fetchAnalytics().catch(function () {});
+  } catch (e) {
+    fail('Network error. Please try again.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── TODAY ──
+// The number under each card. It ignores every filter above it on purpose:
+// the range answers "how are we doing", this answers "what has happened
+// today", and the two must not move together.
+async function anFetchToday() {
+  const box = document.getElementById('kpi_today_total');
+  if (!box) return;                       // the board has been navigated away from
+  const res = await fetch('/api/dashboards/today');
+  const j = await res.json();
+  if (!j.success) return;
+  document.getElementById('kpi_today_total').textContent = j.total;
+  document.getElementById('kpi_today_dispatched').textContent = j.dispatched;
+  document.getElementById('kpi_today_inprogress').textContent = j.inProgress;
+  document.getElementById('kpi_today_cancelled').textContent = j.cancelled;
+}
+
+// Switching tabs rebuilds this view, so an old timer would still be running
+// and a second one would be added on top. Clear ours before starting, and let
+// it stop itself once the cards it writes to are gone.
+if (window.__anTodayTimer) clearInterval(window.__anTodayTimer);
+window.__anTodayTimer = setInterval(function () {
+  if (!document.getElementById('kpi_today_total')) {
+    clearInterval(window.__anTodayTimer);
+    window.__anTodayTimer = null;
+    return;
+  }
+  anFetchToday().catch(function () {});
+}, 120000);
+
+anFetchToday().catch(() => {});
 
 function an_populateFilters(data) {
   const designers = new Set(), dealers = new Set(), couriers = new Set();
@@ -154,9 +321,9 @@ function anApplyFilters() {
       const raw = o.RawDate || o.Date;
       const d = raw ? new Date(raw) : null;
       if(d && !isNaN(d)) {
-        d.setHours(0,0,0,0);
-        if(startV && d < new Date(startV)) dm = false;
-        if(endV && d > new Date(endV)) dm = false;
+        const s = dayStart(startV), e = dayEnd(endV);
+        if(s && d < s) dm = false;
+        if(e && d > e) dm = false;
       } else dm = false;
     }
     return dm &&
