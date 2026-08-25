@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS orders (
   -- Further Production
   printing VARCHAR(50),
   printing_actual_time DATETIME,
+  printing_type VARCHAR(60),
   edges VARCHAR(50),
   edges_actual_time DATETIME,
   

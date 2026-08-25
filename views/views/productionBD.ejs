@@ -69,7 +69,7 @@ document.getElementById('prodRoot').innerHTML = `
         <div class="col-md-4"><label class="small fw-bold">Paper Cutting</label><select class="form-select" name="Paper_Cutting"><option value="Pending">Pending</option><option value="Done">Done</option><option value="Temporary Out of Stock">Temporary Out of Stock</option><option value="Permanent Out of Stock">Permanent Out of Stock</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Dye Status</label><select class="form-select" name="Dye_Status"><option value="Pending">Pending</option><option value="NO DIE">NO DIE</option><option value="DIE NOT RECEIVED">DIE NOT RECEIVED</option><option value="DIE CUTTING DONE">DIE CUTTING DONE</option><option value="DIE SENT">DIE SENT</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Block Status</label><select class="form-select" name="Block_Status"><option value="Pending">Pending</option><option value="NO BLOCK">NO BLOCK</option><option value="BLOCK NOT RECEIVED">BLOCK NOT RECEIVED</option><option value="BLOCK PRINTED">BLOCK PRINTED</option><option value="BLOCK SENT">BLOCK SENT</option></select></div>
-        <div class="col-md-4"><label class="small fw-bold">Printing</label><select class="form-select" name="Printing"><option value="Pending">Pending</option><option value="Done">Done</option></select></div>
+        <div class="col-md-4"><label class="small fw-bold">Printing</label><select class="form-select" name="Printing"><option value="Pending">Pending</option><option value="Done">Done</option></select></div><div class="col-md-4"><label class="small fw-bold">Printing Type</label><select class="form-select" name="Printing_Type"><option value="">Not set</option><option value="Bell Press">Bell Press</option><option value="UV">UV</option><option value="Thermography">Thermography</option><option value="Letterpress">Letterpress</option><option value="Foil Emboss">Foil Emboss</option><option value="Deboss">Deboss</option><option value="Engraved Letterpress">Engraved Letterpress</option><option value="Digital">Digital</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Edges</label><select class="form-select" name="Edges"><option value="Pending" selected>Pending</option><option value="No">No</option><option value="Done">Done</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Laser Cutting</label><select class="form-select" name="Laser_Cutting"><option value="Pending">Pending</option><option value="Done">Done</option><option value="No">No</option></select></div>
         <div class="col-md-4"><label class="small fw-bold">Output</label><select class="form-select" name="Output"><option value="Pending">Pending</option><option value="Done">Done</option><option value="No">No</option></select></div>
@@ -86,7 +86,7 @@ document.getElementById('prodRoot').innerHTML = `
 <div class="modal fade" id="prod_bulkModal" tabindex="-1">
   <div class="modal-dialog modal-xl"><div class="modal-content">
     <div class="modal-header bg-primary text-white"><h5 class="modal-title">Bulk Production Update</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body p-0"><div class="table-responsive" style="max-height:500px;"><table class="table table-bordered align-middle mb-0"><thead class="sticky-top"><tr><th style="background:#fff;color:#000;">ID</th><th style="background:#fff;color:#000;">Guest</th><th style="background:#fff;color:#000;">Paper</th><th style="background:#fff;color:#000;">Dye</th><th style="background:#fff;color:#000;">Block</th><th style="background:#fff;color:#000;">Print</th><th style="background:#fff;color:#000;">Edges</th><th style="background:#fff;color:#000;">Laser</th><th style="background:#fff;color:#000;">Output</th><th style="background:#fff;color:#000;">Assembly</th></tr></thead><tbody id="prod_bulkBody" class="bg-white"></tbody></table></div></div>
+    <div class="modal-body p-0"><div class="table-responsive" style="max-height:500px;"><table class="table table-bordered align-middle mb-0"><thead class="sticky-top"><tr><th style="background:#fff;color:#000;">ID</th><th style="background:#fff;color:#000;">Guest</th><th style="background:#fff;color:#000;">Paper</th><th style="background:#fff;color:#000;">Dye</th><th style="background:#fff;color:#000;">Block</th><th style="background:#fff;color:#000;">Print</th><th style="background:#fff;color:#000;">Print Type</th><th style="background:#fff;color:#000;">Edges</th><th style="background:#fff;color:#000;">Laser</th><th style="background:#fff;color:#000;">Output</th><th style="background:#fff;color:#000;">Assembly</th></tr></thead><tbody id="prod_bulkBody" class="bg-white"></tbody></table></div></div>
     <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="prod_btnBulk" onclick="prod_submitBulk()"><i class="fas fa-save me-1"></i> Update Selected</button></div>
   </div></div>
 </div>
@@ -96,7 +96,7 @@ var prod_data = [], prod_filtered = [], prod_selected = new Set(), prod_editId =
 // var, not const: loadPage() re-runs this whole block every time the tab is
 // opened, and a repeat `const` is a parse error that kills the script before it
 // can fill #prodRoot — leaving the page blank until a full reload.
-var PROD_COLS = ['Guest_Name','Paper_Cutting','Dye_Status','Block_Status','Printing','Edges','Laser_Cutting','Output','Card_Assembly','Remark','Reason_For_Delay'];
+var PROD_COLS = ['Guest_Name','Paper_Cutting','Dye_Status','Block_Status','Printing','Printing_Type','Edges','Laser_Cutting','Output','Card_Assembly','Remark','Reason_For_Delay'];
 
 async function fetchProductionData() {
   try {
@@ -322,8 +322,13 @@ function prod_stageValue(raw) {
 // orders, "No Block" on 1885, "No Guest List" on 1758. Setting a value a
 // select does not have leaves it blank, and saving then wrote that blank back
 // over a real answer. Give the box the option it is missing instead.
-function prod_setSelect(sel, raw) {
-  const v = prod_stageValue(raw);
+// Printing Type is not a stage: an empty one means nobody has said which
+// press was used, not that the work is Pending. Everything else keeps the
+// stage reading.
+var PROD_NOT_A_STAGE = ['Printing_Type'];
+
+function prod_setSelect(sel, raw, plain) {
+  const v = plain ? String(raw || '').trim() : prod_stageValue(raw);
   if(v && !Array.prototype.some.call(sel.options, o => o.value === v)) {
     const opt = document.createElement('option');
     opt.value = v; opt.textContent = v;
@@ -340,7 +345,7 @@ function prod_openEdit(id) {
   PROD_COLS.forEach(col => {
     const input = modal.querySelector(`[name="${col}"]`);
     if(!input) return;
-    if(input.tagName === 'SELECT') prod_setSelect(input, o && o[col]);
+    if(input.tagName === 'SELECT') prod_setSelect(input, o && o[col], PROD_NOT_A_STAGE.indexOf(col) >= 0);
     else input.value = (o && o[col]) || '';
   });
 
@@ -456,6 +461,7 @@ function prod_openBulkModal() {
       <td>${prod_mkSel('Dye_Status',o.Dye_Status,['Pending','NO DIE','DIE NOT RECEIVED','DIE CUTTING DONE','DIE SENT'])}</td>
       <td>${prod_mkSel('Block_Status',o.Block_Status,['Pending','NO BLOCK','BLOCK NOT RECEIVED','BLOCK PRINTED','BLOCK SENT'])}</td>
       <td>${prod_mkSel('Printing',o.Printing,['Pending','Done'])}</td>
+      <td>${prod_mkSel('Printing_Type',o.Printing_Type,["Bell Press","UV","Thermography","Letterpress","Foil Emboss","Deboss","Engraved Letterpress","Digital"])}</td>
       <td>${prod_mkSel('Edges',o.Edges,['Pending','No','Done'])}</td>
       <td>${prod_mkSel('Laser_Cutting',o.Laser_Cutting,['Pending','Done','No'])}</td>
       <td>${prod_mkSel('Output',o.Output,['Pending','Done','No'])}</td>
@@ -467,7 +473,7 @@ function prod_openBulkModal() {
 function prod_mkSel(name, cur, opts) {
   // Same rule as the single-order modal: an answer the list does not carry
   // still has to be selectable, or bulk update would quietly flatten it.
-  const v = prod_stageValue(cur);
+  const v = PROD_NOT_A_STAGE.indexOf(name) >= 0 ? String(cur || '').trim() : prod_stageValue(cur);
   const list = opts.indexOf(v) < 0 && v ? opts.concat([v]) : opts;
   return `<select class="form-select form-select-sm prod_bulk_input" data-field="${name}">${list.map(o=>`<option value="${o}" ${v===o?'selected':''}>${o}</option>`).join('')}</select>`;
 }

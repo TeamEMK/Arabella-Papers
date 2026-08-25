@@ -24,6 +24,7 @@ const FIELDS = {
   dye_status: 'Dye Status',
   block_status: 'Block Status',
   printing: 'Printing',
+  printing_type: 'Printing Type',
   edges: 'Edges',
   laser_cutting: 'Laser Cutting',
   output: 'Output',

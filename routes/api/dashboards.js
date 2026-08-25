@@ -172,6 +172,7 @@ router.get('/production', requireLogin, async (req, res) => {
       Dye_Status: r.dye_status || '',
       Block_Status: r.block_status || '',
       Printing: r.printing || '',
+      Printing_Type: r.printing_type || '',
       Edges: r.edges || '',
       Laser_Cutting: r.laser_cutting || '',
       Output: r.output || '',
@@ -209,6 +210,7 @@ router.put('/production/:id', requireLogin, async (req, res) => {
       Guest_Name: ['guest_name', 'guest_name_actual_time'],
       Paper_Cutting: ['paper_cutting', 'paper_cutting_actual_time'],
       Printing: ['printing', 'printing_actual_time'],
+      Printing_Type: ['printing_type', null],
       Edges: ['edges', 'edges_actual_time'],
       Card_Assembly: ['card_assembly', 'card_assembly_actual_time'],
       Remark: ['remark', 'remark_actual_time'],
@@ -298,6 +300,7 @@ async function updateProductionOrder(orderId, u, user) {
     Guest_Name: 'guest_name',
     Paper_Cutting: 'paper_cutting',
     Printing: 'printing',
+    Printing_Type: 'printing_type',
     Edges: 'edges',
     Card_Assembly: 'card_assembly',
   };
