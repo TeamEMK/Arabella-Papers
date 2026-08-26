@@ -406,6 +406,25 @@ function renderDesignerChart() {
   renderBarChart('chart_designStatus', sorted.map(x => x[0]), sorted.map(x => x[1]));
 }
 
+// Chart.js draws no value on a bar, and reading a height off the gridlines
+// is guesswork once the bars get short. Print the number above each one.
+var AN_BAR_TOTALS = {
+  id: 'anBarTotals',
+  afterDatasetsDraw(chart) {
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.font = 'bold 11px system-ui, sans-serif';
+    ctx.fillStyle = '#212529';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    chart.getDatasetMeta(0).data.forEach((bar, i) => {
+      const v = chart.data.datasets[0].data[i];
+      if(v) ctx.fillText(v, bar.x, bar.y - 4);
+    });
+    ctx.restore();
+  },
+};
+
 function renderBarChart(canvasId, labels, values) {
   if(an_charts[canvasId]) {
     try { an_charts[canvasId].destroy(); } catch(e) {}
@@ -417,8 +436,10 @@ function renderBarChart(canvasId, labels, values) {
   an_charts[canvasId] = new Chart(canvas, {
     type: 'bar',
     data: { labels, datasets: [{ data: values, backgroundColor: '#0d6efd', borderRadius: 4 }] },
+    plugins: [AN_BAR_TOTALS],
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 18 } },
       plugins: { legend: { display: false } },
       scales: {
         // Whole designs only - half a design is not a thing.
