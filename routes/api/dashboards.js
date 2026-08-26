@@ -158,10 +158,10 @@ router.get('/production', requireLogin, async (req, res) => {
           OR LOWER(IFNULL(dye_status, ''))     LIKE '%done%'
           OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
         )
-      -- Newest order first, by the date the order was taken. Sorting by the
-      -- approval date was tried and dropped: it put today's approvals on top,
-      -- but the office reads this board against the order date.
-      ORDER BY timestamp DESC, id DESC
+      -- Newest into production first. That is the approval date, not the
+      -- punch date: an order approved this morning may have been taken a
+      -- month ago, and the floor wants it at the top of their queue today.
+      ORDER BY COALESCE(actual_2, timestamp) DESC, id DESC
     `);
 
     const data = rows.map(r => ({

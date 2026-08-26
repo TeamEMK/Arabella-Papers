@@ -37,7 +37,7 @@ document.getElementById('prodRoot').innerHTML = `
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dispatch</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
-              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Order Date</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Production Date</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dealer</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Client</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Designer</th>
@@ -141,7 +141,7 @@ function prodApplyFilters() {
     if(startV || endV) {
       // Filter on the same date the column shows, or picking a day would
       // hide rows that are plainly in range.
-      const od = parseDMY(o.Timestamp);
+      const od = parseDMY(o.Production_Date);
       if(od) {
         const s = dayStart(startV), e = dayEnd(endV);
         if(s && od < s) dm = false;
@@ -212,7 +212,7 @@ function prod_rowHtml(o) {
       <td><div class="d-flex gap-1"><button class="btn btn-sm btn-info" onclick="prod_openView('${o.ID}')"><i class="fas fa-eye text-white"></i></button><button class="btn btn-sm btn-warning" onclick="prod_openEdit('${o.ID}')"><i class="fas fa-edit text-dark"></i></button></div></td>
       <td class="text-center">${readyBtn}</td>
       <td class="fw-bold">${o.ID}</td>
-      <td class="text-primary fw-bold">${o.Timestamp||''}</td>
+      <td class="text-primary fw-bold">${o.Production_Date||''}</td>
       <td>${o.Dealer_name||''}</td>
       <td>${o.Client_name||''}</td>
       <td><small class="text-muted">${o.Designer||''}</small></td>
