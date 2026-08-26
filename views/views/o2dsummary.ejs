@@ -76,7 +76,7 @@ document.getElementById('analyticsRoot').innerHTML = `
       <div class="card shadow-sm h-100">
         <div class="card-header text-dark fw-bold d-flex justify-content-between align-items-center gap-2">
           <span><i class="fas fa-palette me-2"></i>Designs by Designer</span>
-          <select id="an_designMonth" class="form-select form-select-sm w-auto" onchange="renderDesignerChart()"></select>
+          <div class="dropdown an-month-picker"><button class="btn btn-sm btn-light border dropdown-toggle" type="button" id="an_designMonthBtn" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false"></button><input type="hidden" id="an_designMonth"><ul class="dropdown-menu dropdown-menu-end an-month-menu" id="an_designMonthMenu"></ul></div>
         </div>
         <div class="card-body d-flex align-items-center justify-content-center" style="height:250px;"><canvas id="chart_designStatus"></canvas></div>
       </div>
@@ -91,7 +91,7 @@ document.getElementById('analyticsRoot').innerHTML = `
       <div class="card shadow-sm h-100">
         <div class="card-header text-dark fw-bold d-flex justify-content-between align-items-center gap-2">
           <span><i class="fas fa-shipping-fast me-2"></i>Dispatched</span>
-          <select id="an_dispatchMonth" class="form-select form-select-sm w-auto" onchange="renderDispatchChart()"></select>
+          <div class="dropdown an-month-picker"><button class="btn btn-sm btn-light border dropdown-toggle" type="button" id="an_dispatchMonthBtn" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false"></button><input type="hidden" id="an_dispatchMonth"><ul class="dropdown-menu dropdown-menu-end an-month-menu" id="an_dispatchMonthMenu"></ul></div>
         </div>
         <div class="card-body d-flex align-items-center justify-content-center position-relative" style="height:250px;">
           <canvas id="chart_dispatchStatus"></canvas>
@@ -376,18 +376,42 @@ function an_monthLabel(key) {
   return new Date(y, m - 1, 1).toLocaleString('en-GB', { month: 'long', year: 'numeric' });
 }
 
+// A plain <select> holding 29 months opens a popup taller than the card, and
+// Chrome flips it upward so it covers the filters above. The list has to stay
+// complete, so the control changes instead: a dropdown we own, capped in height
+// and scrolled, always hanging below its button. The chosen month still lives
+// in an input with the same id, so everything reading .value is unaffected.
+function an_fillMonthPicker(id, keys, current, onPick) {
+  const input = document.getElementById(id);
+  const btn = document.getElementById(id + 'Btn');
+  const menu = document.getElementById(id + 'Menu');
+  if(!input || !btn || !menu) return;
+
+  const chosen = keys.indexOf(input.value) >= 0 ? input.value : current;
+  input.value = chosen;
+  btn.textContent = an_monthLabel(chosen);
+  menu.innerHTML = keys.map(k =>
+    '<li><button type="button" class="dropdown-item' + (k === chosen ? ' active' : '') +
+    '" data-month="' + k + '">' + an_monthLabel(k) + '</button></li>').join('');
+
+  menu.onclick = function(e) {
+    const item = e.target.closest('[data-month]');
+    if(!item) return;
+    input.value = item.dataset.month;
+    btn.textContent = item.textContent;
+    menu.querySelectorAll('.dropdown-item').forEach(x => x.classList.toggle('active', x === item));
+    onPick();
+  };
+}
+
 function an_fillDesignMonths() {
-  const sel = document.getElementById('an_designMonth');
-  if(!sel) return;
   const keys = Array.from(new Set(an_all.map(o => an_designMonthKey(o.DesignDone)).filter(Boolean)))
     .sort().reverse();
 
   const current = todayValue().slice(0, 7);
   if(keys.indexOf(current) < 0) keys.unshift(current);
 
-  const chosen = sel.value;
-  sel.innerHTML = keys.map(k => '<option value="' + k + '">' + an_monthLabel(k) + '</option>').join('');
-  sel.value = keys.indexOf(chosen) >= 0 ? chosen : current;
+  an_fillMonthPicker('an_designMonth', keys, current, renderDesignerChart);
 }
 
 function renderDesignerChart() {
@@ -490,17 +514,13 @@ function renderCharts(data) {
 // an order that never went out never had a month - which is why the card is
 // titled Dispatched rather than Dispatch Status.
 function an_fillDispatchMonths() {
-  const sel = document.getElementById('an_dispatchMonth');
-  if(!sel) return;
   const keys = Array.from(new Set(an_all.map(o => an_designMonthKey(o.DispatchDone)).filter(Boolean)))
     .sort().reverse();
 
   const current = todayValue().slice(0, 7);
   if(keys.indexOf(current) < 0) keys.unshift(current);
 
-  const chosen = sel.value;
-  sel.innerHTML = keys.map(k => '<option value="' + k + '">' + an_monthLabel(k) + '</option>').join('');
-  sel.value = keys.indexOf(chosen) >= 0 ? chosen : current;
+  an_fillMonthPicker('an_dispatchMonth', keys, current, renderDispatchChart);
 }
 
 function renderDispatchChart() {
@@ -640,4 +660,8 @@ function renderTable(data) {
 <style>
 .kpi-card { border-radius: 8px; }
 .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important; }
+/* Roughly eight months at a time, then scroll - a 29-month list left open
+   would be taller than the chart it belongs to. */
+.an-month-menu { max-height: 260px; overflow-y: auto; }
+.an-month-picker .btn { font-size: .875rem; padding: .25rem .5rem; font-weight: 400; }
 </style>
