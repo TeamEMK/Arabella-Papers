@@ -124,6 +124,7 @@ document.getElementById('analyticsRoot').innerHTML = `
       <div class="table-responsive" style="max-height:300px; overflow-y:auto;">
         <table class="table table-hover table-sm mb-0 text-nowrap">
           <thead class="table-dark"><tr>
+            <th style="position:sticky;top:0;background:#212529;color:white;">#</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">Date</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">ID</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">Dealer</th>
@@ -136,7 +137,7 @@ document.getElementById('analyticsRoot').innerHTML = `
             <th style="position:sticky;top:0;background:#212529;color:white;">Courier</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">Docket</th>
           </tr></thead>
-          <tbody id="an_tbody"><tr><td colspan="11" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="an_tbody"><tr><td colspan="12" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -443,7 +444,7 @@ function renderTable(data) {
   if(badge) badge.textContent = data.length + ' orders';
   if(!data.length) { tbody.innerHTML = '<tr><td colspan="11" class="text-center">No data found.</td></tr>'; return; }
 
-  tbody.innerHTML = data.map(o => {
+  tbody.innerHTML = data.map((o, i) => {
     const ds = o.DesignStatus||'';
     const cs = o.ClientStatus||'';
     const disp = o.DispatchStatus||'';
@@ -451,6 +452,7 @@ function renderTable(data) {
     const csBadge = cs ? `<span class="badge ${cs.toLowerCase().includes('final')?'bg-success':cs.toLowerCase().includes('modification')?'bg-warning':'bg-secondary'}">${cs}</span>` : '';
     const dispBadge = disp ? `<span class="badge bg-info text-dark">${disp}</span>` : '<span class="text-muted small">—</span>';
     return `<tr>
+      <td>${i + 1}</td>
       <td><small class="text-muted">${o.Date||''}</small></td>
       <td class="fw-bold">${o.ID}</td>
       <td>${o.Dealer||''}</td>

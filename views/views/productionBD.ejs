@@ -34,6 +34,7 @@ document.getElementById('prodRoot').innerHTML = `
           <thead class="table-dark">
             <tr>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;"><input type="checkbox" id="prod_selectAll" onclick="prodToggleSelectAll(this)"></th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">#</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dispatch</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
@@ -49,7 +50,7 @@ document.getElementById('prodRoot').innerHTML = `
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Production Stages</th>
             </tr>
           </thead>
-          <tbody id="prod_tbody"><tr><td colspan="14" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="prod_tbody"><tr><td colspan="15" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -197,11 +198,11 @@ function prod_renderNextBatch() {
   const tbody = document.getElementById('prod_tbody');
   if(!tbody) return;
   const batch = prod_display.slice(prod_shown, prod_shown + PROD_BATCH);
-  tbody.insertAdjacentHTML('beforeend', batch.map(prod_rowHtml).join(''));
+  tbody.insertAdjacentHTML('beforeend', batch.map((o, i) => prod_rowHtml(o, prod_shown + i + 1)).join(''));
   prod_shown += batch.length;
 }
 
-function prod_rowHtml(o) {
+function prod_rowHtml(o, sr) {
   {
     const isChecked = prod_selected.has(o.ID.toString()) ? 'checked' : '';
     const readyBtn = prod_readyCell(o);
@@ -209,6 +210,7 @@ function prod_rowHtml(o) {
     const clientBadge = prod_getClientBadge(o.Design_Approval_Status_From_Client);
     return `<tr>
       <td><input type="checkbox" class="prod_checkbox" value="${o.ID}" ${isChecked} onchange="prod_handleCheck('${o.ID}',this.checked)"></td>
+      <td>${sr}</td>
       <td><div class="d-flex gap-1"><button class="btn btn-sm btn-info" onclick="prod_openView('${o.ID}')"><i class="fas fa-eye text-white"></i></button><button class="btn btn-sm btn-warning" onclick="prod_openEdit('${o.ID}')"><i class="fas fa-edit text-dark"></i></button></div></td>
       <td class="text-center">${readyBtn}</td>
       <td class="fw-bold">${o.ID}</td>

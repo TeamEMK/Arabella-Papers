@@ -37,6 +37,7 @@ document.getElementById('tillApprovalRoot').innerHTML = `
           <thead class="table-dark">
             <tr>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;"><input type="checkbox" id="ta_selectAll" onclick="taToggleSelectAll(this)"></th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">#</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Time Stamp</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Actual Date</th>
@@ -47,7 +48,7 @@ document.getElementById('tillApprovalRoot').innerHTML = `
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Client Approval Status</th>
             </tr>
           </thead>
-          <tbody id="ta_tbody"><tr><td colspan="9" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="ta_tbody"><tr><td colspan="10" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -172,7 +173,7 @@ function ta_renderNextBatch() {
   const tbody = document.getElementById('ta_tbody');
   if(!tbody) return;
   const batch = ta_display.slice(ta_shown, ta_shown + TA_BATCH);
-  tbody.insertAdjacentHTML('beforeend', batch.map(ta_rowHtml).join(''));
+  tbody.insertAdjacentHTML('beforeend', batch.map((o, i) => ta_rowHtml(o, ta_shown + i + 1)).join(''));
   ta_shown += batch.length;
 }
 
@@ -185,12 +186,13 @@ function ta_attachScroll() {
   });
 }
 
-function ta_rowHtml(o) {
+function ta_rowHtml(o, sr) {
   {
     const badge = ta_getStatusBadge(o.Design_Approval_Status_From_Client);
     const isChecked = ta_selected.has(o.ID.toString()) ? 'checked' : '';
     return `<tr>
       <td><input type="checkbox" class="ta_checkbox" value="${o.ID}" ${isChecked} onchange="ta_handleCheck('${o.ID}',this.checked)"></td>
+      <td>${sr}</td>
       <td>
         <button class="btn btn-sm btn-info me-1" onclick="ta_openView('${o.ID}')"><i class="fas fa-eye"></i></button>
         <button class="btn btn-sm btn-warning" onclick="ta_openEdit('${o.ID}')"><i class="fas fa-edit"></i></button>
