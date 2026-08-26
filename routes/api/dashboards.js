@@ -131,15 +131,17 @@ router.get('/production', requireLogin, async (req, res) => {
     const isAuthorized = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' || role.includes('Production Manager');
     if (!isAuthorized) return res.json({ success: true, data: [] });
 
-    // An order still at "Proofing Done" is with the client, not with the
-    // floor, so it is not production's work yet - unless the floor has
-    // already started it.
+    // An order the client has not signed off is not production's work yet:
+    // "Proofing Done" means it is sitting with the client, and a blank means
+    // it has not even been sent - an order punched an hour ago, design still
+    // to do. Neither belongs on the floor's queue.
     //
-    // That exception is the whole argument. The office records the approval
+    // The exception is the whole argument. The office records the approval
     // late if at all, and 1296 orders sit at "Proofing Done" with paper cut,
     // printing or assembly done. Excluding on the approval alone would take
     // those off the board while the stock is in the building, which is what
-    // the team objected to the first time this gate went on.
+    // the team objected to the first time this gate went on. So an order the
+    // floor has already started stays, whatever the approval column says.
     const [rows] = await db.query(`
       SELECT * FROM orders
       WHERE is_deleted = 0
@@ -149,7 +151,7 @@ router.get('/production', requireLogin, async (req, res) => {
         AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
         AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
         AND (
-          TRIM(IFNULL(design_approval_status_from_client, '')) <> 'Proofing Done'
+          TRIM(IFNULL(design_approval_status_from_client, '')) NOT IN ('Proofing Done', '')
           OR LOWER(IFNULL(paper_cutting, ''))  LIKE '%done%'
           OR LOWER(IFNULL(printing, ''))       LIKE '%done%'
           OR LOWER(IFNULL(card_assembly, ''))  LIKE '%done%'
