@@ -158,16 +158,21 @@ router.get('/production', requireLogin, async (req, res) => {
           OR LOWER(IFNULL(dye_status, ''))     LIKE '%done%'
           OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
         )
-      -- Newest order first. Sorting by id gave nearly the same list, because
-      -- ids happen to run with time - but the board is read by date, so it
-      -- says date.
-      ORDER BY timestamp DESC, id DESC
+      -- Newest into production first, which is the approval date, not the
+      -- punch date. An order approved this morning was punched a fortnight
+      -- ago; sorting by the punch date buried today's work halfway down the
+      -- board and it read as missing.
+      ORDER BY COALESCE(actual_2, timestamp) DESC, id DESC
     `);
 
     const data = rows.map(r => ({
       ID: r.order_id,
       Timestamp: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
       Actual_Date: r.actual_2 ? new Date(r.actual_2).toLocaleString('en-GB', IST) : '',
+      // The date this order reached production. 88 of the orders on this board
+      // carry no approval date - imported rows, mostly - so they fall back to
+      // when they were punched rather than showing an empty cell.
+      Production_Date: new Date(r.actual_2 || r.timestamp).toLocaleString('en-GB', IST),
       Dealer_name: r.dealer_name,
       Client_name: r.client_name,
       Designer: r.india_designer || r.overseas_designer || '',
