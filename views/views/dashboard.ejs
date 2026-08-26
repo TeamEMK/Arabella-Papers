@@ -622,8 +622,13 @@ function renderNextBatch() {
     const statusBadge = getStatusBadge(order.Status);
     const row = tbody.insertRow();
     const isChecked = selectedOrderIds.has(order.ID.toString()) ? 'checked' : '';
-    const status = (order.Status || '').toLowerCase();
-    const isFinalized = status.includes('proofing') || status.includes('approved') || status.includes('cancelled') || status.includes('rejected');
+    // Judged on the design status, not the column on screen: that one now
+    // reads "Dispatched" once the parcel has gone, which would otherwise
+    // reopen the status form on an order that has left the building.
+    const status = (order.Design_Status || order.Status || '').toLowerCase();
+    const overall = (order.Status || '').toLowerCase();
+    const isFinalized = status.includes('proofing') || status.includes('approved') || status.includes('cancelled') || status.includes('rejected')
+      || overall.includes('dispatch') || overall.includes('deliver');
     const disableAttr = (role !== 'SuperAdmin' && isFinalized) ? 'disabled' : '';
     const opacityClass = (role !== 'SuperAdmin' && isFinalized) ? 'opacity-50' : '';
 
@@ -662,8 +667,12 @@ function getStatusBadge(status) {
   if(!status) status = 'Pending';
   const l = status.toLowerCase();
   let c = 'secondary';
-  if(l.includes('proofing')) c = 'success';
+  if(l.includes('deliver')) c = 'dark';
+  else if(l.includes('dispatch')) c = 'primary';
+  else if(l.includes('final approval') || l.includes('approved')) c = 'success';
+  else if(l.includes('proofing')) c = 'success';
   else if(l.includes('fresh')) c = 'info';
+  else if(l.includes('sample') || l.includes('reorder') || l.includes('reprint')) c = 'secondary';
   else if(l.includes('modification')) c = 'warning';
   else if(l.includes('cancelled') || l.includes('rejected')) c = 'danger';
   return `<span class="badge rounded-pill bg-${c}">${status}</span>`;

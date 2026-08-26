@@ -65,7 +65,11 @@ router.get('/', requireLogin, async (req, res) => {
       Client_name: r.client_name,
       Possible_design_time: r.possible_design_time,
       Designer: r.india_designer || r.overseas_designer || '',
-      Status: r.design_status,
+      Status: currentStage(r),
+      // The design status on its own. The column above has moved past it once
+      // the client or dispatch have had their say, but whether a designer may
+      // still edit the order is decided by this one.
+      Design_Status: r.design_status || '',
       Timestamp: r.timestamp ? formatDate(r.timestamp) : '',
       Raw_Timestamp: r.timestamp,
       // The full row used to ride along on every order here. At 8000+ orders
@@ -338,6 +342,32 @@ router.post('/bulk-status', requireLogin, async (req, res) => {
 // ─────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────
+// Where the order has actually got to.
+//
+// Three teams write three different columns - the designer sets design_status,
+// Till Approval sets the client's answer, Dispatch sets its own - and the
+// Orders board showed only the first. An order that had been printed, packed
+// and couriered still read "Proofing Done" there, because nothing after the
+// design stage touches that column. So report the furthest point reached.
+function currentStage(r) {
+  const design = (r.design_status || '').trim();
+  const client = (r.design_approval_status_from_client || '').trim();
+  const dispatch = (r.status_4 || '').trim();
+
+  // A cancelled or rejected order is finished wherever it happened, and that
+  // is the answer whatever else was recorded afterwards.
+  const ended = design + ' ' + client;
+  if (/reject/i.test(ended)) return 'Rejected';
+  if (/cancel/i.test(ended)) return 'Cancelled';
+
+  // "Ready" is the dispatch desk's word for not gone yet; say so plainly.
+  if (dispatch) return /^ready$/i.test(dispatch) ? 'Ready for Dispatch' : dispatch;
+  if (r.actual_4) return 'Dispatched';
+
+  if (client) return client;
+  return design || 'Fresh Design';
+}
+
 function formatDate(d) {
   if (!d) return '';
   const dt = new Date(d);
