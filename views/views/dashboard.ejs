@@ -474,15 +474,20 @@ var currentEditOrderId = null;
   setupInfiniteScroll();
 })();
 
+// The list draws 50 rows at a time and adds the next 50 as you near the
+// bottom. The container is the scrolling div around the table - ask for it by
+// the table it holds, not by a class pair, so moving the markup cannot quietly
+// leave the listener unattached and the list stuck on its first batch.
 function setupInfiniteScroll() {
-  const container = document.querySelector('.card-body.table-responsive');
-  if (container) {
-    container.addEventListener('scroll', function() {
-      if (container.scrollTop + container.clientHeight >= container.scrollHeight - 100) {
-        renderNextBatch();
-      }
-    });
-  }
+  const table = document.getElementById('ordersTable');
+  const container = table && table.closest('.table-responsive');
+  if (!container || container.dataset.infinite) return;
+  container.dataset.infinite = '1';
+  container.addEventListener('scroll', function() {
+    if (container.scrollTop + container.clientHeight >= container.scrollHeight - 150) {
+      renderNextBatch();
+    }
+  });
 }
 
 // ═══ DATA FETCH ═══
@@ -661,6 +666,15 @@ function renderNextBatch() {
     row.insertCell().innerHTML = statusBadge;
   });
   renderedCount += batch.length;
+
+  // On a tall screen 50 rows may not reach the bottom of the container. Nothing
+  // scrolls, so no scroll event fires, and the list would sit on 50 forever.
+  // Keep adding batches until there is something left to scroll to.
+  const container = tbody.closest('.table-responsive');
+  if (container && renderedCount < currentDisplaySet.length &&
+      container.scrollHeight <= container.clientHeight + 10) {
+    requestAnimationFrame(renderNextBatch);
+  }
 }
 
 function getStatusBadge(status) {
