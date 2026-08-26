@@ -62,7 +62,6 @@ document.getElementById('analyticsRoot').innerHTML = `
       <div class="row g-2 align-items-end">
         <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Start Date</label><input type="date" id="an_start" class="form-control form-control-sm" onchange="anApplyFilters()"></div>
         <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">End Date</label><input type="date" id="an_end" class="form-control form-control-sm" onchange="anApplyFilters()"></div>
-        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Team</label><select id="an_filterTeam" class="form-select form-select-sm" onchange="anApplyFilters()"><option value="">All Teams</option><option value="India Team">India Team</option><option value="Cassie">Cassie</option></select></div>
         <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Designer</label><select id="an_filterDesigner" class="form-select form-select-sm" onchange="anApplyFilters()"><option value="">All</option></select></div>
         <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Dealer</label><select id="an_filterDealer" class="form-select form-select-sm" onchange="anApplyFilters()"><option value="">All</option></select></div>
         <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Courier</label><select id="an_filterCourier" class="form-select form-select-sm" onchange="anApplyFilters()"><option value="">All</option></select></div>
@@ -111,13 +110,11 @@ document.getElementById('analyticsRoot').innerHTML = `
           <thead class="table-dark"><tr>
             <th style="position:sticky;top:0;background:#212529;color:white;">Month</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">Total</th>
-            <th style="position:sticky;top:0;background:#212529;color:white;">India Team</th>
-            <th style="position:sticky;top:0;background:#212529;color:white;">Cassie</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">Dispatched</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">Pending</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">Cancelled</th>
           </tr></thead>
-          <tbody id="an_monthlyBody"><tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="an_monthlyBody"><tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -138,7 +135,6 @@ document.getElementById('analyticsRoot').innerHTML = `
             <th style="position:sticky;top:0;background:#212529;color:white;">ID</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">Dealer</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">Client</th>
-            <th style="position:sticky;top:0;background:#212529;color:white;">Team</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">Designer</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">Design Status</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">Client Status</th>
@@ -146,7 +142,7 @@ document.getElementById('analyticsRoot').innerHTML = `
             <th style="position:sticky;top:0;background:#212529;color:white;">Courier</th>
             <th style="position:sticky;top:0;background:#212529;color:white;">Docket</th>
           </tr></thead>
-          <tbody id="an_tbody"><tr><td colspan="12" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="an_tbody"><tr><td colspan="11" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -317,7 +313,6 @@ function an_fillSelect(id, set) {
 }
 
 function anApplyFilters() {
-  const team = (document.getElementById('an_filterTeam')||{}).value||'';
   const designer = (document.getElementById('an_filterDesigner')||{}).value||'';
   const dealer = (document.getElementById('an_filterDealer')||{}).value||'';
   const courier = (document.getElementById('an_filterCourier')||{}).value||'';
@@ -337,7 +332,6 @@ function anApplyFilters() {
       } else dm = false;
     }
     return dm &&
-      (!team || (o.Team||'') === team) &&
       (!designer || (o.Designer||'').toLowerCase() === designer.toLowerCase()) &&
       (!dealer || (o.Dealer||'').toLowerCase() === dealer.toLowerCase()) &&
       (!courier || (o.Courier||'').toLowerCase() === courier.toLowerCase());
@@ -350,7 +344,7 @@ function anApplyFilters() {
 }
 
 function anClearFilters() {
-  ['an_filterTeam','an_filterDesigner','an_filterDealer','an_filterCourier','an_start','an_end'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  ['an_filterDesigner','an_filterDealer','an_filterCourier','an_start','an_end'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   anApplyFilters();
 }
 
@@ -568,10 +562,8 @@ function renderMonthly(data) {
     const d = raw ? new Date(raw) : null;
     if(!d || isNaN(d)) return;
     const key = d.toLocaleString('default',{month:'short'})+' '+d.getFullYear();
-    if(!months[key]) months[key] = {total:0,india:0,cassie:0,dispatched:0,pending:0,cancelled:0};
+    if(!months[key]) months[key] = {total:0,dispatched:0,pending:0,cancelled:0};
     months[key].total++;
-    if(o.Team === 'India Team') months[key].india++;
-    else months[key].cassie++;
     if(o.DispatchStatus && o.DispatchStatus.trim()) months[key].dispatched++;
     else if((o.DesignStatus||'').toLowerCase().includes('cancelled')||(o.ClientStatus||'').toLowerCase().includes('cancel')) months[key].cancelled++;
     else months[key].pending++;
@@ -583,13 +575,11 @@ function renderMonthly(data) {
   });
 
   const tbody = document.getElementById('an_monthlyBody');
-  if(!sorted.length) { tbody.innerHTML = '<tr><td colspan="7" class="text-center">No data</td></tr>'; return; }
+  if(!sorted.length) { tbody.innerHTML = '<tr><td colspan="5" class="text-center">No data</td></tr>'; return; }
   tbody.innerHTML = sorted.map(([m, v]) => `
     <tr>
       <td class="fw-bold">${m}</td>
       <td><span class="badge bg-primary">${v.total}</span></td>
-      <td>${v.india}</td>
-      <td>${v.cassie}</td>
       <td><span class="badge bg-success">${v.dispatched}</span></td>
       <td><span class="badge bg-warning">${v.pending}</span></td>
       <td><span class="badge bg-danger">${v.cancelled}</span></td>
@@ -615,7 +605,6 @@ function renderTable(data) {
       <td class="fw-bold">${o.ID}</td>
       <td>${o.Dealer||''}</td>
       <td>${o.Client||''}</td>
-      <td><span class="badge ${o.Team==='Cassie'?'bg-dark':'bg-primary'}">${o.Team||''}</span></td>
       <td><small>${o.Designer||''}</small></td>
       <td>${dsBadge}</td>
       <td>${csBadge}</td>
