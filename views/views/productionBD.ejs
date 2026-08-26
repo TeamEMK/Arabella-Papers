@@ -105,10 +105,10 @@ async function fetchProductionData() {
     const res = await fetch('/api/dashboards/production');
     const json = await res.json();
     prod_data = json.data || [];
-    // Whole board, not the filtered view: the card answers "how many have
-    // reached production", which a date filter should not change.
+    // Counted by the server, not from the rows above: an order that has gone
+    // on to Dispatch has left this board but still reached production once.
     const tc = document.getElementById('prod_tillCount');
-    if(tc) tc.textContent = prod_data.length;
+    if(tc) tc.textContent = json.tillCount != null ? json.tillCount : prod_data.length;
     prod_populateFilters(prod_data);
     prodApplyFilters();
     prod_attachScroll();
