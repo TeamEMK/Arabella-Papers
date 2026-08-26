@@ -131,20 +131,15 @@ router.get('/production', requireLogin, async (req, res) => {
     const isAuthorized = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' || role.includes('Production Manager');
     if (!isAuthorized) return res.json({ success: true, data: [] });
 
-    // Every live order, not only the client-approved ones.
+    // An order still at "Proofing Done" is with the client, not with the
+    // floor, so it is not production's work yet - unless the floor has
+    // already started it.
     //
-    // The approval gate went back on this queue and came straight back off:
-    // it took 2349 orders off the board in one deploy, and the production team
-    // said so within the hour. This shop records the approval late if at all -
-    // 3612 orders still read "Proofing Done" - so gating on it hides work that
-    // is genuinely in the building. Keeping "or already started" as an escape
-    // hatch was not enough, because most of those 2349 had not been started
-    // either: they were simply waiting, which is exactly what a production
-    // queue is for.
-    //
-    // So the queue is "anything still in play": not dispatched, not rejected,
-    // not cancelled. The approval gate belongs here only once approval is
-    // reliably recorded at the time it happens.
+    // That exception is the whole argument. The office records the approval
+    // late if at all, and 1296 orders sit at "Proofing Done" with paper cut,
+    // printing or assembly done. Excluding on the approval alone would take
+    // those off the board while the stock is in the building, which is what
+    // the team objected to the first time this gate went on.
     const [rows] = await db.query(`
       SELECT * FROM orders
       WHERE is_deleted = 0
@@ -153,6 +148,14 @@ router.get('/production', requireLogin, async (req, res) => {
         AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%cancel%'
         AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
         AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
+        AND (
+          TRIM(IFNULL(design_approval_status_from_client, '')) <> 'Proofing Done'
+          OR LOWER(IFNULL(paper_cutting, ''))  LIKE '%done%'
+          OR LOWER(IFNULL(printing, ''))       LIKE '%done%'
+          OR LOWER(IFNULL(card_assembly, ''))  LIKE '%done%'
+          OR LOWER(IFNULL(dye_status, ''))     LIKE '%done%'
+          OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
+        )
       -- Newest order first. Sorting by id gave nearly the same list, because
       -- ids happen to run with time - but the board is read by date, so it
       -- says date.
