@@ -75,20 +75,29 @@ document.getElementById('analyticsRoot').innerHTML = `
   <div class="row g-3 mb-4">
     <div class="col-md-4">
       <div class="card shadow-sm h-100">
-        <div class="card-header text-dark fw-bold"><i class="fas fa-palette me-2"></i>Design Status</div>
+        <div class="card-header text-dark fw-bold d-flex justify-content-between align-items-center gap-2">
+          <span><i class="fas fa-palette me-2"></i>Designs by Designer</span>
+          <select id="an_designMonth" class="form-select form-select-sm w-auto" onchange="renderDesignerChart()"></select>
+        </div>
         <div class="card-body d-flex align-items-center justify-content-center" style="height:250px;"><canvas id="chart_designStatus"></canvas></div>
       </div>
     </div>
     <div class="col-md-4">
       <div class="card shadow-sm h-100">
-        <div class="card-header text-dark fw-bold"><i class="fas fa-user-check me-2"></i>Client Approval</div>
-        <div class="card-body d-flex align-items-center justify-content-center" style="height:250px;"><canvas id="chart_clientStatus"></canvas></div>
+        <div class="card-header text-dark fw-bold"><i class="fas fa-industry me-2"></i>Production</div>
+        <div class="card-body d-flex align-items-center justify-content-center" style="height:250px;"><canvas id="chart_production"></canvas></div>
       </div>
     </div>
     <div class="col-md-4">
       <div class="card shadow-sm h-100">
-        <div class="card-header text-dark fw-bold"><i class="fas fa-shipping-fast me-2"></i>Dispatch Status</div>
-        <div class="card-body d-flex align-items-center justify-content-center" style="height:250px;"><canvas id="chart_dispatchStatus"></canvas></div>
+        <div class="card-header text-dark fw-bold d-flex justify-content-between align-items-center gap-2">
+          <span><i class="fas fa-shipping-fast me-2"></i>Dispatched</span>
+          <select id="an_dispatchMonth" class="form-select form-select-sm w-auto" onchange="renderDispatchChart()"></select>
+        </div>
+        <div class="card-body d-flex align-items-center justify-content-center position-relative" style="height:250px;">
+          <canvas id="chart_dispatchStatus"></canvas>
+          <div id="an_dispatchEmpty" class="text-muted small d-none position-absolute">Nothing went out this month.</div>
+        </div>
       </div>
     </div>
   </div>
@@ -356,21 +365,152 @@ function renderKPIs(data) {
   document.getElementById('kpi_cancelled').textContent = cancelled;
 }
 
+// ── DESIGNS BY DESIGNER ──
+// This chart answers "who drew how much last month", so it counts the month
+// the design was finished in, not the month the order came in - a July order
+// drawn in August is August's work. It reads its own month box and ignores
+// the filters above the page: the two would otherwise fight over the same
+// question.
+function an_designMonthKey(raw) {
+  if(!raw) return '';
+  const d = new Date(raw);
+  return isNaN(d) ? '' : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function an_monthLabel(key) {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+}
+
+function an_fillDesignMonths() {
+  const sel = document.getElementById('an_designMonth');
+  if(!sel) return;
+  const keys = Array.from(new Set(an_all.map(o => an_designMonthKey(o.DesignDone)).filter(Boolean)))
+    .sort().reverse();
+
+  const current = todayValue().slice(0, 7);
+  if(keys.indexOf(current) < 0) keys.unshift(current);
+
+  const chosen = sel.value;
+  sel.innerHTML = keys.map(k => '<option value="' + k + '">' + an_monthLabel(k) + '</option>').join('');
+  sel.value = keys.indexOf(chosen) >= 0 ? chosen : current;
+}
+
+function renderDesignerChart() {
+  const sel = document.getElementById('an_designMonth');
+  if(!sel) return;
+  const month = sel.value;
+
+  const counts = {};
+  an_all.forEach(o => {
+    if(an_designMonthKey(o.DesignDone) !== month) return;
+    const who = (o.Designer || '').trim() || 'Not assigned';
+    counts[who] = (counts[who] || 0) + 1;
+  });
+
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  renderBarChart('chart_designStatus', sorted.map(x => x[0]), sorted.map(x => x[1]));
+}
+
+function renderBarChart(canvasId, labels, values) {
+  if(an_charts[canvasId]) {
+    try { an_charts[canvasId].destroy(); } catch(e) {}
+    delete an_charts[canvasId];
+  }
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+
+  an_charts[canvasId] = new Chart(canvas, {
+    type: 'bar',
+    data: { labels, datasets: [{ data: values, backgroundColor: '#0d6efd', borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        // Whole designs only - half a design is not a thing.
+        y: { beginAtZero: true, ticks: { precision: 0 } },
+      },
+    },
+  });
+}
+
+// ── PRODUCTION COUNTS ──
+// What kind of work the shop is carrying, over everything - not the date
+// range above, and not a month. Reads an_all rather than the filtered set on
+// purpose: the question is what the business holds altogether.
+//
+// Fresh Order is everything that is not a repeat, so an order can be both
+// Fresh and Production. The rows do not add up to the total and are not
+// meant to.
+function renderProductionCounts() {
+  const kind = o => (o.ClientStatus || '').trim().toLowerCase();
+  const count = test => an_all.filter(o => test(kind(o))).length;
+  const repeat = ['reorder', 'reprint', 'sample'];
+
+  // Four slices that between them cover every order exactly once: Fresh Order
+  // is "not a repeat", and the other three are the repeats. Production was
+  // dropped from here because an order approved for production is also a
+  // fresh one - the slice sat inside another and made the pie read wrong.
+  renderPieChart('chart_production', {
+    'Fresh Order': count(k => repeat.indexOf(k) < 0),
+    'Sampling': count(k => k === 'sample'),
+    'Re-print': count(k => k === 'reprint'),
+    'Re-order': count(k => k === 'reorder'),
+  });
+}
+
 function renderCharts(data) {
-  // Design Status chart
-  const dsCounts = {};
-  data.forEach(o => { const s=o.DesignStatus||'Unknown'; dsCounts[s]=(dsCounts[s]||0)+1; });
-  renderPieChart('chart_designStatus', dsCounts);
+  an_fillDesignMonths();
+  renderDesignerChart();
 
-  // Client Status chart
-  const csCounts = {};
-  data.forEach(o => { const s=o.ClientStatus||'Pending'; csCounts[s]=(csCounts[s]||0)+1; });
-  renderPieChart('chart_clientStatus', csCounts);
+  renderProductionCounts();
 
-  // Dispatch Status chart
-  const disCounts = {};
-  data.forEach(o => { const s=o.DispatchStatus||'Not Dispatched'; disCounts[s]=(disCounts[s]||0)+1; });
-  renderPieChart('chart_dispatchStatus', disCounts);
+  an_fillDispatchMonths();
+  renderDispatchChart();
+}
+
+// ── DISPATCHED, BY MONTH ──
+// Counts the parcels that left in the chosen month, so an order taken in
+// April and sent in August is August's. "Not Dispatched" has no place here -
+// an order that never went out never had a month - which is why the card is
+// titled Dispatched rather than Dispatch Status.
+function an_fillDispatchMonths() {
+  const sel = document.getElementById('an_dispatchMonth');
+  if(!sel) return;
+  const keys = Array.from(new Set(an_all.map(o => an_designMonthKey(o.DispatchDone)).filter(Boolean)))
+    .sort().reverse();
+
+  const current = todayValue().slice(0, 7);
+  if(keys.indexOf(current) < 0) keys.unshift(current);
+
+  const chosen = sel.value;
+  sel.innerHTML = keys.map(k => '<option value="' + k + '">' + an_monthLabel(k) + '</option>').join('');
+  sel.value = keys.indexOf(chosen) >= 0 ? chosen : current;
+}
+
+function renderDispatchChart() {
+  const sel = document.getElementById('an_dispatchMonth');
+  if(!sel) return;
+  const month = sel.value;
+
+  const counts = {};
+  an_all.forEach(o => {
+    if(an_designMonthKey(o.DispatchDone) !== month) return;
+    // The imported rows carry a dispatch date but no status word. They went
+    // out all the same.
+    const s = (o.DispatchStatus || '').trim() || 'Dispatched';
+    counts[s] = (counts[s] || 0) + 1;
+  });
+
+  // A month with no dispatches would draw an empty circle, which reads as a
+  // broken chart rather than an empty one. Say it in words instead.
+  const empty = Object.keys(counts).length === 0;
+  const note = document.getElementById('an_dispatchEmpty');
+  const canvas = document.getElementById('chart_dispatchStatus');
+  if(note) note.classList.toggle('d-none', !empty);
+  if(canvas) canvas.style.visibility = empty ? 'hidden' : 'visible';
+
+  renderPieChart('chart_dispatchStatus', counts);
 }
 
 function renderPieChart(canvasId, countsObj) {
@@ -395,7 +535,25 @@ function renderPieChart(canvasId, countsObj) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } },
+        legend: {
+          position: 'bottom',
+          labels: {
+            font: { size: 11 }, boxWidth: 12,
+            // The count goes in the legend. One slice is usually so much
+            // bigger than the rest that the small ones are a hairline on the
+            // pie - readable only if the number is written down.
+            generateLabels: chart => {
+              const ds = chart.data.datasets[0];
+              return chart.data.labels.map((label, i) => ({
+                text: label + ' (' + ds.data[i] + ')',
+                fillStyle: ds.backgroundColor[i],
+                strokeStyle: ds.backgroundColor[i],
+                lineWidth: 0,
+                index: i,
+              }));
+            },
+          },
+        },
         tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/ctx.chart._metasets[0].total*100)}%)` } }
       }
     }

@@ -197,7 +197,27 @@ router.get('/production', requireLogin, async (req, res) => {
       Dispatch_Status: r.status_4 || '',
     }));
 
-    res.json({ success: true, data });
+    // How many orders have reached production altogether, dispatched ones
+    // included. The rows above cannot answer that - an order that has gone to
+    // Dispatch has left this board - so it is counted separately.
+    const [[till]] = await db.query(`
+      SELECT COUNT(*) AS c FROM orders
+      WHERE is_deleted = 0
+        AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%rejected%'
+        AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%cancel%'
+        AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
+        AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
+        AND (
+          TRIM(IFNULL(design_approval_status_from_client, '')) NOT IN ('Proofing Done', '')
+          OR LOWER(IFNULL(paper_cutting, ''))  LIKE '%done%'
+          OR LOWER(IFNULL(printing, ''))       LIKE '%done%'
+          OR LOWER(IFNULL(card_assembly, ''))  LIKE '%done%'
+          OR LOWER(IFNULL(dye_status, ''))     LIKE '%done%'
+          OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
+        )
+    `);
+
+    res.json({ success: true, data, tillCount: till.c });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
@@ -614,9 +634,14 @@ router.get('/analytics', requireLogin, async (req, res) => {
           Designer: designer,
           Team: team,
           DesignStatus: r.design_status || '',
+          // When the designer finished, not when the order arrived - the
+          // designer chart counts the month the work was done in.
+          DesignDone: r.actual_1,
           ClientStatus: r.design_approval_status_from_client || '',
           ProductionStatus: r.card_assembly || '',
           DispatchStatus: r.status_4 || '',
+          // When the parcel actually left, for the monthly dispatch chart.
+          DispatchDone: r.actual_4,
           Courier: r.courier || '',
           Docket: r.ups_dhl_fedex_tracking_number || '',
         };
