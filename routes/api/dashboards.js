@@ -18,6 +18,12 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 *
 // ═══════════════════════════════════════════════
 
 // GET /api/dashboards/till-approval
+// "Local Order" is walk-in work the shop handles itself. It is punched, so it
+// belongs on the Orders Dashboard, but nobody designs, prints or couriers it
+// through this system - and at 3571 rows it buried the boards that do track
+// work and padded every total on Analytics. So it is listed, not queued.
+const LOCAL_ORDER_OFF_BOARDS = `LOWER(IFNULL(dealer_name, '')) <> 'local order'`;
+
 router.get('/till-approval', requireLogin, async (req, res) => {
   try {
     const user = req.session.user;
@@ -28,6 +34,7 @@ router.get('/till-approval', requireLogin, async (req, res) => {
     const [rows] = await db.query(`
       SELECT * FROM orders
       WHERE is_deleted = 0
+        AND ${LOCAL_ORDER_OFF_BOARDS}
         AND no_of_design_revision IS NOT NULL
         AND no_of_design_revision > 0
         AND (
@@ -149,7 +156,7 @@ router.get('/production', requireLogin, async (req, res) => {
         AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%rejected%'
         AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%cancel%'
         AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
-        AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
+        AND ${LOCAL_ORDER_OFF_BOARDS}
         AND (
           TRIM(IFNULL(design_approval_status_from_client, '')) NOT IN ('Proofing Done', '')
           OR LOWER(IFNULL(paper_cutting, ''))  LIKE '%done%'
@@ -206,7 +213,7 @@ router.get('/production', requireLogin, async (req, res) => {
         AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%rejected%'
         AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%cancel%'
         AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
-        AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
+        AND ${LOCAL_ORDER_OFF_BOARDS}
         AND (
           TRIM(IFNULL(design_approval_status_from_client, '')) NOT IN ('Proofing Done', '')
           OR LOWER(IFNULL(paper_cutting, ''))  LIKE '%done%'
@@ -371,6 +378,7 @@ router.get('/dispatch', requireLogin, async (req, res) => {
     const [rows] = await db.query(`
       SELECT * FROM orders
       WHERE is_deleted = 0
+        AND ${LOCAL_ORDER_OFF_BOARDS}
         AND ((status_4 IS NOT NULL AND status_4 != '') OR actual_4 IS NOT NULL)
       ORDER BY COALESCE(actual_4, timestamp) DESC, id DESC
     `);
@@ -539,7 +547,7 @@ router.get('/today', requireLogin, async (req, res) => {
     // here and the cards would sit on the previous day's numbers.
     const today = new Date().toLocaleDateString('en-CA', IST);
 
-    const live = `is_deleted = 0 AND LOWER(IFNULL(dealer_name, '')) <> 'local order'`;
+    const live = `is_deleted = 0 AND ${LOCAL_ORDER_OFF_BOARDS}`;
     const cancelled = `(LOWER(IFNULL(design_status, '')) LIKE '%cancel%'
                         OR LOWER(IFNULL(design_approval_status_from_client, '')) LIKE '%cancel%')`;
 
@@ -587,13 +595,13 @@ router.get('/analytics', requireLogin, async (req, res) => {
     const canSeeAll = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' ||
       role.includes('Production Manager');
 
-    // "Local Order" is off the Orders and Production boards already. It was
-    // still padding the totals here - 3576 rows the business does not track,
-    // in every count and chart on the page.
+    // Analytics measures the work that flows through here, so local orders
+    // are out for the same reason they are off the boards. Left in, 3571 rows
+    // the business does not track sat in every count and chart on the page.
     let query = `
       SELECT * FROM orders
       WHERE is_deleted = 0
-        AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
+        AND ${LOCAL_ORDER_OFF_BOARDS}
     `;
     const params = [];
 

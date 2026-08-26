@@ -31,14 +31,12 @@ router.get('/', requireLogin, async (req, res) => {
     const name = user.username || '';
     const isAdmin = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' || role.includes('Production Manager');
 
-    // "Local Order" is a real dealer with 3576 orders behind it, but it is not
-    // work anyone tracks here - it was crowding out 41% of both this list and
-    // the production queue, and padding every total on Analytics. The rows
-    // stay in the table; they are only kept off the boards.
+    // "Local Order" is a real dealer the shop still punches against, so this
+    // list shows it. The working boards do not - see LOCAL_ORDER_OFF_BOARDS in
+    // dashboards.js for why.
     let query = `
       SELECT * FROM orders
       WHERE is_deleted = 0
-        AND LOWER(IFNULL(dealer_name, '')) <> 'local order'
     `;
     const params = [];
 
