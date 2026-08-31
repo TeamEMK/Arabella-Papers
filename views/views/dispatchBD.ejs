@@ -72,7 +72,7 @@ document.getElementById('dispRoot').innerHTML = `
         <div class="col-12"><label class="form-label fw-bold text-dark">Status</label><select id="dsp_status" class="form-select" required><option value="Ready">Ready</option><option value="Dispatched">Dispatched</option><option value="Delivered">Delivered</option></select></div>
       </div>
     </div>
-    <div class="modal-footer"><button class="btn btn-success" onclick="dsp_submitUpdate()">Update Dispatch</button><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button></div>
+    <div class="modal-footer justify-content-between"><button class="btn btn-outline-warning" onclick="dsp_revertToProduction()" title="Send this order back to the Production Dashboard"><i class="fas fa-undo me-1"></i>Back to Production</button><div class="d-flex gap-2"><button class="btn btn-success" onclick="dsp_submitUpdate()">Update Dispatch</button><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button></div></div>
   </div></div>
 </div>
 
@@ -287,6 +287,58 @@ async function dsp_submitUpdate() {
     showLoading(false);
     if(json.success) { bootstrap.Modal.getInstance(document.getElementById('dsp_editModal')).hide(); showToast('success','Dispatch Updated!'); fetchDispatchData(); }
     else showToast('error', json.error);
+  } catch(e) { showLoading(false); showToast('error','Server error.'); }
+}
+
+// One click on the production modal sends an order here, and it is easy to hit
+// against the wrong row. This undoes it. The dispatch date goes with it, which
+// is the part worth stopping to read, so the confirmation says so plainly.
+async function dsp_revertToProduction() {
+  const id = dsp_editId;
+  const o = dsp_data.find(x => x.ID.toString() === id.toString());
+  const hasDate = !!(o && o.Dispatch_Date);
+
+  const confirmed = await Swal.fire({
+    title: 'Send back to Production?',
+    html: `Order <b>${id}</b> will leave the Dispatch Dashboard and return to the <b>Production queue</b>.`
+      + (hasDate ? `<br><br>Its dispatch date (<b>${o.Dispatch_Date}</b>) will be cleared.` : '')
+      + `<br><br><span class="text-muted small">Courier, docket and invoice details are kept.</span>`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Back to Production',
+    confirmButtonColor: '#fd7e14',
+  });
+  if(!confirmed.isConfirmed) return;
+
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/dashboards/dispatch/${id}/revert`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ userEmail: APP_USER.email }),
+    });
+    const json = await res.json();
+    showLoading(false);
+    if(!json.success) { showToast('error', json.error || 'Could not send it back.'); return; }
+
+    bootstrap.Modal.getInstance(document.getElementById('dsp_editModal')).hide();
+    fetchDispatchData();
+
+    // Off Dispatch is certain; back on Production is not. An order still
+    // sitting at "Proofing Done" with no stage finished does not qualify for
+    // that queue, and saying nothing would leave someone hunting for it.
+    if(json.onProductionBoard) {
+      showToast('success', `${id} is back on the Production Dashboard.`);
+    } else {
+      Swal.fire({
+        title: 'Taken off Dispatch',
+        html: `Order <b>${id}</b> is no longer on the Dispatch Dashboard, but it does not appear on the Production queue either`
+          + ` - its client approval is still <b>Proofing Done</b> (or blank) and no production stage is marked done.`
+          + `<br><br>Set the approval on <b>Till Approval</b>, or mark a stage done, and it will show up there.`,
+        icon: 'info',
+        confirmButtonText: 'Got it',
+      });
+    }
   } catch(e) { showLoading(false); showToast('error','Server error.'); }
 }
 </script>

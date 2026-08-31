@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
 const { uploadToDrive } = require('../../utils/drive');
-const { logOrderUpdate } = require('../../utils/auditlog');
+const { logOrderUpdate, logOrderEvent } = require('../../utils/auditlog');
 const { requireLogin } = require('../../middleware/auth');
 // Dates are stored as IST wall-clock and read back through a +05:30
 // connection. Vercel runs the server in UTC, so without naming the zone here
@@ -23,6 +23,25 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 *
 // through this system - and at 3571 rows it buried the boards that do track
 // work and padded every total on Analytics. So it is listed, not queued.
 const LOCAL_ORDER_OFF_BOARDS = `LOWER(IFNULL(dealer_name, '')) <> 'local order'`;
+
+// What makes an order production's work, leaving aside whether it has already
+// gone to Dispatch. The queue, the till-count and the dispatch revert all need
+// to ask that same question, so they ask it in one place.
+const PRODUCTION_QUEUE_WHERE = `
+  is_deleted = 0
+  AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%rejected%'
+  AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%cancel%'
+  AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
+  AND ${LOCAL_ORDER_OFF_BOARDS}
+  AND (
+    TRIM(IFNULL(design_approval_status_from_client, '')) NOT IN ('Proofing Done', '')
+    OR LOWER(IFNULL(paper_cutting, ''))  LIKE '%done%'
+    OR LOWER(IFNULL(printing, ''))       LIKE '%done%'
+    OR LOWER(IFNULL(card_assembly, ''))  LIKE '%done%'
+    OR LOWER(IFNULL(dye_status, ''))     LIKE '%done%'
+    OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
+  )
+`;
 
 router.get('/till-approval', requireLogin, async (req, res) => {
   try {
@@ -151,20 +170,8 @@ router.get('/production', requireLogin, async (req, res) => {
     // floor has already started stays, whatever the approval column says.
     const [rows] = await db.query(`
       SELECT * FROM orders
-      WHERE is_deleted = 0
+      WHERE ${PRODUCTION_QUEUE_WHERE}
         AND (status_4 IS NULL OR status_4 = '')
-        AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%rejected%'
-        AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%cancel%'
-        AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
-        AND ${LOCAL_ORDER_OFF_BOARDS}
-        AND (
-          TRIM(IFNULL(design_approval_status_from_client, '')) NOT IN ('Proofing Done', '')
-          OR LOWER(IFNULL(paper_cutting, ''))  LIKE '%done%'
-          OR LOWER(IFNULL(printing, ''))       LIKE '%done%'
-          OR LOWER(IFNULL(card_assembly, ''))  LIKE '%done%'
-          OR LOWER(IFNULL(dye_status, ''))     LIKE '%done%'
-          OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
-        )
       -- Newest into production first. That is the approval date, not the
       -- punch date: an order approved this morning may have been taken a
       -- month ago, and the floor wants it at the top of their queue today.
@@ -209,19 +216,7 @@ router.get('/production', requireLogin, async (req, res) => {
     // Dispatch has left this board - so it is counted separately.
     const [[till]] = await db.query(`
       SELECT COUNT(*) AS c FROM orders
-      WHERE is_deleted = 0
-        AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%rejected%'
-        AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%cancel%'
-        AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
-        AND ${LOCAL_ORDER_OFF_BOARDS}
-        AND (
-          TRIM(IFNULL(design_approval_status_from_client, '')) NOT IN ('Proofing Done', '')
-          OR LOWER(IFNULL(paper_cutting, ''))  LIKE '%done%'
-          OR LOWER(IFNULL(printing, ''))       LIKE '%done%'
-          OR LOWER(IFNULL(card_assembly, ''))  LIKE '%done%'
-          OR LOWER(IFNULL(dye_status, ''))     LIKE '%done%'
-          OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
-        )
+      WHERE ${PRODUCTION_QUEUE_WHERE}
     `);
 
     res.json({ success: true, data, tillCount: till.c });
@@ -449,6 +444,68 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
     `, [courier, docket, status, invoiceNo, num(invoiceAmount), num(boxes), weight, volWeight, userEmail, orderId]);
 
     res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PUT /api/dashboards/dispatch/:id/revert
+//
+// Sending an order to Dispatch is one click on the production modal, and it is
+// easy to hit against the wrong row. Two columns decide which board an order
+// sits on: status_4, set by that click, and actual_4, stamped when Dispatch
+// saves. Clearing both is the whole reversal.
+//
+// What is typed on the dispatch form - courier, docket, invoice, boxes - is
+// left alone. If the order does go out later that work is still there, and an
+// order sent here by mistake has none of it filled in anyway.
+router.put('/dispatch/:id/revert', requireLogin, async (req, res) => {
+  try {
+    const user = req.session.user;
+    if (user.role !== 'SuperAdmin' && user.role !== 'Accounts') {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const orderId = req.params.id;
+    const [[order]] = await db.query(
+      'SELECT status_4, actual_4 FROM orders WHERE order_id = ? AND is_deleted = 0',
+      [orderId]
+    );
+    if (!order) return res.status(404).json({ success: false, error: 'Order not found.' });
+    if (!order.status_4 && !order.actual_4) {
+      return res.status(400).json({ success: false, error: 'This order is not on the Dispatch board.' });
+    }
+
+    // The status change logs itself with its old value. The dispatch date does
+    // not - actual_4 is bookkeeping the routes fill in, so it is not in the
+    // audit map - and losing a recorded date is the part worth being able to
+    // look up later, so it gets a line of its own when there was one.
+    await logOrderUpdate(orderId, { status_4: '' }, user, 'Reverted to Production');
+    if (order.actual_4) {
+      await logOrderEvent(
+        orderId,
+        'Reverted to Production',
+        'Dispatch date cleared: ' + new Date(order.actual_4).toLocaleDateString('en-GB', IST),
+        user
+      );
+    }
+
+    await db.query(
+      'UPDATE orders SET status_4 = NULL, actual_4 = NULL, dispatch_updated_by = ? WHERE order_id = ?',
+      [user.email || user.username || '', orderId]
+    );
+
+    // Clearing those two columns takes it off Dispatch whatever else is true,
+    // but it only lands back on the production queue if it still counts as
+    // production's work. An order at "Proofing Done" with no stage finished
+    // does not, and the caller should say so rather than let it vanish.
+    const [[back]] = await db.query(
+      `SELECT COUNT(*) AS c FROM orders WHERE order_id = ? AND ${PRODUCTION_QUEUE_WHERE}`,
+      [orderId]
+    );
+
+    res.json({ success: true, onProductionBoard: back.c > 0 });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
