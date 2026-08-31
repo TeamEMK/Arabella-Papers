@@ -5,14 +5,13 @@
  * nothing standing between a bad UPDATE and 8,600 lost orders. This is the
  * stand-in: run it before anything risky, and on a schedule if you can.
  *
+ *   node scripts/backup-live.js "mysql://root:PASS@host.proxy.rlwy.net:12345/railway"
+ *
+ * That is the first run: paste the URL from Railway -> MySQL -> Variables ->
+ * MYSQL_PUBLIC_URL. It is saved to .env.backup, which is gitignored, so the
+ * live password stays out of the repo. Every run after that is just:
+ *
  *   node scripts/backup-live.js
- *
- * The connection string is read from a file that is never committed, so the
- * live password does not end up in the repo or in anyone's shell history.
- * Create `.env.backup` next to this project with one line, copied from
- * Railway -> MySQL -> Variables -> MYSQL_PUBLIC_URL:
- *
- *   LIVE_DB_URL=mysql://root:PASSWORD@host.proxy.rlwy.net:12345/railway
  */
 const fs = require('fs');
 const path = require('path');
@@ -22,6 +21,17 @@ const { spawn } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 
 function connectionUrl() {
+  // Pasted on the command line the first time, saved so the next run needs
+  // nothing. Creating a dotfile by hand on Windows is more trouble than it is
+  // worth, and this is meant to be run in a hurry.
+  const arg = process.argv[2];
+  if (arg && arg.startsWith('mysql://')) {
+    fs.writeFileSync(path.join(ROOT, '.env.backup'), `LIVE_DB_URL=${arg}
+`);
+    console.log('Saved the connection string. Next time just run the script.');
+    return arg;
+  }
+
   if (process.env.LIVE_DB_URL) return process.env.LIVE_DB_URL;
 
   const file = path.join(ROOT, '.env.backup');
