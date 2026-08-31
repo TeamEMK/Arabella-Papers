@@ -441,8 +441,8 @@ async function prod_dispatchFromEdit() {
   const confirmed = await Swal.fire({
     title: pending.length ? 'Some stages are not finished' : 'Ready for Dispatch?',
     html: pending.length
-      ? `Order <b>${id}</b> still shows <b>${pending.join(', ')}</b> unfinished.<br>Send it to the Dispatch Dashboard anyway?`
-      : `Order <b>${id}</b> will leave the Production queue and move to the <b>Dispatch Dashboard</b>, where its invoice and tracking number are filled in.`,
+      ? `Order <b>${id}</b> still shows <b>${pending.join(', ')}</b> unfinished.<br>Send it to the Dispatch Dashboard anyway?<br><br><span class="text-danger"><b>This does not dispatch it.</b> The parcel still has to be sent, and its courier and docket number entered on the Dispatch Dashboard.</span>`
+      : `Order <b>${id}</b> will leave the Production queue and move to the <b>Dispatch Dashboard</b>.<br><br><span class="text-danger"><b>This does not dispatch it.</b> The parcel still has to be sent, and its courier and docket number entered on the Dispatch Dashboard.</span>`,
     icon: pending.length ? 'warning' : 'question',
     showCancelButton: true,
     confirmButtonText: pending.length ? 'Send anyway' : 'Move to Dispatch',
@@ -466,7 +466,7 @@ async function prod_dispatchFromEdit() {
 async function prod_markDispatch(id) {
   const confirmed = await Swal.fire({
     title: 'Ready for Dispatch?',
-    html: `Order <b>${id}</b> will leave the Production queue and move to the <b>Dispatch Dashboard</b>, where its invoice and tracking number are filled in.`,
+    html: `Order <b>${id}</b> will leave the Production queue and move to the <b>Dispatch Dashboard</b>.<br><br><span class="text-danger"><b>This does not dispatch it.</b> The parcel still has to be sent, and its courier and docket number entered on the Dispatch Dashboard.</span>`,
     icon: 'question',
     showCancelButton: true,
     confirmButtonText: 'Move to Dispatch',
