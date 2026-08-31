@@ -497,7 +497,15 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       -- hundreds of rows down, and read as never having arrived. Sorted on the
       -- status rather than the date, because a few orders carry a date from
       -- being saved while still Ready and are no more dispatched for it.
-      ORDER BY ${AWAITING_DISPATCH} DESC, COALESCE(actual_4, dispatch_ready_at, timestamp) DESC, id DESC
+      -- Two groups, each on the date that means something for it. An order
+      -- still waiting is ordered by when it arrived here, not by a dispatch
+      -- date it has no business carrying; one already gone is ordered by the
+      -- day it went.
+      ORDER BY ${AWAITING_DISPATCH} DESC,
+               IF(${AWAITING_DISPATCH},
+                  COALESCE(dispatch_ready_at, timestamp),
+                  COALESCE(actual_4, dispatch_ready_at, timestamp)) DESC,
+               id DESC
     `);
 
     const data = rows.map(r => ({
