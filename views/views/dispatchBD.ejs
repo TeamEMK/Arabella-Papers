@@ -324,15 +324,18 @@ async function dsp_revertToProduction() {
     bootstrap.Modal.getInstance(document.getElementById('dsp_editModal')).hide();
     fetchDispatchData();
 
-    // Off Dispatch is certain; back on Production is not. An order still
-    // sitting at "Proofing Done" with no stage finished does not qualify for
-    // that queue, and saying nothing would leave someone hunting for it.
-    if(json.onProductionBoard) {
+    // Off Dispatch is certain; where it turns up is not. Almost every order on
+    // this board reached production before the August cutoff, so it lands on
+    // Old Production rather than the main queue - say which, or someone goes
+    // looking on the wrong board.
+    if(json.board === 'production') {
       showToast('success', `${id} is back on the Production Dashboard.`);
+    } else if(json.board === 'old') {
+      showToast('success', `${id} is back on Old Production - it reached production before 1 August.`);
     } else {
       Swal.fire({
         title: 'Taken off Dispatch',
-        html: `Order <b>${id}</b> is no longer on the Dispatch Dashboard, but it does not appear on the Production queue either`
+        html: `Order <b>${id}</b> is no longer on the Dispatch Dashboard, but it does not appear on either production board`
           + ` - its client approval is still <b>Proofing Done</b> (or blank) and no production stage is marked done.`
           + `<br><br>Set the approval on <b>Till Approval</b>, or mark a stage done, and it will show up there.`,
         icon: 'info',

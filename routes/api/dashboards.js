@@ -515,16 +515,20 @@ router.put('/dispatch/:id/revert', requireLogin, async (req, res) => {
       [user.email || user.username || '', orderId]
     );
 
-    // Clearing those two columns takes it off Dispatch whatever else is true,
-    // but it only lands back on the production queue if it still counts as
-    // production's work. An order at "Proofing Done" with no stage finished
-    // does not, and the caller should say so rather than let it vanish.
+    // Off Dispatch is certain. Where it turns up is not, and there are three
+    // answers: the production queue, the Old Production board if it reached
+    // production before the cutoff, or neither - an order at "Proofing Done"
+    // with no stage finished is not production's work at all. Nearly every
+    // order on Dispatch is an old one, so guessing "production" would send
+    // people looking on the wrong board almost every time.
     const [[back]] = await db.query(
-      `SELECT COUNT(*) AS c FROM orders WHERE order_id = ? AND ${PRODUCTION_QUEUE_WHERE}`,
-      [orderId]
+      `SELECT COUNT(*) AS onQueue, SUM(${PRODUCTION_DATE} >= ?) AS current
+       FROM orders WHERE order_id = ? AND ${PRODUCTION_QUEUE_WHERE}`,
+      [PRODUCTION_ARCHIVE_FROM, orderId]
     );
 
-    res.json({ success: true, onProductionBoard: back.c > 0 });
+    const board = !Number(back.onQueue) ? 'none' : (Number(back.current) ? 'production' : 'old');
+    res.json({ success: true, board });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
