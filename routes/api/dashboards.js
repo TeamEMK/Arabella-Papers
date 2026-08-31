@@ -357,7 +357,10 @@ router.put('/production/:id', requireLogin, async (req, res) => {
       Card_Assembly: ['card_assembly', 'card_assembly_actual_time'],
       Remark: ['remark', 'remark_actual_time'],
       Reason_For_Delay: ['reason_for_delay', 'reason_for_delay_actual_time'],
-      Dispatch_Status: ['status_4', null],
+      // Handing an order to Dispatch is worth a time of its own: the board
+      // wants to show when it arrived, and how long it has been sitting.
+      // Not actual_4 - that is the day the parcel went, which is later.
+      Dispatch_Status: ['status_4', 'dispatch_ready_at'],
     };
 
     for (const [key, [col, timeCol]] of Object.entries(stageMap)) {
@@ -366,6 +369,8 @@ router.put('/production/:id', requireLogin, async (req, res) => {
         if (timeCol && u[key] && u[key] !== 'Pending' && u[key] !== 'No') {
           updates[timeCol] = now;
         }
+        // Sent back to production: it is not waiting on Dispatch any more.
+        if (col === 'status_4' && !u[key]) updates.dispatch_ready_at = null;
       }
     }
 
@@ -492,7 +497,7 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       -- hundreds of rows down, and read as never having arrived. Sorted on the
       -- status rather than the date, because a few orders carry a date from
       -- being saved while still Ready and are no more dispatched for it.
-      ORDER BY ${AWAITING_DISPATCH} DESC, COALESCE(actual_4, timestamp) DESC, id DESC
+      ORDER BY ${AWAITING_DISPATCH} DESC, COALESCE(actual_4, dispatch_ready_at, timestamp) DESC, id DESC
     `);
 
     const data = rows.map(r => ({
@@ -502,6 +507,10 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       Client_name: r.client_name,
       Dispatch_Courier_Name: r.courier || '',
       Docket_No: r.ups_dhl_fedex_tracking_number || '',
+      // When production handed it over. Filled the moment it lands here, so
+      // the board shows something the day it arrives rather than staying blank
+      // until the courier is entered.
+      Ready_Date: r.dispatch_ready_at ? new Date(r.dispatch_ready_at).toLocaleString('en-GB', IST) : '',
       Dispatch_Date: r.actual_4 ? new Date(r.actual_4).toLocaleString('en-GB', IST) : '',
       // A parcel with a dispatch date has gone, whatever the status column
       // says - the board reads a blank status as "Ready", which would put
@@ -618,7 +627,8 @@ router.put('/dispatch/:id/revert', requireLogin, async (req, res) => {
     }
 
     await db.query(
-      'UPDATE orders SET status_4 = NULL, actual_4 = NULL, dispatch_updated_by = ? WHERE order_id = ?',
+      `UPDATE orders SET status_4 = NULL, actual_4 = NULL, dispatch_ready_at = NULL,
+         dispatch_updated_by = ? WHERE order_id = ?`,
       [user.email || user.username || '', orderId]
     );
 

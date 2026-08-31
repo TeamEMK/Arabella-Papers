@@ -55,6 +55,9 @@ const COLUMN_MIGRATIONS = [
   // date. NULL means the date decides. production_archived_at came first and
   // could only pin an order to the old board, which left no way to pull a
   // July order onto the live one; `after` carries those pins over.
+  // When production handed the order to Dispatch. Separate from actual_4,
+  // which is the day the parcel actually went.
+  { table: 'orders', column: 'dispatch_ready_at', type: 'DATETIME NULL' },
   {
     table: 'orders',
     column: 'production_board',
