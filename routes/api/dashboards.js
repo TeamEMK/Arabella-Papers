@@ -43,6 +43,12 @@ const PRODUCTION_ARCHIVE_FROM = '2026-08-01';
 // punched - so what the column says matches which board it is on.
 const PRODUCTION_DATE = `DATE(COALESCE(actual_2, timestamp))`;
 
+// Has this order left for Dispatch? status_4 is what the Send to Dispatch
+// button sets, but almost none of the history carries it - those rows came in
+// from the sheet with a dispatch date and nothing else. Both boards test this
+// one expression, the production side negated, so an order cannot sit on both.
+const LEFT_FOR_DISPATCH = `((status_4 IS NOT NULL AND status_4 <> '') OR actual_4 IS NOT NULL)`;
+
 const PRODUCTION_QUEUE_WHERE = `
   is_deleted = 0
   AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%rejected%'
@@ -192,7 +198,7 @@ router.get('/production', requireLogin, async (req, res) => {
     const [rows] = await db.query(`
       SELECT * FROM orders
       WHERE ${PRODUCTION_QUEUE_WHERE}
-        AND (status_4 IS NULL OR status_4 = '')
+        AND NOT ${LEFT_FOR_DISPATCH}
         AND ${PRODUCTION_DATE} ${archive ? '<' : '>='} ?
       -- Newest into production first. That is the approval date, not the
       -- punch date: an order approved this morning may have been taken a
@@ -385,7 +391,7 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       SELECT * FROM orders
       WHERE is_deleted = 0
         AND ${LOCAL_ORDER_OFF_BOARDS}
-        AND ((status_4 IS NOT NULL AND status_4 != '') OR actual_4 IS NOT NULL)
+        AND ${LEFT_FOR_DISPATCH}
       ORDER BY COALESCE(actual_4, timestamp) DESC, id DESC
     `);
 
