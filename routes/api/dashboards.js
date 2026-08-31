@@ -230,15 +230,7 @@ router.get('/production', requireLogin, async (req, res) => {
       Dispatch_Status: r.status_4 || '',
     }));
 
-    // How many orders have reached production altogether, dispatched ones
-    // included. The rows above cannot answer that - an order that has gone to
-    // Dispatch has left this board - so it is counted separately.
-    const [[till]] = await db.query(`
-      SELECT COUNT(*) AS c FROM orders
-      WHERE ${PRODUCTION_QUEUE_WHERE}
-    `);
-
-    res.json({ success: true, data, tillCount: till.c });
+    res.json({ success: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
