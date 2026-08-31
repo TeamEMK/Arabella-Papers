@@ -190,15 +190,17 @@ router.get('/production', requireLogin, async (req, res) => {
     // those off the board while the stock is in the building, which is what
     // the team objected to the first time this gate went on. So an order the
     // floor has already started stays, whatever the approval column says.
-    // ?scope=old is the Old Production board: the same queue, the other side of
-    // the cutoff. Everything below is shared, so the two boards can never drift
-    // apart on what counts as production's work.
+    // ?scope=old is the Old Production board. It is a record rather than a
+    // queue: everything that reached production before the cutoff, dispatched
+    // orders included, because the question it answers is "what did we have",
+    // not "what is left to do". The live board drops an order the moment it
+    // goes to Dispatch, which is why only that side tests for it.
     const archive = req.query.scope === 'old';
 
     const [rows] = await db.query(`
       SELECT * FROM orders
       WHERE ${PRODUCTION_QUEUE_WHERE}
-        AND NOT ${LEFT_FOR_DISPATCH}
+        ${archive ? '' : `AND NOT ${LEFT_FOR_DISPATCH}`}
         AND ${PRODUCTION_DATE} ${archive ? '<' : '>='} ?
       -- Newest into production first. That is the approval date, not the
       -- punch date: an order approved this morning may have been taken a
