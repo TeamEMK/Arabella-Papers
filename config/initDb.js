@@ -57,7 +57,26 @@ const COLUMN_MIGRATIONS = [
   // July order onto the live one; `after` carries those pins over.
   // When production handed the order to Dispatch. Separate from actual_4,
   // which is the day the parcel actually went.
-  { table: 'orders', column: 'dispatch_ready_at', type: 'DATETIME NULL' },
+  //
+  // Orders already sitting on the dispatch board when this column arrived have
+  // no handover time recorded anywhere - except the change log, which has been
+  // writing down every status_4 change since the Logs tab went in. Take the
+  // first one per order. Anything handed over before that is simply not
+  // recoverable, and stays blank rather than being guessed at.
+  {
+    table: 'orders',
+    column: 'dispatch_ready_at',
+    type: 'DATETIME NULL',
+    after: `UPDATE orders o
+              JOIN (
+                SELECT order_id, MIN(changed_at) AS first_set
+                FROM order_logs
+                WHERE field = 'Dispatch Status' AND IFNULL(new_value, '') <> ''
+                GROUP BY order_id
+              ) l ON l.order_id = o.order_id
+              SET o.dispatch_ready_at = l.first_set
+            WHERE o.dispatch_ready_at IS NULL`,
+  },
   {
     table: 'orders',
     column: 'production_board',
