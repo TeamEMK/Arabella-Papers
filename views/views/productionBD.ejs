@@ -19,6 +19,7 @@ document.getElementById('prodRoot').innerHTML = `
   </div>
   <div class="row g-3 mb-3">
     <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #ffc107;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">${PROD_ARCHIVE ? 'Old Production Orders' : 'Production Orders'}</h6><h3 class="fw-bold text-warning mb-0" id="prod_boardCount">--</h3></div></div></div>
+    ${PROD_ARCHIVE ? '' : `<div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #198754;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Dispatched</h6><h3 class="fw-bold text-success mb-0" id="prod_dispatchedCount">--</h3></div></div></div>`}
   </div>
   <div class="card bg-light-glass mb-4 shadow-sm">
     <button class="filter-toggle-btn btn-sm py-1 px-3 w-100 d-flex justify-content-between align-items-center rounded" type="button" data-bs-toggle="collapse" data-bs-target="#prodFilterContent">
@@ -123,6 +124,9 @@ async function fetchProductionData() {
     // wrong.
     const bc = document.getElementById('prod_boardCount');
     if(bc) bc.textContent = prod_data.length;
+    // Same date range as the rows, so the two add up to what August took in.
+    const dc = document.getElementById('prod_dispatchedCount');
+    if(dc) dc.textContent = json.dispatchedCount != null ? json.dispatchedCount : '--';
     prod_populateFilters(prod_data);
     prodApplyFilters();
     prod_attachScroll();

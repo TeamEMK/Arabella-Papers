@@ -238,7 +238,24 @@ router.get('/production', requireLogin, async (req, res) => {
       Dispatch_Status: r.status_4 || '',
     }));
 
-    res.json({ success: true, data });
+    // The queue only holds work still to do, so August orders that have already
+    // shipped are on it nowhere. Count them, over the same date range as the
+    // rows above - the two numbers add up to what August has taken in, which is
+    // the sum people were trying to make from the old un-dated till-count.
+    // The archive already includes its dispatched orders, so it needs none.
+    let dispatchedCount;
+    if (!archive) {
+      const [[d]] = await db.query(
+        `SELECT COUNT(*) AS c FROM orders
+         WHERE ${PRODUCTION_QUEUE_WHERE}
+           AND ${LEFT_FOR_DISPATCH}
+           AND ${PRODUCTION_DATE} >= ?`,
+        [PRODUCTION_ARCHIVE_FROM]
+      );
+      dispatchedCount = d.c;
+    }
+
+    res.json({ success: true, data, dispatchedCount });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
