@@ -40,23 +40,49 @@ async function seedAdmin() {
   return { seeded: true, email };
 }
 
+// Columns added to a table that already exists. schema.sql cannot deliver
+// these: every CREATE in it is IF NOT EXISTS, so on a live database the whole
+// file is a no-op and a new column inside `orders` never arrives. Twice now
+// that has meant running an ALTER against production by hand before a deploy
+// could work.
+//
+// Each entry is checked before it is applied, so this is safe to run on every
+// boot and a database that already has the column is left alone.
+const COLUMN_MIGRATIONS = [
+  { table: 'orders', column: 'printing_type', type: 'VARCHAR(60)' },
+  { table: 'orders', column: 'production_archived_at', type: 'DATETIME NULL' },
+];
+
+async function addMissingColumns() {
+  const added = [];
+  for (const m of COLUMN_MIGRATIONS) {
+    const [cols] = await db.query('SHOW COLUMNS FROM ?? LIKE ?', [m.table, m.column]);
+    if (cols.length) continue;
+    await db.query(`ALTER TABLE \`${m.table}\` ADD COLUMN \`${m.column}\` ${m.type}`);
+    added.push(`${m.table}.${m.column}`);
+  }
+  return added;
+}
+
 async function run() {
   const [existing] = await db.query("SHOW TABLES LIKE 'users'");
-  let created = false;
+  const created = !existing.length;
 
-  if (!existing.length) {
-    const sql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-    const statements = statementsFrom(sql);
-    for (const statement of statements) {
-      await db.query(statement);
-    }
-    created = true;
+  // Run every time, not only on an empty database. Each statement is a
+  // CREATE TABLE IF NOT EXISTS, so an existing database keeps what it has and
+  // a table added since it was set up - order_logs was one - arrives on its
+  // own instead of being created by hand.
+  const sql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+  for (const statement of statementsFrom(sql)) {
+    await db.query(statement);
   }
+
+  const columns = await addMissingColumns();
 
   // Checked even when the tables already exist, so a database that lost its
   // users can still be recovered by setting ADMIN_PASSWORD and restarting.
   const admin = await seedAdmin();
-  return { created, admin };
+  return { created, admin, columns };
 }
 
 let ready = null;

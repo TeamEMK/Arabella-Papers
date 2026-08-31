@@ -111,6 +111,7 @@ if (!isServerless) {
     ensureSchema().then(
       r => {
         console.log(`   Database: ${r.created ? 'schema created' : 'schema already present'}`);
+        if (r.columns && r.columns.length) console.log(`   Migrated: ${r.columns.join(', ')}`);
         console.log(r.admin.seeded
           ? `   Admin:    created ${r.admin.email}`
           : `   Admin:    not created (${r.admin.reason})`);
