@@ -26,8 +26,7 @@ function connectionUrl() {
   // worth, and this is meant to be run in a hurry.
   const arg = process.argv[2];
   if (arg && arg.startsWith('mysql://')) {
-    fs.writeFileSync(path.join(ROOT, '.env.backup'), `LIVE_DB_URL=${arg}
-`);
+    fs.writeFileSync(path.join(ROOT, '.env.backup'), `LIVE_DB_URL=${arg}\n`);
     console.log('Saved the connection string. Next time just run the script.');
     return arg;
   }
@@ -36,10 +35,10 @@ function connectionUrl() {
 
   const file = path.join(ROOT, '.env.backup');
   if (!fs.existsSync(file)) {
-    console.error('\nNo connection string.\n');
-    console.error('Create .env.backup in the project folder with one line:');
-    console.error('  LIVE_DB_URL=mysql://root:PASSWORD@host.proxy.rlwy.net:12345/railway\n');
-    console.error('Copy it from Railway -> MySQL -> Variables -> MYSQL_PUBLIC_URL.\n');
+    console.error('\nNo connection string yet. Run it once with the URL:\n');
+    console.error('  node scripts/backup-live.js "mysql://root:PASS@host.proxy.rlwy.net:12345/railway"\n');
+    console.error('Copy that from Railway -> MySQL -> Variables -> MYSQL_PUBLIC_URL.');
+    console.error('It gets saved, so later runs need nothing.\n');
     process.exit(1);
   }
   const line = fs.readFileSync(file, 'utf8').split('\n')
