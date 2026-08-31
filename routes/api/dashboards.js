@@ -27,6 +27,20 @@ const LOCAL_ORDER_OFF_BOARDS = `LOWER(IFNULL(dealer_name, '')) <> 'local order'`
 // What makes an order production's work, leaving aside whether it has already
 // gone to Dispatch. The queue, the till-count and the dispatch revert all need
 // to ask that same question, so they ask it in one place.
+// The floor works on this month. Everything the queue was still carrying from
+// before August - 2584 orders, most of them from 2025 - is work nobody is going
+// to pick up again, but it cannot simply be dropped either, so it moves to the
+// Old Production board where it can still be found and finished.
+//
+// A fixed date rather than a rolling window: the split has to mean the same
+// thing tomorrow as it did today, or an order quietly changes boards overnight.
+const PRODUCTION_ARCHIVE_FROM = '2026-08-01';
+
+// Which side of that line an order falls on. The date is the same one the board
+// shows and sorts by - when the order reached production, not when it was
+// punched - so what the column says matches which board it is on.
+const PRODUCTION_DATE = `DATE(COALESCE(actual_2, timestamp))`;
+
 const PRODUCTION_QUEUE_WHERE = `
   is_deleted = 0
   AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%rejected%'
@@ -168,15 +182,21 @@ router.get('/production', requireLogin, async (req, res) => {
     // those off the board while the stock is in the building, which is what
     // the team objected to the first time this gate went on. So an order the
     // floor has already started stays, whatever the approval column says.
+    // ?scope=old is the Old Production board: the same queue, the other side of
+    // the cutoff. Everything below is shared, so the two boards can never drift
+    // apart on what counts as production's work.
+    const archive = req.query.scope === 'old';
+
     const [rows] = await db.query(`
       SELECT * FROM orders
       WHERE ${PRODUCTION_QUEUE_WHERE}
         AND (status_4 IS NULL OR status_4 = '')
+        AND ${PRODUCTION_DATE} ${archive ? '<' : '>='} ?
       -- Newest into production first. That is the approval date, not the
       -- punch date: an order approved this morning may have been taken a
       -- month ago, and the floor wants it at the top of their queue today.
       ORDER BY COALESCE(actual_2, timestamp) DESC, id DESC
-    `);
+    `, [PRODUCTION_ARCHIVE_FROM]);
 
     const data = rows.map(r => ({
       ID: r.order_id,
@@ -202,9 +222,6 @@ router.get('/production', requireLogin, async (req, res) => {
       // Per-stage *_actual_time fields used to be sent here too - 16 of them,
       // formatted for every order and read by nothing. On 5000 orders that was
       // 80k Intl formats and most of an 8MB response.
-      // The per-stage *_actual_time fields used to be sent here as well - 16
-      // of them, date-formatted for every order and read by nothing. On 5000
-      // orders that was 80k Intl formats and most of an 8MB response.
       Card_Assembly: r.card_assembly || '',
       Remark: r.remark || '',
       Reason_For_Delay: r.reason_for_delay || '',

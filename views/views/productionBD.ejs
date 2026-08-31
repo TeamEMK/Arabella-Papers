@@ -1,13 +1,24 @@
-<%# Production Dashboard %>
+<%# Production Dashboard. Rendered a second time as Old Production, where the
+    same board shows the orders from before the August cutoff. %>
 <div id="prodRoot"></div>
 <script>
+var PROD_ARCHIVE = <%= archive ? 'true' : 'false' %>;
 document.getElementById('prodRoot').innerHTML = `
 <div class="container-fluid py-4">
+  ${PROD_ARCHIVE ? `
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <h4 class="mb-0 text-dark fw-bold"><i class="fas fa-box-archive me-2"></i>Old Production</h4>
+  </div>
+  <div class="alert alert-secondary py-2 px-3 small mb-3">
+    Orders that reached production <b>before 1 August 2026</b>. They are kept here so they
+    can still be looked up and finished &mdash; the Production Dashboard shows the current work.
+  </div>` : ''}
   <div class="d-flex gap-2 mb-3">
     <button class="btn btn-primary smooth-ui" onclick="prod_openBulkModal()"><i class="fas fa-industry me-1"></i> Bulk Stage Update</button>
     <button class="btn btn-outline-dark smooth-ui text-dark" onclick="refreshBoard(this, fetchProductionData, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
   </div>
-  <div class="row g-3 mb-3"><div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #ffc107;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Till Production Orders</h6><h3 class="fw-bold text-warning mb-0" id="prod_tillCount">--</h3></div></div></div></div>
+  ${PROD_ARCHIVE ? '' : `
+  <div class="row g-3 mb-3"><div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #ffc107;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Till Production Orders</h6><h3 class="fw-bold text-warning mb-0" id="prod_tillCount">--</h3></div></div></div></div>`}
   <div class="card bg-light-glass mb-4 shadow-sm">
     <button class="filter-toggle-btn btn-sm py-1 px-3 w-100 d-flex justify-content-between align-items-center rounded" type="button" data-bs-toggle="collapse" data-bs-target="#prodFilterContent">
       <span class="text-dark p-2 fw-bold"><i class="fas fa-filter me-2"></i> Filters & Search</span>
@@ -28,7 +39,7 @@ document.getElementById('prodRoot').innerHTML = `
     </div>
   </div>
   <div class="card bg-light-glass shadow-lg">
-    <div class="card-header bg-transparent border-0"><h5 class="mb-0 text-dark fw-bold"><i class="fas fa-tools me-2"></i>Orders in Production Queue</h5></div>
+    <div class="card-header bg-transparent border-0"><h5 class="mb-0 text-dark fw-bold"><i class="fas fa-tools me-2"></i>Orders in ${PROD_ARCHIVE ? 'Old Production' : 'Production'} Queue</h5></div>
     <div class="card-body p-0">
       <div class="table-responsive" data-fill-height style="overflow-y:auto;position:relative;">
         <table class="table table-hover table-striped mb-0 text-nowrap" style="border-collapse:separate;border-spacing:0;">
@@ -102,7 +113,7 @@ var PROD_COLS = ['Guest_Name','Paper_Cutting','Dye_Status','Block_Status','Print
 
 async function fetchProductionData() {
   try {
-    const res = await fetch('/api/dashboards/production');
+    const res = await fetch('/api/dashboards/production' + (PROD_ARCHIVE ? '?scope=old' : ''));
     const json = await res.json();
     prod_data = json.data || [];
     // Counted by the server, not from the rows above: an order that has gone

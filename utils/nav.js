@@ -20,6 +20,9 @@ function getNavMenu(role, domain) {
 
   if (roleStr === 'SuperAdmin' || roleStr.includes('Production Manager')) {
     menu.push({ id: 'productionBD', name: 'Production Dashboard', icon: 'fa-industry' });
+    // Same board, the orders from before the August cutoff. Whoever works the
+    // queue is who needs to look one of them up, so it goes right below it.
+    menu.push({ id: 'oldProduction', name: 'Old Production', icon: 'fa-box-archive' });
   }
 
   if (roleStr === 'SuperAdmin' || roleStr === 'Accounts') {
