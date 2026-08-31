@@ -276,13 +276,10 @@ async function anFetchToday() {
   if (!j.success) return;
   document.getElementById('kpi_today_total').textContent = j.total;
   document.getElementById('kpi_today_indesign').textContent = j.inDesign;
-  // The board counts by the day an order reached production, this page by the
-  // day it was punched, so the two figures differ and the gap keeps being
-  // reported as a fault. Print the board's own number beside the explanation.
-  const hint = document.getElementById('kpi_inprogress_hint');
-  if (hint && j.onProductionBoard != null) {
-    hint.innerHTML = 'of this period&rsquo;s orders &mdash; on the floor<br>'
-      + '<span class="text-warning fw-bold">Production Dashboard: ' + j.onProductionBoard + '</span>';
+  // Kept for the cards, which redraw whenever a filter changes.
+  if (j.onProductionBoard != null) {
+    an_boardCount = j.onProductionBoard;
+    renderKPIs(an_filtered.length ? an_filtered : an_all);
   }
   document.getElementById('kpi_today_inprogress').textContent = j.inProgress;
   document.getElementById('kpi_today_dispatched').textContent = j.dispatched;
@@ -364,11 +361,29 @@ function anClearFilters() {
 // showed. The stage now comes from the server, worked out with the same tests
 // the board uses, and the order not yet at the floor has a card of its own so
 // the four still add up to the total.
+// What the production board is carrying right now, straight from the same
+// query the board runs. Held here because the cards redraw on every filter
+// change while this figure is fetched once and refreshed on its own.
+var an_boardCount = null;
+
 function renderKPIs(data) {
   const at = stage => data.filter(o => o.Stage === stage).length;
   document.getElementById('kpi_total').textContent = data.length;
   document.getElementById('kpi_indesign').textContent = at('design');
-  document.getElementById('kpi_inprogress').textContent = at('production');
+  // The board's own figure, not this period's. The two never matched - the
+  // board counts by the day an order reached production, this page by the day
+  // it was punched - and being asked which was right, twice, settled it: the
+  // number people check against goes on the card, and the period figure moves
+  // to the line underneath.
+  const period = at('production');
+  document.getElementById('kpi_inprogress').textContent =
+    an_boardCount != null ? an_boardCount : period;
+  const hint = document.getElementById('kpi_inprogress_hint');
+  if (hint) {
+    hint.innerHTML = an_boardCount != null
+      ? 'on the production floor now<br><span class="text-muted">' + period + ' of this period&rsquo;s orders</span>'
+      : 'approved &mdash; on the production floor';
+  }
   document.getElementById('kpi_dispatched').textContent = at('dispatched');
   document.getElementById('kpi_cancelled').textContent = at('cancelled');
 }
