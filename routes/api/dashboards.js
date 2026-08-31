@@ -477,7 +477,11 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       WHERE is_deleted = 0
         AND ${LOCAL_ORDER_OFF_BOARDS}
         AND ${LEFT_FOR_DISPATCH}
-      ORDER BY COALESCE(actual_4, timestamp) DESC, id DESC
+      -- Parcels still to send first. An order sent over from production has no
+      -- dispatch date yet, so it used to sort on the day it was punched - one
+      -- taken in May and handed over today landed below every August dispatch,
+      -- hundreds of rows down, and read as never having arrived.
+      ORDER BY (actual_4 IS NULL) DESC, COALESCE(actual_4, timestamp) DESC, id DESC
     `);
 
     const data = rows.map(r => ({
