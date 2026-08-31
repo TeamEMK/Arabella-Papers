@@ -49,6 +49,15 @@ const PRODUCTION_DATE = `DATE(COALESCE(actual_2, timestamp))`;
 // one expression, the production side negated, so an order cannot sit on both.
 const LEFT_FOR_DISPATCH = `((status_4 IS NOT NULL AND status_4 <> '') OR actual_4 IS NOT NULL)`;
 
+// Handed to Dispatch but not actually gone. "Ready" says so outright, whatever
+// date the row carries - a few were saved while still Ready and picked up one
+// they never earned. A blank status is the older imported work, which did go
+// out; those rows carry the date and nothing else, so the date is the proof.
+const AWAITING_DISPATCH = `(
+  LOWER(IFNULL(status_4, '')) LIKE '%ready%'
+  OR (IFNULL(status_4, '') = '' AND actual_4 IS NULL)
+)`;
+
 // Which of the two production boards an order belongs on. The cutoff date
 // decides unless someone has pinned it, and a pin has to work both ways: an
 // August order nobody will finish belongs on the old board, and a July one
@@ -480,8 +489,10 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       -- Parcels still to send first. An order sent over from production has no
       -- dispatch date yet, so it used to sort on the day it was punched - one
       -- taken in May and handed over today landed below every August dispatch,
-      -- hundreds of rows down, and read as never having arrived.
-      ORDER BY (actual_4 IS NULL) DESC, COALESCE(actual_4, timestamp) DESC, id DESC
+      -- hundreds of rows down, and read as never having arrived. Sorted on the
+      -- status rather than the date, because a few orders carry a date from
+      -- being saved while still Ready and are no more dispatched for it.
+      ORDER BY ${AWAITING_DISPATCH} DESC, COALESCE(actual_4, timestamp) DESC, id DESC
     `);
 
     const data = rows.map(r => ({
@@ -540,14 +551,23 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
       volumetric_weight: volWeight,
     }, req.session.user || userEmail);
 
+    // The dispatch date is when the parcel went, so only an order that has
+    // actually gone gets one. Saving with the status left on "Ready" used to
+    // stamp it anyway - which is how orders ended up dated with no courier
+    // against them, looking dispatched on every count while sitting on a shelf.
+    // An order already gone keeps the date it went on, so correcting a docket
+    // does not move it to today.
+    const gone = /dispatch|deliver/i.test(status || '') ? 1 : 0;
+
     await db.query(`
       UPDATE orders SET
         courier = ?, ups_dhl_fedex_tracking_number = ?, status_4 = ?,
         invoice_number = ?, invoice_amount = ?, number_of_boxes = ?,
-        weight = ?, volumetric_weight = ?, actual_4 = NOW(),
+        weight = ?, volumetric_weight = ?,
+        actual_4 = CASE WHEN ? = 1 THEN COALESCE(actual_4, NOW()) ELSE NULL END,
         dispatch_updated_by = ?
       WHERE order_id = ?
-    `, [courier, docket, status, invoiceNo, num(invoiceAmount), num(boxes), weight, volWeight, userEmail, orderId]);
+    `, [courier, docket, status, invoiceNo, num(invoiceAmount), num(boxes), weight, volWeight, gone, userEmail, orderId]);
 
     res.json({ success: true });
   } catch (err) {

@@ -161,8 +161,18 @@ function dspApplyFilters() {
   dsp_renderTable(filtered);
 }
 // Say it in words at the top of the board, not as a badge halfway down a row.
+// "Ready" means it has not gone, whatever date the row carries - a few were
+// saved while still Ready and picked up one they never earned. A blank status
+// is the older imported work, which did go out and carries only the date, so
+// there the date is the proof.
+function dsp_isAwaiting(o) {
+  const s = (o.Dispatch_Status || '').trim().toLowerCase();
+  if (s.includes('ready')) return true;
+  return s === '' && !o.Dispatch_Date;
+}
+
 function dsp_showWaitingBanner() {
-  const waiting = dsp_data.filter(o => !o.Dispatch_Date).length;
+  const waiting = dsp_data.filter(dsp_isAwaiting).length;
   const box = document.getElementById('dsp_waitingBanner');
   if(!box) return;
   box.style.setProperty('display', waiting ? 'flex' : 'none', 'important');
