@@ -49,13 +49,14 @@ const PRODUCTION_DATE = `DATE(COALESCE(actual_2, timestamp))`;
 // one expression, the production side negated, so an order cannot sit on both.
 const LEFT_FOR_DISPATCH = `((status_4 IS NOT NULL AND status_4 <> '') OR actual_4 IS NOT NULL)`;
 
-// Which of the two production boards an order belongs on. Usually the cutoff
-// date decides, but an order can also be moved across by hand - the newer work
-// nobody is going to finish, which the date alone would keep on the queue
-// forever. One expression, used by both boards with opposite signs.
-const ON_OLD_PRODUCTION = (archive) => archive
-  ? `(production_archived_at IS NOT NULL OR ${PRODUCTION_DATE} < ?)`
-  : `(production_archived_at IS NULL AND ${PRODUCTION_DATE} >= ?)`;
+// Which of the two production boards an order belongs on. The cutoff date
+// decides unless someone has pinned it, and a pin has to work both ways: an
+// August order nobody will finish belongs on the old board, and a July one
+// being picked up again belongs on the live queue. The two branches are exact
+// complements, so an order is always on one board and never on both.
+const ON_PRODUCTION_BOARD = (archive) => archive
+  ? `IF(production_board IS NULL, ${PRODUCTION_DATE} < ?, production_board = 'old')`
+  : `IF(production_board IS NULL, ${PRODUCTION_DATE} >= ?, production_board = 'current')`;
 
 const PRODUCTION_QUEUE_WHERE = `
   is_deleted = 0
@@ -209,7 +210,7 @@ router.get('/production', requireLogin, async (req, res) => {
       SELECT * FROM orders
       WHERE ${PRODUCTION_QUEUE_WHERE}
         ${archive ? '' : `AND NOT ${LEFT_FOR_DISPATCH}`}
-        AND ${ON_OLD_PRODUCTION(archive)}
+        AND ${ON_PRODUCTION_BOARD(archive)}
       -- Newest into production first. That is the approval date, not the
       -- punch date: an order approved this morning may have been taken a
       -- month ago, and the floor wants it at the top of their queue today.
@@ -263,7 +264,7 @@ router.get('/production', requireLogin, async (req, res) => {
         `SELECT COUNT(*) AS c FROM orders
          WHERE ${PRODUCTION_QUEUE_WHERE}
            AND ${LEFT_FOR_DISPATCH}
-           AND ${ON_OLD_PRODUCTION(false)}`,
+           AND ${ON_PRODUCTION_BOARD(false)}`,
         [PRODUCTION_ARCHIVE_FROM]
       );
       dispatchedCount = d.c;
@@ -293,9 +294,11 @@ router.post('/production/archive', requireLogin, async (req, res) => {
     const toOld = req.body.archive !== false;
     if (!ids.length) return res.status(400).json({ success: false, error: 'No orders selected.' });
 
+    // Pinned, not cleared: sending a July order back to the live queue has to
+    // survive the cutoff date, which would otherwise pull it straight back.
     const [result] = await db.query(
-      'UPDATE orders SET production_archived_at = ? WHERE order_id IN (?) AND is_deleted = 0',
-      [toOld ? new Date() : null, ids]
+      'UPDATE orders SET production_board = ? WHERE order_id IN (?) AND is_deleted = 0',
+      [toOld ? 'old' : 'current', ids]
     );
 
     // One line each, so the Logs tab can answer "who took this off the board".
@@ -592,7 +595,7 @@ router.put('/dispatch/:id/revert', requireLogin, async (req, res) => {
     // order on Dispatch is an old one, so guessing "production" would send
     // people looking on the wrong board almost every time.
     const [[back]] = await db.query(
-      `SELECT COUNT(*) AS onQueue, SUM(${ON_OLD_PRODUCTION(false)}) AS current
+      `SELECT COUNT(*) AS onQueue, SUM(${ON_PRODUCTION_BOARD(false)}) AS current
        FROM orders WHERE order_id = ? AND ${PRODUCTION_QUEUE_WHERE}`,
       [PRODUCTION_ARCHIVE_FROM, orderId]
     );

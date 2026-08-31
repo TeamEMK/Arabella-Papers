@@ -51,6 +51,16 @@ async function seedAdmin() {
 const COLUMN_MIGRATIONS = [
   { table: 'orders', column: 'printing_type', type: 'VARCHAR(60)' },
   { table: 'orders', column: 'production_archived_at', type: 'DATETIME NULL' },
+  // Which production board this order is pinned to, overriding the cutoff
+  // date. NULL means the date decides. production_archived_at came first and
+  // could only pin an order to the old board, which left no way to pull a
+  // July order onto the live one; `after` carries those pins over.
+  {
+    table: 'orders',
+    column: 'production_board',
+    type: "VARCHAR(10) NULL",
+    after: "UPDATE orders SET production_board = 'old' WHERE production_archived_at IS NOT NULL",
+  },
 ];
 
 async function addMissingColumns() {
@@ -59,6 +69,7 @@ async function addMissingColumns() {
     const [cols] = await db.query('SHOW COLUMNS FROM ?? LIKE ?', [m.table, m.column]);
     if (cols.length) continue;
     await db.query(`ALTER TABLE \`${m.table}\` ADD COLUMN \`${m.column}\` ${m.type}`);
+    if (m.after) await db.query(m.after);
     added.push(`${m.table}.${m.column}`);
   }
   return added;
