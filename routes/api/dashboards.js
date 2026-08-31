@@ -58,20 +58,30 @@ const ON_PRODUCTION_BOARD = (archive) => archive
   ? `IF(production_board IS NULL, ${PRODUCTION_DATE} < ?, production_board = 'old')`
   : `IF(production_board IS NULL, ${PRODUCTION_DATE} >= ?, production_board = 'current')`;
 
+// Has this order reached the floor? Either the client has signed it off, or
+// somebody has already started a stage on it - the office records approvals
+// late, and stock in the building counts whatever the column says.
+const REACHED_PRODUCTION = `(
+  TRIM(IFNULL(design_approval_status_from_client, '')) NOT IN ('Proofing Done', '')
+  OR LOWER(IFNULL(paper_cutting, ''))  LIKE '%done%'
+  OR LOWER(IFNULL(printing, ''))       LIKE '%done%'
+  OR LOWER(IFNULL(card_assembly, ''))  LIKE '%done%'
+  OR LOWER(IFNULL(dye_status, ''))     LIKE '%done%'
+  OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
+)`;
+
+// An order nobody is going to make: cancelled, or rejected by the client.
+const DEAD_ORDER = `(
+  LOWER(IFNULL(design_approval_status_from_client, '')) LIKE '%rejected%'
+  OR LOWER(IFNULL(design_approval_status_from_client, '')) LIKE '%cancel%'
+  OR LOWER(IFNULL(design_status, '')) LIKE '%cancel%'
+)`;
+
 const PRODUCTION_QUEUE_WHERE = `
   is_deleted = 0
-  AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%rejected%'
-  AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%cancel%'
-  AND LOWER(IFNULL(design_status, '')) NOT LIKE '%cancel%'
+  AND NOT ${DEAD_ORDER}
   AND ${LOCAL_ORDER_OFF_BOARDS}
-  AND (
-    TRIM(IFNULL(design_approval_status_from_client, '')) NOT IN ('Proofing Done', '')
-    OR LOWER(IFNULL(paper_cutting, ''))  LIKE '%done%'
-    OR LOWER(IFNULL(printing, ''))       LIKE '%done%'
-    OR LOWER(IFNULL(card_assembly, ''))  LIKE '%done%'
-    OR LOWER(IFNULL(dye_status, ''))     LIKE '%done%'
-    OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
-  )
+  AND ${REACHED_PRODUCTION}
 `;
 
 router.get('/till-approval', requireLogin, async (req, res) => {
@@ -701,24 +711,30 @@ router.get('/today', requireLogin, async (req, res) => {
     const today = new Date().toLocaleDateString('en-CA', IST);
 
     const live = `is_deleted = 0 AND ${LOCAL_ORDER_OFF_BOARDS}`;
-    const cancelled = `(LOWER(IFNULL(design_status, '')) LIKE '%cancel%'
-                        OR LOWER(IFNULL(design_approval_status_from_client, '')) LIKE '%cancel%')`;
 
     const count = async (sql, params) => {
       const [[row]] = await db.query(sql, params);
       return row.c;
     };
 
-    const [total, dispatched, inProgress, cancelledToday] = await Promise.all([
+    const [total, dispatched, inDesign, inProgress, cancelledToday] = await Promise.all([
       // Orders punched today.
       count(`SELECT COUNT(*) AS c FROM orders WHERE ${live} AND DATE(timestamp) = ?`, [today]),
       // Parcels that actually went out today, whenever the order was punched.
       count(`SELECT COUNT(*) AS c FROM orders WHERE ${live} AND DATE(actual_4) = ?`, [today]),
-      // Of today's intake, what is still moving.
+      // Of today's intake, what is still with the designer or waiting on the
+      // client, and what has reached the floor. Same two tests the cards above
+      // and the production board use.
       count(
         `SELECT COUNT(*) AS c FROM orders
           WHERE ${live} AND DATE(timestamp) = ?
-            AND IFNULL(status_4, '') = '' AND NOT ${cancelled}`,
+            AND NOT ${DEAD_ORDER} AND NOT ${LEFT_FOR_DISPATCH} AND NOT ${REACHED_PRODUCTION}`,
+        [today]
+      ),
+      count(
+        `SELECT COUNT(*) AS c FROM orders
+          WHERE ${live} AND DATE(timestamp) = ?
+            AND NOT ${DEAD_ORDER} AND NOT ${LEFT_FOR_DISPATCH} AND ${REACHED_PRODUCTION}`,
         [today]
       ),
       // Cancelling leaves no date of its own on the order, so this comes from
@@ -732,7 +748,7 @@ router.get('/today', requireLogin, async (req, res) => {
       ),
     ]);
 
-    res.json({ success: true, date: today, total, dispatched, inProgress, cancelled: cancelledToday });
+    res.json({ success: true, date: today, total, dispatched, inDesign, inProgress, cancelled: cancelledToday });
   } catch (err) {
     console.error("Today's numbers failed:", err);
     res.status(500).json({ success: false, error: err.message });
@@ -751,8 +767,15 @@ router.get('/analytics', requireLogin, async (req, res) => {
     // Analytics measures the work that flows through here, so local orders
     // are out for the same reason they are off the boards. Left in, 3571 rows
     // the business does not track sat in every count and chart on the page.
+    // The stage tests come back from the database rather than being worked out
+    // again here, so the page and the production board can never disagree about
+    // whether an order has reached the floor.
     let query = `
-      SELECT * FROM orders
+      SELECT *,
+        ${DEAD_ORDER} AS is_dead,
+        ${LEFT_FOR_DISPATCH} AS has_left,
+        ${REACHED_PRODUCTION} AS reached
+      FROM orders
       WHERE is_deleted = 0
         AND ${LOCAL_ORDER_OFF_BOARDS}
     `;
@@ -801,6 +824,13 @@ router.get('/analytics', requireLogin, async (req, res) => {
           ClientStatus: r.design_approval_status_from_client || '',
           ProductionStatus: r.card_assembly || '',
           DispatchStatus: r.status_4 || '',
+          // Where the order has got to, as one word. The four values are
+          // exclusive and every order has one, so the cards built from them
+          // always add up to the total.
+          Stage: r.is_dead ? 'cancelled'
+            : r.has_left ? 'dispatched'
+            : r.reached ? 'production'
+            : 'design',
           // When the parcel actually left, for the monthly dispatch chart.
           DispatchDone: r.actual_4,
           Courier: r.courier || '',
