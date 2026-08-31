@@ -6,8 +6,8 @@ const { requireLogin } = require('../../middleware/auth');
 // Dates are stored as IST wall-clock and read back through a +05:30
 // connection. Vercel runs in UTC, so the zone has to be named here or every
 // entry renders 5:30 earlier than it happened.
-// The log is read as "who changed what, when" - a wall-clock question - so it
-// is shown the way the office says the time, not on a 24-hour clock.
+// Every date the boards show goes through here. 12-hour because that is how
+// the office says the time - "18:42" is a moment nobody reads aloud.
 const IST = { timeZone: 'Asia/Kolkata', hour12: true };
 
 // The log only grows, so unlike the boards it is never handed over whole.

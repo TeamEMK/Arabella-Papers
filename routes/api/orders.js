@@ -10,7 +10,9 @@ const { requireLogin } = require('../../middleware/auth');
 // Dates are stored as IST wall-clock and read back through a +05:30
 // connection. Vercel runs the server in UTC, so without naming the zone here
 // every timestamp rendered 5:30 earlier than the sheet said.
-const IST = { timeZone: 'Asia/Kolkata' };
+// Every date the boards show goes through here. 12-hour because that is how
+// the office says the time - "18:42" is a moment nobody reads aloud.
+const IST = { timeZone: 'Asia/Kolkata', hour12: true };
 
 // Multer: memory storage (files go to Drive)
 // 4MB per file — Vercel rejects any request body over 4.5MB before it reaches
