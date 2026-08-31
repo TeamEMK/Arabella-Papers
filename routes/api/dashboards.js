@@ -790,7 +790,22 @@ router.get('/today', requireLogin, async (req, res) => {
       ),
     ]);
 
-    res.json({ success: true, date: today, total, dispatched, inDesign, inProgress, cancelled: cancelledToday });
+    // What the Production Dashboard is showing right now. Analytics counts by
+    // the day an order was punched, the board by the day it reached production,
+    // so the two never match and the difference gets reported as a fault. Send
+    // the board's own figure so the page can print both and end the argument.
+    const [[board]] = await db.query(
+      `SELECT COUNT(*) AS c FROM orders
+       WHERE ${PRODUCTION_QUEUE_WHERE}
+         AND NOT ${LEFT_FOR_DISPATCH}
+         AND ${ON_PRODUCTION_BOARD(false)}`,
+      [PRODUCTION_ARCHIVE_FROM]
+    );
+
+    res.json({
+      success: true, date: today, total, dispatched, inDesign, inProgress,
+      cancelled: cancelledToday, onProductionBoard: board.c,
+    });
   } catch (err) {
     console.error("Today's numbers failed:", err);
     res.status(500).json({ success: false, error: err.message });
