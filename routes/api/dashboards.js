@@ -49,6 +49,14 @@ const PRODUCTION_DATE = `DATE(COALESCE(actual_2, timestamp))`;
 // one expression, the production side negated, so an order cannot sit on both.
 const LEFT_FOR_DISPATCH = `((status_4 IS NOT NULL AND status_4 <> '') OR actual_4 IS NOT NULL)`;
 
+// Which of the two production boards an order belongs on. Usually the cutoff
+// date decides, but an order can also be moved across by hand - the newer work
+// nobody is going to finish, which the date alone would keep on the queue
+// forever. One expression, used by both boards with opposite signs.
+const ON_OLD_PRODUCTION = (archive) => archive
+  ? `(production_archived_at IS NOT NULL OR ${PRODUCTION_DATE} < ?)`
+  : `(production_archived_at IS NULL AND ${PRODUCTION_DATE} >= ?)`;
+
 const PRODUCTION_QUEUE_WHERE = `
   is_deleted = 0
   AND LOWER(IFNULL(design_approval_status_from_client, '')) NOT LIKE '%rejected%'
@@ -201,7 +209,7 @@ router.get('/production', requireLogin, async (req, res) => {
       SELECT * FROM orders
       WHERE ${PRODUCTION_QUEUE_WHERE}
         ${archive ? '' : `AND NOT ${LEFT_FOR_DISPATCH}`}
-        AND ${PRODUCTION_DATE} ${archive ? '<' : '>='} ?
+        AND ${ON_OLD_PRODUCTION(archive)}
       -- Newest into production first. That is the approval date, not the
       -- punch date: an order approved this morning may have been taken a
       -- month ago, and the floor wants it at the top of their queue today.
@@ -255,13 +263,52 @@ router.get('/production', requireLogin, async (req, res) => {
         `SELECT COUNT(*) AS c FROM orders
          WHERE ${PRODUCTION_QUEUE_WHERE}
            AND ${LEFT_FOR_DISPATCH}
-           AND ${PRODUCTION_DATE} >= ?`,
+           AND ${ON_OLD_PRODUCTION(false)}`,
         [PRODUCTION_ARCHIVE_FROM]
       );
       dispatchedCount = d.c;
     }
 
     res.json({ success: true, data, dispatchedCount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/dashboards/production/archive
+//
+// The August cutoff clears out the old backlog, but it cannot help with an
+// order punched last week that is never going to be finished - by date it
+// belongs on the queue, and there it sits. This moves chosen orders across by
+// hand, and back again, without touching anything else about them.
+router.post('/production/archive', requireLogin, async (req, res) => {
+  try {
+    const user = req.session.user;
+    const role = user.role || '';
+    const isAuthorized = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' || role.includes('Production Manager');
+    if (!isAuthorized) return res.status(403).json({ success: false, error: 'Unauthorized' });
+
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.filter(Boolean) : [];
+    const toOld = req.body.archive !== false;
+    if (!ids.length) return res.status(400).json({ success: false, error: 'No orders selected.' });
+
+    const [result] = await db.query(
+      'UPDATE orders SET production_archived_at = ? WHERE order_id IN (?) AND is_deleted = 0',
+      [toOld ? new Date() : null, ids]
+    );
+
+    // One line each, so the Logs tab can answer "who took this off the board".
+    for (const id of ids) {
+      await logOrderEvent(
+        id,
+        toOld ? 'Moved to Old Production' : 'Moved back to Production',
+        '',
+        user
+      );
+    }
+
+    res.json({ success: true, moved: result.affectedRows });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
@@ -545,7 +592,7 @@ router.put('/dispatch/:id/revert', requireLogin, async (req, res) => {
     // order on Dispatch is an old one, so guessing "production" would send
     // people looking on the wrong board almost every time.
     const [[back]] = await db.query(
-      `SELECT COUNT(*) AS onQueue, SUM(${PRODUCTION_DATE} >= ?) AS current
+      `SELECT COUNT(*) AS onQueue, SUM(${ON_OLD_PRODUCTION(false)}) AS current
        FROM orders WHERE order_id = ? AND ${PRODUCTION_QUEUE_WHERE}`,
       [PRODUCTION_ARCHIVE_FROM, orderId]
     );

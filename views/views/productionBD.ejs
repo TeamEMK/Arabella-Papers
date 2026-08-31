@@ -15,6 +15,7 @@ document.getElementById('prodRoot').innerHTML = `
   </div>` : ''}
   <div class="d-flex gap-2 mb-3">
     <button class="btn btn-primary smooth-ui" onclick="prod_openBulkModal()"><i class="fas fa-industry me-1"></i> Bulk Stage Update</button>
+    <button class="btn ${PROD_ARCHIVE ? 'btn-outline-primary' : 'btn-outline-warning'} smooth-ui" onclick="prod_moveBoards()"><i class="fas ${PROD_ARCHIVE ? 'fa-rotate-left' : 'fa-box-archive'} me-1"></i> ${PROD_ARCHIVE ? 'Move back to Production' : 'Move to Old Production'}</button>
     <button class="btn btn-outline-dark smooth-ui text-dark" onclick="refreshBoard(this, fetchProductionData, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
   </div>
   <div class="row g-3 mb-3">
@@ -483,6 +484,44 @@ async function prod_markDispatch(id) {
 }
 function prodToggleSelectAll(m) { document.querySelectorAll('.prod_checkbox').forEach(c => { c.checked = m.checked; prod_handleCheck(c.value, m.checked); }); }
 function prod_handleCheck(id, checked) { if(checked) prod_selected.add(id.toString()); else prod_selected.delete(id.toString()); }
+// The cutoff date handles the old backlog. This is for the rest: an order from
+// this month that is never going to be finished, which by date would sit on the
+// queue forever. Same button both ways round - the archive sends them back.
+async function prod_moveBoards() {
+  const ids = [...prod_selected];
+  if(!ids.length) { showToast('warning','Select at least one order.'); return; }
+
+  const toOld = !PROD_ARCHIVE;
+  const where = toOld ? 'Old Production' : 'the Production Dashboard';
+  const confirmed = await Swal.fire({
+    title: `Move to ${where}?`,
+    html: `<b>${ids.length}</b> order${ids.length > 1 ? 's' : ''} will move to <b>${where}</b>.`
+      + `<br><br><span class="text-muted small">Nothing else changes &mdash; stages, dates and dealer stay as they are, and they can be moved back.</span>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Move',
+    confirmButtonColor: toOld ? '#fd7e14' : '#0d6efd',
+  });
+  if(!confirmed.isConfirmed) return;
+
+  showLoading(true);
+  try {
+    const res = await fetch('/api/dashboards/production/archive', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ ids, archive: toOld }),
+    });
+    const json = await res.json();
+    showLoading(false);
+    if(!json.success) { showToast('error', json.error || 'Could not move them.'); return; }
+    prod_selected.clear();
+    const mc = document.getElementById('prod_selectAll');
+    if(mc) mc.checked = false;
+    showToast('success', `${json.moved} order${json.moved > 1 ? 's' : ''} moved to ${where}.`);
+    fetchProductionData();
+  } catch(e) { showLoading(false); showToast('error','Server error.'); }
+}
+
 function prod_openBulkModal() {
   if(!prod_selected.size) { showToast('warning','Select at least one order.'); return; }
   const tbody = document.getElementById('prod_bulkBody'); tbody.innerHTML = '';
