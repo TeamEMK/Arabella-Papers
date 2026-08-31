@@ -238,10 +238,16 @@ router.get('/production', requireLogin, async (req, res) => {
       Dispatch_Status: r.status_4 || '',
     }));
 
-    // The queue only holds work still to do, so August orders that have already
-    // shipped are on it nowhere. Count them, over the same date range as the
-    // rows above - the two numbers add up to what August has taken in, which is
-    // the sum people were trying to make from the old un-dated till-count.
+    // The queue only holds work still to do, so August orders that have left it
+    // are on it nowhere. Count them, over the same date range as the rows above
+    // - the two add up to what August has taken in, which is the sum people
+    // were trying to make from the old un-dated till-count.
+    //
+    // This is "sent to Dispatch", not "dispatched": an order marked Ready has
+    // left production but has not gone out, and it belongs in this count. It is
+    // also why this number does not match a date filter on the Dispatch board -
+    // that reads the dispatch date, and a Ready order has none.
+    //
     // The archive already includes its dispatched orders, so it needs none.
     let dispatchedCount;
     if (!archive) {
