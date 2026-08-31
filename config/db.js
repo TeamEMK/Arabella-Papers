@@ -23,7 +23,23 @@ function createPool() {
   });
 }
 
-const pool = globalThis.__arabellaPool || createPool();
+// The `timezone` option above only tells this driver how to turn a JS Date
+// into the string it sends, and how to read one back. It tells MySQL nothing,
+// so NOW() and CURRENT_TIMESTAMP still run in whatever zone the server itself
+// is set to - IST on a developer's machine, UTC on Railway. The driver then
+// reads that UTC value back as though it were IST, and every timestamp the
+// database wrote for itself lands five and a half hours early.
+//
+// Pin the session to match the driver, on each new connection, so the two
+// agree wherever this runs. It has to be the callback form: the pool hands
+// this event a plain connection, not the promise wrapper.
+function createPinnedPool() {
+  const p = createPool();
+  p.on('connection', (conn) => conn.query("SET time_zone = '+05:30'", () => {}));
+  return p;
+}
+
+const pool = globalThis.__arabellaPool || createPinnedPool();
 if (isServerless) globalThis.__arabellaPool = pool;
 
 module.exports = pool;
