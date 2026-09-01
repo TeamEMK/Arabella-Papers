@@ -27,6 +27,9 @@ function getNavMenu(role, domain) {
 
   if (roleStr === 'SuperAdmin' || roleStr === 'Accounts') {
     menu.push({ id: 'dispatchBD', name: 'Dispatch Dashboard', icon: 'fa-truck-fast' });
+    // The same board, for parcels sent before the cutoff. Whoever works the
+    // queue is who needs to look one up, so it sits right below it.
+    menu.push({ id: 'oldDispatch', name: 'Old Dispatch', icon: 'fa-box-archive' });
   }
 
   if (roleStr === 'SuperAdmin' || domain === 'Head') {

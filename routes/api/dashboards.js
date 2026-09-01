@@ -86,6 +86,18 @@ const DEAD_ORDER = `(
   OR LOWER(IFNULL(design_status, '')) LIKE '%cancel%'
 )`;
 
+// Where the dispatch board splits. Same day as the production one, but kept
+// separate: there is no reason the two have to move together.
+const DISPATCH_ARCHIVE_FROM = '2026-08-01';
+
+// Which dispatch board an order belongs on. Anything still to send stays on
+// the live one however old it is - it is outstanding work, not history - and
+// so does anything marked gone without a date, which would otherwise fall off
+// both. The two branches are exact complements.
+const ON_DISPATCH_BOARD = (archive) => archive
+  ? `(NOT ${AWAITING_DISPATCH} AND actual_4 IS NOT NULL AND DATE(actual_4) < ?)`
+  : `(${AWAITING_DISPATCH} OR actual_4 IS NULL OR DATE(actual_4) >= ?)`;
+
 const PRODUCTION_QUEUE_WHERE = `
   is_deleted = 0
   AND NOT ${DEAD_ORDER}
@@ -482,6 +494,10 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
+    // ?scope=old is the Old Dispatch board: everything sent before the cutoff.
+    // The queue itself keeps the recent work and whatever is still to go out.
+    const archive = req.query.scope === 'old';
+
     // status_4 is only set by this dashboard, so on its own it showed the 24
     // orders handled since the system went live and hid the 1770 the sheet
     // recorded as dispatched before that. A dispatch date is the same fact
@@ -491,6 +507,7 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       WHERE is_deleted = 0
         AND ${LOCAL_ORDER_OFF_BOARDS}
         AND ${LEFT_FOR_DISPATCH}
+        AND ${ON_DISPATCH_BOARD(archive)}
       -- Parcels still to send first. An order sent over from production has no
       -- dispatch date yet, so it used to sort on the day it was punched - one
       -- taken in May and handed over today landed below every August dispatch,
@@ -506,7 +523,7 @@ router.get('/dispatch', requireLogin, async (req, res) => {
                   COALESCE(dispatch_ready_at, timestamp),
                   COALESCE(actual_4, dispatch_ready_at, timestamp)) DESC,
                id DESC
-    `);
+    `, [DISPATCH_ARCHIVE_FROM]);
 
     const data = rows.map(r => ({
       ID: r.order_id,
