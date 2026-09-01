@@ -10,7 +10,6 @@
 
   <div class="row g-3 mb-3" id="hr_cards">
     <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #0d6efd;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Employees</h6><h3 class="fw-bold text-primary mb-0" id="hr_total">--</h3></div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #ffc107;"><div class="card-body p-3"><h6 class="text-muted mb-0 small">Documents Pending</h6><div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">appointment letter, NDA, code of conduct or handbook</div><h3 class="fw-bold text-warning mb-0" id="hr_pending">--</h3></div></div></div>
   </div>
 
   <div class="card bg-light-glass mb-4 shadow-sm">
@@ -41,10 +40,9 @@
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Reporting To</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Joining</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Status</th>
-              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Documents Pending</th>
             </tr>
           </thead>
-          <tbody id="hr_tbody"><tr><td colspan="11" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="hr_tbody"><tr><td colspan="10" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -122,26 +120,9 @@ var HR_FIELDS = ['company','name','emp_code','mobile','email','emergency_no',
   'appointment_nda_status','code_of_conduct','policy_handbook',
   'background_verification','working_status','last_date_of_employment',
   'record_log','performance_remarks','other_notes'];
-
-// The four things that have to be signed or checked before someone is properly
-// on board. Anything not clearly settled counts as outstanding. Each carries a
-// short label, because a count on its own only prompts "which ones?".
-var HR_DOCS = [
-  { field: 'appointment_nda_status',   short: 'Letter',     full: 'Appointment letter / NDA' },
-  { field: 'code_of_conduct',          short: 'Conduct',    full: 'Code of conduct' },
-  { field: 'policy_handbook',          short: 'Handbook',   full: 'Policy handbook' },
-  { field: 'background_verification',  short: 'Background', full: 'Background verification' },
-];
-var HR_DOC_FIELDS = HR_DOCS.map(d => d.field);
-function hr_docDone(v) {
-  const s = (v || '').toLowerCase();
-  if (!s) return false;
-  return /signed|issued|received|acknowledg|clear|verified|done|yes|complete/.test(s)
-    && !/not |pending|awaited|no\b/.test(s);
-}
-function hr_pendingDocs(e) {
-  return HR_DOCS.filter(d => !hr_docDone(e[d.field]));
-}
+// The document fields, kept only so the form can offer back the wording
+// already in use as suggestions.
+var HR_DOC_FIELDS = ['appointment_nda_status', 'code_of_conduct', 'policy_handbook', 'background_verification'];
 
 const hr_esc = v => String(v == null ? '' : v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -156,7 +137,7 @@ async function hr_fetch() {
     return hr_data.length;
   } catch (e) {
     document.getElementById('hr_tbody').innerHTML =
-      '<tr><td colspan="11" class="text-center text-danger py-4">Could not load staff records.</td></tr>';
+      '<tr><td colspan="10" class="text-center text-danger py-4">Could not load staff records.</td></tr>';
     return 0;
   }
 }
@@ -195,20 +176,13 @@ function hr_render() {
   );
 
   document.getElementById('hr_total').textContent = hr_data.length;
-  document.getElementById('hr_pending').textContent = hr_data.filter(e => hr_pendingDocs(e).length > 0).length;
 
   const tbody = document.getElementById('hr_tbody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4">No employees found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4">No employees found.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((e, i) => {
-    // Named, not counted. Hovering gives the full name and whatever the record
-    // actually says, which is how you find out it is "Email Not Sent".
-    const pending = hr_pendingDocs(e);
-    const docs = pending.length
-      ? pending.map(d => `<span class="badge bg-warning text-dark me-1" title="${hr_esc(d.full)}: ${hr_esc(e[d.field]) || 'blank'}">${d.short}</span>`).join('')
-      : '<span class="badge bg-success">Complete</span>';
     return `<tr>
       <td>${i + 1}</td>
       <td><button class="btn btn-sm btn-warning" onclick="hr_openEdit(${e.id})" title="Open"><i class="fas fa-pen-to-square"></i></button></td>
@@ -220,7 +194,6 @@ function hr_render() {
       <td>${hr_esc(e.reporting_manager) || '-'}</td>
       <td>${hr_esc(e.date_of_joining) || '-'}</td>
       <td>${hr_esc(e.working_status) || '-'}</td>
-      <td>${docs}</td>
     </tr>`;
   }).join('');
 }
