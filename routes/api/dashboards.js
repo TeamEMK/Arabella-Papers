@@ -38,10 +38,43 @@ const LOCAL_ORDER_OFF_BOARDS = `LOWER(IFNULL(dealer_name, '')) <> 'local order'`
 // thing tomorrow as it did today, or an order quietly changes boards overnight.
 const PRODUCTION_ARCHIVE_FROM = '2026-08-01';
 
-// Which side of that line an order falls on. The date is the same one the board
-// shows and sorts by - when the order reached production, not when it was
-// punched - so what the column says matches which board it is on.
-const PRODUCTION_DATE = `DATE(COALESCE(actual_2, timestamp))`;
+// When anybody last did something to this order: the client approval, or any
+// production stage being set. An order taken in June that somebody worked on
+// today is today's work and belongs on the live board, without having to be
+// carried over from the archive by hand.
+//
+// GREATEST returns NULL if any argument is NULL, so every one carries a floor.
+const LAST_WORKED_ON = `GREATEST(
+  COALESCE(actual_2, timestamp),
+  COALESCE(guest_name_actual_time, '1000-01-01'),
+  COALESCE(paper_cutting_actual_time, '1000-01-01'),
+  COALESCE(dye_status_actual_time, '1000-01-01'),
+  COALESCE(no_die_actual_time, '1000-01-01'),
+  COALESCE(die_not_received_actual_time, '1000-01-01'),
+  COALESCE(die_cutting_done_actual_time, '1000-01-01'),
+  COALESCE(die_sent_actual_time, '1000-01-01'),
+  COALESCE(block_status_actual_time, '1000-01-01'),
+  COALESCE(no_block_actual_time, '1000-01-01'),
+  COALESCE(block_not_received_actual_time, '1000-01-01'),
+  COALESCE(block_printed_actual_time, '1000-01-01'),
+  COALESCE(block_sent_actual_time, '1000-01-01'),
+  COALESCE(printing_actual_time, '1000-01-01'),
+  COALESCE(edges_actual_time, '1000-01-01'),
+  COALESCE(no_laser_cutting_actual_time, '1000-01-01'),
+  COALESCE(done_laser_cutting_actual_time, '1000-01-01'),
+  COALESCE(pending_laser_cutting_actual_time, '1000-01-01'),
+  COALESCE(no_output_actual_time, '1000-01-01'),
+  COALESCE(output_done_actual_time, '1000-01-01'),
+  COALESCE(output_pending_actual_time, '1000-01-01'),
+  COALESCE(card_assembly_actual_time, '1000-01-01'),
+  COALESCE(remark_actual_time, '1000-01-01'),
+  COALESCE(reason_for_delay_actual_time, '1000-01-01')
+)`;
+
+// Which side of the cutoff an order falls on. Not the date the board prints -
+// that is when the order reached production and never moves - but the last
+// time it was touched, so working on an old order brings it back on its own.
+const PRODUCTION_DATE = `DATE(${LAST_WORKED_ON})`;
 
 // Has this order left for Dispatch? status_4 is what the Send to Dispatch
 // button sets, but almost none of the history carries it - those rows came in
