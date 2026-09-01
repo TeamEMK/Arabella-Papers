@@ -79,6 +79,10 @@ const REACHED_PRODUCTION = `(
   OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
 )`;
 
+// Client approvals that mean the job is to be made again. An order carrying
+// one of these is production's work afresh, however far it got last time.
+const REMAKE_STATUSES = ['Reprint', 'Reorder', 'Sample'];
+
 // An order nobody is going to make: cancelled, or rejected by the client.
 const DEAD_ORDER = `(
   LOWER(IFNULL(design_approval_status_from_client, '')) LIKE '%rejected%'
@@ -170,7 +174,36 @@ router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req
     if (fileUrl) updates.approved_design = fileUrl;
     if (approvalStatus === 'Rejected') updates.design_status = 'Rejected';
 
+    // A reprint on an order that has already gone out is a new job on an old
+    // row: it has to leave Dispatch and go back to the floor, or it sits on the
+    // dispatch board marked Delivered while somebody is expected to make it
+    // again. Clearing the dispatch columns is what moves it - the previous
+    // delivery is in the change log, and the courier and docket stay on the
+    // row until the new parcel overwrites them.
+    let sentBack = false;
+    if (REMAKE_STATUSES.includes((approvalStatus || '').trim())) {
+      const [[before]] = await db.query(
+        'SELECT status_4, actual_4 FROM orders WHERE order_id = ? LIMIT 1',
+        [orderId]
+      );
+      if (before && (before.status_4 || before.actual_4)) {
+        updates.status_4 = null;
+        updates.actual_4 = null;
+        updates.dispatch_ready_at = null;
+        updates.dispatch_board = null;
+        sentBack = true;
+      }
+    }
+
     await logOrderUpdate(orderId, updates, req.session.user || userEmail);
+    if (sentBack) {
+      await logOrderEvent(
+        orderId,
+        'Back to Production',
+        `Marked ${approvalStatus} after dispatch`,
+        req.session.user || userEmail
+      );
+    }
 
     const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
@@ -195,12 +228,17 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
         remarks: u.remark,
       }, req.session.user || u.userEmail);
 
+      // Same rule as the single update: a reprint on an order that has already
+      // gone out sends it back to the floor, or it sits on Dispatch marked
+      // Delivered with somebody waiting to make it again.
+      const remake = REMAKE_STATUSES.includes((u.status || '').trim());
       await db.query(`
         UPDATE orders SET
           design_approval_status_from_client = ?,
           remarks = ?,
           actual_2 = NOW(),
           approval_updated_by = ?
+          ${remake ? ', status_4 = NULL, actual_4 = NULL, dispatch_ready_at = NULL, dispatch_board = NULL' : ''}
         WHERE order_id = ?
       `, [u.status, u.remark, u.userEmail, u.id]);
       count++;
