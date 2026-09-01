@@ -7,7 +7,10 @@ document.getElementById('dispRoot').innerHTML = `
 <div class="container-fluid py-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h3 class="mb-0 text-dark fw-bold">${DSP_ARCHIVE ? '<i class="fas fa-box-archive me-2"></i>Old Dispatch' : 'Dispatch Dashboard'}</h3>
-    <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, fetchDispatchData, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    <div class="d-flex gap-2">
+      <button class="btn ${DSP_ARCHIVE ? 'btn-outline-primary' : 'btn-outline-warning'} smooth-ui fw-bold" onclick="dsp_moveBoards()"><i class="fas ${DSP_ARCHIVE ? 'fa-rotate-left' : 'fa-box-archive'} me-1"></i> ${DSP_ARCHIVE ? 'Move back to Dispatch' : 'Move to Old Dispatch'}</button>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, fetchDispatchData, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
   </div>
   ${DSP_ARCHIVE ? `
   <div class="alert alert-secondary py-2 px-3 small mb-3">
@@ -48,6 +51,7 @@ document.getElementById('dispRoot').innerHTML = `
         <table class="table table-hover table-striped mb-0 text-nowrap" style="border-collapse:separate;border-spacing:0;">
           <thead class="table-dark">
             <tr>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;"><input type="checkbox" id="dsp_selectAll" onclick="dspToggleSelectAll(this)" title="Select everything shown"></th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">#</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Sent to Dispatch</th>
@@ -65,7 +69,7 @@ document.getElementById('dispRoot').innerHTML = `
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
             </tr>
           </thead>
-          <tbody id="dsp_tbody"><tr><td colspan="15" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="dsp_tbody"><tr><td colspan="16" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -97,6 +101,10 @@ document.getElementById('dispRoot').innerHTML = `
 `;
 
 var dsp_data = [], dsp_editId = null;
+var dsp_selected = new Set();
+// The row last clicked, so shift-click can fill in everything between. Picking
+// 1,700 rows one at a time is not a thing anyone is going to do.
+var dsp_lastRow = null;
 
 async function fetchDispatchData() {
   try {
@@ -198,19 +206,100 @@ function dsp_showWaiting() {
   dspApplyFilters();
 }
 
+// Ticking one row is a click; ticking rows 62 to 1817 is not. Shift-click
+// fills in everything between this row and the last one touched, the way any
+// file list does.
+function dsp_handleCheck(ev, id, row) {
+  const on = ev.target.checked;
+  if (ev.shiftKey && dsp_lastRow !== null) {
+    const [from, to] = row < dsp_lastRow ? [row, dsp_lastRow] : [dsp_lastRow, row];
+    for (let i = from; i <= to; i++) {
+      const o = dsp_shown[i];
+      if (!o) continue;
+      if (on) dsp_selected.add(o.ID.toString()); else dsp_selected.delete(o.ID.toString());
+    }
+    document.querySelectorAll('.dsp_checkbox').forEach(c => {
+      c.checked = dsp_selected.has(c.value.toString());
+    });
+  } else {
+    if (on) dsp_selected.add(id.toString()); else dsp_selected.delete(id.toString());
+  }
+  dsp_lastRow = row;
+  dsp_showSelectedCount();
+}
+
+function dspToggleSelectAll(master) {
+  dsp_shown.forEach(o => {
+    if (master.checked) dsp_selected.add(o.ID.toString()); else dsp_selected.delete(o.ID.toString());
+  });
+  document.querySelectorAll('.dsp_checkbox').forEach(c => { c.checked = master.checked; });
+  dsp_lastRow = null;
+  dsp_showSelectedCount();
+}
+
+function dsp_showSelectedCount() {
+  const btn = document.querySelector('[onclick="dsp_moveBoards()"]');
+  if (!btn) return;
+  const label = DSP_ARCHIVE ? 'Move back to Dispatch' : 'Move to Old Dispatch';
+  const icon = DSP_ARCHIVE ? 'fa-rotate-left' : 'fa-box-archive';
+  btn.innerHTML = `<i class="fas ${icon} me-1"></i> ${label}`
+    + (dsp_selected.size ? ` <span class="badge bg-dark ms-1">${dsp_selected.size}</span>` : '');
+}
+
+async function dsp_moveBoards() {
+  const ids = [...dsp_selected];
+  if (!ids.length) { showToast('warning', 'Tick the orders you want to move.'); return; }
+
+  const toOld = !DSP_ARCHIVE;
+  const where = toOld ? 'Old Dispatch' : 'the Dispatch Dashboard';
+  const confirmed = await Swal.fire({
+    title: `Move to ${where}?`,
+    html: `<b>${ids.length}</b> order${ids.length > 1 ? 's' : ''} will move to <b>${where}</b>.`
+      + `<br><br><span class="text-muted small">Nothing else changes &mdash; courier, docket, invoice and dates stay as they are, and they can be moved back.</span>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Move',
+    confirmButtonColor: toOld ? '#fd7e14' : '#0d6efd',
+  });
+  if (!confirmed.isConfirmed) return;
+
+  showLoading(true);
+  try {
+    const res = await fetch('/api/dashboards/dispatch/archive', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ ids, archive: toOld }),
+    });
+    const json = await res.json();
+    showLoading(false);
+    if (!json.success) { showToast('error', json.error || 'Could not move them.'); return; }
+    dsp_selected.clear();
+    const master = document.getElementById('dsp_selectAll');
+    if (master) master.checked = false;
+    showToast('success', `${json.moved} order${json.moved > 1 ? 's' : ''} moved to ${where}.`);
+    fetchDispatchData();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
 function dspClearFilters() {
   ['dsp_filterStatus','dsp_filterCourier','dsp_filterDealer','dsp_search','dsp_startDate','dsp_endDate'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   dspApplyFilters();
 }
+// What the table is currently showing, so "select all" means what is in front
+// of you rather than every order on the board.
+var dsp_shown = [];
+
 function dsp_renderTable(data) {
+  dsp_shown = data;
   const tbody = document.getElementById('dsp_tbody');
-  if(!data.length) { tbody.innerHTML = '<tr><td colspan="15" class="text-center">No orders found.</td></tr>'; return; }
+  if(!data.length) { tbody.innerHTML = '<tr><td colspan="16" class="text-center">No orders found.</td></tr>'; return; }
   tbody.innerHTML = data.map((o, i) => {
     const s = o.Dispatch_Status||'Ready';
     let b = 'warning';
     if(s.toLowerCase().includes('dispatched')) b='info';
     if(s.toLowerCase().includes('delivered')) b='success';
     return `<tr>
+      <td><input type="checkbox" class="dsp_checkbox" value="${o.ID}" data-row="${i}" ${dsp_selected.has(o.ID.toString()) ? 'checked' : ''} onclick="dsp_handleCheck(event, '${o.ID}', ${i})"></td>
       <td>${i + 1}</td>
       <td class="fw-bold">${o.ID}</td>
       <td class="text-nowrap">${o.Ready_Date||'-'}</td>

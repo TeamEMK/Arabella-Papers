@@ -77,6 +77,10 @@ const COLUMN_MIGRATIONS = [
               SET o.dispatch_ready_at = l.first_set
             WHERE o.dispatch_ready_at IS NULL`,
   },
+  // Which dispatch board this order is pinned to, overriding the cutoff date.
+  // Same three states as production_board: 'old', 'current', or NULL to let
+  // the date decide.
+  { table: 'orders', column: 'dispatch_board', type: "VARCHAR(10) NULL" },
   {
     table: 'orders',
     column: 'production_board',

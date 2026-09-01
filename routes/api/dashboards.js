@@ -95,8 +95,12 @@ const DISPATCH_ARCHIVE_FROM = '2026-08-01';
 // so does anything marked gone without a date, which would otherwise fall off
 // both. The two branches are exact complements.
 const ON_DISPATCH_BOARD = (archive) => archive
-  ? `(NOT ${AWAITING_DISPATCH} AND actual_4 IS NOT NULL AND DATE(actual_4) < ?)`
-  : `(${AWAITING_DISPATCH} OR actual_4 IS NULL OR DATE(actual_4) >= ?)`;
+  ? `IF(dispatch_board IS NULL,
+        (NOT ${AWAITING_DISPATCH} AND actual_4 IS NOT NULL AND DATE(actual_4) < ?),
+        dispatch_board = 'old')`
+  : `IF(dispatch_board IS NULL,
+        (${AWAITING_DISPATCH} OR actual_4 IS NULL OR DATE(actual_4) >= ?),
+        dispatch_board = 'current')`;
 
 const PRODUCTION_QUEUE_WHERE = `
   is_deleted = 0
@@ -604,6 +608,47 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
     `, [courier, docket, status, invoiceNo, num(invoiceAmount), num(boxes), weight, volWeight, gone, userEmail, orderId]);
 
     res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/dashboards/dispatch/archive
+//
+// Moves chosen orders between the dispatch board and the archive by hand. The
+// cutoff date sorts out the bulk of it, but the line it draws is not always
+// where the office wants it, and 1,700 rows is not something anyone is going
+// to reclassify one at a time.
+router.post('/dispatch/archive', requireLogin, async (req, res) => {
+  try {
+    const user = req.session.user;
+    if (user.role !== 'SuperAdmin' && user.role !== 'Accounts') {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.filter(Boolean) : [];
+    const toOld = req.body.archive !== false;
+    if (!ids.length) return res.status(400).json({ success: false, error: 'No orders selected.' });
+
+    // Pinned, not cleared: a parcel sent in June belongs on the live board only
+    // for as long as somebody says so, and the cutoff would pull it straight
+    // back otherwise.
+    const [result] = await db.query(
+      'UPDATE orders SET dispatch_board = ? WHERE order_id IN (?) AND is_deleted = 0',
+      [toOld ? 'old' : 'current', ids]
+    );
+
+    // Moving 1,700 orders would write 1,700 log lines and bury everything else
+    // in the Logs tab, so a bulk move is recorded as one entry.
+    await logOrderEvent(
+      ids[0],
+      toOld ? 'Moved to Old Dispatch' : 'Moved back to Dispatch',
+      ids.length > 1 ? `${ids.length} orders moved together` : '',
+      user
+    );
+
+    res.json({ success: true, moved: result.affectedRows });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });

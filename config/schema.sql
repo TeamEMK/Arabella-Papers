@@ -149,6 +149,9 @@ CREATE TABLE IF NOT EXISTS orders (
   -- When production handed the order over to Dispatch. actual_4 below is a
   -- different day: when the parcel actually went.
   dispatch_ready_at DATETIME NULL,
+  -- Pins the order to one dispatch board or the other, overriding the cutoff
+  -- date. NULL means the date decides.
+  dispatch_board VARCHAR(10) NULL,
   edges VARCHAR(50),
   edges_actual_time DATETIME,
   
