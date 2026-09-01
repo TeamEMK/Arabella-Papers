@@ -5,7 +5,7 @@ const db = require('../../config/db');
 const { requireRole } = require('../../middleware/auth');
 
 const MIN_PASSWORD = 8;
-const ROLES = ['SuperAdmin', 'Designer', 'TillApprover', 'Production Manager', 'Accounts'];
+const ROLES = ['SuperAdmin', 'Designer', 'TillApprover', 'Production Manager', 'Accounts', 'HR'];
 const DOMAINS = ['', 'Head'];
 
 const onlySuperAdmin = requireRole('SuperAdmin');

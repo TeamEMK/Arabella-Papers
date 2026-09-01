@@ -1,0 +1,291 @@
+<%# HR — staff records. Only SuperAdmin and the HR role can reach this. %>
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-id-card me-2"></i>HR</h3>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary smooth-ui fw-bold" onclick="hr_openAdd()"><i class="fas fa-plus me-1"></i> Add Employee</button>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, hr_fetch, 'employees')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3" id="hr_cards">
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #0d6efd;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Employees</h6><h3 class="fw-bold text-primary mb-0" id="hr_total">--</h3></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #ffc107;"><div class="card-body p-3"><h6 class="text-muted mb-0 small">Documents Pending</h6><div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">appointment letter, NDA, code of conduct or handbook</div><h3 class="fw-bold text-warning mb-0" id="hr_pending">--</h3></div></div></div>
+  </div>
+
+  <div class="card bg-light-glass mb-4 shadow-sm">
+    <div class="card-body p-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-4"><label class="form-label text-dark fw-bold small mb-0">Search</label><input type="text" id="hr_search" class="form-control form-control-sm" placeholder="Name, email, mobile, designation..." onkeyup="hr_render()"></div>
+        <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Department</label><select id="hr_dept" class="form-select form-select-sm" onchange="hr_render()"><option value="">All</option></select></div>
+        <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Working Status</label><select id="hr_status" class="form-select form-select-sm" onchange="hr_render()"><option value="">All</option></select></div>
+        <div class="col-12 col-md-2 text-end"><button class="btn btn-secondary btn-sm w-100" onclick="hr_clear()">Clear</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card bg-light-glass shadow-lg">
+    <div class="card-header bg-transparent border-0"><h5 class="mb-0 text-dark fw-bold"><i class="fas fa-users me-2"></i>Staff Records</h5></div>
+    <div class="card-body p-0">
+      <div class="table-responsive" data-fill-height style="overflow-y:auto;position:relative;">
+        <table class="table table-hover table-striped mb-0 text-nowrap">
+          <thead class="table-dark">
+            <tr>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">#</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Name</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Designation</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Department</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Mobile</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Email</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Reporting To</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Joining</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Status</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Documents</th>
+            </tr>
+          </thead>
+          <tbody id="hr_tbody"><tr><td colspan="11" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add / edit. Every field on the record, grouped so the form can be read. -->
+<div class="modal fade" id="hr_modal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title"><span id="hr_modalTitle">Employee</span></h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Person</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-4"><label class="form-label fw-bold text-dark small">Employee name *</label><input class="form-control" id="hr_name"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark small">Employee code</label><input class="form-control" id="hr_emp_code"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark small">Company</label><input class="form-control" id="hr_company" value="AMIPL"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark small">Mobile</label><input class="form-control" id="hr_mobile"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark small">Official email</label><input class="form-control" id="hr_email"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark small">Emergency no</label><input class="form-control" id="hr_emergency_no"></div>
+      </div>
+
+      <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Role</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-4"><label class="form-label fw-bold text-dark small">Designation</label><input class="form-control" id="hr_designation"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark small">Department</label><input class="form-control" id="hr_department"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark small">Reporting manager</label><input class="form-control" id="hr_reporting_manager"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark small">Work location</label><input class="form-control" id="hr_work_location"></div>
+        <div class="col-12"><label class="form-label fw-bold text-dark small">KRA</label><textarea class="form-control" id="hr_kra" rows="4"></textarea></div>
+      </div>
+
+      <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Joining &amp; documents</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-3"><label class="form-label fw-bold text-dark small">Offer letter date</label><input class="form-control" id="hr_offer_letter_date"></div>
+        <div class="col-md-3"><label class="form-label fw-bold text-dark small">Date of joining</label><input class="form-control" id="hr_date_of_joining"></div>
+        <div class="col-md-3"><label class="form-label fw-bold text-dark small">Probation end</label><input class="form-control" id="hr_probation_end_date"></div>
+        <div class="col-md-3"><label class="form-label fw-bold text-dark small">Confirmation date</label><input class="form-control" id="hr_confirmation_date"></div>
+        <div class="col-md-3"><label class="form-label fw-bold text-dark small">Appointment letter / NDA</label><input class="form-control" id="hr_appointment_nda_status" list="hr_docStates"></div>
+        <div class="col-md-3"><label class="form-label fw-bold text-dark small">Code of conduct</label><input class="form-control" id="hr_code_of_conduct" list="hr_docStates"></div>
+        <div class="col-md-3"><label class="form-label fw-bold text-dark small">Policy handbook</label><input class="form-control" id="hr_policy_handbook" list="hr_docStates"></div>
+        <div class="col-md-3"><label class="form-label fw-bold text-dark small">Background verification</label><input class="form-control" id="hr_background_verification" list="hr_docStates"></div>
+        <div class="col-md-3"><label class="form-label fw-bold text-dark small">Working status</label><input class="form-control" id="hr_working_status" list="hr_statusList"></div>
+        <div class="col-md-3"><label class="form-label fw-bold text-dark small">Last date of employment</label><input class="form-control" id="hr_last_date_of_employment"></div>
+      </div>
+      <datalist id="hr_docStates"></datalist>
+      <datalist id="hr_statusList"></datalist>
+
+      <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Notes</h6>
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label fw-bold text-dark small">Complete record log</label><textarea class="form-control" id="hr_record_log" rows="3"></textarea></div>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark small">Performance remarks</label><textarea class="form-control" id="hr_performance_remarks" rows="3"></textarea></div>
+        <div class="col-12"><label class="form-label fw-bold text-dark small">Other notes</label><textarea class="form-control" id="hr_other_notes" rows="2"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer justify-content-between">
+      <button class="btn btn-outline-danger" id="hr_deleteBtn" onclick="hr_delete()"><i class="fas fa-trash me-1"></i>Remove</button>
+      <div class="d-flex gap-2">
+        <button class="btn btn-success" onclick="hr_save()">Save</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<script>
+var hr_data = [], hr_editId = null;
+
+// Every field on the form, so loading and saving do not each carry their own
+// list that can drift apart.
+var HR_FIELDS = ['company','name','emp_code','mobile','email','emergency_no',
+  'designation','department','kra','reporting_manager','work_location',
+  'offer_letter_date','date_of_joining','probation_end_date','confirmation_date',
+  'appointment_nda_status','code_of_conduct','policy_handbook',
+  'background_verification','working_status','last_date_of_employment',
+  'record_log','performance_remarks','other_notes'];
+
+// The four things that have to be signed or checked before someone is properly
+// on board. Anything not clearly settled counts as outstanding.
+var HR_DOC_FIELDS = ['appointment_nda_status','code_of_conduct','policy_handbook','background_verification'];
+function hr_docDone(v) {
+  const s = (v || '').toLowerCase();
+  if (!s) return false;
+  return /signed|issued|received|acknowledg|clear|verified|done|yes|complete/.test(s)
+    && !/not |pending|awaited|no\b/.test(s);
+}
+function hr_pendingDocs(e) {
+  return HR_DOC_FIELDS.filter(f => !hr_docDone(e[f])).length;
+}
+
+const hr_esc = v => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+async function hr_fetch() {
+  try {
+    const res = await fetch('/api/hr');
+    const json = await res.json();
+    hr_data = json.data || [];
+    hr_fillFilters();
+    hr_render();
+    return hr_data.length;
+  } catch (e) {
+    document.getElementById('hr_tbody').innerHTML =
+      '<tr><td colspan="11" class="text-center text-danger py-4">Could not load staff records.</td></tr>';
+    return 0;
+  }
+}
+
+function hr_fillFilters() {
+  const fill = (id, values) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const keep = sel.value;
+    sel.innerHTML = '<option value="">All</option>'
+      + [...new Set(values.filter(Boolean))].sort().map(v => `<option>${hr_esc(v)}</option>`).join('');
+    sel.value = keep;
+  };
+  fill('hr_dept', hr_data.map(e => e.department));
+  fill('hr_status', hr_data.map(e => e.working_status));
+
+  // Offer back whatever wording is already in use rather than inventing a set
+  // of statuses the office does not say.
+  const list = (id, values) => {
+    const dl = document.getElementById(id);
+    if (dl) dl.innerHTML = [...new Set(values.filter(Boolean))].sort().map(v => `<option value="${hr_esc(v)}">`).join('');
+  };
+  list('hr_docStates', HR_DOC_FIELDS.flatMap(f => hr_data.map(e => e[f])));
+  list('hr_statusList', hr_data.map(e => e.working_status));
+}
+
+function hr_render() {
+  const q = (document.getElementById('hr_search').value || '').toLowerCase().trim();
+  const dept = document.getElementById('hr_dept').value;
+  const status = document.getElementById('hr_status').value;
+
+  const rows = hr_data.filter(e =>
+    (!dept || (e.department || '') === dept) &&
+    (!status || (e.working_status || '') === status) &&
+    (!q || JSON.stringify(e).toLowerCase().includes(q))
+  );
+
+  document.getElementById('hr_total').textContent = hr_data.length;
+  document.getElementById('hr_pending').textContent = hr_data.filter(e => hr_pendingDocs(e) > 0).length;
+
+  const tbody = document.getElementById('hr_tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4">No employees found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((e, i) => {
+    const pending = hr_pendingDocs(e);
+    const docs = pending
+      ? `<span class="badge bg-warning text-dark">${pending} pending</span>`
+      : '<span class="badge bg-success">Complete</span>';
+    return `<tr>
+      <td>${i + 1}</td>
+      <td><button class="btn btn-sm btn-warning" onclick="hr_openEdit(${e.id})" title="Open"><i class="fas fa-pen-to-square"></i></button></td>
+      <td class="fw-bold">${hr_esc(e.name)}</td>
+      <td>${hr_esc(e.designation) || '-'}</td>
+      <td>${hr_esc(e.department) || '-'}</td>
+      <td>${hr_esc(e.mobile) || '-'}</td>
+      <td>${hr_esc(e.email) || '-'}</td>
+      <td>${hr_esc(e.reporting_manager) || '-'}</td>
+      <td>${hr_esc(e.date_of_joining) || '-'}</td>
+      <td>${hr_esc(e.working_status) || '-'}</td>
+      <td>${docs}</td>
+    </tr>`;
+  }).join('');
+}
+
+function hr_clear() {
+  ['hr_search', 'hr_dept', 'hr_status'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  hr_render();
+}
+
+function hr_openAdd() {
+  hr_editId = null;
+  document.getElementById('hr_modalTitle').textContent = 'Add Employee';
+  HR_FIELDS.forEach(f => { const el = document.getElementById('hr_' + f); if (el) el.value = ''; });
+  document.getElementById('hr_company').value = 'AMIPL';
+  document.getElementById('hr_deleteBtn').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('hr_modal')).show();
+}
+
+function hr_openEdit(id) {
+  const e = hr_data.find(x => x.id === id);
+  if (!e) return;
+  hr_editId = id;
+  document.getElementById('hr_modalTitle').textContent = e.name;
+  HR_FIELDS.forEach(f => { const el = document.getElementById('hr_' + f); if (el) el.value = e[f] == null ? '' : e[f]; });
+  document.getElementById('hr_deleteBtn').style.display = '';
+  new bootstrap.Modal(document.getElementById('hr_modal')).show();
+}
+
+async function hr_save() {
+  const body = {};
+  HR_FIELDS.forEach(f => { const el = document.getElementById('hr_' + f); if (el) body[f] = el.value; });
+  if (!body.name.trim()) { showToast('warning', 'Employee name is required.'); return; }
+
+  showLoading(true);
+  try {
+    const res = await fetch(hr_editId ? `/api/hr/${hr_editId}` : '/api/hr', {
+      method: hr_editId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    showLoading(false);
+    if (!json.success) { showToast('error', json.error || 'Could not save.'); return; }
+    bootstrap.Modal.getInstance(document.getElementById('hr_modal')).hide();
+    showToast('success', hr_editId ? 'Employee updated.' : 'Employee added.');
+    hr_fetch();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+async function hr_delete() {
+  if (!hr_editId) return;
+  const e = hr_data.find(x => x.id === hr_editId);
+  const confirmed = await Swal.fire({
+    title: 'Remove this employee?',
+    html: `<b>${hr_esc(e ? e.name : '')}</b> will be taken off the list.`
+      + '<br><br><span class="text-muted small">The record is kept, not erased &mdash; it can be brought back.</span>',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Remove',
+    confirmButtonColor: '#dc3545',
+  });
+  if (!confirmed.isConfirmed) return;
+
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/hr/${hr_editId}`, { method: 'DELETE' });
+    const json = await res.json();
+    showLoading(false);
+    if (!json.success) { showToast('error', json.error || 'Could not remove.'); return; }
+    bootstrap.Modal.getInstance(document.getElementById('hr_modal')).hide();
+    showToast('success', 'Employee removed.');
+    hr_fetch();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+hr_fetch();
+</script>

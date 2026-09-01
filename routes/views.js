@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireLogin } = require('../middleware/auth');
 
-const ALLOWED_VIEWS = ['dashboard', 'tillApproval', 'productionBD', 'oldProduction', 'dispatchBD', 'oldDispatch', 'o2dsummary', 'users', 'logs'];
+const ALLOWED_VIEWS = ['dashboard', 'tillApproval', 'productionBD', 'oldProduction', 'dispatchBD', 'oldDispatch', 'o2dsummary', 'users', 'logs', 'hr'];
 
 // GET /views/:page — returns rendered dashboard HTML
 router.get('/:page', requireLogin, (req, res) => {
@@ -26,6 +26,7 @@ router.get('/:page', requireLogin, (req, res) => {
     oldDispatch: () => role === 'SuperAdmin' || role === 'Accounts',
     o2dsummary: () => role === 'SuperAdmin' || domain === 'Head',
     users: () => role === 'SuperAdmin',
+    hr: () => role === 'SuperAdmin' || role.includes('HR'),
     logs: () => role === 'SuperAdmin' || domain === 'Head',
   };
 

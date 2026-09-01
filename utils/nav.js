@@ -41,6 +41,12 @@ function getNavMenu(role, domain) {
   // someone with a list to import actually is. The view itself is still
   // permission-checked in routes/views.js.
 
+  // Staff records carry mobiles, emergency contacts and document status, so
+  // the tab is not offered to anyone who has no business opening it.
+  if (roleStr === 'SuperAdmin' || roleStr.includes('HR')) {
+    menu.push({ id: 'hr', name: 'HR', icon: 'fa-id-card' });
+  }
+
   if (roleStr === 'SuperAdmin' || domain === 'Head') {
     menu.push({ id: 'logs', name: 'Logs', icon: 'fa-clock-rotate-left' });
   }

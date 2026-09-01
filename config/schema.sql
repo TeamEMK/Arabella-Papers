@@ -197,6 +197,42 @@ CREATE TABLE IF NOT EXISTS orders (
 -- =============================================
 -- SESSIONS TABLE (express-mysql-session)
 -- =============================================
+-- Staff records. Separate from `users`, which is only login accounts: most of
+-- the people here have no reason to sign in, and the ones who do are matched
+-- by email rather than being the same row.
+CREATE TABLE IF NOT EXISTS employees (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  company VARCHAR(50) NOT NULL DEFAULT 'AMIPL',
+  name VARCHAR(150) NOT NULL,
+  emp_code VARCHAR(50),
+  mobile VARCHAR(30),
+  email VARCHAR(150),
+  emergency_no VARCHAR(30),
+  designation VARCHAR(150),
+  department VARCHAR(120),
+  kra TEXT,
+  reporting_manager VARCHAR(150),
+  work_location VARCHAR(150),
+  offer_letter_date VARCHAR(60),
+  date_of_joining VARCHAR(60),
+  probation_end_date VARCHAR(60),
+  confirmation_date VARCHAR(60),
+  appointment_nda_status VARCHAR(100),
+  code_of_conduct VARCHAR(100),
+  policy_handbook VARCHAR(100),
+  background_verification VARCHAR(100),
+  working_status VARCHAR(100),
+  last_date_of_employment VARCHAR(60),
+  record_log TEXT,
+  performance_remarks TEXT,
+  other_notes TEXT,
+  is_deleted TINYINT DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_employees_company (company),
+  INDEX idx_employees_name (name)
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR(128) NOT NULL PRIMARY KEY,
   expires INT(11) UNSIGNED NOT NULL,
