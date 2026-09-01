@@ -52,18 +52,9 @@ document.getElementById('analyticsRoot').innerHTML = `
   <div class="row g-3 mb-4 row-cols-2 row-cols-lg-5" id="kpi_row">
     <div class="col"><div class="card shadow smooth-ui kpi-card h-100" style="border-left:4px solid #0d6efd;"><div class="card-body p-3"><h6 class="text-muted mb-0 small">Total Orders</h6><div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">punched in this period</div><h3 class="fw-bold text-primary mb-0" id="kpi_total">--</h3><div class="kpi-today mt-2 pt-2 border-top d-flex justify-content-between align-items-baseline"><span class="text-muted small">Today</span><span class="fw-bold text-primary" id="kpi_today_total">--</span></div></div></div></div>
     <div class="col"><div class="card shadow smooth-ui kpi-card h-100" style="border-left:4px solid #6f42c1;"><div class="card-body p-3"><h6 class="text-muted mb-0 small">Pending Approval</h6><div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">not on the floor yet &mdash; with the designer or the client</div><h3 class="fw-bold text-purple mb-0" id="kpi_indesign">--</h3><div class="kpi-today mt-2 pt-2 border-top d-flex justify-content-between align-items-baseline"><span class="text-muted small">Today</span><span class="fw-bold text-purple" id="kpi_today_indesign">--</span></div></div></div></div>
-    <div class="col"><div class="card shadow smooth-ui kpi-card h-100" style="border-left:4px solid #ffc107;"><div class="card-body p-3"><h6 class="text-muted mb-0 small">In Production</h6><div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;" id="kpi_inprogress_hint">approved &mdash; on the production floor</div><h3 class="fw-bold text-warning mb-0" id="kpi_inprogress">--</h3><div class="kpi-today mt-2 pt-2 border-top d-flex justify-content-between align-items-baseline"><span class="text-muted small">Today</span><span class="fw-bold text-warning" id="kpi_today_inprogress">--</span></div></div></div></div>
+    <div class="col"><div class="card shadow smooth-ui kpi-card h-100" style="border-left:4px solid #ffc107;"><div class="card-body p-3"><h6 class="text-muted mb-0 small">In Production</h6><div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;" id="kpi_inprogress_hint">on the floor now &mdash; date filter does not apply</div><h3 class="fw-bold text-warning mb-0" id="kpi_inprogress">--</h3><div class="kpi-today mt-2 pt-2 border-top d-flex justify-content-between align-items-baseline"><span class="text-muted small">Today</span><span class="fw-bold text-warning" id="kpi_today_inprogress">--</span></div></div></div></div>
     <div class="col"><div class="card shadow smooth-ui kpi-card h-100" style="border-left:4px solid #198754;"><div class="card-body p-3"><h6 class="text-muted mb-0 small">Dispatched</h6><div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">left the building</div><h3 class="fw-bold text-success mb-0" id="kpi_dispatched">--</h3><div class="kpi-today mt-2 pt-2 border-top d-flex justify-content-between align-items-baseline"><span class="text-muted small">Today</span><span class="fw-bold text-success" id="kpi_today_dispatched">--</span></div></div></div></div>
     <div class="col"><div class="card shadow smooth-ui kpi-card h-100" style="border-left:4px solid #dc3545;"><div class="card-body p-3"><h6 class="text-muted mb-0 small">Cancelled</h6><div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">cancelled or rejected</div><h3 class="fw-bold text-danger mb-0" id="kpi_cancelled">--</h3><div class="kpi-today mt-2 pt-2 border-top d-flex justify-content-between align-items-baseline"><span class="text-muted small">Today</span><span class="fw-bold text-danger" id="kpi_today_cancelled">--</span></div></div></div></div>
-  </div>
-
-  <!-- The production board counts by the day an order reached the floor, this
-       page by the day it was punched, so the two never match. Both numbers are
-       wanted; keeping them in one row of cards only got them added together. -->
-  <div id="an_boardLine" class="alert alert-warning py-2 px-3 small mb-4" style="display:none !important;">
-    <i class="fas fa-industry me-2"></i>On the production floor right now:
-    <b id="an_boardCountText">--</b>
-    <span class="text-muted">&mdash; this is what the Production Dashboard shows. It counts orders whenever they were punched, so it is not part of the totals above.</span>
   </div>
 
   <!-- FILTERS -->
@@ -285,10 +276,13 @@ async function anFetchToday() {
   if (!j.success) return;
   document.getElementById('kpi_today_total').textContent = j.total;
   document.getElementById('kpi_today_indesign').textContent = j.inDesign;
+  // Held for the cards, which redraw on every filter change. Redrawn through
+  // anApplyFilters rather than straight from an_filtered: this can arrive
+  // before the orders have loaded, and a filter that legitimately matches
+  // nothing must show nothing, not fall back to every order on record.
   if (j.onProductionBoard != null) {
     an_boardCount = j.onProductionBoard;
-    document.getElementById('an_boardCountText').textContent = an_boardCount;
-    document.getElementById('an_boardLine').style.setProperty('display', 'block', 'important');
+    if (an_all.length) anApplyFilters();
   }
   document.getElementById('kpi_today_inprogress').textContent = j.inProgress;
   document.getElementById('kpi_today_dispatched').textContent = j.dispatched;
@@ -379,10 +373,13 @@ function renderKPIs(data) {
   const at = stage => data.filter(o => o.Stage === stage).length;
   document.getElementById('kpi_total').textContent = data.length;
   document.getElementById('kpi_indesign').textContent = at('design');
-  // All five count the same thing - orders punched in the period - so they add
-  // up to the total. The board's own figure answers a different question and
-  // sits on its own line below, where nobody will try to add it in.
-  document.getElementById('kpi_inprogress').textContent = at('production');
+  // The one card the date filter does not touch. Asked for that way: what is
+  // on the floor is a standing figure, not something that belongs to a month,
+  // and it has to read the same here as it does on the production board. The
+  // other four count orders punched in the period, so this one is deliberately
+  // out of that sum - which the card says, under the title.
+  document.getElementById('kpi_inprogress').textContent =
+    an_boardCount != null ? an_boardCount : at('production');
   document.getElementById('kpi_dispatched').textContent = at('dispatched');
   document.getElementById('kpi_cancelled').textContent = at('cancelled');
 }
