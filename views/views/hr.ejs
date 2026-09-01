@@ -41,7 +41,7 @@
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Reporting To</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Joining</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Status</th>
-              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Documents</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Documents Pending</th>
             </tr>
           </thead>
           <tbody id="hr_tbody"><tr><td colspan="11" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
@@ -124,8 +124,15 @@ var HR_FIELDS = ['company','name','emp_code','mobile','email','emergency_no',
   'record_log','performance_remarks','other_notes'];
 
 // The four things that have to be signed or checked before someone is properly
-// on board. Anything not clearly settled counts as outstanding.
-var HR_DOC_FIELDS = ['appointment_nda_status','code_of_conduct','policy_handbook','background_verification'];
+// on board. Anything not clearly settled counts as outstanding. Each carries a
+// short label, because a count on its own only prompts "which ones?".
+var HR_DOCS = [
+  { field: 'appointment_nda_status',   short: 'Letter',     full: 'Appointment letter / NDA' },
+  { field: 'code_of_conduct',          short: 'Conduct',    full: 'Code of conduct' },
+  { field: 'policy_handbook',          short: 'Handbook',   full: 'Policy handbook' },
+  { field: 'background_verification',  short: 'Background', full: 'Background verification' },
+];
+var HR_DOC_FIELDS = HR_DOCS.map(d => d.field);
 function hr_docDone(v) {
   const s = (v || '').toLowerCase();
   if (!s) return false;
@@ -133,7 +140,7 @@ function hr_docDone(v) {
     && !/not |pending|awaited|no\b/.test(s);
 }
 function hr_pendingDocs(e) {
-  return HR_DOC_FIELDS.filter(f => !hr_docDone(e[f])).length;
+  return HR_DOCS.filter(d => !hr_docDone(e[d.field]));
 }
 
 const hr_esc = v => String(v == null ? '' : v)
@@ -188,7 +195,7 @@ function hr_render() {
   );
 
   document.getElementById('hr_total').textContent = hr_data.length;
-  document.getElementById('hr_pending').textContent = hr_data.filter(e => hr_pendingDocs(e) > 0).length;
+  document.getElementById('hr_pending').textContent = hr_data.filter(e => hr_pendingDocs(e).length > 0).length;
 
   const tbody = document.getElementById('hr_tbody');
   if (!rows.length) {
@@ -196,9 +203,11 @@ function hr_render() {
     return;
   }
   tbody.innerHTML = rows.map((e, i) => {
+    // Named, not counted. Hovering gives the full name and whatever the record
+    // actually says, which is how you find out it is "Email Not Sent".
     const pending = hr_pendingDocs(e);
-    const docs = pending
-      ? `<span class="badge bg-warning text-dark">${pending} pending</span>`
+    const docs = pending.length
+      ? pending.map(d => `<span class="badge bg-warning text-dark me-1" title="${hr_esc(d.full)}: ${hr_esc(e[d.field]) || 'blank'}">${d.short}</span>`).join('')
       : '<span class="badge bg-success">Complete</span>';
     return `<tr>
       <td>${i + 1}</td>
