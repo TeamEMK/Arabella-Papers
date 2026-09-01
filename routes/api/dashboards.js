@@ -369,8 +369,19 @@ router.post('/production/archive', requireLogin, async (req, res) => {
 
     // Pinned, not cleared: sending a July order back to the live queue has to
     // survive the cutoff date, which would otherwise pull it straight back.
+    //
+    // Coming back also means leaving Dispatch. The queue skips anything that
+    // has gone out, so pinning alone left an order on neither board - off Old
+    // Production because it was pinned, off the queue because it still read as
+    // dispatched. The button says it goes back to production, so it does; this
+    // is the same clearing the dispatch board's own Back to Production does.
+    const dispatchReset = toOld
+      ? ''
+      : ', status_4 = NULL, actual_4 = NULL, dispatch_ready_at = NULL, dispatch_board = NULL';
+
     const [result] = await db.query(
-      'UPDATE orders SET production_board = ? WHERE order_id IN (?) AND is_deleted = 0',
+      `UPDATE orders SET production_board = ?${dispatchReset}
+       WHERE order_id IN (?) AND is_deleted = 0`,
       [toOld ? 'old' : 'current', ids]
     );
 
