@@ -1,24 +1,56 @@
 /**
  * Loads the AMIPL tab of the HR sheet into the employees table.
  *
- *   node scripts/import-hr.js <path-to-xlsx>   # dry run, prints what it found
- *   node scripts/import-hr.js <path-to-xlsx> --write
+ *   node scripts/import-hr.js <path-to-xlsx>                  # dry run
+ *   node scripts/import-hr.js <path-to-xlsx> --write           # into the local database
+ *   node scripts/import-hr.js <path-to-xlsx> --write --live    # into the live one
  *
  * Export the sheet from Google as .xlsx first (File -> Download -> Microsoft
  * Excel). Rows are matched on name, so running it twice updates rather than
  * duplicating.
+ *
+ * --live reads the same .env.backup the backup script uses, so the production
+ * password lives in one gitignored file instead of being pasted into commands.
  */
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-const db = require('../config/db');
+const mysql = require('mysql2/promise');
 
 const XLSX = process.argv[2];
 const WRITE = process.argv.includes('--write');
+const LIVE = process.argv.includes('--live');
+
+const db = (() => {
+  if (!LIVE) return require('../config/db');
+
+  const file = path.join(__dirname, '..', '.env.backup');
+  if (!fs.existsSync(file)) {
+    console.error('\n--live needs .env.backup with the Railway connection string.');
+    console.error('Set it up once: node scripts/backup-live.js "mysql://..."\n');
+    process.exit(1);
+  }
+  const line = fs.readFileSync(file, 'utf8').split('\n')
+    .map(l => l.trim()).find(l => l.startsWith('LIVE_DB_URL='));
+  if (!line) {
+    console.error('\n.env.backup has no LIVE_DB_URL= line.\n');
+    process.exit(1);
+  }
+  const url = new URL(line.slice('LIVE_DB_URL='.length).trim());
+  return mysql.createPool({
+    host: url.hostname,
+    port: url.port || 3306,
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    database: url.pathname.replace('/', '') || 'railway',
+    timezone: '+05:30',
+    connectionLimit: 2,
+  });
+})();
 
 if (!XLSX || !fs.existsSync(XLSX)) {
-  console.error('\nUsage: node scripts/import-hr.js <sheet.xlsx> [--write]\n');
+  console.error('\nUsage: node scripts/import-hr.js <sheet.xlsx> [--write] [--live]\n');
   process.exit(1);
 }
 
@@ -177,6 +209,8 @@ const MAP = {
     console.log('\nDry run. Add --write to load these into the employees table.\n');
     process.exit(0);
   }
+
+  console.log('Writing to the ' + (LIVE ? 'LIVE' : 'local') + ' database...');
 
   let added = 0, updated = 0;
   for (const p of people) {
