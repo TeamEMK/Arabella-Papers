@@ -41,6 +41,10 @@ function getNavMenu(role, domain) {
   // someone with a list to import actually is. The view itself is still
   // permission-checked in routes/views.js.
 
+  // Everybody takes leave, so everybody gets the tab. What differs is what is
+  // on it: your own requests, plus everyone's if you are the one deciding.
+  menu.push({ id: 'leave', name: 'Leave', icon: 'fa-calendar-check' });
+
   // Staff records carry mobiles, emergency contacts and document status, so
   // the tab is not offered to anyone who has no business opening it.
   if (roleStr === 'SuperAdmin' || roleStr.includes('HR')) {

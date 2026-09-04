@@ -233,6 +233,29 @@ CREATE TABLE IF NOT EXISTS employees (
   INDEX idx_employees_name (name)
 );
 
+-- Leave, work-from-home and extra-working requests. Raised by whoever is
+-- logged in, decided by a SuperAdmin.
+CREATE TABLE IF NOT EXISTS leave_requests (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  leave_type VARCHAR(30) NOT NULL,
+  -- The days chosen, one JSON array. from_date/to_date are the ends of that
+  -- set, kept as columns so the list can be filtered and sorted by date
+  -- without unpacking the JSON on every row.
+  dates_json TEXT,
+  from_date DATE NOT NULL,
+  to_date DATE NOT NULL,
+  reason TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  approver_id INT DEFAULT NULL,
+  approver_note TEXT,
+  decided_at DATETIME DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_leave_user (user_id),
+  INDEX idx_leave_status (status),
+  INDEX idx_leave_from (from_date)
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR(128) NOT NULL PRIMARY KEY,
   expires INT(11) UNSIGNED NOT NULL,

@@ -1,0 +1,382 @@
+<%# Leave tracker. Anyone signed in can apply; a SuperAdmin decides. %>
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-calendar-check me-2"></i>Leave Tracker</h3>
+      <div class="text-muted small">Apply for leave, work from home, or extra working.</div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary smooth-ui fw-bold" onclick="lv_openForm()"><i class="fas fa-plus me-1"></i> Apply</button>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, lv_fetch, 'requests')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
+  </div>
+
+  <ul class="nav nav-tabs mb-3" id="lv_tabs">
+    <li class="nav-item"><button class="nav-link active" id="lv_tabMine" onclick="lv_setScope('mine', this)">My Leaves</button></li>
+    <li class="nav-item" id="lv_tabAllWrap" style="display:none;"><button class="nav-link" id="lv_tabAll" onclick="lv_setScope('all', this)">All Requests <span class="badge bg-warning text-dark ms-1" id="lv_pendingBadge" style="display:none;">0</span></button></li>
+  </ul>
+
+  <div class="card bg-light-glass mb-3 shadow-sm">
+    <div class="card-body p-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-5"><label class="form-label text-dark fw-bold small mb-0">Search</label><input type="text" id="lv_search" class="form-control form-control-sm" placeholder="Name, reason, type..." onkeyup="lv_render()"></div>
+        <div class="col-8 col-md-5">
+          <label class="form-label text-dark fw-bold small mb-0">Status</label>
+          <div class="btn-group w-100" role="group" id="lv_statusPills">
+            <button class="btn btn-sm btn-outline-secondary active" data-status="" onclick="lv_setStatus('', this)">All</button>
+            <button class="btn btn-sm btn-outline-warning" data-status="pending" onclick="lv_setStatus('pending', this)">Pending</button>
+            <button class="btn btn-sm btn-outline-success" data-status="approved" onclick="lv_setStatus('approved', this)">Approved</button>
+            <button class="btn btn-sm btn-outline-danger" data-status="rejected" onclick="lv_setStatus('rejected', this)">Rejected</button>
+          </div>
+        </div>
+        <div class="col-4 col-md-2 text-end"><button class="btn btn-secondary btn-sm w-100" onclick="lv_clear()">Clear</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="lv_list"><div class="text-center py-5 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</div></div>
+</div>
+
+<!-- Apply. Days are picked one at a time on the calendar rather than as a
+     range, because a person's leave is often Friday and the Monday after. -->
+<div class="modal fade" id="lv_modal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title"><i class="fas fa-calendar-check me-2"></i>Apply for Leave</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <label class="form-label fw-bold text-dark small">Leave type</label>
+      <div class="row g-2 mb-4" id="lv_typeGrid">
+        <div class="col-6 col-md-3"><button type="button" class="btn btn-outline-primary w-100 lv-type" data-type="full_day" onclick="lv_pickType('full_day', this)"><i class="fas fa-bed d-block mb-1"></i>Full Day</button></div>
+        <div class="col-6 col-md-3"><button type="button" class="btn btn-outline-primary w-100 lv-type" data-type="half_day" onclick="lv_pickType('half_day', this)"><i class="fas fa-clock d-block mb-1"></i>Half Day</button></div>
+        <div class="col-6 col-md-3"><button type="button" class="btn btn-outline-primary w-100 lv-type" data-type="work_from_home" onclick="lv_pickType('work_from_home', this)"><i class="fas fa-house d-block mb-1"></i>Work From Home</button></div>
+        <div class="col-6 col-md-3"><button type="button" class="btn btn-outline-primary w-100 lv-type" data-type="extra_working" onclick="lv_pickType('extra_working', this)"><i class="fas fa-bolt d-block mb-1"></i>Extra Working</button></div>
+      </div>
+
+      <label class="form-label fw-bold text-dark small">Pick the days <span class="text-muted fw-normal">— click a date to select or unselect it</span></label>
+      <div class="card mb-3">
+        <div class="card-body p-2">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <button type="button" class="btn btn-sm btn-light" onclick="lv_calNav(-1)"><i class="fas fa-chevron-left"></i></button>
+            <b id="lv_calMonth" class="text-dark">—</b>
+            <button type="button" class="btn btn-sm btn-light" onclick="lv_calNav(1)"><i class="fas fa-chevron-right"></i></button>
+          </div>
+          <div class="d-grid text-center text-muted small mb-1" style="grid-template-columns:repeat(7,1fr);gap:2px;">
+            <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+          </div>
+          <div class="d-grid" id="lv_calGrid" style="grid-template-columns:repeat(7,1fr);gap:2px;"></div>
+        </div>
+      </div>
+
+      <div id="lv_selectedBox" class="mb-3" style="display:none;">
+        <label class="form-label fw-bold text-dark small"><span id="lv_selectedCount">0</span> selected</label>
+        <div id="lv_selectedList"></div>
+      </div>
+
+      <label class="form-label fw-bold text-dark small">Reason</label>
+      <textarea class="form-control" id="lv_reason" rows="3" placeholder="Sick, personal work, family function..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-success" onclick="lv_submit()">Send for approval</button>
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- Approve / reject -->
+<div class="modal fade" id="lv_decideModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="lv_decideTitle">Decide</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div id="lv_decideSummary" class="mb-3"></div>
+      <label class="form-label fw-bold text-dark small">Note <span class="text-muted fw-normal">— optional, the applicant sees it</span></label>
+      <textarea class="form-control" id="lv_decideNote" rows="2"></textarea>
+    </div>
+    <div class="modal-footer justify-content-between">
+      <button class="btn btn-danger" onclick="lv_decide('reject')"><i class="fas fa-xmark me-1"></i>Reject</button>
+      <div class="d-flex gap-2">
+        <button class="btn btn-success" onclick="lv_decide('approve')"><i class="fas fa-check me-1"></i>Approve</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<style>
+.lv-type.active { background: #0d6efd; color: #fff; }
+.lv-day { border: 1px solid #dee2e6; background: #fff; border-radius: 6px; padding: 6px 0; font-size: .85rem; cursor: pointer; }
+.lv-day:disabled { border-color: transparent; background: transparent; cursor: default; }
+.lv-day.picked { background: #0d6efd; border-color: #0d6efd; color: #fff; font-weight: 700; }
+.lv-day.today { border-color: #0d6efd; font-weight: 700; }
+</style>
+
+<script>
+var lv_data = [], lv_scope = 'mine', lv_status = '', lv_canDecide = false;
+var lv_type = '', lv_picked = [], lv_calDate = new Date(), lv_decideId = null;
+
+const lv_esc = v => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// yyyy-mm-dd in the user's own day, not UTC - toISOString() on an evening date
+// hands back yesterday in IST.
+function lv_key(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+async function lv_fetch() {
+  try {
+    const res = await fetch('/api/leaves?scope=' + lv_scope + (lv_status ? '&status=' + lv_status : ''));
+    const json = await res.json();
+    lv_data = json.data || [];
+    lv_canDecide = !!json.canDecide;
+    document.getElementById('lv_tabAllWrap').style.display = lv_canDecide ? '' : 'none';
+    lv_render();
+    if (lv_canDecide) lv_pendingBadge();
+    return lv_data.length;
+  } catch (e) {
+    document.getElementById('lv_list').innerHTML =
+      '<div class="alert alert-danger">Could not load leave requests.</div>';
+    return 0;
+  }
+}
+
+async function lv_pendingBadge() {
+  try {
+    const res = await fetch('/api/leaves/pending-count');
+    const json = await res.json();
+    const b = document.getElementById('lv_pendingBadge');
+    b.textContent = json.count;
+    b.style.display = json.count ? '' : 'none';
+  } catch (e) { /* the badge is a nicety; never break the page over it */ }
+}
+
+function lv_setScope(scope, btn) {
+  lv_scope = scope;
+  document.querySelectorAll('#lv_tabs .nav-link').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  lv_fetch();
+}
+
+function lv_setStatus(status, btn) {
+  lv_status = status;
+  document.querySelectorAll('#lv_statusPills .btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  lv_fetch();
+}
+
+function lv_clear() {
+  document.getElementById('lv_search').value = '';
+  lv_status = '';
+  document.querySelectorAll('#lv_statusPills .btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  lv_fetch();
+}
+
+const LV_STATUS_STYLE = { pending: 'warning text-dark', approved: 'success', rejected: 'danger' };
+
+function lv_render() {
+  const q = (document.getElementById('lv_search').value || '').toLowerCase().trim();
+  const rows = lv_data.filter(r => !q || JSON.stringify(r).toLowerCase().includes(q));
+  const box = document.getElementById('lv_list');
+
+  if (!rows.length) {
+    box.innerHTML = '<div class="text-center py-5 text-muted">'
+      + (lv_scope === 'mine' ? 'You have not applied for any leave yet.' : 'Nothing here.') + '</div>';
+    return;
+  }
+
+  box.innerHTML = rows.map(r => {
+    const dates = r.dates.map(d => {
+      const label = d.date.split('-').reverse().join('/');
+      return `<span class="badge bg-light text-dark border me-1 mb-1">${label}${d.hours ? ' &middot; ' + d.hours + 'h' : ''}</span>`;
+    }).join('');
+
+    // Deciding is only offered on requests that are still open, and only to
+    // whoever may decide them.
+    const actions = [];
+    if (lv_canDecide && r.status === 'pending') {
+      actions.push(`<button class="btn btn-sm btn-primary" onclick="lv_openDecide(${r.id})"><i class="fas fa-gavel me-1"></i>Decide</button>`);
+    }
+    if (r.status === 'pending' || lv_canDecide) {
+      actions.push(`<button class="btn btn-sm btn-outline-danger" onclick="lv_withdraw(${r.id})" title="Withdraw"><i class="fas fa-trash"></i></button>`);
+    }
+
+    return `<div class="card mb-2 shadow-sm">
+      <div class="card-body py-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+          <div>
+            <div class="fw-bold text-dark">${lv_esc(r.userName)}
+              <span class="badge bg-secondary ms-1">${lv_esc(r.typeLabel)}</span>
+              <span class="badge bg-${LV_STATUS_STYLE[r.status] || 'secondary'} ms-1">${r.status}</span>
+            </div>
+            <div class="small text-muted">${r.days} day${r.days > 1 ? 's' : ''}${r.hours ? ' &middot; ' + r.hours + ' hours' : ''} &middot; applied ${lv_esc(r.appliedAt)}</div>
+          </div>
+          <div class="d-flex gap-2">${actions.join('')}</div>
+        </div>
+        <div class="mt-2">${dates}</div>
+        <div class="mt-2 small"><b>Reason:</b> ${lv_esc(r.reason)}</div>
+        ${r.status !== 'pending' ? `<div class="mt-1 small text-muted">${r.status === 'approved' ? 'Approved' : 'Rejected'} by ${lv_esc(r.approverName)} on ${lv_esc(r.decidedAt)}${r.approverNote ? ' &mdash; ' + lv_esc(r.approverNote) : ''}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Apply form ──
+function lv_openForm() {
+  lv_type = '';
+  lv_picked = [];
+  lv_calDate = new Date();
+  document.querySelectorAll('.lv-type').forEach(b => b.classList.remove('active'));
+  document.getElementById('lv_reason').value = '';
+  lv_drawCal();
+  lv_drawSelected();
+  new bootstrap.Modal(document.getElementById('lv_modal')).show();
+}
+
+function lv_pickType(type, btn) {
+  lv_type = type;
+  document.querySelectorAll('.lv-type').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  lv_drawSelected();
+}
+
+function lv_calNav(step) {
+  lv_calDate = new Date(lv_calDate.getFullYear(), lv_calDate.getMonth() + step, 1);
+  lv_drawCal();
+}
+
+function lv_drawCal() {
+  const year = lv_calDate.getFullYear(), month = lv_calDate.getMonth();
+  document.getElementById('lv_calMonth').textContent =
+    new Date(year, month, 1).toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+
+  const first = new Date(year, month, 1).getDay();
+  const days = new Date(year, month + 1, 0).getDate();
+  const today = lv_key(new Date());
+
+  let html = '';
+  for (let i = 0; i < first; i++) html += '<button class="lv-day" disabled></button>';
+  for (let d = 1; d <= days; d++) {
+    const key = lv_key(new Date(year, month, d));
+    const cls = 'lv-day' + (lv_picked.some(p => p.date === key) ? ' picked' : '') + (key === today ? ' today' : '');
+    html += `<button type="button" class="${cls}" onclick="lv_toggleDay('${key}')">${d}</button>`;
+  }
+  document.getElementById('lv_calGrid').innerHTML = html;
+}
+
+function lv_toggleDay(key) {
+  const at = lv_picked.findIndex(p => p.date === key);
+  if (at >= 0) lv_picked.splice(at, 1);
+  else lv_picked.push({ date: key });
+  lv_picked.sort((a, b) => a.date.localeCompare(b.date));
+  lv_drawCal();
+  lv_drawSelected();
+}
+
+// Extra working is paid by the hour, so each chosen day needs one. The other
+// types do not, and asking for hours there would only be noise.
+function lv_drawSelected() {
+  const box = document.getElementById('lv_selectedBox');
+  document.getElementById('lv_selectedCount').textContent = lv_picked.length;
+  box.style.display = lv_picked.length ? '' : 'none';
+  if (!lv_picked.length) return;
+
+  document.getElementById('lv_selectedList').innerHTML = lv_picked.map((p, i) => {
+    const label = p.date.split('-').reverse().join('/');
+    if (lv_type !== 'extra_working') {
+      return `<span class="badge bg-primary me-1 mb-1">${label}</span>`;
+    }
+    return `<div class="d-flex align-items-center gap-2 mb-1">
+      <span class="badge bg-primary">${label}</span>
+      <input type="number" class="form-control form-control-sm" style="max-width:110px;" min="1" max="24" step="0.5"
+             placeholder="hours" value="${p.hours || ''}" onchange="lv_setHours(${i}, this.value)">
+      <span class="text-muted small">hours</span>
+    </div>`;
+  }).join('');
+}
+
+function lv_setHours(i, value) {
+  if (lv_picked[i]) lv_picked[i].hours = Number(value) || 0;
+}
+
+async function lv_submit() {
+  if (!lv_type) { showToast('warning', 'Choose a leave type.'); return; }
+  if (!lv_picked.length) { showToast('warning', 'Pick at least one date.'); return; }
+  const reason = document.getElementById('lv_reason').value.trim();
+  if (!reason) { showToast('warning', 'Please give a reason.'); return; }
+  if (lv_type === 'extra_working' && lv_picked.some(p => !p.hours || p.hours <= 0)) {
+    showToast('warning', 'Enter the hours for every date.');
+    return;
+  }
+
+  showLoading(true);
+  try {
+    const res = await fetch('/api/leaves', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: lv_type, dates: lv_picked, reason }),
+    });
+    const json = await res.json();
+    showLoading(false);
+    if (!json.success) { showToast('error', json.error || 'Could not send it.'); return; }
+    bootstrap.Modal.getInstance(document.getElementById('lv_modal')).hide();
+    showToast('success', 'Sent for approval.');
+    lv_fetch();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+// ── Decide ──
+function lv_openDecide(id) {
+  const r = lv_data.find(x => x.id === id);
+  if (!r) return;
+  lv_decideId = id;
+  document.getElementById('lv_decideTitle').textContent = r.userName;
+  document.getElementById('lv_decideSummary').innerHTML =
+    `<div class="mb-1"><b>${lv_esc(r.typeLabel)}</b> &middot; ${r.days} day${r.days > 1 ? 's' : ''}${r.hours ? ' &middot; ' + r.hours + ' hours' : ''}</div>`
+    + `<div class="mb-1">${r.dates.map(d => `<span class="badge bg-light text-dark border me-1">${d.date.split('-').reverse().join('/')}${d.hours ? ' &middot; ' + d.hours + 'h' : ''}</span>`).join('')}</div>`
+    + `<div class="small"><b>Reason:</b> ${lv_esc(r.reason)}</div>`;
+  document.getElementById('lv_decideNote').value = '';
+  new bootstrap.Modal(document.getElementById('lv_decideModal')).show();
+}
+
+async function lv_decide(action) {
+  if (!lv_decideId) return;
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/leaves/${lv_decideId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, note: document.getElementById('lv_decideNote').value }),
+    });
+    const json = await res.json();
+    showLoading(false);
+    if (!json.success) { showToast('error', json.error || 'Could not save.'); return; }
+    bootstrap.Modal.getInstance(document.getElementById('lv_decideModal')).hide();
+    showToast('success', action === 'approve' ? 'Approved.' : 'Rejected.');
+    lv_fetch();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+async function lv_withdraw(id) {
+  const confirmed = await Swal.fire({
+    title: 'Withdraw this request?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Withdraw',
+    confirmButtonColor: '#dc3545',
+  });
+  if (!confirmed.isConfirmed) return;
+
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/leaves/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    showLoading(false);
+    if (!json.success) { showToast('error', json.error || 'Could not withdraw.'); return; }
+    showToast('success', 'Withdrawn.');
+    lv_fetch();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+lv_fetch();
+</script>
