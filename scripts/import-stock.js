@@ -130,8 +130,10 @@ function mapColumns(rows) {
       if (re.test(value)) { map[col] = field; isHeader = true; break; }
     }
   }
-  // No header row - the ribbon tabs. They are always code in A, stock in C.
-  if (!isHeader) return { map: { A: 'code', C: 'status' }, skipFirst: false };
+  // No header row - the ribbon tabs, and Leather paper. The layout is the same
+  // as everywhere else, so name it: without B the leather names ended up in the
+  // notes column, which is not where anybody would look for them.
+  if (!isHeader) return { map: { A: 'code', B: 'name', C: 'status' }, skipFirst: false };
 
   // Velvet's header row reads "4" over the codes and "Stock" over the values,
   // so nothing marks the code column and every row would be dropped for having
