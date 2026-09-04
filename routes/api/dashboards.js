@@ -1024,6 +1024,9 @@ router.get('/analytics', requireLogin, async (req, res) => {
           DesignDone: r.actual_1,
           ClientStatus: r.design_approval_status_from_client || '',
           ProductionStatus: r.card_assembly || '',
+          // Why an order is late. Set on the production board, read on the
+          // Analytics page, which is where anyone asks the question.
+          ReasonForDelay: r.reason_for_delay || '',
           DispatchStatus: r.status_4 || '',
           // Where the order has got to, as one word. The four values are
           // exclusive and every order has one, so the cards built from them

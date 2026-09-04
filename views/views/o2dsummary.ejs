@@ -7,45 +7,51 @@ document.getElementById('analyticsRoot').innerHTML = `
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-chart-pie me-2"></i>O2D Analytics Summary</h3>
     <div class="d-flex gap-2">
-      <button class="btn btn-primary smooth-ui" onclick="anOpenQuick('reorder')"><i class="fas fa-rotate-left me-1"></i> Mark Re-order</button>
-      <button class="btn btn-warning smooth-ui text-dark" onclick="anOpenQuick('delay')"><i class="fas fa-clock me-1"></i> Reason For Delay</button>
+      <button class="btn btn-primary smooth-ui" onclick="anOpenList('Reprint')"><i class="fas fa-print me-1"></i> Re-Print <span class="badge bg-light text-dark ms-1" id="an_cnt_Reprint">0</span></button>
+      <button class="btn btn-info smooth-ui text-dark" onclick="anOpenList('Reorder')"><i class="fas fa-rotate-left me-1"></i> Re-Order <span class="badge bg-light text-dark ms-1" id="an_cnt_Reorder">0</span></button>
+      <button class="btn btn-secondary smooth-ui" onclick="anOpenList('Sample')"><i class="fas fa-swatchbook me-1"></i> Printed Sample <span class="badge bg-light text-dark ms-1" id="an_cnt_Sample">0</span></button>
+      <button class="btn btn-warning smooth-ui text-dark" onclick="anOpenList('Delay')"><i class="fas fa-clock me-1"></i> Delay Order <span class="badge bg-dark text-white ms-1" id="an_cnt_Delay">0</span></button>
       <button class="btn btn-outline-dark smooth-ui" onclick="refreshBoard(this, fetchAnalytics, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
     </div>
   </div>
 
-  <!-- QUICK ENTRY MODAL -->
-  <div class="modal fade" id="an_quickModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <!-- STATE LIST MODAL -->
+  <!-- One list per state. These only show what is there: the status itself is
+       set on Till Approval or the production board, and turns up here after. -->
+  <div class="modal fade" id="an_listModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
       <div class="modal-header bg-primary text-white">
-        <h5 class="modal-title" id="an_quickTitle">Mark Re-order</h5>
+        <h5 class="modal-title" id="an_listTitle">Orders</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <div id="an_quickError" class="alert alert-danger py-2 small d-none"></div>
-        <div class="mb-3">
-          <label class="form-label fw-bold text-dark">Order ID</label>
-          <input list="an_orderList" id="an_quickOrder" class="form-control form-combo" placeholder="K-159756" autocomplete="off" oninput="anQuickLookup()">
-          <datalist id="an_orderList"></datalist>
-          <div class="form-text" id="an_quickFound">Type or pick an order.</div>
+        <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
+          <input type="text" id="an_listSearch" class="form-control form-control-sm" style="max-width:320px;" placeholder="Order ID, client, dealer..." onkeyup="anDrawList()">
+          <span class="text-muted small" id="an_listCount"></span>
         </div>
-        <div class="mb-3 d-none" id="an_quickStatusBox">
-          <label class="form-label fw-bold text-dark">Mark as</label>
-          <select id="an_quickStatus" class="form-select">
-            <option value="Reorder">Reorder</option>
-            <option value="Reprint">Reprint</option>
-            <option value="Sample">Sample</option>
-          </select>
-        </div>
-        <div class="mb-3 d-none" id="an_quickReasonBox">
-          <label class="form-label fw-bold text-dark">Reason For Delay</label>
-          <textarea id="an_quickReason" class="form-control" rows="3" placeholder="Why is this order running late?"></textarea>
+        <div class="table-responsive" style="max-height:60vh; overflow-y:auto;">
+          <table class="table table-sm table-hover table-striped mb-0 text-nowrap">
+            <thead class="table-dark">
+              <tr>
+                <th style="position:sticky;top:0;background:#212529;color:white;">#</th>
+                <th style="position:sticky;top:0;background:#212529;color:white;">Order ID</th>
+                <th style="position:sticky;top:0;background:#212529;color:white;">Dealer</th>
+                <th style="position:sticky;top:0;background:#212529;color:white;">Client</th>
+                <th style="position:sticky;top:0;background:#212529;color:white;">Designer</th>
+                <th style="position:sticky;top:0;background:#212529;color:white;">Punched</th>
+                <th style="position:sticky;top:0;background:#212529;color:white;" id="an_listLastCol">Status</th>
+              </tr>
+            </thead>
+            <tbody id="an_listBody"></tbody>
+          </table>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-success" id="an_quickSave" onclick="anQuickSave()"><i class="fas fa-save me-1"></i> Save</button>
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <span class="text-muted small me-auto">Not filtered by the dates above &mdash; this is everything on record.</span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div></div>
+  </div>
   </div>
 
   <!-- KPI CARDS -->
@@ -162,6 +168,7 @@ async function fetchAnalytics() {
     an_all = json.data || [];
     an_populateFilters(an_all);
     anApplyFilters();
+    anListCounts();
     return an_all.length;
   } catch(e) { console.error(e); throw e; }
 }
@@ -173,96 +180,79 @@ document.getElementById('an_end').value = todayValue();
 
 fetchAnalytics().catch(() => {});
 
-// ── QUICK ENTRY ──
-// Two things people were opening the Production board to do, from the report
-// where they noticed the problem. Both write one field and nothing else.
-var an_quickMode = 'reorder';
+// ── THE FOUR STATE LISTS ──
+// Buttons that show, not buttons that set. The status is changed on Till
+// Approval or the production board; these answer "which orders are in that
+// state right now", which is the question people were opening three tabs to
+// work out. Deliberately not filtered by the dates above: the count of
+// reprints outstanding is not a fact about a date range.
+var AN_LISTS = {
+  Reprint: { title: 'Re-Print Orders', last: 'Client Status' },
+  Reorder: { title: 'Re-Order Orders', last: 'Client Status' },
+  Sample:  { title: 'Printed Sample Orders', last: 'Client Status' },
+  Delay:   { title: 'Delayed Orders', last: 'Reason For Delay' },
+};
 
-function anOpenQuick(mode) {
-  an_quickMode = mode;
-  const reorder = mode === 'reorder';
+function an_inList(order, key) {
+  if (key === 'Delay') return !!(order.ReasonForDelay || '').trim();
+  return (order.ClientStatus || '').trim().toLowerCase() === key.toLowerCase();
+}
 
-  document.getElementById('an_quickTitle').textContent = reorder ? 'Mark Re-order' : 'Reason For Delay';
-  document.getElementById('an_quickStatusBox').classList.toggle('d-none', !reorder);
-  document.getElementById('an_quickReasonBox').classList.toggle('d-none', reorder);
-  document.getElementById('an_quickError').classList.add('d-none');
-  document.getElementById('an_quickOrder').value = '';
-  document.getElementById('an_quickReason').value = '';
-  document.getElementById('an_quickStatus').value = 'Reorder';
-  document.getElementById('an_quickFound').textContent = 'Type or pick an order.';
-  document.getElementById('an_quickFound').className = 'form-text';
-
-  // The board already holds every order, so the list costs nothing and saves
-  // typing an ID wrong.
-  const list = document.getElementById('an_orderList');
-  list.innerHTML = '';
-  an_all.slice(0, 400).forEach(function (o) {
-    const opt = document.createElement('option');
-    opt.value = o.ID;
-    list.appendChild(opt);
+function anListCounts() {
+  Object.keys(AN_LISTS).forEach(function (key) {
+    const el = document.getElementById('an_cnt_' + key);
+    if (el) el.textContent = an_all.filter(function (o) { return an_inList(o, key); }).length;
   });
-
-  new bootstrap.Modal(document.getElementById('an_quickModal')).show();
 }
 
-// Naming the order back to the reader is the difference between "K-159756"
-// and "K-159756 — Phyllis Roth / BAUM", which is what catches a typo.
-function anQuickLookup() {
-  const id = (document.getElementById('an_quickOrder').value || '').trim();
-  const found = document.getElementById('an_quickFound');
-  if (!id) {
-    found.textContent = 'Type or pick an order.';
-    found.className = 'form-text';
-    return;
-  }
-  const o = an_all.find(function (x) { return String(x.ID).toLowerCase() === id.toLowerCase(); });
-  if (!o) {
-    found.textContent = 'No order with that ID on this board.';
-    found.className = 'form-text text-danger';
-    return;
-  }
-  found.textContent = (o.Dealer || '-') + ' / ' + (o.Client || '-')
-    + ' — currently ' + (o.ClientStatus || 'no client status');
-  found.className = 'form-text text-success';
+var an_listKey = 'Reprint';
+
+function anOpenList(key) {
+  an_listKey = key;
+  document.getElementById('an_listTitle').textContent = AN_LISTS[key].title;
+  document.getElementById('an_listLastCol').textContent = AN_LISTS[key].last;
+  document.getElementById('an_listSearch').value = '';
+  anDrawList();
+  new bootstrap.Modal(document.getElementById('an_listModal')).show();
 }
 
-async function anQuickSave() {
-  const id = (document.getElementById('an_quickOrder').value || '').trim();
-  const err = document.getElementById('an_quickError');
-  const fail = function (message) {
-    err.textContent = message;
-    err.classList.remove('d-none');
-  };
-  err.classList.add('d-none');
-
-  if (!id) return fail('Enter the order ID.');
-
-  const body = an_quickMode === 'reorder'
-    ? { clientStatus: document.getElementById('an_quickStatus').value }
-    : { reasonForDelay: (document.getElementById('an_quickReason').value || '').trim() };
-
-  if (an_quickMode === 'delay' && !body.reasonForDelay) return fail('Write the reason for the delay.');
-
-  const btn = document.getElementById('an_quickSave');
-  btn.disabled = true;
-  try {
-    const res = await fetch('/api/dashboards/quick/' + encodeURIComponent(id), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+function anDrawList() {
+  const key = an_listKey;
+  const q = (document.getElementById('an_listSearch').value || '').toLowerCase().trim();
+  const rows = an_all
+    .filter(function (o) { return an_inList(o, key); })
+    .filter(function (o) {
+      return !q || ((o.ID || '') + ' ' + (o.Client || '') + ' ' + (o.Dealer || '') + ' ' + (o.Designer || ''))
+        .toLowerCase().includes(q);
     });
-    const json = await res.json();
-    if (!json.success) return fail(json.error || 'Could not save.');
 
-    bootstrap.Modal.getInstance(document.getElementById('an_quickModal')).hide();
-    showToast('success', an_quickMode === 'reorder' ? 'Order marked.' : 'Reason saved.');
-    fetchAnalytics().catch(function () {});
-  } catch (e) {
-    fail('Network error. Please try again.');
-  } finally {
-    btn.disabled = false;
+  document.getElementById('an_listCount').textContent =
+    rows.length + (rows.length === 1 ? ' order' : ' orders');
+
+  const body = document.getElementById('an_listBody');
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">Nothing in this state.</td></tr>';
+    return;
   }
+  body.innerHTML = rows.map(function (o, i) {
+    const last = key === 'Delay' ? (o.ReasonForDelay || '') : (o.ClientStatus || '');
+    return '<tr>'
+      + '<td>' + (i + 1) + '</td>'
+      + '<td class="fw-bold">' + anEsc(o.ID) + '</td>'
+      + '<td>' + (anEsc(o.Dealer) || '-') + '</td>'
+      + '<td>' + (anEsc(o.Client) || '-') + '</td>'
+      + '<td>' + (anEsc(o.Designer) || '-') + '</td>'
+      + '<td>' + (anEsc(o.Date) || '-') + '</td>'
+      + '<td class="text-wrap" style="max-width:320px;">' + anEsc(last) + '</td>'
+      + '</tr>';
+  }).join('');
 }
+
+function anEsc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 
 // ── TODAY ──
 // The number under each card. It ignores every filter above it on purpose:
