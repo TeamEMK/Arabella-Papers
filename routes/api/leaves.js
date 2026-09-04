@@ -13,7 +13,6 @@ const LEAVE_TYPES = {
   full_day: 'Full Day Leave',
   half_day: 'Half Day Leave',
   work_from_home: 'Work From Home',
-  extra_working: 'Extra Working',
 };
 
 const IST = { timeZone: 'Asia/Kolkata', hour12: true };
@@ -36,7 +35,6 @@ function shape(r) {
     typeLabel: LEAVE_TYPES[r.leave_type] || r.leave_type,
     dates,
     days: dates.length,
-    hours: dates.reduce((sum, d) => sum + (Number(d.hours) || 0), 0),
     from: day(r.from_date),
     to: day(r.to_date),
     reason: r.reason || '',
@@ -118,15 +116,7 @@ router.post('/', requireLogin, async (req, res) => {
       if (seen.has(date)) continue;
       seen.add(date);
 
-      const item = { date };
-      if (type === 'extra_working') {
-        const hours = Number(entry && entry.hours);
-        if (!hours || hours <= 0 || hours > 24) {
-          return res.status(400).json({ success: false, error: `Hours are needed for ${date} (1-24).` });
-        }
-        item.hours = hours;
-      }
-      clean.push(item);
+      clean.push({ date });
     }
     clean.sort((a, b) => a.date.localeCompare(b.date));
 

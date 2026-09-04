@@ -3,7 +3,7 @@
   <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
       <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-calendar-check me-2"></i>Leave Tracker</h3>
-      <div class="text-muted small">Apply for leave, work from home, or extra working.</div>
+      <div class="text-muted small">Apply for leave or work from home.</div>
     </div>
     <div class="d-flex gap-2">
       <button class="btn btn-primary smooth-ui fw-bold" onclick="lv_openForm()"><i class="fas fa-plus me-1"></i> Apply</button>
@@ -48,10 +48,9 @@
     <div class="modal-body">
       <label class="form-label fw-bold text-dark small">Leave type</label>
       <div class="row g-2 mb-4" id="lv_typeGrid">
-        <div class="col-6 col-md-3"><button type="button" class="btn btn-outline-primary w-100 lv-type" data-type="full_day" onclick="lv_pickType('full_day', this)"><i class="fas fa-bed d-block mb-1"></i>Full Day</button></div>
-        <div class="col-6 col-md-3"><button type="button" class="btn btn-outline-primary w-100 lv-type" data-type="half_day" onclick="lv_pickType('half_day', this)"><i class="fas fa-clock d-block mb-1"></i>Half Day</button></div>
-        <div class="col-6 col-md-3"><button type="button" class="btn btn-outline-primary w-100 lv-type" data-type="work_from_home" onclick="lv_pickType('work_from_home', this)"><i class="fas fa-house d-block mb-1"></i>Work From Home</button></div>
-        <div class="col-6 col-md-3"><button type="button" class="btn btn-outline-primary w-100 lv-type" data-type="extra_working" onclick="lv_pickType('extra_working', this)"><i class="fas fa-bolt d-block mb-1"></i>Extra Working</button></div>
+        <div class="col-12 col-md-4"><button type="button" class="btn btn-outline-primary w-100 lv-type" data-type="full_day" onclick="lv_pickType('full_day', this)"><i class="fas fa-bed d-block mb-1"></i>Full Day</button></div>
+        <div class="col-6 col-md-4"><button type="button" class="btn btn-outline-primary w-100 lv-type" data-type="half_day" onclick="lv_pickType('half_day', this)"><i class="fas fa-clock d-block mb-1"></i>Half Day</button></div>
+        <div class="col-6 col-md-4"><button type="button" class="btn btn-outline-primary w-100 lv-type" data-type="work_from_home" onclick="lv_pickType('work_from_home', this)"><i class="fas fa-house d-block mb-1"></i>Work From Home</button></div>
       </div>
 
       <label class="form-label fw-bold text-dark small">Pick the days <span class="text-muted fw-normal">— click a date to select or unselect it</span></label>
@@ -186,10 +185,9 @@ function lv_render() {
   }
 
   box.innerHTML = rows.map(r => {
-    const dates = r.dates.map(d => {
-      const label = d.date.split('-').reverse().join('/');
-      return `<span class="badge bg-light text-dark border me-1 mb-1">${label}${d.hours ? ' &middot; ' + d.hours + 'h' : ''}</span>`;
-    }).join('');
+    const dates = r.dates
+      .map(d => `<span class="badge bg-light text-dark border me-1 mb-1">${d.date.split('-').reverse().join('/')}</span>`)
+      .join('');
 
     // Deciding is only offered on requests that are still open, and only to
     // whoever may decide them.
@@ -209,7 +207,7 @@ function lv_render() {
               <span class="badge bg-secondary ms-1">${lv_esc(r.typeLabel)}</span>
               <span class="badge bg-${LV_STATUS_STYLE[r.status] || 'secondary'} ms-1">${r.status}</span>
             </div>
-            <div class="small text-muted">${r.days} day${r.days > 1 ? 's' : ''}${r.hours ? ' &middot; ' + r.hours + ' hours' : ''} &middot; applied ${lv_esc(r.appliedAt)}</div>
+            <div class="small text-muted">${r.days} day${r.days > 1 ? 's' : ''} &middot; applied ${lv_esc(r.appliedAt)}</div>
           </div>
           <div class="d-flex gap-2">${actions.join('')}</div>
         </div>
@@ -273,30 +271,15 @@ function lv_toggleDay(key) {
   lv_drawSelected();
 }
 
-// Extra working is paid by the hour, so each chosen day needs one. The other
-// types do not, and asking for hours there would only be noise.
 function lv_drawSelected() {
   const box = document.getElementById('lv_selectedBox');
   document.getElementById('lv_selectedCount').textContent = lv_picked.length;
   box.style.display = lv_picked.length ? '' : 'none';
   if (!lv_picked.length) return;
 
-  document.getElementById('lv_selectedList').innerHTML = lv_picked.map((p, i) => {
-    const label = p.date.split('-').reverse().join('/');
-    if (lv_type !== 'extra_working') {
-      return `<span class="badge bg-primary me-1 mb-1">${label}</span>`;
-    }
-    return `<div class="d-flex align-items-center gap-2 mb-1">
-      <span class="badge bg-primary">${label}</span>
-      <input type="number" class="form-control form-control-sm" style="max-width:110px;" min="1" max="24" step="0.5"
-             placeholder="hours" value="${p.hours || ''}" onchange="lv_setHours(${i}, this.value)">
-      <span class="text-muted small">hours</span>
-    </div>`;
-  }).join('');
-}
-
-function lv_setHours(i, value) {
-  if (lv_picked[i]) lv_picked[i].hours = Number(value) || 0;
+  document.getElementById('lv_selectedList').innerHTML = lv_picked
+    .map(p => `<span class="badge bg-primary me-1 mb-1">${p.date.split('-').reverse().join('/')}</span>`)
+    .join('');
 }
 
 async function lv_submit() {
@@ -304,10 +287,6 @@ async function lv_submit() {
   if (!lv_picked.length) { showToast('warning', 'Pick at least one date.'); return; }
   const reason = document.getElementById('lv_reason').value.trim();
   if (!reason) { showToast('warning', 'Please give a reason.'); return; }
-  if (lv_type === 'extra_working' && lv_picked.some(p => !p.hours || p.hours <= 0)) {
-    showToast('warning', 'Enter the hours for every date.');
-    return;
-  }
 
   showLoading(true);
   try {
@@ -332,8 +311,8 @@ function lv_openDecide(id) {
   lv_decideId = id;
   document.getElementById('lv_decideTitle').textContent = r.userName;
   document.getElementById('lv_decideSummary').innerHTML =
-    `<div class="mb-1"><b>${lv_esc(r.typeLabel)}</b> &middot; ${r.days} day${r.days > 1 ? 's' : ''}${r.hours ? ' &middot; ' + r.hours + ' hours' : ''}</div>`
-    + `<div class="mb-1">${r.dates.map(d => `<span class="badge bg-light text-dark border me-1">${d.date.split('-').reverse().join('/')}${d.hours ? ' &middot; ' + d.hours + 'h' : ''}</span>`).join('')}</div>`
+    `<div class="mb-1"><b>${lv_esc(r.typeLabel)}</b> &middot; ${r.days} day${r.days > 1 ? 's' : ''}</div>`
+    + `<div class="mb-1">${r.dates.map(d => `<span class="badge bg-light text-dark border me-1">${d.date.split('-').reverse().join('/')}</span>`).join('')}</div>`
     + `<div class="small"><b>Reason:</b> ${lv_esc(r.reason)}</div>`;
   document.getElementById('lv_decideNote').value = '';
   new bootstrap.Modal(document.getElementById('lv_decideModal')).show();
