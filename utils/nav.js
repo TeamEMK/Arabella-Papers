@@ -41,6 +41,10 @@ function getNavMenu(role, domain) {
   // someone with a list to import actually is. The view itself is still
   // permission-checked in routes/views.js.
 
+  // What paper is in stock is asked by everyone who takes an order, so the
+  // tab is open to all.
+  menu.push({ id: 'stock', name: 'Stock', icon: 'fa-layer-group' });
+
   // Everybody takes leave, so everybody gets the tab. What differs is what is
   // on it: your own requests, plus everyone's if you are the one deciding.
   menu.push({ id: 'leave', name: 'Leave', icon: 'fa-calendar-check' });

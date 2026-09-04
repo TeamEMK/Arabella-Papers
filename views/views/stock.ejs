@@ -1,0 +1,314 @@
+<%# Paper and ribbon stock. Open to everyone, and editable in place. %>
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-layer-group me-2"></i>Stock</h3>
+      <div class="text-muted small">Paper and ribbon availability. Click a status to change it.</div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary smooth-ui fw-bold" onclick="st_openAdd()"><i class="fas fa-plus me-1"></i> Add Item</button>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, st_fetch, 'items')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #0d6efd;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Items</h6><h3 class="fw-bold text-primary mb-0" id="st_total">--</h3></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #198754;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">In Stock</h6><h3 class="fw-bold text-success mb-0" id="st_in">--</h3></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #dc3545;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Out of Stock</h6><h3 class="fw-bold text-danger mb-0" id="st_out">--</h3></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #ffc107;"><div class="card-body p-3"><h6 class="text-muted mb-0 small">Confirm First</h6><div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">ask before promising it to a client</div><h3 class="fw-bold text-warning mb-0" id="st_ask">--</h3></div></div></div>
+  </div>
+
+  <div class="card bg-light-glass mb-3 shadow-sm">
+    <div class="card-body p-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-5"><label class="form-label text-dark fw-bold small mb-0">Search</label><input type="text" id="st_search" class="form-control form-control-sm" placeholder="Code or paper name..." onkeyup="st_render()"></div>
+        <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Series</label><select id="st_category" class="form-select form-select-sm" onchange="st_render()"><option value="">All</option></select></div>
+        <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Status</label><select id="st_status" class="form-select form-select-sm" onchange="st_render()"><option value="">All</option></select></div>
+        <div class="col-12 col-md-1 text-end"><button class="btn btn-secondary btn-sm w-100" onclick="st_clear()">Clear</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card bg-light-glass shadow-lg">
+    <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+      <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-boxes-stacked me-2"></i>Stock List</h5>
+      <span class="text-muted small" id="st_shown"></span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive" data-fill-height style="overflow-y:auto;position:relative;">
+        <table class="table table-hover table-striped mb-0 text-nowrap">
+          <thead class="table-dark">
+            <tr>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">#</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Code</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Name</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Series</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Thickness</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Status</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Note</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="st_tbody"><tr><td colspan="8" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add / edit -->
+<div class="modal fade" id="st_modal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title" id="st_modalTitle">Item</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label fw-bold text-dark small">Code</label><input class="form-control" id="st_f_code"></div>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark small">Series *</label><input class="form-control" id="st_f_category" list="st_categories"></div>
+        <div class="col-12"><label class="form-label fw-bold text-dark small">Name</label><input class="form-control" id="st_f_name"></div>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark small">Thickness</label><input class="form-control" id="st_f_thickness" placeholder="e.g. 1.00 mm"></div>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark small">Status</label><input class="form-control" id="st_f_status" list="st_statuses"></div>
+        <div class="col-12"><label class="form-label fw-bold text-dark small">Note</label><textarea class="form-control" id="st_f_note" rows="2"></textarea></div>
+      </div>
+      <datalist id="st_categories"></datalist>
+      <datalist id="st_statuses"></datalist>
+    </div>
+    <div class="modal-footer justify-content-between">
+      <button class="btn btn-outline-danger" id="st_deleteBtn" onclick="st_delete()"><i class="fas fa-trash me-1"></i>Remove</button>
+      <div class="d-flex gap-2">
+        <button class="btn btn-success" onclick="st_save()">Save</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<script>
+var st_data = [], st_editId = null, st_shown = [];
+
+// The wordings the office actually uses. Offered on the row so a status is
+// changed by picking, not by typing it slightly differently each time.
+var ST_STATES = ['In Stock', 'Out of Stock', 'Please confirm before placing an order'];
+
+const st_esc = v => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function st_badge(status) {
+  const s = (status || '').toLowerCase();
+  if (!s) return 'secondary';
+  if (s.includes('out')) return 'danger';
+  if (s.includes('confirm')) return 'warning text-dark';
+  if (s.includes('in stock')) return 'success';
+  return 'secondary';
+}
+
+async function st_fetch() {
+  try {
+    const res = await fetch('/api/stock');
+    const json = await res.json();
+    st_data = json.data || [];
+    st_fillFilters();
+    st_render();
+    return st_data.length;
+  } catch (e) {
+    document.getElementById('st_tbody').innerHTML =
+      '<tr><td colspan="8" class="text-center text-danger py-4">Could not load stock.</td></tr>';
+    return 0;
+  }
+}
+
+function st_fillFilters() {
+  const fill = (id, values, keepAll) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const keep = el.value;
+    const list = [...new Set(values.filter(Boolean))].sort();
+    el.innerHTML = (keepAll ? '<option value="">All</option>' : '')
+      + list.map(v => `<option value="${st_esc(v)}">${st_esc(v)}</option>`).join('');
+    el.value = keep;
+  };
+  fill('st_category', st_data.map(i => i.category), true);
+  fill('st_status', st_data.map(i => i.status), true);
+
+  // Suggestions on the form: whatever is already in use, plus the standard set.
+  const dl = (id, values) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = [...new Set(values.filter(Boolean))].sort()
+      .map(v => `<option value="${st_esc(v)}">`).join('');
+  };
+  dl('st_categories', st_data.map(i => i.category));
+  dl('st_statuses', ST_STATES.concat(st_data.map(i => i.status)));
+}
+
+function st_render() {
+  const q = (document.getElementById('st_search').value || '').toLowerCase().trim();
+  const cat = document.getElementById('st_category').value;
+  const status = document.getElementById('st_status').value;
+
+  st_shown = st_data.filter(i =>
+    (!cat || i.category === cat) &&
+    (!status || (i.status || '') === status) &&
+    (!q || ((i.code || '') + ' ' + (i.name || '')).toLowerCase().includes(q))
+  );
+
+  const has = s => st_data.filter(i => (i.status || '').toLowerCase().includes(s)).length;
+  document.getElementById('st_total').textContent = st_data.length;
+  document.getElementById('st_in').textContent = st_data.filter(i => /in stock/i.test(i.status || '')).length;
+  document.getElementById('st_out').textContent = has('out');
+  document.getElementById('st_ask').textContent = has('confirm');
+  document.getElementById('st_shown').textContent =
+    st_shown.length === st_data.length ? '' : st_shown.length + ' of ' + st_data.length;
+
+  const tbody = document.getElementById('st_tbody');
+  if (!st_shown.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4">Nothing matches.</td></tr>';
+    return;
+  }
+
+  // Only the first 200 rows are drawn; 1,100 select elements at once made the
+  // page crawl. The rest come in as you scroll.
+  st_drawn = 0;
+  tbody.innerHTML = '';
+  st_drawMore();
+  st_attachScroll();
+}
+
+var st_drawn = 0;
+function st_drawMore() {
+  if (st_drawn >= st_shown.length) return;
+  const batch = st_shown.slice(st_drawn, st_drawn + 200);
+  const rows = batch.map((i, n) => {
+    const options = [...new Set(ST_STATES.concat(i.status ? [i.status] : []))]
+      .map(s => `<option ${s === i.status ? 'selected' : ''}>${st_esc(s)}</option>`).join('');
+    return `<tr>
+      <td>${st_drawn + n + 1}</td>
+      <td class="fw-bold">${st_esc(i.code) || '-'}</td>
+      <td>${st_esc(i.name) || '-'}</td>
+      <td><span class="badge bg-light text-dark border">${st_esc(i.category)}</span></td>
+      <td>${st_esc(i.thickness) || '-'}</td>
+      <td>
+        <select class="form-select form-select-sm border-${st_badge(i.status).split(' ')[0]}"
+                style="min-width:190px;" onchange="st_setStatus(${i.id}, this.value)">
+          <option value="" ${i.status ? '' : 'selected'}>—</option>
+          ${options}
+        </select>
+      </td>
+      <td class="text-truncate" style="max-width:260px;" title="${st_esc(i.note)}">${st_esc(i.note) || '-'}</td>
+      <td><button class="btn btn-sm btn-warning" onclick="st_openEdit(${i.id})"><i class="fas fa-pen-to-square"></i></button></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('st_tbody').insertAdjacentHTML('beforeend', rows);
+  st_drawn += batch.length;
+}
+
+function st_attachScroll() {
+  const box = document.getElementById('st_tbody').closest('.table-responsive');
+  if (!box || box.dataset.more) return;
+  box.dataset.more = '1';
+  box.addEventListener('scroll', function () {
+    if (box.scrollTop + box.clientHeight >= box.scrollHeight - 150) st_drawMore();
+  });
+}
+
+// Changing a status is the thing people come here to do, so it saves straight
+// from the row rather than through the form.
+async function st_setStatus(id, value) {
+  const item = st_data.find(i => i.id === id);
+  const before = item ? item.status : null;
+  if (item) item.status = value || null;
+  try {
+    const res = await fetch(`/api/stock/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: value }),
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'save failed');
+    showToast('success', 'Stock updated.');
+    st_fillFilters();
+  } catch (e) {
+    if (item) item.status = before;
+    showToast('error', 'Could not save that.');
+    st_render();
+  }
+}
+
+function st_clear() {
+  ['st_search', 'st_category', 'st_status'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  st_render();
+}
+
+const ST_FIELDS = ['code', 'name', 'category', 'thickness', 'status', 'note'];
+
+function st_openAdd() {
+  st_editId = null;
+  document.getElementById('st_modalTitle').textContent = 'Add Item';
+  ST_FIELDS.forEach(f => { const el = document.getElementById('st_f_' + f); if (el) el.value = ''; });
+  document.getElementById('st_f_category').value = document.getElementById('st_category').value || '';
+  document.getElementById('st_f_status').value = 'In Stock';
+  document.getElementById('st_deleteBtn').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('st_modal')).show();
+}
+
+function st_openEdit(id) {
+  const i = st_data.find(x => x.id === id);
+  if (!i) return;
+  st_editId = id;
+  document.getElementById('st_modalTitle').textContent = i.code || i.name || 'Item';
+  ST_FIELDS.forEach(f => { const el = document.getElementById('st_f_' + f); if (el) el.value = i[f] == null ? '' : i[f]; });
+  document.getElementById('st_deleteBtn').style.display = '';
+  new bootstrap.Modal(document.getElementById('st_modal')).show();
+}
+
+async function st_save() {
+  const body = {};
+  ST_FIELDS.forEach(f => { body[f] = document.getElementById('st_f_' + f).value; });
+  if (!body.category.trim()) { showToast('warning', 'Which series does it belong to?'); return; }
+  if (!body.code.trim() && !body.name.trim()) { showToast('warning', 'Give it a code or a name.'); return; }
+
+  showLoading(true);
+  try {
+    const res = await fetch(st_editId ? `/api/stock/${st_editId}` : '/api/stock', {
+      method: st_editId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    showLoading(false);
+    if (!json.success) { showToast('error', json.error || 'Could not save.'); return; }
+    bootstrap.Modal.getInstance(document.getElementById('st_modal')).hide();
+    showToast('success', st_editId ? 'Item updated.' : 'Item added.');
+    st_fetch();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+async function st_delete() {
+  if (!st_editId) return;
+  const i = st_data.find(x => x.id === st_editId);
+  const confirmed = await Swal.fire({
+    title: 'Remove this item?',
+    html: `<b>${st_esc(i ? (i.code || i.name) : '')}</b> will come off the list.`
+      + '<br><br><span class="text-muted small">The record is kept, not erased.</span>',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Remove',
+    confirmButtonColor: '#dc3545',
+  });
+  if (!confirmed.isConfirmed) return;
+
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/stock/${st_editId}`, { method: 'DELETE' });
+    const json = await res.json();
+    showLoading(false);
+    if (!json.success) { showToast('error', json.error || 'Could not remove.'); return; }
+    bootstrap.Modal.getInstance(document.getElementById('st_modal')).hide();
+    showToast('success', 'Removed.');
+    st_fetch();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+st_fetch();
+</script>

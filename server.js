@@ -19,6 +19,7 @@ const bulkApi = require('./routes/api/bulk');
 const logsApi = require('./routes/api/logs');
 const hrApi = require('./routes/api/hr');
 const leavesApi = require('./routes/api/leaves');
+const stockApi = require('./routes/api/stock');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -84,6 +85,7 @@ app.use('/api/bulk', bulkApi);
 app.use('/api/logs', logsApi);
 app.use('/api/hr', hrApi);
 app.use('/api/leaves', leavesApi);
+app.use('/api/stock', stockApi);
 
 // ── 404 FALLBACK ──
 app.use((req, res) => {

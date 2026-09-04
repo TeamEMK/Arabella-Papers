@@ -256,6 +256,25 @@ CREATE TABLE IF NOT EXISTS leave_requests (
   INDEX idx_leave_from (from_date)
 );
 
+-- Paper and ribbon stock. One row per item; `category` is the series it came
+-- from, which in the source workbook was a tab of its own.
+CREATE TABLE IF NOT EXISTS stock_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  category VARCHAR(120) NOT NULL,
+  code VARCHAR(80),
+  name VARCHAR(255),
+  -- Free text, not a fixed set: the sheet says "In Stock", "out of stock" and
+  -- "Please confirm before placing an order", and the office means all three.
+  status VARCHAR(160),
+  thickness VARCHAR(40),
+  note TEXT,
+  is_deleted TINYINT DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_stock_category (category),
+  INDEX idx_stock_code (code)
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR(128) NOT NULL PRIMARY KEY,
   expires INT(11) UNSIGNED NOT NULL,
