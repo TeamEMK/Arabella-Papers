@@ -233,8 +233,8 @@ function anOpenList(key) {
   document.getElementById('an_listTitle').textContent = AN_LISTS[key].title;
   document.getElementById('an_listLastCol').textContent = AN_LISTS[key].last;
   document.getElementById('an_listNote').textContent = key === 'Delay'
-    ? 'On the production board for more than ' + AN_DELAY_DAYS + ' days, longest wait first.'
-    : 'Not filtered by the dates above — this is everything on record.';
+    ? 'On the production board for more than ' + AN_DELAY_DAYS + ' days, longest wait first. Click a row for the reason.'
+    : 'Not filtered by the dates above — this is everything on record. Click a row for details.';
   document.getElementById('an_listSearch').value = '';
   anDrawList();
   new bootstrap.Modal(document.getElementById('an_listModal')).show();
@@ -256,6 +256,9 @@ function anDrawList() {
   document.getElementById('an_listCount').textContent =
     rows.length + (rows.length === 1 ? ' order' : ' orders');
 
+  // Held for the row click, which needs the order behind the line it opened.
+  an_listRows = rows;
+
   const body = document.getElementById('an_listBody');
   if (!rows.length) {
     body.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">Nothing in this state.</td></tr>';
@@ -271,16 +274,66 @@ function anDrawList() {
     } else {
       last = anEsc(o.ClientStatus || '');
     }
-    return '<tr>'
+    return '<tr style="cursor:pointer;" onclick="anToggleRow(this, ' + i + ')">'
       + '<td>' + (i + 1) + '</td>'
       + '<td class="fw-bold">' + anEsc(o.ID) + '</td>'
       + '<td>' + (anEsc(o.Dealer) || '-') + '</td>'
       + '<td>' + (anEsc(o.Client) || '-') + '</td>'
       + '<td>' + (anEsc(o.Designer) || '-') + '</td>'
-      + '<td class="text-nowrap">' + (anEsc(o.Date) || '-') + '</td>'
+      + '<td class="text-nowrap">' + (anEsc((o.Date || '').split(',')[0]) || '-') + '</td>'
       + '<td class="text-wrap" style="max-width:320px;">' + last + '</td>'
       + '</tr>';
   }).join('');
+}
+
+// Click a line to open it. The list answers "which orders are late"; the panel
+// underneath answers the next question, which is always "why is that one late"
+// - the reason somebody wrote on the production board, and how far the card
+// actually got. Opening a second line closes the first, so the list stays
+// readable however long it is.
+var an_listRows = [];
+
+function anToggleRow(tr, i) {
+  const open = tr.nextElementSibling && tr.nextElementSibling.classList.contains('an-detail');
+  const body = document.getElementById('an_listBody');
+  [...body.querySelectorAll('tr.an-detail')].forEach(function (r) { r.remove(); });
+  [...body.querySelectorAll('tr.table-active')].forEach(function (r) { r.classList.remove('table-active'); });
+  if (open) return;
+
+  const o = an_listRows[i];
+  if (!o) return;
+  tr.classList.add('table-active');
+
+  const reason = (o.ReasonForDelay || '').trim();
+  const started = o.ProductionStart
+    ? new Date(o.ProductionStart).toLocaleDateString('en-GB') + ' — ' + an_daysInProduction(o) + ' days ago'
+    : 'not recorded';
+
+  const facts = [
+    ['Reached production', started],
+    ['Design status', o.DesignStatus],
+    ['Client status', o.ClientStatus],
+    ['Production stage', o.ProductionStatus],
+    ['Dispatch', o.DispatchStatus],
+  ].filter(function (f) { return (f[1] || '').toString().trim(); })
+   .map(function (f) {
+     return '<div class="col-6 col-lg-4 mb-2"><div class="text-muted small">' + f[0] + '</div>'
+       + '<div class="fw-semibold">' + anEsc(f[1]) + '</div></div>';
+   }).join('');
+
+  const row = document.createElement('tr');
+  row.className = 'an-detail';
+  row.innerHTML = '<td colspan="7" class="bg-light">'
+    + '<div class="p-2">'
+    + '<div class="mb-3">'
+    +   '<div class="text-muted small">Reason for delay</div>'
+    +   (reason
+          ? '<div class="fw-bold text-danger">' + anEsc(reason) + '</div>'
+          : '<div class="fst-italic text-muted">Nobody has written one yet — it is set on the production board, in the Reason For Delay box.</div>')
+    + '</div>'
+    + '<div class="row g-0">' + facts + '</div>'
+    + '</div></td>';
+  tr.after(row);
 }
 
 function anEsc(v) {
