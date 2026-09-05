@@ -658,9 +658,22 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
 
-    const { courier, docket, status, invoiceNo, invoiceAmount, boxes, weight, volWeight,
+    const { courier, docket, invoiceNo, invoiceAmount, boxes, weight, volWeight,
             userEmail, clientEmail, sendClientMail } = req.body;
     const orderId = req.params.id;
+
+    // The modal no longer asks for a status: entering the courier and saving is
+    // what dispatching an order means, and the picker only ever had one useful
+    // answer. An order already marked Delivered keeps that - correcting a
+    // docket number a week later must not walk it back to Dispatched.
+    let status = req.body.status;
+    if (status === undefined) {
+      const [[current]] = await db.query(
+        'SELECT status_4 FROM orders WHERE order_id = ? LIMIT 1', [orderId]
+      );
+      const was = (current && current.status_4) || '';
+      status = /deliver/i.test(was) ? was : 'Dispatched';
+    }
 
     // invoice_amount is DECIMAL and number_of_boxes is INT: an untouched input
     // sends '', which MySQL rejects outright in strict mode and would fail the
