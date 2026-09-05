@@ -22,14 +22,14 @@ function getNavMenu(role, domain) {
     menu.push({ id: 'productionBD', name: 'Production Dashboard', icon: 'fa-industry' });
     // Same board, the orders from before the August cutoff. Whoever works the
     // queue is who needs to look one of them up, so it goes right below it.
-    menu.push({ id: 'oldProduction', name: 'Old Production', icon: 'fa-box-archive' });
+    menu.push({ id: 'oldProduction', name: 'Backup Production', icon: 'fa-box-archive' });
   }
 
   if (roleStr === 'SuperAdmin' || roleStr === 'Accounts') {
     menu.push({ id: 'dispatchBD', name: 'Dispatch Dashboard', icon: 'fa-truck-fast' });
     // The same board, for parcels sent before the cutoff. Whoever works the
     // queue is who needs to look one up, so it sits right below it.
-    menu.push({ id: 'oldDispatch', name: 'Old Dispatch', icon: 'fa-box-archive' });
+    menu.push({ id: 'oldDispatch', name: 'Backup Dispatch', icon: 'fa-box-archive' });
   }
 
   if (roleStr === 'SuperAdmin' || domain === 'Head') {

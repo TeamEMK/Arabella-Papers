@@ -32,7 +32,7 @@ const LOCAL_ORDER_OFF_BOARDS = `LOWER(IFNULL(dealer_name, '')) <> 'local order'`
 // The floor works on this month. Everything the queue was still carrying from
 // before August - 2584 orders, most of them from 2025 - is work nobody is going
 // to pick up again, but it cannot simply be dropped either, so it moves to the
-// Old Production board where it can still be found and finished.
+// Backup Production board where it can still be found and finished.
 //
 // A fixed date rather than a rolling window: the split has to mean the same
 // thing tomorrow as it did today, or an order quietly changes boards overnight.
@@ -305,7 +305,7 @@ router.get('/production', requireLogin, async (req, res) => {
     // those off the board while the stock is in the building, which is what
     // the team objected to the first time this gate went on. So an order the
     // floor has already started stays, whatever the approval column says.
-    // ?scope=old is the Old Production board. It is a record rather than a
+    // ?scope=old is the Backup Production board. It is a record rather than a
     // queue: everything that reached production before the cutoff, dispatched
     // orders included, because the question it answers is "what did we have",
     // not "what is left to do". The live board drops an order the moment it
@@ -422,7 +422,7 @@ router.post('/production/archive', requireLogin, async (req, res) => {
     for (const id of ids) {
       await logOrderEvent(
         id,
-        toOld ? 'Moved to Old Production' : 'Moved back to Production',
+        toOld ? 'Moved to Backup Production' : 'Moved back to Production',
         '',
         user
       );
@@ -580,7 +580,7 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    // ?scope=old is the Old Dispatch board: everything sent before the cutoff.
+    // ?scope=old is the Backup Dispatch board: everything sent before the cutoff.
     // The queue itself keeps the recent work and whatever is still to go out.
     const archive = req.query.scope === 'old';
 
@@ -725,7 +725,7 @@ router.post('/dispatch/archive', requireLogin, async (req, res) => {
     // in the Logs tab, so a bulk move is recorded as one entry.
     await logOrderEvent(
       ids[0],
-      toOld ? 'Moved to Old Dispatch' : 'Moved back to Dispatch',
+      toOld ? 'Moved to Backup Dispatch' : 'Moved back to Dispatch',
       ids.length > 1 ? `${ids.length} orders moved together` : '',
       user
     );
@@ -785,7 +785,7 @@ router.put('/dispatch/:id/revert', requireLogin, async (req, res) => {
     );
 
     // Off Dispatch is certain. Where it turns up is not, and there are three
-    // answers: the production queue, the Old Production board if it reached
+    // answers: the production queue, the Backup Production board if it reached
     // production before the cutoff, or neither - an order at "Proofing Done"
     // with no stage finished is not production's work at all. Nearly every
     // order on Dispatch is an old one, so guessing "production" would send

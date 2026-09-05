@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS orders (
   printing_actual_time DATETIME,
   printing_type VARCHAR(60),
   -- Set when someone moves an order off the production queue by hand. The
-  -- August cutoff already sends the old work to the Old Production board; this
+  -- August cutoff already sends the old work to the Backup Production board; this
   -- is for the newer orders nobody is going to finish either.
   production_archived_at DATETIME NULL,
   -- When production handed the order over to Dispatch. actual_4 below is a

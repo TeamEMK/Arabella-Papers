@@ -1,4 +1,4 @@
-<%# Dispatch Dashboard. Rendered a second time as Old Dispatch, where the same
+<%# Dispatch Dashboard. Rendered a second time as Backup Dispatch, where the same
     board shows the parcels sent before the cutoff. %>
 <div id="dispRoot"></div>
 <script>
@@ -6,9 +6,9 @@ var DSP_ARCHIVE = <%= archive ? 'true' : 'false' %>;
 document.getElementById('dispRoot').innerHTML = `
 <div class="container-fluid py-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="mb-0 text-dark fw-bold">${DSP_ARCHIVE ? '<i class="fas fa-box-archive me-2"></i>Old Dispatch' : 'Dispatch Dashboard'}</h3>
+    <h3 class="mb-0 text-dark fw-bold">${DSP_ARCHIVE ? '<i class="fas fa-box-archive me-2"></i>Backup Dispatch' : 'Dispatch Dashboard'}</h3>
     <div class="d-flex gap-2">
-      <button class="btn ${DSP_ARCHIVE ? 'btn-outline-primary' : 'btn-outline-warning'} smooth-ui fw-bold" onclick="dsp_moveBoards()"><i class="fas ${DSP_ARCHIVE ? 'fa-rotate-left' : 'fa-box-archive'} me-1"></i> ${DSP_ARCHIVE ? 'Move back to Dispatch' : 'Move to Old Dispatch'}</button>
+      <button class="btn ${DSP_ARCHIVE ? 'btn-outline-primary' : 'btn-outline-warning'} smooth-ui fw-bold" onclick="dsp_moveBoards()"><i class="fas ${DSP_ARCHIVE ? 'fa-rotate-left' : 'fa-box-archive'} me-1"></i> ${DSP_ARCHIVE ? 'Move back to Dispatch' : 'Move to Backup Dispatch'}</button>
       <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, fetchDispatchData, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
     </div>
   </div>
@@ -17,7 +17,7 @@ document.getElementById('dispRoot').innerHTML = `
     Parcels sent <b>before 1 August 2026</b>. This is the shipping record &mdash; the
     Dispatch Dashboard shows recent work and anything still to go out.
   </div>` : ''}
-  <div class="row g-3 mb-3"><div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #198754;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">${DSP_ARCHIVE ? 'Old Dispatch Orders' : 'Dispatch Orders'}</h6><h3 class="fw-bold text-success mb-0" id="dsp_tillCount">--</h3></div></div></div></div>
+  <div class="row g-3 mb-3"><div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #198754;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">${DSP_ARCHIVE ? 'Backup Dispatch Orders' : 'Dispatch Orders'}</h6><h3 class="fw-bold text-success mb-0" id="dsp_tillCount">--</h3></div></div></div></div>
   <!-- Orders production has handed over that nobody has actually sent. They
        carried nothing but a small Ready badge and empty cells, so nine of them
        sat unnoticed until the client asked. -->
@@ -45,7 +45,7 @@ document.getElementById('dispRoot').innerHTML = `
     </div>
   </div>
   <div class="card bg-light-glass shadow-lg">
-    <div class="card-header bg-transparent border-0"><h5 class="mb-0 text-dark fw-bold"><i class="fas fa-shipping-fast me-2"></i>${DSP_ARCHIVE ? 'Old Dispatch Queue' : 'Dispatch Queue'}</h5></div>
+    <div class="card-header bg-transparent border-0"><h5 class="mb-0 text-dark fw-bold"><i class="fas fa-shipping-fast me-2"></i>${DSP_ARCHIVE ? 'Backup Dispatch Queue' : 'Dispatch Queue'}</h5></div>
     <div class="card-body p-0">
       <div class="table-responsive" data-fill-height style="overflow-y:auto;position:relative;">
         <table class="table table-hover table-striped mb-0 text-nowrap" style="border-collapse:separate;border-spacing:0;">
@@ -240,7 +240,7 @@ function dspToggleSelectAll(master) {
 function dsp_showSelectedCount() {
   const btn = document.querySelector('[onclick="dsp_moveBoards()"]');
   if (!btn) return;
-  const label = DSP_ARCHIVE ? 'Move back to Dispatch' : 'Move to Old Dispatch';
+  const label = DSP_ARCHIVE ? 'Move back to Dispatch' : 'Move to Backup Dispatch';
   const icon = DSP_ARCHIVE ? 'fa-rotate-left' : 'fa-box-archive';
   btn.innerHTML = `<i class="fas ${icon} me-1"></i> ${label}`
     + (dsp_selected.size ? ` <span class="badge bg-dark ms-1">${dsp_selected.size}</span>` : '');
@@ -251,7 +251,7 @@ async function dsp_moveBoards() {
   if (!ids.length) { showToast('warning', 'Tick the orders you want to move.'); return; }
 
   const toOld = !DSP_ARCHIVE;
-  const where = toOld ? 'Old Dispatch' : 'the Dispatch Dashboard';
+  const where = toOld ? 'Backup Dispatch' : 'the Dispatch Dashboard';
   const confirmed = await Swal.fire({
     title: `Move to ${where}?`,
     html: `<b>${ids.length}</b> order${ids.length > 1 ? 's' : ''} will move to <b>${where}</b>.`
@@ -471,12 +471,12 @@ async function dsp_revertToProduction() {
 
     // Off Dispatch is certain; where it turns up is not. Almost every order on
     // this board reached production before the August cutoff, so it lands on
-    // Old Production rather than the main queue - say which, or someone goes
+    // Backup Production rather than the main queue - say which, or someone goes
     // looking on the wrong board.
     if(json.board === 'production') {
       showToast('success', `${id} is back on the Production Dashboard.`);
     } else if(json.board === 'old') {
-      showToast('success', `${id} is back on Old Production - it reached production before 1 August.`);
+      showToast('success', `${id} is back on Backup Production - it reached production before 1 August.`);
     } else {
       Swal.fire({
         title: 'Taken off Dispatch',
