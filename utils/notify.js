@@ -135,4 +135,79 @@ async function notifyDesignerAssigned(order) {
   }
 }
 
-module.exports = { notifyDesignerAssigned, designerEmail };
+// ── DISPATCH NOTICE ──
+// Goes to the client, not to anybody inside the building, so it says only what
+// the client asked for: the order has gone, in how many boxes, and the number
+// they can track it with. Wording follows the note the office had been typing
+// by hand for every parcel.
+
+function dispatchedHtml(o) {
+  const boxes = String(o.boxes || '').trim();
+  return `
+  <div style="background:#f4f5f7;padding:24px 12px;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
+    <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #e6e8eb;">
+      <div style="background:#212529;padding:22px 24px;">
+        <div style="color:#ffa500;font-size:17px;font-weight:700;letter-spacing:.5px;">ARABELLA PAPERS</div>
+      </div>
+      <div style="padding:24px;">
+        <p style="margin:0 0 18px;font-size:16px;color:#212529;">Hello,</p>
+        <p style="margin:0 0 20px;font-size:14px;color:#495057;line-height:1.6;">
+          We have dispatched your order${boxes ? ` in <b>${esc(boxes)}</b> ${boxes === '1' ? 'Box' : 'Boxes'}` : ''}.
+        </p>
+        <p style="margin:0 0 8px;font-size:14px;color:#495057;">Here is the tracking number</p>
+        <table style="border-collapse:collapse;margin:0 0 4px;">
+          <tr>
+            <td style="padding:10px 22px 10px 0;font-size:18px;font-weight:700;color:#212529;letter-spacing:.5px;">${esc(o.docket)}</td>
+            <td style="padding:10px 0;font-size:14px;font-weight:600;color:#6c757d;">${esc(o.courier)}</td>
+          </tr>
+        </table>
+      </div>
+      <div style="background:#f8f9fa;padding:14px 24px;border-top:1px solid #e9ecef;">
+        <p style="margin:0;font-size:11px;color:#adb5bd;line-height:1.5;">
+          Order ${esc(o.orderId)} &middot; Arabella Papers
+        </p>
+      </div>
+    </div>
+  </div>`;
+}
+
+function dispatchedText(o) {
+  const boxes = String(o.boxes || '').trim();
+  return [
+    'Hello,',
+    '',
+    `We have dispatched your order${boxes ? ` in ${boxes} ${boxes === '1' ? 'Box' : 'Boxes'}` : ''}.`,
+    '',
+    'Here is the tracking number',
+    '',
+    `${o.docket}         ${o.courier}`,
+    '',
+    `Order ${o.orderId} - Arabella Papers`,
+  ].join('\n');
+}
+
+/**
+ * Tell the client their parcel has gone. Never throws: the dispatch is saved
+ * whether or not the mail leaves, and the caller reports what happened.
+ */
+async function notifyClientDispatched(order) {
+  try {
+    const to = String(order.to || '').trim();
+    if (!to) return { sent: false, skipped: 'no-recipient' };
+
+    // The subject carries the order number and the client's own name, which is
+    // how the office refers to a job when they reply about one.
+    const client = String(order.client || '').trim();
+    return await sendMail({
+      to,
+      subject: `Order Dispatched - ${order.orderId}${client ? ` - ${client}` : ''}`,
+      html: dispatchedHtml(order),
+      text: dispatchedText(order),
+    });
+  } catch (err) {
+    console.error(`[mail] ${order.orderId}: dispatch notice failed:`, err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
+module.exports = { notifyDesignerAssigned, designerEmail, notifyClientDispatched, dispatchedHtml, dispatchedText };

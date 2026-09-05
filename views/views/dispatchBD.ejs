@@ -89,7 +89,17 @@ document.getElementById('dispRoot').innerHTML = `
         <div class="col-md-4"><label class="form-label fw-bold text-dark">Boxes</label><input type="number" id="dsp_boxes" class="form-control" min="1" step="1"></div>
         <div class="col-md-4"><label class="form-label fw-bold text-dark">Weight (kg)</label><input type="number" id="dsp_weight" class="form-control" min="0" step="any" placeholder="e.g. 1.500"></div>
         <div class="col-md-4"><label class="form-label fw-bold text-dark">Vol. Weight</label><input type="number" id="dsp_volWeight" class="form-control" min="0" step="any" placeholder="e.g. 0.500"></div>
-        <div class="col-12"><label class="form-label fw-bold text-dark">Status</label><select id="dsp_status" class="form-select" required><option value="Ready">Ready</option><option value="Dispatched">Dispatched</option><option value="Delivered">Delivered</option></select></div>
+        <div class="col-12"><label class="form-label fw-bold text-dark">Status</label><select id="dsp_status" class="form-select" onchange="dsp_mailState()" required><option value="Ready">Ready</option><option value="Dispatched">Dispatched</option><option value="Delivered">Delivered</option></select></div>
+        <div class="col-12"><hr class="my-1"></div>
+        <div class="col-12">
+          <label class="form-label fw-bold text-dark">Client Email</label>
+          <input type="email" id="dsp_clientEmail" class="form-control" placeholder="client@example.com" oninput="dsp_mailState()">
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="dsp_sendMail">
+            <label class="form-check-label" for="dsp_sendMail">Email the client that the order has been dispatched</label>
+          </div>
+          <div class="form-text" id="dsp_mailHint"></div>
+        </div>
       </div>
     </div>
     <div class="modal-footer justify-content-between"><button class="btn btn-outline-warning" onclick="dsp_revertToProduction()" title="Send this order back to the Production Dashboard"><i class="fas fa-undo me-1"></i>Back to Production</button><div class="d-flex gap-2"><button class="btn btn-success" onclick="dsp_submitUpdate()">Update Dispatch</button><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button></div></div>
@@ -382,7 +392,30 @@ function dsp_openEdit(id) {
   document.getElementById('dsp_boxes').value = o?.Number_of_Boxes||'';
   document.getElementById('dsp_weight').value = o?.Weight||'';
   document.getElementById('dsp_volWeight').value = o?.Volumetric_Weight||'';
+  document.getElementById('dsp_clientEmail').value = o?.Client_Email||'';
+  dsp_editOrder = o || null;
+  dsp_mailState();
   new bootstrap.Modal(document.getElementById('dsp_editModal')).show();
+}
+
+// Whether this order is about to be emailed. The box ticks itself for a parcel
+// that is going out and has an address on it, because that is the whole point
+// of typing the address in - but never for one already told, or the day
+// somebody reopens the order to fix an invoice number would be the day the
+// client gets a second dispatch notice.
+var dsp_editOrder = null;
+
+function dsp_mailState() {
+  const box = document.getElementById('dsp_sendMail');
+  const hint = document.getElementById('dsp_mailHint');
+  const sent = dsp_editOrder?.Mail_Sent || '';
+  const hasEmail = !!(document.getElementById('dsp_clientEmail').value || '').trim();
+  const going = /dispatch|deliver/i.test(document.getElementById('dsp_status').value || '');
+
+  box.checked = !sent && hasEmail && going;
+  hint.innerHTML = sent
+    ? '<span class="text-success">Already emailed on ' + sent + '.</span> Tick the box to send it again.'
+    : 'Sent only when the status is Dispatched or Delivered. The mail carries the tracking number, the courier and the number of boxes.';
 }
 async function dsp_submitUpdate() {
   const val = id => (document.getElementById(id).value||'').trim();
@@ -395,6 +428,8 @@ async function dsp_submitUpdate() {
     boxes: val('dsp_boxes'),
     weight: val('dsp_weight'),
     volWeight: val('dsp_volWeight'),
+    clientEmail: val('dsp_clientEmail'),
+    sendClientMail: document.getElementById('dsp_sendMail').checked,
     userEmail: APP_USER.email,
     userRole: APP_USER.role,
   };
@@ -425,12 +460,46 @@ async function dsp_submitUpdate() {
       return;
     }
   }
+  // Mail leaves the building and cannot be recalled, so the address is checked
+  // here and the send is confirmed with the address in front of the person
+  // clicking. A typo here reaches a stranger.
+  if(body.sendClientMail) {
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.clientEmail)) {
+      showToast('warning','Enter a valid client email, or untick the box.');
+      return;
+    }
+    if(body.status === 'Ready') {
+      showToast('warning','Mark the order Dispatched before emailing the client.');
+      return;
+    }
+    const ok = await Swal.fire({
+      title: 'Email the client?',
+      html: `A dispatch notice for <b>${dsp_editId}</b> will be sent to<br><b>${body.clientEmail}</b>`
+        + `<br><br><span class="text-muted small">Tracking ${body.docket || '—'} &middot; ${body.courier || 'no courier'}`
+        + `${body.boxes ? ' &middot; ' + body.boxes + ' box(es)' : ''}</span>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Send it',
+      confirmButtonColor: '#198754',
+    });
+    if(!ok.isConfirmed) return;
+  }
+
   showLoading(true);
   try {
     const res = await fetch(`/api/dashboards/dispatch/${dsp_editId}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const json = await res.json();
     showLoading(false);
-    if(json.success) { bootstrap.Modal.getInstance(document.getElementById('dsp_editModal')).hide(); showToast('success','Dispatch Updated!'); fetchDispatchData(); }
+    if(json.success) {
+      bootstrap.Modal.getInstance(document.getElementById('dsp_editModal')).hide();
+      // The dispatch is saved either way. Say so separately from the mail, or
+      // a bounced address reads as a lost update.
+      if(json.mail && json.mail.sent) showToast('success','Dispatch updated and the client has been emailed.');
+      else if(json.mail && json.mail.error) showToast('warning','Dispatch updated, but the email did not go: ' + json.mail.error);
+      else if(json.mail && json.mail.skipped === 'not-configured') showToast('warning','Dispatch updated. Email is switched off on this server.');
+      else showToast('success','Dispatch Updated!');
+      fetchDispatchData();
+    }
     else showToast('error', json.error);
   } catch(e) { showLoading(false); showToast('error','Server error.'); }
 }

@@ -4,6 +4,7 @@ const multer = require('multer');
 const db = require('../../config/db');
 const { uploadToDrive } = require('../../utils/drive');
 const { logOrderUpdate, logOrderEvent } = require('../../utils/auditlog');
+const { notifyClientDispatched } = require('../../utils/notify');
 const { requireLogin } = require('../../middleware/auth');
 // Dates are stored as IST wall-clock and read back through a +05:30
 // connection. Vercel runs the server in UTC, so without naming the zone here
@@ -635,6 +636,11 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       Number_of_Boxes: r.number_of_boxes == null ? '' : r.number_of_boxes,
       Weight: r.weight || '',
       Volumetric_Weight: r.volumetric_weight || '',
+      // For the dispatch notice: where it goes, and whether it has gone
+      // already, so the modal does not offer to send a second one.
+      Client_Email: r.dispatch_email || '',
+      Mail_Sent: r.dispatch_mail_sent_at
+        ? new Date(r.dispatch_mail_sent_at).toLocaleString('en-GB', IST) : '',
     }));
 
     res.json({ success: true, data });
@@ -652,7 +658,8 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
 
-    const { courier, docket, status, invoiceNo, invoiceAmount, boxes, weight, volWeight, userEmail } = req.body;
+    const { courier, docket, status, invoiceNo, invoiceAmount, boxes, weight, volWeight,
+            userEmail, clientEmail, sendClientMail } = req.body;
     const orderId = req.params.id;
 
     // invoice_amount is DECIMAL and number_of_boxes is INT: an untouched input
@@ -679,17 +686,46 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
     // does not move it to today.
     const gone = /dispatch|deliver/i.test(status || '') ? 1 : 0;
 
+    const mailTo = String(clientEmail || '').trim();
+
     await db.query(`
       UPDATE orders SET
         courier = ?, ups_dhl_fedex_tracking_number = ?, status_4 = ?,
         invoice_number = ?, invoice_amount = ?, number_of_boxes = ?,
-        weight = ?, volumetric_weight = ?,
+        weight = ?, volumetric_weight = ?, dispatch_email = ?,
         actual_4 = CASE WHEN ? = 1 THEN COALESCE(actual_4, NOW()) ELSE NULL END,
         dispatch_updated_by = ?
       WHERE order_id = ?
-    `, [courier, docket, status, invoiceNo, num(invoiceAmount), num(boxes), weight, volWeight, gone, userEmail, orderId]);
+    `, [courier, docket, status, invoiceNo, num(invoiceAmount), num(boxes), weight, volWeight,
+        mailTo || null, gone, userEmail, orderId]);
 
-    res.json({ success: true });
+    // The dispatch notice. Only when the box is ticked - a saved edit to an
+    // invoice number must never mail a client again - and only for a parcel
+    // that has actually gone, with something to track it by. The mail is sent
+    // after the row is written and cannot undo it: the parcel has left the
+    // building whether or not the client's mail server was reachable.
+    let mail = null;
+    if (sendClientMail && gone && mailTo) {
+      const [[row]] = await db.query(
+        'SELECT client_name FROM orders WHERE order_id = ? LIMIT 1', [orderId]
+      );
+      mail = await notifyClientDispatched({
+        to: mailTo,
+        orderId,
+        client: row ? row.client_name : '',
+        boxes,
+        docket,
+        courier,
+      });
+      if (mail.sent) {
+        await db.query(
+          'UPDATE orders SET dispatch_mail_sent_at = NOW() WHERE order_id = ?', [orderId]
+        );
+        await logOrderEvent(orderId, 'Dispatch Notice', `Emailed ${mailTo}`, req.session.user || userEmail);
+      }
+    }
+
+    res.json({ success: true, mail });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });

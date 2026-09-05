@@ -87,6 +87,14 @@ const COLUMN_MIGRATIONS = [
     type: "VARCHAR(10) NULL",
     after: "UPDATE orders SET production_board = 'old' WHERE production_archived_at IS NOT NULL",
   },
+  // Where the dispatch notice goes. Its own column rather than dealer_email:
+  // that is the dealer's address off the punch form, and the person waiting on
+  // the parcel is often somebody else.
+  { table: 'orders', column: 'dispatch_email', type: 'VARCHAR(150) NULL' },
+  // When the client was last told. Kept so the box does not tick itself again
+  // on an order already emailed - correcting an invoice number a week later
+  // must not send a second dispatch notice.
+  { table: 'orders', column: 'dispatch_mail_sent_at', type: 'DATETIME NULL' },
 ];
 
 async function addMissingColumns() {
