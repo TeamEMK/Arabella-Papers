@@ -975,12 +975,17 @@ router.get('/analytics', requireLogin, async (req, res) => {
       SELECT *,
         ${DEAD_ORDER} AS is_dead,
         ${LEFT_FOR_DISPATCH} AS has_left,
-        ${REACHED_PRODUCTION} AS reached
+        ${REACHED_PRODUCTION} AS reached,
+        (${PRODUCTION_QUEUE_WHERE}
+          AND NOT ${LEFT_FOR_DISPATCH}
+          AND ${ON_PRODUCTION_BOARD(false)}) AS on_board
       FROM orders
       WHERE is_deleted = 0
         AND ${LOCAL_ORDER_OFF_BOARDS}
     `;
-    const params = [];
+    // The archive cutoff belongs to on_board, in the SELECT, so it is the
+    // first placeholder in the statement and has to be the first parameter.
+    const params = [PRODUCTION_ARCHIVE_FROM];
 
     if (!canSeeAll) {
       query += ` AND (
@@ -1027,6 +1032,12 @@ router.get('/analytics', requireLogin, async (req, res) => {
           // Why an order is late. Set on the production board, read on the
           // Analytics page, which is where anyone asks the question.
           ReasonForDelay: r.reason_for_delay || '',
+          // Is it on the live production board right now, and since when - the
+          // two facts the delay list is built from. The board test is the same
+          // expression the production board itself runs, so the delayed orders
+          // are always a subset of the In Production card above them.
+          OnBoard: !!Number(r.on_board),
+          ProductionStart: r.actual_2 || r.timestamp,
           DispatchStatus: r.status_4 || '',
           // Where the order has got to, as one word. The four values are
           // exclusive and every order has one, so the cards built from them

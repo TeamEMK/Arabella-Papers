@@ -10,7 +10,7 @@ document.getElementById('analyticsRoot').innerHTML = `
       <button class="btn btn-primary smooth-ui" onclick="anOpenList('Reprint')"><i class="fas fa-print me-1"></i> Re-Print <span class="badge bg-light text-dark ms-1" id="an_cnt_Reprint">0</span></button>
       <button class="btn btn-info smooth-ui text-dark" onclick="anOpenList('Reorder')"><i class="fas fa-rotate-left me-1"></i> Re-Order <span class="badge bg-light text-dark ms-1" id="an_cnt_Reorder">0</span></button>
       <button class="btn btn-secondary smooth-ui" onclick="anOpenList('Sample')"><i class="fas fa-swatchbook me-1"></i> Printed Sample <span class="badge bg-light text-dark ms-1" id="an_cnt_Sample">0</span></button>
-      <button class="btn btn-warning smooth-ui text-dark" onclick="anOpenList('Delay')"><i class="fas fa-clock me-1"></i> Delay Order <span class="badge bg-dark text-white ms-1" id="an_cnt_Delay">0</span></button>
+      <button class="btn btn-warning smooth-ui text-dark" title="On the production board for more than 10 days" onclick="anOpenList('Delay')"><i class="fas fa-clock me-1"></i> Delay Order <span class="badge bg-dark text-white ms-1" id="an_cnt_Delay">0</span></button>
       <button class="btn btn-outline-dark smooth-ui" onclick="refreshBoard(this, fetchAnalytics, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
     </div>
   </div>
@@ -30,7 +30,7 @@ document.getElementById('analyticsRoot').innerHTML = `
           <span class="text-muted small" id="an_listCount"></span>
         </div>
         <div class="table-responsive" style="max-height:60vh; overflow-y:auto;">
-          <table class="table table-sm table-hover table-striped mb-0 text-nowrap">
+          <table class="table table-sm table-hover table-striped mb-0">
             <thead class="table-dark">
               <tr>
                 <th style="position:sticky;top:0;background:#212529;color:white;">#</th>
@@ -47,7 +47,7 @@ document.getElementById('analyticsRoot').innerHTML = `
         </div>
       </div>
       <div class="modal-footer">
-        <span class="text-muted small me-auto">Not filtered by the dates above &mdash; this is everything on record.</span>
+        <span class="text-muted small me-auto" id="an_listNote">Not filtered by the dates above &mdash; this is everything on record.</span>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div></div>
@@ -190,11 +190,32 @@ var AN_LISTS = {
   Reprint: { title: 'Re-Print Orders', last: 'Client Status' },
   Reorder: { title: 'Re-Order Orders', last: 'Client Status' },
   Sample:  { title: 'Printed Sample Orders', last: 'Client Status' },
-  Delay:   { title: 'Delayed Orders', last: 'Reason For Delay' },
+  Delay:   { title: 'Delayed Orders', last: 'Days In Production' },
 };
 
+// How long a card is allowed to sit on the floor before it is late.
+var AN_DELAY_DAYS = 10;
+
+// Days since the order reached production. actual_2 is the date the production
+// board itself prints; the older imported rows never got one, so they fall back
+// to the punch date the same way the board does.
+function an_daysInProduction(order) {
+  const started = order.ProductionStart ? new Date(order.ProductionStart) : null;
+  if (!started || isNaN(started)) return 0;
+  return Math.floor((Date.now() - started.getTime()) / 86400000);
+}
+
+// Late means still on the live production board and more than ten days in -
+// or somebody has written down why it is late, which says so outright however
+// long it has been. Only board orders count, so this list is always part of
+// the In Production card above and never larger than it.
+function an_isDelayed(order) {
+  if (!order.OnBoard) return false;
+  return an_daysInProduction(order) > AN_DELAY_DAYS || !!(order.ReasonForDelay || '').trim();
+}
+
 function an_inList(order, key) {
-  if (key === 'Delay') return !!(order.ReasonForDelay || '').trim();
+  if (key === 'Delay') return an_isDelayed(order);
   return (order.ClientStatus || '').trim().toLowerCase() === key.toLowerCase();
 }
 
@@ -211,6 +232,9 @@ function anOpenList(key) {
   an_listKey = key;
   document.getElementById('an_listTitle').textContent = AN_LISTS[key].title;
   document.getElementById('an_listLastCol').textContent = AN_LISTS[key].last;
+  document.getElementById('an_listNote').textContent = key === 'Delay'
+    ? 'On the production board for more than ' + AN_DELAY_DAYS + ' days, longest wait first.'
+    : 'Not filtered by the dates above — this is everything on record.';
   document.getElementById('an_listSearch').value = '';
   anDrawList();
   new bootstrap.Modal(document.getElementById('an_listModal')).show();
@@ -226,6 +250,9 @@ function anDrawList() {
         .toLowerCase().includes(q);
     });
 
+  // Longest-waiting first: the top of this list is the day's work.
+  if (key === 'Delay') rows.sort(function (a, b) { return an_daysInProduction(b) - an_daysInProduction(a); });
+
   document.getElementById('an_listCount').textContent =
     rows.length + (rows.length === 1 ? ' order' : ' orders');
 
@@ -235,15 +262,23 @@ function anDrawList() {
     return;
   }
   body.innerHTML = rows.map(function (o, i) {
-    const last = key === 'Delay' ? (o.ReasonForDelay || '') : (o.ClientStatus || '');
+    let last;
+    if (key === 'Delay') {
+      const days = an_daysInProduction(o);
+      const reason = (o.ReasonForDelay || '').trim();
+      last = '<span class="fw-bold text-danger">' + days + ' days</span>'
+        + (reason ? '<div class="small text-muted">' + anEsc(reason) + '</div>' : '');
+    } else {
+      last = anEsc(o.ClientStatus || '');
+    }
     return '<tr>'
       + '<td>' + (i + 1) + '</td>'
       + '<td class="fw-bold">' + anEsc(o.ID) + '</td>'
       + '<td>' + (anEsc(o.Dealer) || '-') + '</td>'
       + '<td>' + (anEsc(o.Client) || '-') + '</td>'
       + '<td>' + (anEsc(o.Designer) || '-') + '</td>'
-      + '<td>' + (anEsc(o.Date) || '-') + '</td>'
-      + '<td class="text-wrap" style="max-width:320px;">' + anEsc(last) + '</td>'
+      + '<td class="text-nowrap">' + (anEsc(o.Date) || '-') + '</td>'
+      + '<td class="text-wrap" style="max-width:320px;">' + last + '</td>'
       + '</tr>';
   }).join('');
 }
