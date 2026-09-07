@@ -1037,11 +1037,15 @@ router.get('/analytics', requireLogin, async (req, res) => {
     const params = [PRODUCTION_ARCHIVE_FROM];
 
     if (!canSeeAll) {
+      // The name, exactly. This used to also match LIKE '%name%', which put
+      // every one of Kanu Priya's 352 orders in front of Riya - "riya" is
+      // inside "priya". A designer seeing another designer's work is worse
+      // than a designer seeing none of their own, so the loose half is gone.
       query += ` AND (
-        LOWER(india_designer) = LOWER(?) OR LOWER(india_designer) LIKE LOWER(?) OR
-        LOWER(overseas_designer) = LOWER(?) OR LOWER(overseas_designer) LIKE LOWER(?)
+        LOWER(TRIM(IFNULL(india_designer, ''))) = LOWER(TRIM(?)) OR
+        LOWER(TRIM(IFNULL(overseas_designer, ''))) = LOWER(TRIM(?))
       )`;
-      params.push(email, `%${name}%`, email, `%${name}%`);
+      params.push(name, name);
     }
 
     query += ' ORDER BY id DESC';

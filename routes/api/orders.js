@@ -22,16 +22,45 @@ const upload = multer({
   limits: { fileSize: 4 * 1024 * 1024, files: 10 },
 });
 
+/**
+ * Which orders this user is allowed to see. SuperAdmin, Head and the
+ * production managers work the whole floor; everybody else sees the orders
+ * assigned to them by name, and the ones they punched themselves.
+ *
+ * The list and the View modal both ask this one question, so the modal cannot
+ * quietly hand over an order the list would have hidden.
+ *
+ * The name must match exactly. It used to also match LIKE '%name%', which put
+ * all 352 of Kanu Priya's orders in front of Riya - "riya" sits inside
+ * "priya". A designer seeing nothing of their own is a complaint; a designer
+ * seeing another designer's work is a breach.
+ */
+function visibleOrders(user) {
+  const role = user.role || '';
+  const isAdmin = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' ||
+    role.includes('Production Manager');
+  if (isAdmin) return { isAdmin, where: '', params: [] };
+
+  const name = user.username || '';
+  return {
+    isAdmin,
+    where: ` AND (
+      LOWER(TRIM(IFNULL(india_designer, ''))) = LOWER(TRIM(?)) OR
+      LOWER(TRIM(IFNULL(overseas_designer, ''))) = LOWER(TRIM(?)) OR
+      LOWER(IFNULL(email_address, '')) = LOWER(?)
+    )`,
+    params: [name, name, user.email || ''],
+  };
+}
+
 // ─────────────────────────────────────────────
 // GET /api/orders — Orders Dashboard Data
 // ─────────────────────────────────────────────
 router.get('/', requireLogin, async (req, res) => {
   try {
     const user = req.session.user;
-    const role = user.role || '';
-    const email = user.email || '';
-    const name = user.username || '';
-    const isAdmin = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' || role.includes('Production Manager');
+    const mine = visibleOrders(user);
+    const isAdmin = mine.isAdmin;
 
     // "Local Order" is a real dealer the shop still punches against, so this
     // list shows it. The working boards do not - see LOCAL_ORDER_OFF_BOARDS in
@@ -42,16 +71,8 @@ router.get('/', requireLogin, async (req, res) => {
     `;
     const params = [];
 
-    if (!isAdmin) {
-      query += ` AND (
-        LOWER(india_designer) = LOWER(?) OR
-        LOWER(india_designer) LIKE LOWER(?) OR
-        LOWER(overseas_designer) = LOWER(?) OR
-        LOWER(overseas_designer) LIKE LOWER(?) OR
-        LOWER(email_address) = LOWER(?)
-      )`;
-      params.push(email, `%${name}%`, email, `%${name}%`, email);
-    }
+    query += mine.where;
+    params.push(...mine.params);
 
     query += ` ORDER BY id DESC`;
 
@@ -94,14 +115,18 @@ router.get('/', requireLogin, async (req, res) => {
 router.get('/:id/details', requireLogin, async (req, res) => {
   try {
     const user = req.session.user;
-    const role = user.role || '';
-    const isAdmin = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' ||
-      role.includes('Production Manager');
+    const mine = visibleOrders(user);
 
-    const [rows] = await db.query('SELECT * FROM orders WHERE order_id = ? AND is_deleted = 0', [req.params.id]);
+    const [rows] = await db.query(
+      `SELECT * FROM orders WHERE order_id = ? AND is_deleted = 0${mine.where}`,
+      [req.params.id, ...mine.params]
+    );
+    // Not yours reads the same as not there. Order ids run in sequence, so
+    // saying "you may not see that one" would confirm it exists and who it
+    // belongs to, which is most of what was being hidden.
     if (!rows.length) return res.status(404).json({ success: false, error: 'Order not found.' });
 
-    res.json({ success: true, rowData: buildRowData(rows[0], isAdmin) });
+    res.json({ success: true, rowData: buildRowData(rows[0], mine.isAdmin) });
   } catch (err) {
     console.error('Order details failed:', err);
     res.status(500).json({ success: false, error: 'Server error.' });
