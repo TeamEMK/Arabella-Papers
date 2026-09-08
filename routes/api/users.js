@@ -128,6 +128,9 @@ router.delete('/:id', onlySuperAdmin, async (req, res) => {
     }
 
     await db.query('DELETE FROM users WHERE id = ?', [id]);
+    // Nothing links these rows to the user for the database to clean up, and a
+    // left-behind grant would attach itself to whoever next takes this id.
+    await db.query('DELETE FROM user_sections WHERE user_id = ?', [id]);
     res.json({ success: true });
   } catch (err) {
     console.error('User delete failed:', err);

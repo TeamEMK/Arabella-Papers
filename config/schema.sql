@@ -363,3 +363,21 @@ CREATE TABLE IF NOT EXISTS sessions (
 -- it back. config/initDb.js creates the first admin from ADMIN_EMAIL and
 -- ADMIN_PASSWORD instead, hashing at runtime.
 -- =============================================
+
+-- =============================================
+-- PER-PERSON SECTION ACCESS
+-- Only what differs from the person's role: allowed = 1 is a section given to
+-- them on top of it, allowed = 0 one taken away. A person with no rows here
+-- opens exactly what their role opens, so an empty table is the behaviour the
+-- app had before this existed — which is how it ships.
+-- =============================================
+CREATE TABLE IF NOT EXISTS user_sections (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  section VARCHAR(40) NOT NULL,
+  allowed TINYINT(1) NOT NULL DEFAULT 1,
+  updated_by VARCHAR(150),
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_user_section (user_id, section),
+  INDEX idx_user_sections_user (user_id)
+);

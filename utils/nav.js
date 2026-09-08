@@ -1,69 +1,100 @@
 /**
- * Returns allowed nav menu items based on role/domain
- * Same logic as GAS getNavMenu()
+ * Every section of the app, in the order the side panel lists them.
+ *
+ * `rule` is what a role opens on its own — the same conditions that have been
+ * in this file since the app went in, moved into one list so the side panel,
+ * the view routes and the Access Control page all read from a single place
+ * instead of three copies drifting apart.
+ *
+ * A rule is only the starting point. utils/access.js lays the per-person
+ * grants from the Access Control page over the top; somebody with no grants
+ * resolves to exactly their rule, which is what everyone gets today.
  *
  * `icon` is a Font Awesome 6 class. The side panel shows icons alone when it is
  * collapsed, so every item needs one — keep it here with the item rather than
  * in the template, so adding a tab is a one-line change.
+ *
+ * `locked` sections are not on offer from the Access Control page. Their APIs
+ * sit behind requireRole('SuperAdmin'), so handing the tab to anybody else
+ * would open a page whose every button answers 403.
  */
-function getNavMenu(role, domain) {
-  const roleStr = role ? role.toString().trim() : '';
-  const menu = [];
-
-  if (roleStr === 'SuperAdmin' || domain === 'Head' || roleStr.includes('Designer')) {
-    menu.push({ id: 'dashboard', name: 'Orders Dashboard', icon: 'fa-clipboard-list' });
-  }
-
-  if (roleStr === 'SuperAdmin' || domain === 'Head' || roleStr.includes('TillApprover')) {
-    menu.push({ id: 'tillApproval', name: 'Till Approval', icon: 'fa-circle-check' });
-  }
-
-  if (roleStr === 'SuperAdmin' || roleStr.includes('Production Manager')) {
-    menu.push({ id: 'productionBD', name: 'Production Dashboard', icon: 'fa-industry' });
-    // Same board, the orders from before the August cutoff. Whoever works the
-    // queue is who needs to look one of them up, so it goes right below it.
-    menu.push({ id: 'oldProduction', name: 'Backup Production', icon: 'fa-box-archive' });
-  }
-
-  if (roleStr === 'SuperAdmin' || roleStr === 'Accounts') {
-    menu.push({ id: 'dispatchBD', name: 'Dispatch Dashboard', icon: 'fa-truck-fast' });
-    // The same board, for parcels sent before the cutoff. Whoever works the
-    // queue is who needs to look one up, so it sits right below it.
-    menu.push({ id: 'oldDispatch', name: 'Backup Dispatch', icon: 'fa-box-archive' });
-  }
-
-  if (roleStr === 'SuperAdmin' || domain === 'Head') {
-    menu.push({ id: 'o2dsummary', name: 'Analytics', icon: 'fa-chart-line' });
-  }
-
-  // Bulk Upload has no tab of its own: it is reached from the Bulk Upload
-  // button inside the Add Dealer, Add Designer and New Order modals, where
-  // someone with a list to import actually is. The view itself is still
-  // permission-checked in routes/views.js.
-
+const SECTIONS = [
+  {
+    id: 'dashboard', name: 'Orders Dashboard', icon: 'fa-clipboard-list',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head' || role.includes('Designer'),
+  },
+  {
+    id: 'tillApproval', name: 'Till Approval', icon: 'fa-circle-check',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head' || role.includes('TillApprover'),
+  },
+  {
+    id: 'productionBD', name: 'Production Dashboard', icon: 'fa-industry',
+    rule: (role) => role === 'SuperAdmin' || role.includes('Production Manager'),
+  },
+  // Same board, the orders from before the August cutoff. Whoever works the
+  // queue is who needs to look one of them up, so it goes right below it.
+  {
+    id: 'oldProduction', name: 'Backup Production', icon: 'fa-box-archive',
+    rule: (role) => role === 'SuperAdmin' || role.includes('Production Manager'),
+  },
+  {
+    id: 'dispatchBD', name: 'Dispatch Dashboard', icon: 'fa-truck-fast',
+    rule: (role) => role === 'SuperAdmin' || role === 'Accounts',
+  },
+  // The same board, for parcels sent before the cutoff. Whoever works the
+  // queue is who needs to look one up, so it sits right below it.
+  {
+    id: 'oldDispatch', name: 'Backup Dispatch', icon: 'fa-box-archive',
+    rule: (role) => role === 'SuperAdmin' || role === 'Accounts',
+  },
+  {
+    id: 'o2dsummary', name: 'Analytics', icon: 'fa-chart-line',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
+  },
   // What paper is in stock is asked by everyone who takes an order, so the
   // tab is open to all.
-  menu.push({ id: 'stock', name: 'Stock', icon: 'fa-layer-group' });
-
+  { id: 'stock', name: 'Stock', icon: 'fa-layer-group', rule: () => true },
   // Everybody takes leave, so everybody gets the tab. What differs is what is
   // on it: your own requests, plus everyone's if you are the one deciding.
-  menu.push({ id: 'leave', name: 'Leave', icon: 'fa-calendar-check' });
-
+  { id: 'leave', name: 'Leave', icon: 'fa-calendar-check', rule: () => true },
   // Staff records carry mobiles, emergency contacts and document status, so
   // the tab is not offered to anyone who has no business opening it.
-  if (roleStr === 'SuperAdmin' || roleStr.includes('HR')) {
-    menu.push({ id: 'hr', name: 'HR', icon: 'fa-id-card' });
-  }
+  {
+    id: 'hr', name: 'HR', icon: 'fa-id-card',
+    rule: (role) => role === 'SuperAdmin' || role.includes('HR'),
+  },
+  {
+    id: 'logs', name: 'Logs', icon: 'fa-clock-rotate-left',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
+  },
+  {
+    id: 'users', name: 'Users', icon: 'fa-users',
+    rule: (role) => role === 'SuperAdmin', locked: true,
+  },
+  {
+    id: 'access', name: 'Access Control', icon: 'fa-user-shield',
+    rule: (role) => role === 'SuperAdmin', locked: true,
+  },
+];
 
-  if (roleStr === 'SuperAdmin' || domain === 'Head') {
-    menu.push({ id: 'logs', name: 'Logs', icon: 'fa-clock-rotate-left' });
-  }
+// Bulk Upload has no tab of its own: it is reached from the Bulk Upload
+// button inside the Add Dealer, Add Designer and New Order modals, where
+// someone with a list to import actually is. The view itself is still
+// permission-checked in routes/views.js.
 
-  if (roleStr === 'SuperAdmin') {
-    menu.push({ id: 'users', name: 'Users', icon: 'fa-users' });
-  }
+const SECTION_IDS = SECTIONS.map(s => s.id);
+const MANAGEABLE_SECTIONS = SECTIONS.filter(s => !s.locked);
+const MANAGEABLE_IDS = MANAGEABLE_SECTIONS.map(s => s.id);
 
-  return menu;
+/**
+ * The sections a role opens by itself, before any per-person grant. Pure — no
+ * database — so the Access Control page can show what somebody would have on
+ * their role alone next to what they actually have.
+ */
+function defaultSectionIds(role, domain) {
+  const roleStr = role ? role.toString().trim() : '';
+  const dom = domain || '';
+  return SECTIONS.filter(s => s.rule(roleStr, dom)).map(s => s.id);
 }
 
-module.exports = { getNavMenu };
+module.exports = { SECTIONS, SECTION_IDS, MANAGEABLE_SECTIONS, MANAGEABLE_IDS, defaultSectionIds };

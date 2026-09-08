@@ -1,0 +1,241 @@
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0 text-dark fw-bold">Access Control</h3>
+    <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, acFetch, 'people')">
+      <i class="fas fa-sync-alt me-1"></i> Refresh
+    </button>
+  </div>
+
+  <div class="alert alert-info d-flex align-items-start" role="alert">
+    <i class="fas fa-circle-info me-2 mt-1"></i>
+    <div class="small">
+      Everyone keeps whatever their role already gives them. Tick a section to give
+      this person something extra, untick one to take it away.
+      <strong>Nothing changes until you press Save.</strong>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <!-- PERSON PICKER -->
+    <div class="col-lg-4">
+      <div class="card bg-light-glass shadow-lg h-100">
+        <div class="card-header bg-transparent border-0">
+          <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-user me-2"></i>Person</h5>
+        </div>
+        <div class="card-body">
+          <label class="form-label fw-bold text-dark" for="ac_person">Select a name</label>
+          <select class="form-select" id="ac_person" onchange="acSelect(this.value)">
+            <option value="">Loading...</option>
+          </select>
+          <div id="ac_personMeta" class="mt-3 small text-muted">
+            Pick a name to see what they can open.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTIONS -->
+    <div class="col-lg-8">
+      <div class="card bg-light-glass shadow-lg h-100">
+        <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+          <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-list-check me-2"></i>Sections</h5>
+          <span id="ac_dirty" class="badge bg-warning text-dark d-none">Unsaved changes</span>
+        </div>
+        <div class="card-body">
+          <div id="ac_error" class="alert alert-danger py-2 small d-none"></div>
+          <div id="ac_sections">
+            <p class="text-muted mb-0 py-4 text-center">No one selected yet.</p>
+          </div>
+        </div>
+        <div class="card-footer bg-transparent border-0 d-flex justify-content-end gap-2">
+          <button class="btn btn-outline-secondary fw-bold" id="ac_reset" onclick="acResetToRole()" disabled>
+            <i class="fas fa-rotate-left me-1"></i> Reset to role default
+          </button>
+          <button class="btn btn-primary fw-bold" id="ac_save" onclick="acSave(this)" disabled>
+            <i class="fas fa-floppy-disk me-1"></i> Save Access
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  let acUsers = [];
+  let acSections = [];
+  // { user, byRole:Set, chosen:Set, isSelf } — byRole is what the role gives on
+  // its own, chosen is what the switches currently say.
+  let acCurrent = null;
+
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function showError(msg) {
+    const box = document.getElementById('ac_error');
+    if (!msg) { box.classList.add('d-none'); return; }
+    box.textContent = msg;
+    box.classList.remove('d-none');
+  }
+
+  function setDirty(on) {
+    document.getElementById('ac_dirty').classList.toggle('d-none', !on);
+  }
+
+  window.acFetch = async function () {
+    const res = await fetch('/api/access');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Could not load people.');
+
+    acUsers = data.users;
+    acSections = data.sections;
+    const customised = new Set(data.customised);
+
+    const sel = document.getElementById('ac_person');
+    sel.innerHTML = '<option value="">- Select a person -</option>' + acUsers.map(function (u) {
+      // A dot marks someone who has been given or denied something by hand,
+      // so a list of 30 names still shows at a glance who was touched.
+      const mark = customised.has(u.id) ? ' *' : '';
+      return '<option value="' + u.id + '">' + esc(u.username)
+        + (u.emp_id ? ' (' + esc(u.emp_id) + ')' : '') + mark + '</option>';
+    }).join('');
+
+    // Keep whoever is on screen selected across a refresh.
+    if (acCurrent) {
+      sel.value = String(acCurrent.user.id);
+      await acSelect(sel.value);
+    }
+    return acUsers.length;
+  };
+
+  window.acSelect = async function (id) {
+    showError('');
+    setDirty(false);
+
+    if (!id) {
+      acCurrent = null;
+      document.getElementById('ac_personMeta').innerHTML = 'Pick a name to see what they can open.';
+      document.getElementById('ac_sections').innerHTML =
+        '<p class="text-muted mb-0 py-4 text-center">No one selected yet.</p>';
+      document.getElementById('ac_save').disabled = true;
+      document.getElementById('ac_reset').disabled = true;
+      return;
+    }
+
+    const res = await fetch('/api/access/' + encodeURIComponent(id));
+    const data = await res.json();
+    if (!data.success) { showError(data.error || 'Could not load that person.'); return; }
+
+    acCurrent = {
+      user: data.user,
+      byRole: new Set(data.byRole),
+      chosen: new Set(data.effective),
+      isSelf: data.isSelf,
+    };
+
+    document.getElementById('ac_personMeta').innerHTML =
+      '<div class="mb-1"><span class="text-muted">Role:</span> '
+        + '<span class="badge bg-secondary">' + esc(data.user.role || '-') + '</span></div>'
+      + '<div class="mb-1"><span class="text-muted">Domain:</span> '
+        + (data.user.domain ? esc(data.user.domain) : '<span class="text-muted">-</span>') + '</div>'
+      + '<div class="text-muted">' + esc(data.user.email || '') + '</div>'
+      + (data.isSelf
+        ? '<div class="alert alert-warning py-2 px-2 small mt-3 mb-0">This is your own account. '
+          + 'You cannot change your own access - shutting yourself out of this page '
+          + 'could not be undone from inside the app.</div>'
+        : '');
+
+    acRender();
+  };
+
+  function acRender() {
+    const c = acCurrent;
+
+    const rows = acSections.map(function (s) {
+      const fromRole = c.byRole.has(s.id);
+      // Users and Access Control are never handed out, so they always show
+      // what the role alone decides.
+      const on = s.locked ? fromRole : c.chosen.has(s.id);
+
+      let note, tone;
+      if (s.locked) { note = 'SuperAdmin only'; tone = 'text-muted'; }
+      else if (on && fromRole) { note = 'From role'; tone = 'text-muted'; }
+      else if (on && !fromRole) { note = 'Given extra'; tone = 'text-success fw-bold'; }
+      else if (!on && fromRole) { note = 'Taken away'; tone = 'text-danger fw-bold'; }
+      else { note = 'No access'; tone = 'text-muted'; }
+
+      const disabled = s.locked || c.isSelf;
+
+      return '<div class="d-flex align-items-center justify-content-between border-bottom py-2">'
+        + '<div class="d-flex align-items-center">'
+        + '<i class="fas ' + esc(s.icon) + ' me-2 text-secondary" style="width:18px;"></i>'
+        + '<span class="fw-bold text-dark">' + esc(s.name) + '</span>'
+        + (s.locked ? '<i class="fas fa-lock ms-2 text-muted small"></i>' : '')
+        + '</div>'
+        + '<div class="d-flex align-items-center">'
+        + '<small class="me-3 ' + tone + '">' + note + '</small>'
+        + '<div class="form-check form-switch mb-0">'
+        + '<input class="form-check-input" type="checkbox" role="switch"'
+        + ' id="ac_sw_' + esc(s.id) + '" data-section="' + esc(s.id) + '"'
+        + (on ? ' checked' : '') + (disabled ? ' disabled' : '') + '>'
+        + '</div>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+
+    const box = document.getElementById('ac_sections');
+    box.innerHTML = rows;
+    box.querySelectorAll('input[data-section]').forEach(function (el) {
+      el.addEventListener('change', function () {
+        if (this.checked) acCurrent.chosen.add(this.dataset.section);
+        else acCurrent.chosen.delete(this.dataset.section);
+        acRender();
+        setDirty(true);
+      });
+    });
+
+    document.getElementById('ac_save').disabled = c.isSelf;
+    document.getElementById('ac_reset').disabled = c.isSelf;
+  }
+
+  window.acResetToRole = function () {
+    if (!acCurrent) return;
+    acCurrent.chosen = new Set(acCurrent.byRole);
+    acRender();
+    setDirty(true);
+  };
+
+  window.acSave = async function (btn) {
+    if (!acCurrent) return;
+    showError('');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/access/' + acCurrent.user.id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sections: Array.from(acCurrent.chosen) }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Could not save.');
+
+      setDirty(false);
+      // The side panel is built when the app loads, so it changes for them on
+      // their next page load rather than in the tab they already have open.
+      showToast('success', acCurrent.user.username
+        + ' saved. It applies the next time they open the app.');
+      await acFetch();
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  acFetch().catch(function (err) {
+    showError(err.message || 'Could not load people.');
+  });
+})();
+</script>
