@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../config/db');
 const { requireLogin } = require('../../middleware/auth');
+const { canSee } = require('../../utils/access');
 
 // Staff records hold mobiles, emergency contacts and document status. Nobody
-// gets at them without being told to: the HR role, or a SuperAdmin.
+// gets at them without being told to: the HR role, a SuperAdmin, or somebody
+// handed the section on the Access Control page.
 function canSeeHR(user) {
-  const role = user && user.role ? String(user.role) : '';
-  return role === 'SuperAdmin' || role.includes('HR');
+  return canSee(user, 'hr');
 }
 
 // The columns a person fills in. Everything else on the row - id, is_deleted,
@@ -34,7 +35,7 @@ function clean(body) {
 // GET /api/hr — every employee on file.
 router.get('/', requireLogin, async (req, res) => {
   try {
-    if (!canSeeHR(req.session.user)) return res.status(403).json({ success: false, error: 'Unauthorized' });
+    if (!(await canSeeHR(req.session.user))) return res.status(403).json({ success: false, error: 'Unauthorized' });
     const [rows] = await db.query(
       'SELECT * FROM employees WHERE is_deleted = 0 ORDER BY name ASC'
     );
@@ -48,7 +49,7 @@ router.get('/', requireLogin, async (req, res) => {
 // POST /api/hr — add someone.
 router.post('/', requireLogin, async (req, res) => {
   try {
-    if (!canSeeHR(req.session.user)) return res.status(403).json({ success: false, error: 'Unauthorized' });
+    if (!(await canSeeHR(req.session.user))) return res.status(403).json({ success: false, error: 'Unauthorized' });
     const row = clean(req.body);
     if (!row.name) return res.status(400).json({ success: false, error: 'Name is required.' });
     if (!row.company) row.company = 'AMIPL';
@@ -69,7 +70,7 @@ router.post('/', requireLogin, async (req, res) => {
 // PUT /api/hr/:id — edit someone.
 router.put('/:id', requireLogin, async (req, res) => {
   try {
-    if (!canSeeHR(req.session.user)) return res.status(403).json({ success: false, error: 'Unauthorized' });
+    if (!(await canSeeHR(req.session.user))) return res.status(403).json({ success: false, error: 'Unauthorized' });
     const row = clean(req.body);
     if (row.name !== undefined && !row.name) {
       return res.status(400).json({ success: false, error: 'Name is required.' });
@@ -92,7 +93,7 @@ router.put('/:id', requireLogin, async (req, res) => {
 // somebody asks for again a year later.
 router.delete('/:id', requireLogin, async (req, res) => {
   try {
-    if (!canSeeHR(req.session.user)) return res.status(403).json({ success: false, error: 'Unauthorized' });
+    if (!(await canSeeHR(req.session.user))) return res.status(403).json({ success: false, error: 'Unauthorized' });
     await db.query('UPDATE employees SET is_deleted = 1 WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {

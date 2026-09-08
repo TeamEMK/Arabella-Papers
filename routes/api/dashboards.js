@@ -6,6 +6,11 @@ const { uploadToDrive } = require('../../utils/drive');
 const { logOrderUpdate, logOrderEvent } = require('../../utils/auditlog');
 const { notifyClientDispatched } = require('../../utils/notify');
 const { requireLogin } = require('../../middleware/auth');
+// The board a request is asking for is the same thing the side panel decides
+// whether to show - role rule plus whatever was granted on the Access Control
+// page. Asking the role string here instead is what made a granted tab open
+// onto an empty board.
+const { canSee } = require('../../utils/access');
 // Dates are stored as IST wall-clock and read back through a +05:30
 // connection. Vercel runs the server in UTC, so without naming the zone here
 // every timestamp rendered 5:30 earlier than the sheet said.
@@ -149,10 +154,9 @@ const PRODUCTION_QUEUE_WHERE = `
 
 router.get('/till-approval', requireLogin, async (req, res) => {
   try {
-    const user = req.session.user;
-    const role = user.role || '';
-    const isAuthorized = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' || role.includes('TillApprover');
-    if (!isAuthorized) return res.json({ success: true, data: [] });
+    if (!(await canSee(req.session.user, 'tillApproval'))) {
+      return res.json({ success: true, data: [] });
+    }
 
     const [rows] = await db.query(`
       SELECT * FROM orders
@@ -290,10 +294,9 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
 // GET /api/dashboards/production
 router.get('/production', requireLogin, async (req, res) => {
   try {
-    const user = req.session.user;
-    const role = user.role || '';
-    const isAuthorized = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' || role.includes('Production Manager');
-    if (!isAuthorized) return res.json({ success: true, data: [] });
+    if (!(await canSee(req.session.user, 'productionBD'))) {
+      return res.json({ success: true, data: [] });
+    }
 
     // An order the client has not signed off is not production's work yet:
     // "Proofing Done" means it is sitting with the client, and a blank means
@@ -393,9 +396,9 @@ router.get('/production', requireLogin, async (req, res) => {
 router.post('/production/archive', requireLogin, async (req, res) => {
   try {
     const user = req.session.user;
-    const role = user.role || '';
-    const isAuthorized = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' || role.includes('Production Manager');
-    if (!isAuthorized) return res.status(403).json({ success: false, error: 'Unauthorized' });
+    if (!(await canSee(user, 'productionBD'))) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
 
     const ids = Array.isArray(req.body.ids) ? req.body.ids.filter(Boolean) : [];
     const toOld = req.body.archive !== false;
@@ -577,7 +580,7 @@ async function updateProductionOrder(orderId, u, user) {
 router.get('/dispatch', requireLogin, async (req, res) => {
   try {
     const user = req.session.user;
-    if (user.role !== 'SuperAdmin' && user.role !== 'Accounts') {
+    if (!(await canSee(user, 'dispatchBD'))) {
       return res.json({ success: true, data: [] });
     }
 
@@ -654,7 +657,7 @@ router.get('/dispatch', requireLogin, async (req, res) => {
 router.put('/dispatch/:id', requireLogin, async (req, res) => {
   try {
     const user = req.session.user;
-    if (user.role !== 'SuperAdmin' && user.role !== 'Accounts') {
+    if (!(await canSee(user, 'dispatchBD'))) {
       return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
 
@@ -754,7 +757,7 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
 router.post('/dispatch/archive', requireLogin, async (req, res) => {
   try {
     const user = req.session.user;
-    if (user.role !== 'SuperAdmin' && user.role !== 'Accounts') {
+    if (!(await canSee(user, 'dispatchBD'))) {
       return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
 
@@ -799,7 +802,7 @@ router.post('/dispatch/archive', requireLogin, async (req, res) => {
 router.put('/dispatch/:id/revert', requireLogin, async (req, res) => {
   try {
     const user = req.session.user;
-    if (user.role !== 'SuperAdmin' && user.role !== 'Accounts') {
+    if (!(await canSee(user, 'dispatchBD'))) {
       return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
 
