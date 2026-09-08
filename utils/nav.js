@@ -51,6 +51,11 @@ const SECTIONS = [
     id: 'o2dsummary', name: 'Analytics', icon: 'fa-chart-line',
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
   },
+  // Work that lives in a Google Sheet — an enquiry or an order walked through
+  // its steps. Open to everyone, because the tab is where a person finds the
+  // rows waiting on them; being named on a step is what puts anything on it,
+  // and somebody on no step sees an empty page rather than a locked door.
+  { id: 'fms', name: 'FMS', icon: 'fa-diagram-project', rule: () => true },
   // What paper is in stock is asked by everyone who takes an order, so the
   // tab is open to all.
   { id: 'stock', name: 'Stock', icon: 'fa-layer-group', rule: () => true },

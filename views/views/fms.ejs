@@ -1,0 +1,590 @@
+<%# FMS — work that lives in a Google Sheet.
+    One page, two faces. Everybody gets the list of steps waiting on them; a
+    SuperAdmin also gets the setup, because whoever maps a sheet is the person
+    who then has to check it looks right. %>
+<div class="container-fluid py-4" id="fmsRoot">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-diagram-project me-2"></i>FMS</h3>
+      <div class="text-muted small">Work tracked in a Google Sheet. The sheet stays the record — this is a quicker way to write to it.</div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary smooth-ui fw-bold d-none" id="fms_addBtn" onclick="fms_openSetup()"><i class="fas fa-plus me-1"></i> Add FMS</button>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, fms_load, 'steps')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
+  </div>
+
+  <!-- Which FMS. Hidden while there is only one: a dropdown of one is a
+       question with a single answer. -->
+  <div class="card bg-light-glass mb-3 shadow-sm d-none" id="fms_pickerCard">
+    <div class="card-body p-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-5">
+          <label class="form-label text-dark fw-bold small mb-0">Process</label>
+          <select id="fms_pick" class="form-select form-select-sm" onchange="fms_openFms(this.value)"></select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="fms_empty" class="alert alert-secondary d-none">
+    <b>Nothing here yet.</b> <span id="fms_emptyWhy"></span>
+  </div>
+
+  <!-- The step train. Every step, not only yours: the point of seeing it is
+       knowing where the work has got to, and a doer who can only see their own
+       square cannot tell whether the step before has even started. -->
+  <div id="fms_stepsWrap" class="d-none">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h5 class="mb-0 text-dark fw-bold" id="fms_stepsTitle"></h5>
+      <span class="text-muted small" id="fms_sheetNote"></span>
+    </div>
+    <div class="row g-2 mb-4" id="fms_steps"></div>
+  </div>
+
+  <!-- The rows of one step -->
+  <div class="card bg-light-glass shadow-lg d-none" id="fms_rowsCard">
+    <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-list-check me-2"></i><span id="fms_rowsTitle">Rows</span></h5>
+      <div class="d-flex align-items-center gap-2">
+        <div class="btn-group btn-group-sm" role="group">
+          <button type="button" class="btn btn-outline-primary active" id="fms_tabPending" onclick="fms_showRows(false)">To do</button>
+          <button type="button" class="btn btn-outline-secondary" id="fms_tabDone" onclick="fms_showRows(true)">Done</button>
+        </div>
+        <span class="text-muted small" id="fms_rowsCount"></span>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive" data-fill-height style="overflow-y:auto;position:relative;">
+        <table class="table table-hover table-striped mb-0 text-nowrap">
+          <thead class="table-dark"><tr id="fms_rowsHead"></tr></thead>
+          <tbody id="fms_rowsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SETUP: map a sheet ══ -->
+<div class="modal fade" id="fms_setupModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title"><i class="fas fa-diagram-project me-2"></i><span id="fms_setupTitle">Add an FMS</span></h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div class="row g-3 mb-3">
+        <div class="col-12">
+          <label class="form-label fw-bold text-dark">Google Sheet link</label>
+          <div class="input-group">
+            <input type="text" id="fms_sheetUrl" class="form-control" placeholder="https://docs.google.com/spreadsheets/d/...">
+            <button class="btn btn-outline-primary" onclick="fms_loadTabs()">Read tabs</button>
+          </div>
+          <div class="form-text" id="fms_shareHint"></div>
+        </div>
+        <div class="col-12 col-md-5">
+          <label class="form-label fw-bold text-dark">Tab</label>
+          <select id="fms_tab" class="form-select"><option value="">Read the tabs first</option></select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-bold text-dark">Header row</label>
+          <input type="number" id="fms_headerRow" class="form-control" value="1" min="1">
+          <div class="form-text">Left alone it works this out.</div>
+        </div>
+        <div class="col-6 col-md-4 d-flex align-items-end">
+          <button class="btn btn-primary w-100 fw-bold" onclick="fms_detect()"><i class="fas fa-wand-magic-sparkles me-1"></i> Read the steps</button>
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-bold text-dark">Name</label>
+          <input type="text" id="fms_name" class="form-control" placeholder="What this process is called">
+        </div>
+      </div>
+
+      <div id="fms_detectNote"></div>
+      <div id="fms_stepEditor"></div>
+    </div>
+    <div class="modal-footer justify-content-between">
+      <button class="btn btn-outline-danger d-none" id="fms_deleteBtn" onclick="fms_delete()"><i class="fas fa-trash me-1"></i> Delete</button>
+      <div class="d-flex gap-2 ms-auto">
+        <button class="btn btn-success fw-bold" id="fms_saveBtn" onclick="fms_save()" disabled>Save</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<!-- ══ MARK A ROW DONE ══ -->
+<div class="modal fade" id="fms_doneModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-success text-white">
+      <h5 class="modal-title">Mark done</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div class="mb-3" id="fms_doneWhat"></div>
+      <div id="fms_doneFields"></div>
+      <div class="mb-2 d-none" id="fms_doneDelayWrap">
+        <label class="form-label fw-bold text-dark">Reason for delay</label>
+        <textarea id="fms_doneDelay" class="form-control" rows="2" placeholder="Why it ran past the planned date"></textarea>
+      </div>
+      <div class="form-text" id="fms_doneHow"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-success fw-bold" onclick="fms_markDone()">Done</button>
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    </div>
+  </div></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// FMS
+// The doer's half is the page; the setup is a modal on top of it. They share
+// the same fetch of /api/fms-tasks, because "which processes am I on" and
+// "which may I configure" is one question with one answer.
+// ══════════════════════════════════════════════════════
+var fms_list = [];          // the FMSs this user can open
+var fms_canConfig = false;
+var fms_current = null;     // { sheet, steps }
+var fms_step = null;        // the step whose rows are shown
+var fms_rowsDone = false;   // which half of the rows is showing
+var fms_rows = [];
+var fms_doneRow = null;
+var fms_editing = null;     // the FMS being configured, or null for a new one
+var fms_draft = null;       // what the setup screen is holding
+
+function fmsEsc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function fms_load() {
+  const res = await fetch('/api/fms-tasks');
+  const j = await res.json();
+  if (!j.success) { showToast('error', j.error || 'Could not load.'); return 0; }
+  fms_list = j.data || [];
+  fms_canConfig = !!j.canConfigure;
+  document.getElementById('fms_addBtn').classList.toggle('d-none', !fms_canConfig);
+
+  const pick = document.getElementById('fms_pick');
+  pick.innerHTML = fms_list.map(f =>
+    '<option value="' + f.id + '">' + fmsEsc(f.fms_name || f.sheet_name) + '</option>').join('');
+  document.getElementById('fms_pickerCard').classList.toggle('d-none', fms_list.length < 2);
+
+  const empty = document.getElementById('fms_empty');
+  if (!fms_list.length) {
+    empty.classList.remove('d-none');
+    document.getElementById('fms_emptyWhy').textContent = fms_canConfig
+      ? 'Add an FMS to map a sheet and say who works each step.'
+      : 'You are not named on any step yet. Whoever set the process up can add you.';
+    document.getElementById('fms_stepsWrap').classList.add('d-none');
+    document.getElementById('fms_rowsCard').classList.add('d-none');
+    return 0;
+  }
+  empty.classList.add('d-none');
+  await fms_openFms(fms_list[0].id);
+  return fms_current ? fms_current.steps.length : 0;
+}
+
+async function fms_openFms(id) {
+  showLoading(true);
+  try {
+    const res = await fetch('/api/fms-tasks/' + id);
+    const j = await res.json();
+    if (!j.success) { showToast('error', j.error); return; }
+    fms_current = j.data;
+    document.getElementById('fms_stepsTitle').textContent = j.data.sheet.fms_name || j.data.sheet.sheet_name;
+    document.getElementById('fms_sheetNote').textContent =
+      'Tab "' + j.data.sheet.sheet_name + '", headings on row ' + j.data.sheet.header_row;
+    fms_drawSteps();
+    document.getElementById('fms_stepsWrap').classList.remove('d-none');
+    document.getElementById('fms_rowsCard').classList.add('d-none');
+    fms_step = null;
+  } finally { showLoading(false); }
+}
+
+// One card per step. Yours are marked; the count on each is what says where
+// the work has piled up.
+function fms_drawSteps() {
+  const box = document.getElementById('fms_steps');
+  box.innerHTML = (fms_current.steps || []).map(function (s) {
+    const st = s.stats || { pending: 0, done: 0, delayed: 0 };
+    const mine = s.isMyStep;
+    const busy = st.pending > 0;
+    const border = st.delayed ? '#dc3545' : (busy ? '#ffc107' : '#198754');
+    return '<div class="col-12 col-sm-6 col-lg-3">'
+      + '<div class="card shadow-sm smooth-ui h-100" style="cursor:pointer;border-left:4px solid ' + border + ';"'
+      + ' onclick="fms_openStep(' + s.id + ')">'
+      + '<div class="card-body p-3">'
+      + '<div class="d-flex justify-content-between align-items-start gap-2">'
+      + '<div class="text-muted small">Step ' + s.step_order + '</div>'
+      + (mine ? '<span class="badge bg-primary">mine</span>' : '')
+      + '</div>'
+      + '<div class="fw-bold text-dark" style="line-height:1.25;">' + fmsEsc(s.step_name) + '</div>'
+      + '<div class="mt-2 d-flex gap-3 small">'
+      + '<span class="fw-bold ' + (busy ? 'text-warning' : 'text-muted') + '">' + st.pending + ' to do</span>'
+      + '<span class="text-success">' + st.done + ' done</span>'
+      + (st.delayed ? '<span class="text-danger fw-bold">' + st.delayed + ' late</span>' : '')
+      + '</div>'
+      + (s.doerNames ? '<div class="text-muted mt-2" style="font-size:.72rem;">' + fmsEsc(s.doerNames) + '</div>' : '')
+      + '</div></div></div>';
+  }).join('');
+}
+
+async function fms_openStep(stepId) {
+  fms_step = (fms_current.steps || []).find(s => s.id === stepId);
+  if (!fms_step) return;
+  fms_rowsDone = false;
+  await fms_showRows(false);
+}
+
+async function fms_showRows(done) {
+  if (!fms_step) return;
+  fms_rowsDone = done;
+  document.getElementById('fms_tabPending').classList.toggle('active', !done);
+  document.getElementById('fms_tabDone').classList.toggle('active', done);
+  showLoading(true);
+  try {
+    const res = await fetch('/api/fms-tasks/' + fms_current.sheet.id + '/steps/' + fms_step.id
+      + '/rows' + (done ? '?done=1' : ''));
+    const j = await res.json();
+    if (!j.success) { showToast('error', j.error); return; }
+    fms_rows = j.data.rows || [];
+    document.getElementById('fms_rowsTitle').textContent = fms_step.step_name;
+    document.getElementById('fms_rowsCard').classList.remove('d-none');
+    fms_drawRows(j.data.showHeaders || []);
+  } finally { showLoading(false); }
+}
+
+function fms_drawRows(showHeaders) {
+  const head = document.getElementById('fms_rowsHead');
+  head.innerHTML = '<th>#</th>'
+    + showHeaders.map(h => '<th>' + fmsEsc(h) + '</th>').join('')
+    + '<th>Planned</th>' + (fms_rowsDone ? '<th>Actual</th>' : '') + '<th></th>';
+
+  document.getElementById('fms_rowsCount').textContent =
+    fms_rows.length + (fms_rows.length === 1 ? ' row' : ' rows');
+
+  const body = document.getElementById('fms_rowsBody');
+  const span = showHeaders.length + (fms_rowsDone ? 4 : 3);
+  if (!fms_rows.length) {
+    body.innerHTML = '<tr><td colspan="' + span + '" class="text-center py-4 text-muted">'
+      + (fms_rowsDone ? 'Nothing finished on this step yet.' : 'Nothing waiting on this step.')
+      + '</td></tr>';
+    return;
+  }
+  // Only whoever the step belongs to gets the button. Everyone can look.
+  const mayDo = fms_step.isMyStep;
+  body.innerHTML = fms_rows.map(function (r, i) {
+    return '<tr' + (r.delayed ? ' class="table-danger"' : '') + '>'
+      + '<td>' + (i + 1) + '</td>'
+      + r.cells.map(c => '<td>' + (fmsEsc(c.value) || '-') + '</td>').join('')
+      + '<td class="' + (r.delayed ? 'text-danger fw-bold' : '') + '">' + fmsEsc(r.plan) + '</td>'
+      + (fms_rowsDone ? '<td class="text-success">' + fmsEsc(r.actual) + '</td>' : '')
+      + '<td>' + (!fms_rowsDone && mayDo
+        ? '<button class="btn btn-sm btn-success fw-bold" onclick="fms_openDone(' + i + ')">Done</button>'
+        : '') + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+// ── Marking a row done ──
+function fms_openDone(i) {
+  fms_doneRow = fms_rows[i];
+  if (!fms_doneRow) return;
+  const first = fms_doneRow.cells.filter(c => String(c.value || '').trim()).slice(0, 3);
+  document.getElementById('fms_doneWhat').innerHTML =
+    '<div class="fw-bold text-dark mb-1">' + fmsEsc(fms_step.step_name) + '</div>'
+    + first.map(c => '<div class="small text-muted">' + fmsEsc(c.header) + ': <b class="text-dark">'
+      + fmsEsc(c.value) + '</b></div>').join('')
+    + '<div class="small text-muted mt-1">Planned ' + fmsEsc(fms_doneRow.plan) + '</div>';
+
+  // Anything else this step asks the doer to fill in.
+  const fields = fms_step.extraRows || [];
+  document.getElementById('fms_doneFields').innerHTML = fields.map(function (f) {
+    const id = 'fms_extra_' + f.id;
+    let input;
+    if (f.field_type === 'dropdown') {
+      const opts = String(f.dropdown_options || '').split(',').map(o => o.trim()).filter(Boolean);
+      input = '<select id="' + id + '" class="form-select"><option value=""></option>'
+        + opts.map(o => '<option>' + fmsEsc(o) + '</option>').join('') + '</select>';
+    } else if (f.field_type === 'date') {
+      input = '<input type="date" id="' + id + '" class="form-control">';
+    } else if (f.field_type === 'number') {
+      input = '<input type="number" id="' + id + '" class="form-control" step="any">';
+    } else {
+      input = '<input type="text" id="' + id + '" class="form-control">';
+    }
+    return '<div class="mb-2"><label class="form-label fw-bold text-dark">' + fmsEsc(f.row_label)
+      + (f.required ? ' <span class="text-danger">*</span>' : '') + '</label>' + input + '</div>';
+  }).join('');
+
+  // The reason box only where the sheet has somewhere to put it, and only when
+  // the row is actually late — asking why an on-time job is late is noise.
+  const canDelay = !!fms_step.delay_reason_col;
+  document.getElementById('fms_doneDelayWrap').classList.toggle('d-none', !(canDelay && fms_doneRow.delayed));
+  document.getElementById('fms_doneDelay').value = '';
+
+  document.getElementById('fms_doneHow').textContent = fms_step.complete_col
+    ? 'This ticks the Status box in column ' + fms_step.complete_col + '. The sheet fills the date itself.'
+    : 'This writes today’s date into column ' + (fms_step.actual_col || '?') + '.';
+
+  new bootstrap.Modal(document.getElementById('fms_doneModal')).show();
+}
+
+async function fms_markDone() {
+  if (!fms_doneRow) return;
+  const extras = [];
+  for (const f of (fms_step.extraRows || [])) {
+    const el = document.getElementById('fms_extra_' + f.id);
+    const value = el ? (el.value || '').trim() : '';
+    if (f.required && !value) {
+      showToast('warning', f.row_label + ' is needed.');
+      return;
+    }
+    if (value) extras.push({ rowId: f.id, value });
+  }
+  showLoading(true);
+  try {
+    const res = await fetch('/api/fms-tasks/' + fms_current.sheet.id + '/steps/' + fms_step.id + '/done', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rowNumber: fms_doneRow.rowNumber,
+        delayReason: (document.getElementById('fms_doneDelay').value || '').trim(),
+        extraInputs: extras,
+      }),
+    });
+    const j = await res.json();
+    showLoading(false);
+    if (!j.success) { showToast('error', j.error); return; }
+    bootstrap.Modal.getInstance(document.getElementById('fms_doneModal')).hide();
+    showToast('success', j.completedBy === 'checkbox'
+      ? 'Ticked ' + j.column + ' — the sheet is filling the date.'
+      : 'Marked done in column ' + j.column + '.');
+    await fms_openFms(fms_current.sheet.id);
+    const again = (fms_current.steps || []).find(s => s.id === fms_step.id);
+    if (again) { fms_step = again; await fms_showRows(fms_rowsDone); }
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+// ══ SETUP ══
+
+function fms_openSetup(id) {
+  fms_editing = id || null;
+  fms_draft = null;
+  document.getElementById('fms_setupTitle').textContent = id ? 'Edit FMS' : 'Add an FMS';
+  document.getElementById('fms_stepEditor').innerHTML = '';
+  document.getElementById('fms_detectNote').innerHTML = '';
+  document.getElementById('fms_saveBtn').disabled = true;
+  document.getElementById('fms_deleteBtn').classList.toggle('d-none', !id);
+  document.getElementById('fms_shareHint').textContent = '';
+  if (!id) {
+    document.getElementById('fms_sheetUrl').value = '';
+    document.getElementById('fms_tab').innerHTML = '<option value="">Read the tabs first</option>';
+    document.getElementById('fms_headerRow').value = 1;
+    document.getElementById('fms_name').value = '';
+  }
+  new bootstrap.Modal(document.getElementById('fms_setupModal')).show();
+}
+
+async function fms_loadTabs() {
+  const url = (document.getElementById('fms_sheetUrl').value || '').trim();
+  if (!url) { showToast('warning', 'Paste the sheet link first.'); return; }
+  showLoading(true);
+  try {
+    const res = await fetch('/api/fms/tabs?sheet=' + encodeURIComponent(url));
+    const j = await res.json();
+    showLoading(false);
+    if (!j.success) {
+      showToast('error', j.error);
+      // The usual cause is a sheet nobody shared. Say which address to share
+      // with rather than leaving somebody to guess.
+      if (j.serviceAccount) {
+        document.getElementById('fms_shareHint').innerHTML =
+          'Share the sheet with <b>' + fmsEsc(j.serviceAccount) + '</b> as an Editor.';
+      }
+      return;
+    }
+    document.getElementById('fms_tab').innerHTML =
+      j.data.map(t => '<option>' + fmsEsc(t.title) + '</option>').join('');
+    document.getElementById('fms_shareHint').textContent = j.data.length + ' tabs read.';
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+async function fms_detect() {
+  const url = (document.getElementById('fms_sheetUrl').value || '').trim();
+  const tab = document.getElementById('fms_tab').value;
+  if (!url || !tab) { showToast('warning', 'Pick the sheet and the tab first.'); return; }
+  showLoading(true);
+  try {
+    const res = await fetch('/api/fms/detect-steps', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sheetId: url, sheetName: tab,
+        headerRow: document.getElementById('fms_headerRow').value,
+      }),
+    });
+    const j = await res.json();
+    showLoading(false);
+    if (!j.success) {
+      showToast('error', j.error);
+      if (j.serviceAccount) {
+        document.getElementById('fms_shareHint').innerHTML =
+          'Share the sheet with <b>' + fmsEsc(j.serviceAccount) + '</b> as an Editor.';
+      }
+      return;
+    }
+    // It may have found the headings somewhere other than where it was told.
+    // Move the field to match, so what is on screen is what was actually used.
+    document.getElementById('fms_headerRow').value = j.headerRow;
+    if (!document.getElementById('fms_name').value.trim()) {
+      document.getElementById('fms_name').value = tab;
+    }
+    fms_draft = j;
+    fms_drawEditor();
+    document.getElementById('fms_saveBtn').disabled = !j.steps.length;
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+// What it found, laid out for correction. Nothing here is decided until Save.
+function fms_drawEditor() {
+  const j = fms_draft;
+  const note = [];
+  if (j.headerRowAdjusted) {
+    note.push('<div class="alert alert-info py-2 px-3 small mb-2">'
+      + 'The headings are on row <b>' + j.headerRow + '</b>, not the row given — read from there instead.</div>');
+  }
+  note.push('<div class="alert alert-success py-2 px-3 small mb-2"><b>' + j.detectedSteps
+    + ' steps</b> found. Check them and set who does each one.</div>');
+
+  // The same two remarks come back once per step — fourteen steps produced
+  // twenty-eight identical lines and pushed the steps themselves off the
+  // screen. Say each thing once, with the steps it applies to.
+  const notes = j.warnings || [];
+  const ticks = notes.filter(w => w.kind === 'info');
+  if (ticks.length) {
+    note.push('<div class="alert alert-info py-2 px-3 small mb-2">'
+      + '<b>' + ticks.length + (ticks.length === 1 ? ' step completes' : ' steps complete')
+      + ' by ticking their Status box</b> — the sheet fills the date itself, so nothing is written over its formula.</div>');
+  }
+  const real = notes.filter(w => w.kind !== 'info');
+  if (real.length) {
+    const byReason = new Map();
+    real.forEach(function (w) {
+      const list = byReason.get(w.reason) || [];
+      list.push(w);
+      byReason.set(w.reason, list);
+    });
+    note.push('<div class="alert alert-warning py-2 px-3 small mb-2"><b>Worth reading:</b><ul class="mb-0 ps-3">'
+      + [...byReason.entries()].map(function (pair) {
+        const list = pair[1];
+        const names = [...new Set(list.map(w => w.name))].join(', ');
+        const where = list.length > 3
+          ? list.length + ' steps'
+          : list.map(w => 'step ' + w.step + ' (' + w.col + ')').join(', ');
+        return '<li>"' + fmsEsc(names) + '" — ' + fmsEsc(pair[0]) + ' <span class="text-muted">[' + where + ']</span></li>';
+      }).join('')
+      + '</ul></div>');
+  }
+  if ((j.skipped || []).length) {
+    note.push('<div class="alert alert-secondary py-2 px-3 small mb-2"><b>Left out:</b> '
+      + j.skipped.map(s => fmsEsc(s.name) + ' (' + s.reason + ')').join(', ') + '</div>');
+  }
+  document.getElementById('fms_detectNote').innerHTML = note.join('');
+
+  document.getElementById('fms_stepEditor').innerHTML = j.steps.map(function (s, i) {
+    return '<div class="card mb-2 border"><div class="card-body py-2 px-3">'
+      + '<div class="row g-2 align-items-center">'
+      + '<div class="col-12 col-md-4">'
+      +   '<label class="form-label small fw-bold text-muted mb-0">Step ' + s.stepOrder + '</label>'
+      +   '<input type="text" class="form-control form-control-sm" value="' + fmsEsc(s.stepName) + '"'
+      +   ' oninput="fms_draft.steps[' + i + '].stepName=this.value">'
+      + '</div>'
+      + '<div class="col-6 col-md-2">'
+      +   '<label class="form-label small fw-bold text-muted mb-0">Planned</label>'
+      +   '<input type="text" class="form-control form-control-sm" value="' + fmsEsc(s.planCol) + '" readonly>'
+      + '</div>'
+      + '<div class="col-6 col-md-2">'
+      +   '<label class="form-label small fw-bold text-muted mb-0">' + (s.completeCol ? 'Ticks' : 'Writes to') + '</label>'
+      +   '<input type="text" class="form-control form-control-sm" value="' + fmsEsc(s.completeCol || s.actualCol) + '" readonly>'
+      + '</div>'
+      + '<div class="col-12 col-md-4">'
+      +   '<label class="form-label small fw-bold text-muted mb-0">Who does it'
+      +   (s.doerLabel ? ' <span class="text-primary">(sheet says: ' + fmsEsc(s.doerLabel) + ')</span>' : '')
+      +   '</label>'
+      +   '<select multiple class="form-select form-select-sm" size="1" id="fms_doers_' + i + '"'
+      +   ' onchange="fms_setDoers(' + i + ', this)">' + fms_userOptions(s.doers || []) + '</select>'
+      + '</div>'
+      + '</div></div></div>';
+  }).join('');
+}
+
+var fms_users = [];
+function fms_userOptions(selected) {
+  const chosen = new Set((selected || []).map(Number));
+  return fms_users.map(u => '<option value="' + u.id + '"' + (chosen.has(u.id) ? ' selected' : '') + '>'
+    + fmsEsc(u.username) + '</option>').join('');
+}
+function fms_setDoers(i, sel) {
+  fms_draft.steps[i].doers = [...sel.selectedOptions].map(o => Number(o.value));
+}
+
+async function fms_save() {
+  if (!fms_draft) return;
+  const body = {
+    fmsName: (document.getElementById('fms_name').value || '').trim(),
+    sheetId: (document.getElementById('fms_sheetUrl').value || '').trim(),
+    sheetName: document.getElementById('fms_tab').value,
+    headerRow: document.getElementById('fms_headerRow').value,
+    steps: fms_draft.steps,
+  };
+  showLoading(true);
+  try {
+    const res = await fetch('/api/fms' + (fms_editing ? '/' + fms_editing : ''), {
+      method: fms_editing ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const j = await res.json();
+    showLoading(false);
+    if (!j.success) { showToast('error', j.error); return; }
+    bootstrap.Modal.getInstance(document.getElementById('fms_setupModal')).hide();
+    showToast('success', 'Saved.');
+    await fms_load();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+async function fms_delete() {
+  if (!fms_editing) return;
+  const ok = await Swal.fire({
+    title: 'Remove this FMS?',
+    html: 'Only the mapping goes. <b>The sheet is not touched</b> — no dates, no rows.',
+    icon: 'warning', showCancelButton: true, confirmButtonText: 'Remove', confirmButtonColor: '#dc3545',
+  });
+  if (!ok.isConfirmed) return;
+  showLoading(true);
+  try {
+    const res = await fetch('/api/fms/' + fms_editing, { method: 'DELETE' });
+    const j = await res.json();
+    showLoading(false);
+    if (!j.success) { showToast('error', j.error); return; }
+    bootstrap.Modal.getInstance(document.getElementById('fms_setupModal')).hide();
+    showToast('success', 'Removed.');
+    await fms_load();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+// The user list, for the "who does it" pickers. Only a configurer needs it.
+async function fms_loadUsers() {
+  try {
+    const res = await fetch('/api/users');
+    const j = await res.json();
+    fms_users = (j.data || j.users || []).map(u => ({ id: u.id, username: u.username }));
+  } catch (e) { fms_users = []; }
+}
+
+(async () => {
+  await fms_load();
+  if (fms_canConfig) await fms_loadUsers();
+})();
+</script>
