@@ -275,6 +275,80 @@ CREATE TABLE IF NOT EXISTS stock_items (
   INDEX idx_stock_code (code)
 );
 
+-- =============================================
+-- FMS — work that lives in a Google Sheet
+--
+-- A sheet where each row is a job and each step of that job has its own block
+-- of columns: a planned date, an actual date, the delay, and a checkbox. The
+-- sheet stays the record; this app is a better way to write to it than opening
+-- the sheet and hunting for the right cell.
+--
+-- What is stored here is only the MAPPING — which columns mean what, and who
+-- works which step. No job data is copied; that would be a second copy of the
+-- truth, and the two would drift apart within a week.
+-- =============================================
+CREATE TABLE IF NOT EXISTS fms_sheets (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  fms_name VARCHAR(255) DEFAULT '',
+  -- The tab, and the spreadsheet it lives in.
+  sheet_name VARCHAR(255) NOT NULL,
+  sheet_id VARCHAR(255) NOT NULL,
+  -- Which row carries the column headings. Rarely 1: these sheets open with a
+  -- banner block naming each step and who owns it.
+  header_row INT DEFAULT 1,
+  total_steps INT DEFAULT 0,
+  created_by INT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS fms_steps (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  fms_id INT NOT NULL,
+  step_order INT NOT NULL,
+  step_name VARCHAR(255) NOT NULL,
+  plan_col VARCHAR(10) DEFAULT '',
+  actual_col VARCHAR(10) DEFAULT '',
+  -- Where the sheet fills the actual date itself from a checkbox, completing
+  -- the step means ticking that checkbox. Writing the date directly would
+  -- delete the formula for every future row.
+  complete_col VARCHAR(10) DEFAULT '',
+  delay_reason_col VARCHAR(10) DEFAULT '',
+  extra_input VARCHAR(10) DEFAULT 'no',
+  extra_col VARCHAR(10) DEFAULT '',
+  show_cols TEXT,
+  -- The header NAME behind each mapped column. Letters are positions and
+  -- positions move: insert one column in the sheet and every letter after it
+  -- points at the wrong data, silently. See utils/fms/columns.js.
+  header_map TEXT,
+  INDEX idx_fms_steps_fms (fms_id),
+  INDEX idx_fms_steps_order (fms_id, step_order)
+);
+
+CREATE TABLE IF NOT EXISTS fms_step_doers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  step_id INT NOT NULL,
+  user_id INT NOT NULL,
+  INDEX idx_fms_doers_step (step_id),
+  INDEX idx_fms_doers_user (user_id),
+  UNIQUE KEY uq_fms_step_user (step_id, user_id)
+);
+
+-- Anything else a doer types when finishing a step — a quantity, a courier, a
+-- note. header_name/header_occ do for these what header_map does for a step.
+CREATE TABLE IF NOT EXISTS fms_extra_rows (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  step_id INT NOT NULL,
+  row_label VARCHAR(255) DEFAULT '',
+  col_letter VARCHAR(10) DEFAULT '',
+  field_type VARCHAR(20) DEFAULT 'text',
+  dropdown_options TEXT,
+  required TINYINT(1) DEFAULT 0,
+  header_name VARCHAR(255) DEFAULT '',
+  header_occ INT DEFAULT 0,
+  INDEX idx_fms_extra_step (step_id)
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR(128) NOT NULL PRIMARY KEY,
   expires INT(11) UNSIGNED NOT NULL,
