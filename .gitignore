@@ -7,3 +7,4 @@ uploads/
 
 # Live database connection string for scripts/backup-live.js
 .env.backup
+credentials.json
