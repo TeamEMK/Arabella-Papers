@@ -1,0 +1,543 @@
+<%# FMS Admin — map a Google Sheet to steps, and say who works each one.
+    Done once per process. The daily work is on the FMS Task tab. %>
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-sitemap me-2"></i>FMS Admin</h3>
+      <div class="text-muted small">Point the app at a sheet, check what it read, and set who does each step.</div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary smooth-ui fw-bold" onclick="fa_openAdd()"><i class="fas fa-plus me-1"></i> Add FMS</button>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, fa_load, 'processes')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
+  </div>
+
+  <div id="fa_empty" class="alert alert-secondary d-none">
+    <b>No process mapped yet.</b> Add one and point it at a tab of your sheet.
+  </div>
+
+  <div class="row g-3" id="fa_list"></div>
+</div>
+
+<!-- ══ STEP 1 — where the sheet is ══ -->
+<div class="modal fade" id="fa_addModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title"><i class="fas fa-plus me-2"></i>Add an FMS</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div class="mb-3">
+        <label class="form-label fw-bold text-dark">Name</label>
+        <input type="text" id="fa_name" class="form-control" placeholder="What this process is called — Incoming NBD, Order Taking">
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-bold text-dark">Google Sheet link</label>
+        <div class="input-group">
+          <input type="text" id="fa_sheetUrl" class="form-control" placeholder="https://docs.google.com/spreadsheets/d/...">
+          <button class="btn btn-outline-primary" onclick="fa_loadTabs()">Read tabs</button>
+        </div>
+        <div class="form-text" id="fa_shareHint">
+          The sheet has to be shared with this server before it can be read.
+        </div>
+      </div>
+      <div class="row g-3">
+        <div class="col-8">
+          <label class="form-label fw-bold text-dark">Tab</label>
+          <select id="fa_tab" class="form-select"><option value="">Read the tabs first</option></select>
+        </div>
+        <div class="col-4">
+          <label class="form-label fw-bold text-dark">Header row</label>
+          <input type="number" id="fa_headerRow" class="form-control" value="1" min="1">
+          <div class="form-text">Leave it — this is worked out.</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary fw-bold" onclick="fa_detect()">Read the steps <i class="fas fa-arrow-right ms-1"></i></button>
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- ══ STEP 2 — what it read, and correcting it ══ -->
+<div class="modal fade" id="fa_stepsModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title"><i class="fas fa-list-ol me-2"></i><span id="fa_stepsTitle">Configure steps</span></h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div id="fa_note"></div>
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="text-muted small" id="fa_stepCount"></span>
+        <button class="btn btn-sm btn-outline-primary" onclick="fa_addStep()"><i class="fas fa-plus me-1"></i> Add a step</button>
+      </div>
+      <div id="fa_steps"></div>
+    </div>
+    <div class="modal-footer justify-content-between">
+      <button class="btn btn-outline-danger d-none" id="fa_deleteBtn" onclick="fa_delete()"><i class="fas fa-trash me-1"></i> Remove this FMS</button>
+      <div class="d-flex gap-2 ms-auto">
+        <button class="btn btn-success fw-bold" onclick="fa_save()"><i class="fas fa-floppy-disk me-1"></i> Save</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// FMS ADMIN
+// Two dialogs, in the order the job is actually done: say where the sheet is,
+// then correct what was read off it. Detection only ever proposes — nothing
+// here is written until Save.
+// ══════════════════════════════════════════════════════
+var fa_all = [];        // the mapped processes
+var fa_users = [];      // for the doer pickers
+var fa_headers = [];    // the sheet's header row, for the column pickers
+var fa_steps = [];      // what the editor is holding
+var fa_editing = null;  // id when editing, null when adding
+var fa_meta = { sheetUrl: '', tab: '', headerRow: 1, name: '' };
+
+function faEsc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function fa_load() {
+  const res = await fetch('/api/fms');
+  const j = await res.json();
+  if (!j.success) { showToast('error', j.error || 'Could not load.'); return 0; }
+  fa_all = j.data || [];
+  document.getElementById('fa_empty').classList.toggle('d-none', fa_all.length > 0);
+  document.getElementById('fa_list').innerHTML = fa_all.map(function (f) {
+    return '<div class="col-12 col-md-6 col-xl-4">'
+      + '<div class="card shadow-sm smooth-ui h-100" style="border-left:4px solid #0d6efd;">'
+      + '<div class="card-body">'
+      + '<div class="d-flex justify-content-between align-items-start gap-2">'
+      +   '<div><h5 class="fw-bold text-dark mb-1">' + faEsc(f.fms_name || f.sheet_name) + '</h5>'
+      +   '<div class="text-muted small">Tab "' + faEsc(f.sheet_name) + '", headings on row ' + f.header_row + '</div></div>'
+      +   '<span class="badge bg-primary">' + f.step_count + ' steps</span>'
+      + '</div>'
+      + '<div class="mt-3 d-flex gap-2">'
+      +   '<button class="btn btn-sm btn-outline-primary" onclick="fa_edit(' + f.id + ')"><i class="fas fa-pen me-1"></i>Edit</button>'
+      +   '<a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener"'
+      +   ' href="https://docs.google.com/spreadsheets/d/' + faEsc(f.sheet_id) + '/edit"><i class="fas fa-up-right-from-square me-1"></i>Sheet</a>'
+      + '</div></div></div></div>';
+  }).join('');
+  return fa_all.length;
+}
+
+// ── Dialog 1 ──
+function fa_openAdd() {
+  fa_editing = null;
+  fa_steps = [];
+  fa_headers = [];
+  document.getElementById('fa_name').value = '';
+  document.getElementById('fa_sheetUrl').value = '';
+  document.getElementById('fa_tab').innerHTML = '<option value="">Read the tabs first</option>';
+  document.getElementById('fa_headerRow').value = 1;
+  document.getElementById('fa_shareHint').textContent = 'The sheet has to be shared with this server before it can be read.';
+  new bootstrap.Modal(document.getElementById('fa_addModal')).show();
+}
+
+async function fa_loadTabs() {
+  const url = (document.getElementById('fa_sheetUrl').value || '').trim();
+  if (!url) { showToast('warning', 'Paste the sheet link first.'); return; }
+  showLoading(true);
+  try {
+    const res = await fetch('/api/fms/tabs?sheet=' + encodeURIComponent(url));
+    const j = await res.json();
+    showLoading(false);
+    if (!j.success) return fa_sheetProblem(j);
+    document.getElementById('fa_tab').innerHTML =
+      j.data.map(t => '<option>' + faEsc(t.title) + '</option>').join('');
+    document.getElementById('fa_shareHint').textContent = j.data.length + ' tabs read. Pick the one the work is on.';
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+// A sheet nobody shared is the usual failure. Say which address to share with
+// rather than leaving somebody to work it out.
+function fa_sheetProblem(j) {
+  showToast('error', j.error || 'Could not read that sheet.');
+  if (j.serviceAccount) {
+    document.getElementById('fa_shareHint').innerHTML =
+      'Share the sheet with <b>' + faEsc(j.serviceAccount) + '</b> as an <b>Editor</b>, then try again.';
+  }
+}
+
+async function fa_detect() {
+  const url = (document.getElementById('fa_sheetUrl').value || '').trim();
+  const tab = document.getElementById('fa_tab').value;
+  if (!url || !tab) { showToast('warning', 'Pick the sheet and the tab first.'); return; }
+  showLoading(true);
+  try {
+    const res = await fetch('/api/fms/detect-steps', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sheetId: url, sheetName: tab, headerRow: document.getElementById('fa_headerRow').value }),
+    });
+    const j = await res.json();
+    showLoading(false);
+    if (!j.success) return fa_sheetProblem(j);
+
+    document.getElementById('fa_headerRow').value = j.headerRow;
+    fa_meta = {
+      sheetUrl: url, tab: tab, headerRow: j.headerRow,
+      name: (document.getElementById('fa_name').value || '').trim() || tab,
+    };
+    fa_headers = j.headers || [];
+    fa_steps = (j.steps || []).map(fa_stepFrom);
+    fa_showSteps(j);
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+// Detection's shape, flattened into what the editor edits.
+function fa_stepFrom(d) {
+  return {
+    stepName: d.stepName || '',
+    planCol: d.planCol || '',
+    actualCol: d.actualCol || '',
+    completeCol: d.completeCol || '',
+    delayReasonCol: d.delayReasonCol || '',
+    showCols: Array.isArray(d.showCols) ? d.showCols : [],
+    doers: d.doers || [],
+    doerLabel: d.doerLabel || '',
+    extraRows: (d.extraRows || []).map(r => ({
+      label: r.label || r.header || '',
+      col_letter: r.col_letter || '',
+      field_type: r.field_type || 'text',
+      dropdown_options: r.dropdown_options || '',
+      required: r.required ? 1 : 0,
+    })),
+  };
+}
+
+function fa_showSteps(detection) {
+  const modal = bootstrap.Modal.getInstance(document.getElementById('fa_addModal'));
+  if (modal) modal.hide();
+  document.getElementById('fa_stepsTitle').textContent =
+    (fa_editing ? 'Edit — ' : 'Configure — ') + fa_meta.name;
+  document.getElementById('fa_deleteBtn').classList.toggle('d-none', !fa_editing);
+  fa_drawNote(detection);
+  fa_drawSteps();
+  new bootstrap.Modal(document.getElementById('fa_stepsModal')).show();
+}
+
+// What was read, and what was deliberately left alone. Detection reports these
+// per step; saying the same thing fourteen times buries the steps themselves,
+// so each remark is said once with the steps it covers.
+function fa_drawNote(j) {
+  if (!j) { document.getElementById('fa_note').innerHTML = ''; return; }
+  const out = [];
+  if (j.headerRowAdjusted) {
+    out.push('<div class="alert alert-info py-2 px-3 small mb-2">The headings are on row <b>'
+      + j.headerRow + '</b>, not the row given — read from there instead.</div>');
+  }
+  out.push('<div class="alert alert-success py-2 px-3 small mb-2"><b>' + j.detectedSteps
+    + ' steps</b> read off the sheet. Check them and set who does each one.</div>');
+
+  const notes = j.warnings || [];
+  const ticks = notes.filter(w => w.kind === 'info');
+  if (ticks.length) {
+    out.push('<div class="alert alert-info py-2 px-3 small mb-2"><b>' + ticks.length
+      + (ticks.length === 1 ? ' step completes' : ' steps complete')
+      + ' by ticking their Status box</b> — the sheet fills the date itself, so nothing is written over its formula.</div>');
+  }
+  const real = notes.filter(w => w.kind !== 'info');
+  if (real.length) {
+    const byReason = new Map();
+    real.forEach(w => { const l = byReason.get(w.reason) || []; l.push(w); byReason.set(w.reason, l); });
+    out.push('<div class="alert alert-warning py-2 px-3 small mb-2"><b>Worth reading:</b><ul class="mb-0 ps-3">'
+      + [...byReason.entries()].map(function (pair) {
+        const names = [...new Set(pair[1].map(w => w.name))].join(', ');
+        const where = pair[1].length > 3 ? pair[1].length + ' steps'
+          : pair[1].map(w => 'step ' + w.step + ' (' + w.col + ')').join(', ');
+        return '<li>"' + faEsc(names) + '" — ' + faEsc(pair[0]) + ' <span class="text-muted">[' + where + ']</span></li>';
+      }).join('') + '</ul></div>');
+  }
+  if ((j.skipped || []).length) {
+    out.push('<div class="alert alert-secondary py-2 px-3 small mb-2"><b>Left out:</b> '
+      + j.skipped.map(s => faEsc(s.name) + ' (' + s.reason + ')').join(', ') + '</div>');
+  }
+  document.getElementById('fa_note').innerHTML = out.join('');
+}
+
+// ── The step editor ──
+function fa_colOptions(selected) {
+  return '<option value="">— none —</option>'
+    + fa_headers.map(h => '<option value="' + h.col + '"' + (selected === h.col ? ' selected' : '') + '>'
+      + faEsc(h.name) + ' (' + h.col + ')</option>').join('');
+}
+
+function fa_drawSteps() {
+  document.getElementById('fa_stepCount').textContent =
+    fa_steps.length + (fa_steps.length === 1 ? ' step' : ' steps');
+
+  document.getElementById('fa_steps').innerHTML = fa_steps.map(function (s, i) {
+    return '<div class="card mb-3 border shadow-sm"><div class="card-body p-3">'
+      + '<div class="d-flex justify-content-between align-items-center mb-2">'
+      +   '<span class="badge bg-dark">Step ' + (i + 1) + '</span>'
+      +   '<button class="btn btn-sm btn-outline-danger" onclick="fa_removeStep(' + i + ')" title="Remove this step"><i class="fas fa-trash"></i></button>'
+      + '</div>'
+      + '<div class="row g-2">'
+      // name
+      + '<div class="col-12 col-lg-6">'
+      +   '<label class="form-label small fw-bold text-muted mb-0">Step name</label>'
+      +   '<input type="text" class="form-control form-control-sm" value="' + faEsc(s.stepName) + '"'
+      +   ' oninput="fa_steps[' + i + '].stepName=this.value">'
+      + '</div>'
+      // doers
+      + '<div class="col-12 col-lg-6">'
+      +   '<label class="form-label small fw-bold text-muted mb-0">Who does it'
+      +   (s.doerLabel ? ' <span class="text-primary">— sheet says: ' + faEsc(s.doerLabel) + '</span>' : '')
+      +   '</label>'
+      +   fa_doerPicker(i, s.doers)
+      + '</div>'
+      // columns
+      + '<div class="col-6 col-lg-3">'
+      +   '<label class="form-label small fw-bold text-muted mb-0">Planned date</label>'
+      +   '<select class="form-select form-select-sm" onchange="fa_steps[' + i + '].planCol=this.value">'
+      +   fa_colOptions(s.planCol) + '</select>'
+      + '</div>'
+      + '<div class="col-6 col-lg-3">'
+      +   '<label class="form-label small fw-bold text-muted mb-0">Actual date</label>'
+      +   '<select class="form-select form-select-sm" onchange="fa_steps[' + i + '].actualCol=this.value">'
+      +   fa_colOptions(s.actualCol) + '</select>'
+      + '</div>'
+      + '<div class="col-6 col-lg-3">'
+      +   '<label class="form-label small fw-bold text-muted mb-0">Tick to complete</label>'
+      +   '<select class="form-select form-select-sm" onchange="fa_steps[' + i + '].completeCol=this.value">'
+      +   fa_colOptions(s.completeCol) + '</select>'
+      +   '<div class="form-text" style="font-size:.7rem;">Set where the sheet fills Actual itself.</div>'
+      + '</div>'
+      + '<div class="col-6 col-lg-3">'
+      +   '<label class="form-label small fw-bold text-muted mb-0">Reason for delay</label>'
+      +   '<select class="form-select form-select-sm" onchange="fa_steps[' + i + '].delayReasonCol=this.value">'
+      +   fa_colOptions(s.delayReasonCol) + '</select>'
+      + '</div>'
+      + '</div>'
+      // columns to show
+      + '<div class="mt-3">'
+      +   '<label class="form-label small fw-bold text-muted mb-1">Columns to show the doer'
+      +   ' <span class="fw-normal">(none ticked = everything before the first step)</span></label>'
+      +   '<div class="d-flex flex-wrap gap-1 p-2 border rounded bg-light" style="max-height:120px;overflow-y:auto;">'
+      +   fa_headers.map(h => '<label class="badge bg-white text-dark border fw-normal" style="cursor:pointer;">'
+      +     '<input type="checkbox" class="form-check-input me-1" style="margin-top:0;"'
+      +     (s.showCols.indexOf(h.index) >= 0 ? ' checked' : '')
+      +     ' onchange="fa_toggleShow(' + i + ',' + h.index + ',this.checked)">'
+      +     faEsc(h.name) + ' <span class="text-muted">' + h.col + '</span></label>').join('')
+      +   '</div>'
+      + '</div>'
+      // extra inputs
+      + '<div class="mt-3">'
+      +   '<div class="d-flex justify-content-between align-items-center mb-1">'
+      +     '<label class="form-label small fw-bold text-muted mb-0">Ask the doer for</label>'
+      +     '<button class="btn btn-sm btn-outline-secondary py-0" onclick="fa_addExtra(' + i + ')"><i class="fas fa-plus"></i> field</button>'
+      +   '</div>'
+      +   '<div>' + s.extraRows.map((r, ri) => fa_extraRow(i, ri, r)).join('') + '</div>'
+      + '</div>'
+      + '</div></div>';
+  }).join('');
+}
+
+// A plain checkbox list in a dropdown. Bootstrap has no multi-select, and a
+// <select multiple> in a modal is a scroll trap.
+function fa_doerPicker(i, chosen) {
+  const picked = new Set((chosen || []).map(Number));
+  const names = fa_users.filter(u => picked.has(u.id)).map(u => u.username);
+  return '<div class="dropdown">'
+    + '<button class="btn btn-sm btn-outline-secondary w-100 text-start dropdown-toggle" type="button"'
+    + ' data-bs-toggle="dropdown" data-bs-auto-close="outside" id="fa_doerBtn_' + i + '">'
+    + (names.length ? faEsc(names.join(', ')) : '<span class="text-muted">nobody yet</span>')
+    + '</button>'
+    + '<div class="dropdown-menu p-2" style="max-height:240px;overflow-y:auto;min-width:240px;">'
+    + '<input type="text" class="form-control form-control-sm mb-2" placeholder="Search…"'
+    + ' oninput="fa_filterDoers(' + i + ', this.value)">'
+    + '<div id="fa_doerList_' + i + '">'
+    + fa_users.map(u => '<label class="d-block px-1 py-1 rounded" data-name="' + faEsc(u.username.toLowerCase()) + '" style="cursor:pointer;">'
+      + '<input type="checkbox" class="form-check-input me-2"' + (picked.has(u.id) ? ' checked' : '')
+      + ' onchange="fa_toggleDoer(' + i + ',' + u.id + ',this.checked)">' + faEsc(u.username) + '</label>').join('')
+    + '</div></div></div>';
+}
+
+function fa_filterDoers(i, q) {
+  const needle = (q || '').toLowerCase().trim();
+  [...document.querySelectorAll('#fa_doerList_' + i + ' label')].forEach(function (l) {
+    l.style.display = !needle || l.dataset.name.includes(needle) ? '' : 'none';
+  });
+}
+
+function fa_toggleDoer(i, uid, on) {
+  const set = new Set((fa_steps[i].doers || []).map(Number));
+  if (on) set.add(uid); else set.delete(uid);
+  fa_steps[i].doers = [...set];
+  const names = fa_users.filter(u => set.has(u.id)).map(u => u.username);
+  document.getElementById('fa_doerBtn_' + i).innerHTML =
+    names.length ? faEsc(names.join(', ')) : '<span class="text-muted">nobody yet</span>';
+}
+
+function fa_toggleShow(i, colIndex, on) {
+  const set = new Set(fa_steps[i].showCols || []);
+  if (on) set.add(colIndex); else set.delete(colIndex);
+  fa_steps[i].showCols = [...set].sort((a, b) => a - b);
+}
+
+function fa_extraRow(i, ri, r) {
+  return '<div class="row g-1 align-items-end mb-1 p-2 border rounded bg-light">'
+    + '<div class="col-12 col-md-4"><label class="form-label small text-muted mb-0">Label</label>'
+    +   '<input type="text" class="form-control form-control-sm" value="' + faEsc(r.label) + '"'
+    +   ' oninput="fa_steps[' + i + '].extraRows[' + ri + '].label=this.value"></div>'
+    + '<div class="col-6 col-md-3"><label class="form-label small text-muted mb-0">Writes to</label>'
+    +   '<select class="form-select form-select-sm" onchange="fa_steps[' + i + '].extraRows[' + ri + '].col_letter=this.value">'
+    +   fa_colOptions(r.col_letter) + '</select></div>'
+    + '<div class="col-6 col-md-2"><label class="form-label small text-muted mb-0">Type</label>'
+    +   '<select class="form-select form-select-sm" onchange="fa_setExtraType(' + i + ',' + ri + ',this.value)">'
+    +   ['text', 'number', 'date', 'dropdown'].map(t => '<option value="' + t + '"'
+        + (r.field_type === t ? ' selected' : '') + '>' + t + '</option>').join('')
+    +   '</select></div>'
+    + '<div class="col-8 col-md-2">'
+    +   (r.field_type === 'dropdown'
+        ? '<label class="form-label small text-muted mb-0">Options</label>'
+          + '<input type="text" class="form-control form-control-sm" placeholder="a, b, c" value="' + faEsc(r.dropdown_options) + '"'
+          + ' oninput="fa_steps[' + i + '].extraRows[' + ri + '].dropdown_options=this.value">'
+        : '<label class="form-check-label small text-muted d-block mb-0">Required</label>'
+          + '<input type="checkbox" class="form-check-input"' + (r.required ? ' checked' : '')
+          + ' onchange="fa_steps[' + i + '].extraRows[' + ri + '].required=this.checked?1:0">')
+    + '</div>'
+    + '<div class="col-4 col-md-1 text-end">'
+    +   '<button class="btn btn-sm btn-outline-danger" onclick="fa_removeExtra(' + i + ',' + ri + ')"><i class="fas fa-xmark"></i></button>'
+    + '</div></div>';
+}
+
+function fa_setExtraType(i, ri, v) {
+  fa_steps[i].extraRows[ri].field_type = v;
+  fa_drawSteps();                       // the options box appears or goes
+}
+function fa_addExtra(i) {
+  fa_steps[i].extraRows.push({ label: '', col_letter: '', field_type: 'text', dropdown_options: '', required: 0 });
+  fa_drawSteps();
+}
+function fa_removeExtra(i, ri) { fa_steps[i].extraRows.splice(ri, 1); fa_drawSteps(); }
+
+function fa_addStep() {
+  fa_steps.push({
+    stepName: '', planCol: '', actualCol: '', completeCol: '', delayReasonCol: '',
+    showCols: [], doers: [], doerLabel: '', extraRows: [],
+  });
+  fa_drawSteps();
+}
+async function fa_removeStep(i) {
+  const ok = await Swal.fire({
+    title: 'Remove step ' + (i + 1) + '?',
+    html: 'It goes from this screen. <b>The sheet is not touched.</b>',
+    icon: 'warning', showCancelButton: true, confirmButtonText: 'Remove', confirmButtonColor: '#dc3545',
+  });
+  if (!ok.isConfirmed) return;
+  fa_steps.splice(i, 1);
+  fa_drawSteps();
+}
+
+// ── Edit an existing one ──
+async function fa_edit(id) {
+  showLoading(true);
+  try {
+    const res = await fetch('/api/fms/' + id);
+    const j = await res.json();
+    if (!j.success) { showLoading(false); showToast('error', j.error); return; }
+    const sheet = j.data.sheet;
+    fa_editing = id;
+    fa_meta = {
+      sheetUrl: 'https://docs.google.com/spreadsheets/d/' + sheet.sheet_id + '/edit',
+      tab: sheet.sheet_name, headerRow: sheet.header_row, name: sheet.fms_name || sheet.sheet_name,
+    };
+    document.getElementById('fa_name').value = fa_meta.name;
+    document.getElementById('fa_sheetUrl').value = fa_meta.sheetUrl;
+    document.getElementById('fa_tab').innerHTML = '<option>' + faEsc(sheet.sheet_name) + '</option>';
+    document.getElementById('fa_headerRow').value = sheet.header_row;
+
+    // The headers are read fresh, not remembered: the point of the whole
+    // mapping is that the sheet may have moved since it was saved.
+    const hres = await fetch('/api/fms/detect-steps', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sheetId: sheet.sheet_id, sheetName: sheet.sheet_name, headerRow: sheet.header_row }),
+    });
+    const hj = await hres.json();
+    fa_headers = hj.success ? (hj.headers || []) : [];
+
+    fa_steps = (j.data.steps || []).map(st => ({
+      stepName: st.step_name || '',
+      planCol: st.plan_col || '',
+      actualCol: st.actual_col || '',
+      completeCol: st.complete_col || '',
+      delayReasonCol: st.delay_reason_col || '',
+      showCols: st.show_cols_parsed || [],
+      doers: st.doerIds || [],
+      doerLabel: '',
+      extraRows: (st.extraRows || []).map(r => ({
+        label: r.row_label || '', col_letter: r.col_letter || '',
+        field_type: r.field_type || 'text', dropdown_options: r.dropdown_options || '',
+        required: r.required ? 1 : 0,
+      })),
+    }));
+    showLoading(false);
+    fa_showSteps(null);
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+async function fa_save() {
+  const bad = fa_steps.findIndex(s => !String(s.stepName || '').trim() || !s.planCol);
+  if (bad >= 0) {
+    showToast('warning', 'Step ' + (bad + 1) + ' needs a name and a Planned column.');
+    return;
+  }
+  const body = {
+    fmsName: (document.getElementById('fa_name').value || '').trim() || fa_meta.name,
+    sheetId: fa_meta.sheetUrl, sheetName: fa_meta.tab,
+    headerRow: document.getElementById('fa_headerRow').value || fa_meta.headerRow,
+    steps: fa_steps,
+  };
+  showLoading(true);
+  try {
+    const res = await fetch('/api/fms' + (fa_editing ? '/' + fa_editing : ''), {
+      method: fa_editing ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const j = await res.json();
+    showLoading(false);
+    if (!j.success) { showToast('error', j.error); return; }
+    bootstrap.Modal.getInstance(document.getElementById('fa_stepsModal')).hide();
+    showToast('success', 'Saved. It is on the FMS Task tab now.');
+    await fa_load();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+async function fa_delete() {
+  if (!fa_editing) return;
+  const ok = await Swal.fire({
+    title: 'Remove this FMS?',
+    html: 'Only the mapping goes. <b>The sheet is not touched</b> — no dates, no rows, no formulas.',
+    icon: 'warning', showCancelButton: true, confirmButtonText: 'Remove', confirmButtonColor: '#dc3545',
+  });
+  if (!ok.isConfirmed) return;
+  showLoading(true);
+  try {
+    const res = await fetch('/api/fms/' + fa_editing, { method: 'DELETE' });
+    const j = await res.json();
+    showLoading(false);
+    if (!j.success) { showToast('error', j.error); return; }
+    bootstrap.Modal.getInstance(document.getElementById('fa_stepsModal')).hide();
+    showToast('success', 'Removed.');
+    await fa_load();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+(async () => {
+  try {
+    const res = await fetch('/api/users');
+    const j = await res.json();
+    fa_users = (j.users || []).map(u => ({ id: u.id, username: u.username }));
+  } catch (e) { fa_users = []; }
+  await fa_load();
+})();
+</script>
