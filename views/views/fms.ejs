@@ -98,6 +98,7 @@ var fms_step = null;        // the step whose rows are shown
 var fms_rowsDone = false;   // which half of the rows is showing
 var fms_rows = [];
 var fms_doneRow = null;
+var fms_uploads = {};       // field id -> the Drive link, once it is up
 
 function fmsEsc(v) {
   return String(v == null ? '' : v)
@@ -257,12 +258,22 @@ function fms_openDone(i) {
       input = '<input type="date" id="' + id + '" class="form-control">';
     } else if (f.field_type === 'number') {
       input = '<input type="number" id="' + id + '" class="form-control" step="any">';
+    } else if (f.field_type === 'link') {
+      input = '<input type="url" id="' + id + '" class="form-control" placeholder="https://...">';
+    } else if (f.field_type === 'file') {
+      // The cell holds a link, so the file goes to Drive first and the link is
+      // what gets written. Uploaded on pick rather than on submit, so a slow
+      // upload does not look like a slow save.
+      input = '<input type="file" id="' + id + '" class="form-control" onchange="fms_upload(this, '' + id + '')">'
+        + '<div class="form-text" id="' + id + '_note"></div>';
     } else {
       input = '<input type="text" id="' + id + '" class="form-control">';
     }
     return '<div class="mb-2"><label class="form-label fw-bold text-dark">' + fmsEsc(f.row_label)
       + (f.required ? ' <span class="text-danger">*</span>' : '') + '</label>' + input + '</div>';
   }).join('');
+
+  fms_uploads = {};
 
   // The reason box only where the sheet has somewhere to put it, and only when
   // the row is actually late — asking why an on-time job is late is noise.
@@ -277,12 +288,34 @@ function fms_openDone(i) {
   new bootstrap.Modal(document.getElementById('fms_doneModal')).show();
 }
 
+async function fms_upload(el, id) {
+  const note = document.getElementById(id + '_note');
+  const file = el.files && el.files[0];
+  delete fms_uploads[id];
+  if (!file) { note.textContent = ''; return; }
+  note.textContent = 'Uploading…';
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await fetch('/api/fms-tasks/upload', { method: 'POST', body: form });
+    const j = await res.json();
+    if (!j.success) { note.innerHTML = '<span class="text-danger">' + fmsEsc(j.error) + '</span>'; return; }
+    fms_uploads[id] = j.url;
+    note.innerHTML = '<span class="text-success">Uploaded.</span> The link goes into the sheet.';
+  } catch (e) {
+    note.innerHTML = '<span class="text-danger">Upload failed.</span>';
+  }
+}
+
 async function fms_markDone() {
   if (!fms_doneRow) return;
   const extras = [];
   for (const f of (fms_step.extraRows || [])) {
-    const el = document.getElementById('fms_extra_' + f.id);
-    const value = el ? (el.value || '').trim() : '';
+    const id = 'fms_extra_' + f.id;
+    const el = document.getElementById(id);
+    const value = f.field_type === 'file'
+      ? (fms_uploads[id] || '')
+      : (el ? (el.value || '').trim() : '');
     if (f.required && !value) {
       showToast('warning', f.row_label + ' is needed.');
       return;

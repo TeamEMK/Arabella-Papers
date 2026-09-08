@@ -7,8 +7,14 @@
 // ══════════════════════════════════════════════════════
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const db = require('../../config/db');
+const { uploadToDrive } = require('../../utils/drive');
 const { requireLogin } = require('../../middleware/auth');
+
+// 4MB, the same cap the rest of the app uses — Vercel rejects a request body
+// over 4.5MB before it reaches any handler.
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 } });
 const sheets = require('../../utils/sheets');
 const {
   extractSpreadsheetId, colToIdx,
@@ -152,6 +158,24 @@ router.get('/:fmsId/steps/:stepId/rows', requireLogin, async (req, res) => {
   } catch (err) {
     console.error('FMS rows failed:', err);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/fms-tasks/upload — a file field's value.
+ *
+ * A sheet cell holds a link, not a file, so the upload happens before the row
+ * is written and what goes in the cell is the Drive link. Kept in memory: the
+ * deployment has no writable disk.
+ */
+router.post('/upload', requireLogin, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, error: 'No file.' });
+    const url = await uploadToDrive(req.file.buffer, req.file.originalname, req.file.mimetype);
+    res.json({ success: true, url });
+  } catch (err) {
+    console.error('FMS upload failed:', err);
+    res.status(500).json({ success: false, error: 'Could not upload that file.' });
   }
 });
 

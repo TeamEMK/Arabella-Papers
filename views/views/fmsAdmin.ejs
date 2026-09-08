@@ -389,31 +389,73 @@ function fa_toggleShow(i, colIndex, on) {
   fa_steps[i].showCols = [...set].sort((a, b) => a - b);
 }
 
+// One field the doer fills in when finishing a row. Column first, because
+// picking it is what names the field — the sheet already has a heading for it,
+// and typing that heading out again is a chance to disagree with the sheet.
+var FA_FIELD_TYPES = [
+  ['text', '📝 Text'],
+  ['number', '🔢 Number'],
+  ['date', '📅 Date'],
+  ['link', '🔗 Link'],
+  ['file', '📎 File (photo / PDF → Drive)'],
+  ['dropdown', '🔽 Dropdown'],
+];
+
 function fa_extraRow(i, ri, r) {
-  return '<div class="row g-1 align-items-end mb-1 p-2 border rounded bg-light">'
-    + '<div class="col-12 col-md-4"><label class="form-label small text-muted mb-0">Label</label>'
-    +   '<input type="text" class="form-control form-control-sm" value="' + faEsc(r.label) + '"'
-    +   ' oninput="fa_steps[' + i + '].extraRows[' + ri + '].label=this.value"></div>'
-    + '<div class="col-6 col-md-3"><label class="form-label small text-muted mb-0">Writes to</label>'
-    +   '<select class="form-select form-select-sm" onchange="fa_steps[' + i + '].extraRows[' + ri + '].col_letter=this.value">'
+  const required = !(r.required === 0 || r.required === false || r.required === '0');
+  const lbl = (t) => '<div class="text-muted fw-bold mb-1" style="font-size:.65rem;letter-spacing:.4px;">' + t + '</div>';
+  return '<div class="fa-extra-row p-2 mb-2 border rounded bg-white">'
+    + '<div class="row g-2">'
+    + '<div class="col-12 col-md-3">' + lbl('COLUMN')
+    +   '<select class="form-select form-select-sm" onchange="fa_setExtraCol(' + i + ',' + ri + ',this)">'
     +   fa_colOptions(r.col_letter) + '</select></div>'
-    + '<div class="col-6 col-md-2"><label class="form-label small text-muted mb-0">Type</label>'
+    + '<div class="col-12 col-md-3">' + lbl('LABEL')
+    +   '<input type="text" class="form-control form-control-sm" id="fa_lbl_' + i + '_' + ri + '"'
+    +   ' placeholder="filled in from the heading" value="' + faEsc(r.label) + '"'
+    +   ' oninput="fa_steps[' + i + '].extraRows[' + ri + '].label=this.value"></div>'
+    + '<div class="col-6 col-md-3">' + lbl('FIELD TYPE')
     +   '<select class="form-select form-select-sm" onchange="fa_setExtraType(' + i + ',' + ri + ',this.value)">'
-    +   ['text', 'number', 'date', 'dropdown'].map(t => '<option value="' + t + '"'
-        + (r.field_type === t ? ' selected' : '') + '>' + t + '</option>').join('')
+    +   FA_FIELD_TYPES.map(t => '<option value="' + t[0] + '"'
+        + ((r.field_type || 'text') === t[0] ? ' selected' : '') + '>' + t[1] + '</option>').join('')
     +   '</select></div>'
-    + '<div class="col-8 col-md-2">'
-    +   (r.field_type === 'dropdown'
-        ? '<label class="form-label small text-muted mb-0">Options</label>'
-          + '<input type="text" class="form-control form-control-sm" placeholder="a, b, c" value="' + faEsc(r.dropdown_options) + '"'
-          + ' oninput="fa_steps[' + i + '].extraRows[' + ri + '].dropdown_options=this.value">'
-        : '<label class="form-check-label small text-muted d-block mb-0">Required</label>'
-          + '<input type="checkbox" class="form-check-input"' + (r.required ? ' checked' : '')
-          + ' onchange="fa_steps[' + i + '].extraRows[' + ri + '].required=this.checked?1:0">')
+    + '<div class="col-6 col-md-2">' + lbl('REQUIRED?')
+    +   '<label class="form-select form-select-sm d-flex align-items-center gap-2" style="cursor:pointer;">'
+    +     '<input type="checkbox" class="form-check-input mt-0"' + (required ? ' checked' : '')
+    +     ' onchange="fa_setExtraRequired(' + i + ',' + ri + ',this.checked)">'
+    +     '<span class="fw-bold">' + (required ? 'Required' : 'Optional') + '</span></label></div>'
+    + '<div class="col-12 col-md-1 d-flex align-items-end justify-content-end">'
+    +   '<button class="btn btn-sm btn-outline-danger w-100" onclick="fa_removeExtra(' + i + ',' + ri + ')" title="Remove this field"><i class="fas fa-xmark"></i></button>'
     + '</div>'
-    + '<div class="col-4 col-md-1 text-end">'
-    +   '<button class="btn btn-sm btn-outline-danger" onclick="fa_removeExtra(' + i + ',' + ri + ')"><i class="fas fa-xmark"></i></button>'
-    + '</div></div>';
+    + '</div>'
+    + (r.field_type === 'dropdown'
+      ? '<div class="mt-2">' + lbl('DROPDOWN OPTIONS <span class="fw-normal text-lowercase">(comma separated, e.g. Yes,No,N/A)</span>')
+        + '<input type="text" class="form-control form-control-sm" placeholder="Yes,No,N/A"'
+        + ' value="' + faEsc(r.dropdown_options) + '"'
+        + ' oninput="fa_steps[' + i + '].extraRows[' + ri + '].dropdown_options=this.value"></div>'
+      : '')
+    + (r.field_type === 'file'
+      ? '<div class="form-text mt-1">The doer picks a file; it goes to Drive and the link is written into this column.</div>'
+      : '')
+    + '</div>';
+}
+
+// Choosing the column names the field, unless somebody has already renamed it.
+function fa_setExtraCol(i, ri, sel) {
+  const row = fa_steps[i].extraRows[ri];
+  const previous = fa_headers.find(h => h.col === row.col_letter);
+  row.col_letter = sel.value;
+  const header = fa_headers.find(h => h.col === sel.value);
+  const untouched = !row.label || (previous && row.label === previous.name);
+  if (header && untouched) {
+    row.label = header.name;
+    const el = document.getElementById('fa_lbl_' + i + '_' + ri);
+    if (el) el.value = header.name;
+  }
+}
+
+function fa_setExtraRequired(i, ri, on) {
+  fa_steps[i].extraRows[ri].required = on ? 1 : 0;
+  fa_drawSteps();                       // the word beside the box has to follow it
 }
 
 function fa_setExtraType(i, ri, v) {
@@ -425,13 +467,13 @@ function fa_setExtraType(i, ri, v) {
 function fa_setExtra(i, v) {
   fa_steps[i].extraInput = v;
   if (v === 'yes' && !fa_steps[i].extraRows.length) {
-    fa_steps[i].extraRows.push({ label: '', col_letter: '', field_type: 'text', dropdown_options: '', required: 0 });
+    fa_steps[i].extraRows.push({ label: '', col_letter: '', field_type: 'text', dropdown_options: '', required: 1 });
   }
   fa_drawSteps();
 }
 
 function fa_addExtra(i) {
-  fa_steps[i].extraRows.push({ label: '', col_letter: '', field_type: 'text', dropdown_options: '', required: 0 });
+  fa_steps[i].extraRows.push({ label: '', col_letter: '', field_type: 'text', dropdown_options: '', required: 1 });
   fa_drawSteps();
 }
 function fa_removeExtra(i, ri) {
