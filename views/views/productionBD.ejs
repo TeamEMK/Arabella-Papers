@@ -19,7 +19,10 @@ document.getElementById('prodRoot').innerHTML = `
     <button class="btn btn-outline-dark smooth-ui text-dark" onclick="refreshBoard(this, fetchProductionData, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
   </div>
   <div class="row g-3 mb-3">
-    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #ffc107;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">${PROD_ARCHIVE ? 'Backup Production Orders' : 'Production Orders'}</h6><h3 class="fw-bold text-warning mb-0" id="prod_boardCount">--</h3></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #ffc107;"><div class="card-body p-3"><h6 class="text-muted mb-0 small">${PROD_ARCHIVE ? 'Backup Production Orders' : 'Production Orders'}</h6><div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">samples counted separately</div><h3 class="fw-bold text-warning mb-0" id="prod_boardCount">--</h3></div></div></div>
+    <!-- A sample kit is not an order being made; counting the two together
+         meant the floor's number was never the number of jobs to produce. -->
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #6f42c1;"><div class="card-body p-3"><h6 class="text-muted mb-0 small">Samples</h6><div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">sample kits on this board</div><h3 class="fw-bold mb-0" style="color:#6f42c1;" id="prod_sampleCount">--</h3></div></div></div>
     ${PROD_ARCHIVE ? '' : `<div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #198754;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Sent to Dispatch</h6><h3 class="fw-bold text-success mb-0" id="prod_dispatchedCount">--</h3></div></div></div>`}
   </div>
   <div class="card bg-light-glass mb-4 shadow-sm">
@@ -123,8 +126,14 @@ async function fetchProductionData() {
     // that had ever reached production, dispatched orders included, and next to
     // a hundred-row table that number only ever got read as the board being
     // wrong.
+    // Samples are on the board and have to be worked, but they are not orders
+    // being produced - so the production figure is the board without them, and
+    // the two cards add up to the row count.
+    const samples = prod_data.filter(prod_isSample).length;
     const bc = document.getElementById('prod_boardCount');
-    if(bc) bc.textContent = prod_data.length;
+    if(bc) bc.textContent = prod_data.length - samples;
+    const sc = document.getElementById('prod_sampleCount');
+    if(sc) sc.textContent = samples;
     // Same date range as the rows, so the two add up to what August took in.
     // "Sent to", not "Dispatched": an order marked Ready has left the queue but
     // has not gone anywhere yet, and it is counted here.
@@ -154,6 +163,12 @@ function prod_fillSelect(id, set) {
 // than a stage of one. The filter has to compare against the column instead of
 // the production progress for these.
 var PROD_ORDER_KINDS = ['Reorder', 'Reprint', 'Sample'];
+
+// What counts as a sample, asked in one place so the card and the filter can
+// never disagree about it.
+function prod_isSample(o) {
+  return (o && (o.Design_Approval_Status_From_Client || '')).trim().toLowerCase() === 'sample';
+}
 function prodApplyFilters() {
   const status = (document.getElementById('prod_filterStatus')||{}).value||'';
   const designer = (document.getElementById('prod_filterDesigner')||{}).value||'';
