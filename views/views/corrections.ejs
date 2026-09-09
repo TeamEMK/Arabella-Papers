@@ -13,31 +13,39 @@
     </div>
   </div>
 
-  <!-- The three states, as buttons that filter. Same three whoever is looking:
-       a designer wants their own outstanding ones just as much. -->
-  <div class="row g-3 mb-3">
-    <div class="col-6 col-md-3">
+  <!-- The states, as buttons that filter. A SuperAdmin who is also a designer
+       on orders - Sanjay is on 1113 of them - gets one more: their own, which
+       would otherwise be lost in everybody else's. -->
+  <div class="row g-3 mb-3 row-cols-2 row-cols-md-4" id="cr_cards">
+    <div class="col d-none" id="cr_col_mine">
+      <div class="card shadow smooth-ui kpi-card" style="cursor:pointer;border-left:4px solid #0d6efd;" id="cr_card_mine" onclick="cr_show('mine')">
+        <div class="card-body p-3"><h6 class="text-muted mb-0 small">Waiting on you</h6>
+        <div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">on your own name</div>
+        <h3 class="fw-bold text-primary mb-0" id="cr_n_mine">--</h3></div>
+      </div>
+    </div>
+    <div class="col">
       <div class="card shadow smooth-ui kpi-card" style="cursor:pointer;border-left:4px solid #ffc107;" id="cr_card_pending" onclick="cr_show('pending')">
         <div class="card-body p-3"><h6 class="text-muted mb-0 small">Pending</h6>
         <div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">waiting on the designer</div>
         <h3 class="fw-bold text-warning mb-0" id="cr_n_pending">--</h3></div>
       </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col">
       <div class="card shadow smooth-ui kpi-card" style="cursor:pointer;border-left:4px solid #198754;" id="cr_card_done" onclick="cr_show('done')">
         <div class="card-body p-3"><h6 class="text-muted mb-0 small">Done</h6>
         <div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">corrected and written down</div>
         <h3 class="fw-bold text-success mb-0" id="cr_n_done">--</h3></div>
       </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col">
       <div class="card shadow smooth-ui kpi-card" style="cursor:pointer;border-left:4px solid #dc3545;" id="cr_card_delayed" onclick="cr_show('delayed')">
         <div class="card-body p-3"><h6 class="text-muted mb-0 small">Delayed</h6>
         <div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">not done, with a reason given</div>
         <h3 class="fw-bold text-danger mb-0" id="cr_n_delayed">--</h3></div>
       </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col">
       <div class="card shadow smooth-ui kpi-card" style="cursor:pointer;border-left:4px solid #6c757d;" id="cr_card_all" onclick="cr_show('')">
         <div class="card-body p-3"><h6 class="text-muted mb-0 small">All</h6>
         <div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">every round, newest first</div>
@@ -176,6 +184,13 @@ var cr_lookupTimer = null;
 var cr_found = null;          // the order the number resolved to
 var cr_doing = null;          // the correction being answered
 
+// Is this correction on my name? The one place that decides it, so the card,
+// the filter and the Answer button can never disagree.
+function cr_isMine(c) {
+  return (APP_USER.username || '').trim().toLowerCase()
+    === String(c && c.designer || '').trim().toLowerCase();
+}
+
 function crEsc(v) {
   return String(v == null ? '' : v)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -191,6 +206,15 @@ async function cr_load() {
   document.getElementById('cr_sub').textContent = cr_canRaise
     ? 'Changes the client asked for after the design was done.'
     : 'Changes the client asked for on your orders.';
+
+  // Somebody can be a SuperAdmin and a designer at the same time. They see
+  // everybody's corrections, so their own need a way of being found.
+  const mineRows = cr_all.filter(cr_isMine);
+  const minePending = mineRows.filter(c => c.status === 'pending').length;
+  document.getElementById('cr_col_mine').classList.toggle('d-none', !cr_canRaise || !mineRows.length);
+  document.getElementById('cr_n_mine').textContent = minePending;
+  document.getElementById('cr_cards').classList.toggle('row-cols-md-5', cr_canRaise && !!mineRows.length);
+  document.getElementById('cr_cards').classList.toggle('row-cols-md-4', !(cr_canRaise && !!mineRows.length));
 
   document.getElementById('cr_n_pending').textContent = j.counts.pending;
   document.getElementById('cr_n_done').textContent = j.counts.done;
@@ -221,7 +245,8 @@ function cr_clear() {
   cr_render();
 }
 
-var CR_LABEL = { pending: 'Pending corrections', done: 'Done', delayed: 'Delayed', '': 'All corrections' };
+var CR_LABEL = { pending: 'Pending corrections', done: 'Done', delayed: 'Delayed',
+                 mine: 'Waiting on you', '': 'All corrections' };
 var CR_BADGE = {
   pending: '<span class="badge bg-warning text-dark">Pending</span>',
   done: '<span class="badge bg-success">Done</span>',
@@ -229,7 +254,7 @@ var CR_BADGE = {
 };
 
 function cr_render() {
-  ['pending', 'done', 'delayed', 'all'].forEach(function (k) {
+  ['pending', 'done', 'delayed', 'all', 'mine'].forEach(function (k) {
     const card = document.getElementById('cr_card_' + k);
     if (card) card.classList.toggle('border-primary', (k === 'all' ? '' : k) === cr_filter);
   });
@@ -238,7 +263,10 @@ function cr_render() {
   const q = (document.getElementById('cr_search').value || '').toLowerCase().trim();
   const who = document.getElementById('cr_designer').value || '';
   const rows = cr_all
-    .filter(c => !cr_filter || c.status === cr_filter)
+    // "mine" is not a status - it is my own outstanding ones, which is the
+    // only reason a person who can see everything would want the shortcut.
+    .filter(c => cr_filter !== 'mine' || (cr_isMine(c) && c.status === 'pending'))
+    .filter(c => cr_filter === 'mine' || !cr_filter || c.status === cr_filter)
     .filter(c => !who || c.designer === who)
     .filter(c => !q || (c.orderId + ' ' + c.designer + ' ' + c.client + ' ' + c.dealer + ' ' + c.clientNote)
       .toLowerCase().includes(q));
@@ -249,7 +277,8 @@ function cr_render() {
   const body = document.getElementById('cr_tbody');
   if (!rows.length) {
     body.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">'
-      + (cr_filter === 'pending' ? 'Nothing waiting.' : 'Nothing here.') + '</td></tr>';
+      + (cr_filter === 'mine' ? 'Nothing waiting on you.'
+         : cr_filter === 'pending' ? 'Nothing waiting.' : 'Nothing here.') + '</td></tr>';
     return;
   }
 
