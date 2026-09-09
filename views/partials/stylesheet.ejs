@@ -70,7 +70,11 @@
     display: inline-flex; align-items: center; justify-content: center; }
   .side-toggle:hover, .side-close:hover { background: rgba(255,255,255,0.1); color: #ffcc00; }
 
-  .side-nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 12px 10px; display: flex; flex-direction: column; gap: 4px; }
+  .side-nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 12px 10px; display: flex; flex-direction: column; gap: 4px;
+    /* Scrolls, but the bar is not drawn. Collapsed to icons the panel is only
+       a few tabs wide and a grey rail down the middle of it reads as damage. */
+    scrollbar-width: none; -ms-overflow-style: none; }
+  .side-nav::-webkit-scrollbar { width: 0; height: 0; }
   .side-link, .side-user, .side-logout { display: flex; align-items: center; gap: 12px; width: 100%;
     background: transparent; border: 0; border-radius: 8px; padding: 10px 12px; color: #d7dce1;
     font-size: 14px; text-align: left; }
