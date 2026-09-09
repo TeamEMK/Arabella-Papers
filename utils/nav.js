@@ -10,6 +10,11 @@
  * grants from the Access Control page over the top; somebody with no grants
  * resolves to exactly their rule, which is what everyone gets today.
  *
+ * `group` is the heading the side panel files it under. Fourteen tabs in one
+ * flat column read as a wall; the headings are what turn it back into a list
+ * of a few things. A heading with nothing under it is never drawn, so somebody
+ * who opens four tabs sees no headings they cannot use.
+ *
  * `icon` is a Font Awesome 6 class. The side panel shows icons alone when it is
  * collapsed, so every item needs one — keep it here with the item rather than
  * in the template, so adding a tab is a one-line change.
@@ -20,75 +25,75 @@
  */
 const SECTIONS = [
   {
-    id: 'dashboard', name: 'Orders Dashboard', icon: 'fa-clipboard-list',
+    id: 'dashboard', group: 'Orders', name: 'Orders Dashboard', icon: 'fa-clipboard-list',
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head' || role.includes('Designer'),
   },
   {
-    id: 'tillApproval', name: 'Till Approval', icon: 'fa-circle-check',
+    id: 'tillApproval', group: 'Orders', name: 'Till Approval', icon: 'fa-circle-check',
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head' || role.includes('TillApprover'),
   },
+  // Changes the client asks for by email after the design is done. Open to
+  // everyone: a designer's own corrections are the point of the page, and
+  // raising one is guarded in the API rather than by hiding the tab.
+  { id: 'corrections', group: 'Orders', name: 'Corrections', icon: 'fa-pen-ruler', rule: () => true },
   {
-    id: 'productionBD', name: 'Production Dashboard', icon: 'fa-industry',
+    id: 'productionBD', group: 'Production', name: 'Production Dashboard', icon: 'fa-industry',
     rule: (role) => role === 'SuperAdmin' || role.includes('Production Manager'),
   },
   // Same board, the orders from before the August cutoff. Whoever works the
   // queue is who needs to look one of them up, so it goes right below it.
   {
-    id: 'oldProduction', name: 'Backup Production', icon: 'fa-box-archive',
+    id: 'oldProduction', group: 'Production', name: 'Backup Production', icon: 'fa-box-archive',
     rule: (role) => role === 'SuperAdmin' || role.includes('Production Manager'),
   },
   {
-    id: 'dispatchBD', name: 'Dispatch Dashboard', icon: 'fa-truck-fast',
+    id: 'dispatchBD', group: 'Dispatch', name: 'Dispatch Dashboard', icon: 'fa-truck-fast',
     rule: (role) => role === 'SuperAdmin' || role === 'Accounts',
   },
   // The same board, for parcels sent before the cutoff. Whoever works the
   // queue is who needs to look one up, so it sits right below it.
   {
-    id: 'oldDispatch', name: 'Backup Dispatch', icon: 'fa-box-archive',
+    id: 'oldDispatch', group: 'Dispatch', name: 'Backup Dispatch', icon: 'fa-box-archive',
     rule: (role) => role === 'SuperAdmin' || role === 'Accounts',
   },
-  {
-    id: 'o2dsummary', name: 'Analytics', icon: 'fa-chart-line',
-    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
-  },
-  // Changes the client asks for by email after the design is done. Open to
-  // everyone: a designer's own corrections are the point of the page, and
-  // raising one is guarded in the API rather than by hiding the tab.
-  { id: 'corrections', name: 'Corrections', icon: 'fa-pen-ruler', rule: () => true },
   // Work that lives in a Google Sheet — an enquiry or an order walked through
   // its steps. Two tabs, because they are two jobs: mapping a sheet is done
   // once by whoever sets the process up, and working a step is done every day
   // by everybody else. One page carrying both put a setup button in front of
   // people who will never press it.
   {
-    id: 'fmsAdmin', name: 'FMS Admin', icon: 'fa-sitemap',
+    id: 'fmsAdmin', group: 'FMS', name: 'FMS Admin', icon: 'fa-sitemap',
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
   },
   // Open to everyone: being named on a step is what puts anything on this
   // page, and somebody on no step sees an empty tab rather than a locked door.
-  { id: 'fms', name: 'FMS Task', icon: 'fa-diagram-project', rule: () => true },
+  { id: 'fms', group: 'FMS', name: 'FMS Task', icon: 'fa-diagram-project', rule: () => true },
   // What paper is in stock is asked by everyone who takes an order, so the
   // tab is open to all.
-  { id: 'stock', name: 'Stock', icon: 'fa-layer-group', rule: () => true },
+  { id: 'stock', group: 'Company', name: 'Stock', icon: 'fa-layer-group', rule: () => true },
   // Everybody takes leave, so everybody gets the tab. What differs is what is
   // on it: your own requests, plus everyone's if you are the one deciding.
-  { id: 'leave', name: 'Leave', icon: 'fa-calendar-check', rule: () => true },
+  { id: 'leave', group: 'Company', name: 'Leave', icon: 'fa-calendar-check', rule: () => true },
   // Staff records carry mobiles, emergency contacts and document status, so
   // the tab is not offered to anyone who has no business opening it.
   {
-    id: 'hr', name: 'HR', icon: 'fa-id-card',
+    id: 'hr', group: 'Company', name: 'HR', icon: 'fa-id-card',
     rule: (role) => role === 'SuperAdmin' || role.includes('HR'),
   },
   {
-    id: 'logs', name: 'Logs', icon: 'fa-clock-rotate-left',
+    id: 'o2dsummary', group: 'Admin', name: 'Analytics', icon: 'fa-chart-line',
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
   },
   {
-    id: 'users', name: 'Users', icon: 'fa-users',
+    id: 'logs', group: 'Admin', name: 'Logs', icon: 'fa-clock-rotate-left',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
+  },
+  {
+    id: 'users', group: 'Admin', name: 'Users', icon: 'fa-users',
     rule: (role) => role === 'SuperAdmin', locked: true,
   },
   {
-    id: 'access', name: 'Access Control', icon: 'fa-user-shield',
+    id: 'access', group: 'Admin', name: 'Access Control', icon: 'fa-user-shield',
     rule: (role) => role === 'SuperAdmin', locked: true,
   },
 ];

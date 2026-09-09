@@ -47,7 +47,14 @@
   </div>
 
   <nav class="side-nav">
+    <%# A heading is drawn when the group changes, and only for groups this
+        person actually has a tab in — somebody with four tabs should not be
+        reading six headings. %>
+    <% let lastGroup = null; %>
     <% navMenu.forEach(function(tab) { %>
+      <% if (tab.group && tab.group !== lastGroup) { lastGroup = tab.group; %>
+        <div class="side-group"><span class="side-group-label"><%= tab.group %></span></div>
+      <% } %>
       <button type="button" class="side-link" id="<%= tab.id %>Tab" onclick="loadPage('<%= tab.id %>')" title="<%= tab.name %>">
         <i class="fas <%= tab.icon %> side-icon"></i><span class="side-label"><%= tab.name %></span>
       </button>

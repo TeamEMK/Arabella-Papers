@@ -78,6 +78,15 @@
   .side-link.active { background: rgba(255,204,0,0.14); color: #ffcc00; font-weight: 600; box-shadow: inset 3px 0 0 #ffcc00; }
   .side-icon { flex: 0 0 20px; width: 20px; text-align: center; font-size: 16px; }
   .side-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The heading over each block of tabs. Quiet on purpose: it is there to
+     break the column up, not to be read. */
+  .side-group { padding: 10px 12px 2px; }
+  .side-group:first-child { padding-top: 2px; }
+  .side-group-label { font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: rgba(255,255,255,0.35); }
+  /* Collapsed there is no room for words, so the heading becomes the rule that
+     separates one block from the next. */
+  .side-group::after { content: ''; display: none; }
 
   .side-footer { border-top: 1px solid rgba(255,255,255,0.08); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
   .side-footer .dropdown { width: 100%; }
@@ -112,6 +121,9 @@
        rows already start 10px in from the panel edge. */
     .side-link, .side-user, .side-logout { overflow: hidden; padding-left: 18px; padding-right: 0; }
     .side-label { opacity: 0; }
+    .side-group { padding: 8px 14px 6px; }
+    .side-group-label { opacity: 0; }
+    .side-group::after { display: block; height: 1px; background: rgba(255,255,255,0.12); }
     .side-logo, .side-wordmark, .side-toggle, .side-user::after { display: none; }
     .side-mark { display: flex; }
     .side-brand { justify-content: center; padding-left: 8px; padding-right: 8px; }
@@ -121,6 +133,8 @@
     body.side-expanded .side-user,
     body.side-expanded .side-logout { padding-left: 12px; padding-right: 12px; }
     body.side-expanded .side-label { opacity: 1; }
+    body.side-expanded .side-group-label { opacity: 1; }
+    body.side-expanded .side-group::after { display: none; }
     body.side-expanded .side-logo { display: block; }
     body.side-expanded .side-wordmark { display: block; }
     body.side-expanded .side-toggle { display: inline-flex; }

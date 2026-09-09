@@ -45,7 +45,7 @@ async function getNavMenu(user) {
   const allowed = await sectionsFor(user);
   return SECTIONS
     .filter(s => allowed.has(s.id))
-    .map(s => ({ id: s.id, name: s.name, icon: s.icon }));
+    .map(s => ({ id: s.id, name: s.name, icon: s.icon, group: s.group || '' }));
 }
 
 async function canSee(user, sectionId) {
