@@ -154,8 +154,9 @@ async function notifyDesignerAssigned(order) {
 
 function dispatchedHtml(o) {
   const boxes = String(o.boxes || '').trim();
-  // Samples often travel with a dispatch, and the client should be told in the
-  // same mail rather than opening the box and wondering.
+  // Samples often travel with a dispatch. They go on the same line as the box
+  // count - it is one sentence about what is in the parcel, and splitting it in
+  // two made the mail read like two announcements.
   const samples = String(o.samples || '').trim();
   return `
   <div style="background:#f4f5f7;padding:24px 12px;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
@@ -166,12 +167,8 @@ function dispatchedHtml(o) {
       <div style="padding:24px;">
         <p style="margin:0 0 18px;font-size:16px;color:#212529;">Hello,</p>
         <p style="margin:0 0 20px;font-size:14px;color:#495057;line-height:1.6;">
-          We have dispatched your order${boxes ? ` in <b>${esc(boxes)}</b> ${boxes === '1' ? 'Box' : 'Boxes'}` : ''}.
+          We have dispatched your order${boxes ? ` in <b>${esc(boxes)}</b> ${boxes === '1' ? 'Box' : 'Boxes'}` : ''}${samples ? `, ${esc(samples)}` : ''}
         </p>
-        ${samples ? `
-        <p style="margin:0 0 20px;font-size:14px;color:#495057;line-height:1.6;">
-          Sent with it: <b>${esc(samples)}</b>
-        </p>` : ''}
         <p style="margin:0 0 8px;font-size:14px;color:#495057;">Here is the tracking number</p>
         <table style="border-collapse:collapse;margin:0 0 4px;">
           <tr>
@@ -195,8 +192,7 @@ function dispatchedText(o) {
   return [
     'Hello,',
     '',
-    `We have dispatched your order${boxes ? ` in ${boxes} ${boxes === '1' ? 'Box' : 'Boxes'}` : ''}.`,
-    ...(samples ? ['', `Sent with it: ${samples}`] : []),
+    `We have dispatched your order${boxes ? ` in ${boxes} ${boxes === '1' ? 'Box' : 'Boxes'}` : ''}${samples ? `, ${samples}` : ''}`,
     '',
     'Here is the tracking number',
     '',
