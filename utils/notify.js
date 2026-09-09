@@ -12,13 +12,29 @@ function esc(v) {
 /**
  * Find a designer's mailbox by the name stored on the order. Orders link to
  * designers by name text, not by id, so the name is all we ever have.
- * The designers table is the source of truth; a designer who was given a login
- * but never added to that list still gets found through users.
+ *
+ * The login comes first. Two tables hold an address for the same person - the
+ * designers list, and the login on the Users page - and only one of them is
+ * where anybody goes to change it. Eight designers were moved to
+ * @arabellajaipur.com on the Users page while the designers list kept the old
+ * @arabellapapers.com, and every task notice went to the address they had
+ * stopped reading.
+ *
+ * The designers list is still the answer for somebody who has no login at all:
+ * BAO BUI and The Wedding Company are on it and have never signed in.
+ *
  * @returns {Promise<string>} the address, or '' if the designer has none
  */
 async function designerEmail(name) {
   const designer = String(name || '').trim();
   if (!designer) return '';
+
+  const [users] = await db.query(
+    `SELECT NULLIF(TRIM(IFNULL(email, '')), '') AS email
+       FROM users WHERE LOWER(TRIM(username)) = LOWER(?) LIMIT 1`,
+    [designer]
+  );
+  if (users.length && users[0].email) return users[0].email;
 
   const [rows] = await db.query(
     `SELECT NULLIF(TRIM(IFNULL(india_email, '')), '')    AS india,
@@ -32,12 +48,7 @@ async function designerEmail(name) {
   if (rows.length && (rows[0].india || rows[0].overseas)) {
     return rows[0].india || rows[0].overseas;
   }
-
-  const [users] = await db.query(
-    `SELECT email FROM users WHERE LOWER(TRIM(username)) = LOWER(?) LIMIT 1`,
-    [designer]
-  );
-  return users.length ? (users[0].email || '') : '';
+  return '';
 }
 
 function assignmentHtml(order) {
