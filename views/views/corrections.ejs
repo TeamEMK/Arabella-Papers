@@ -149,7 +149,7 @@
         <textarea id="cr_workNote" class="form-control" rows="3" placeholder="The changes you made in this order" oninput="cr_doToggle()"></textarea>
       </div>
       <div class="mb-1">
-        <label class="form-label fw-bold text-dark">Or, if it is not done — why</label>
+        <label class="form-label fw-bold text-dark">Or &mdash; if it is not done, why</label>
         <textarea id="cr_delayReason" class="form-control" rows="2" placeholder="Reason for delay" oninput="cr_doToggle()"></textarea>
       </div>
       <div class="form-text" id="cr_doHint">Fill in one of the two. Whichever you fill decides where it goes.</div>
@@ -392,20 +392,36 @@ function cr_openDo(id) {
       : '<div class="fst-italic text-muted">Nothing written here — check your mail for this order.</div>')
     + '<div class="small text-muted mt-2">Raised ' + crEsc(cr_doing.raisedAt)
     + (cr_doing.raisedBy ? ' by ' + crEsc(cr_doing.raisedBy) : '') + '</div>';
-  document.getElementById('cr_workNote').value = cr_doing.workNote || '';
-  document.getElementById('cr_delayReason').value = cr_doing.delayReason || '';
+  const workEl = document.getElementById('cr_workNote');
+  const delayEl = document.getElementById('cr_delayReason');
+  workEl.disabled = delayEl.disabled = false;
+  workEl.value = cr_doing.workNote || '';
+  delayEl.value = cr_doing.delayReason || '';
   cr_doToggle();
   new bootstrap.Modal(document.getElementById('cr_doModal')).show();
 }
 
+// One or the other, never both. Filling in what you corrected AND why it is
+// not done says two opposite things, and the row that came out of it read
+// "Done" with a reason for delay underneath.
 function cr_doToggle() {
-  const work = (document.getElementById('cr_workNote').value || '').trim();
-  const delay = (document.getElementById('cr_delayReason').value || '').trim();
+  const workEl = document.getElementById('cr_workNote');
+  const delayEl = document.getElementById('cr_delayReason');
+  const work = (workEl.value || '').trim();
+  const delay = (delayEl.value || '').trim();
+
+  // Whichever was typed in first closes the other. Emptying it opens it again,
+  // so nothing is a one-way door.
+  delayEl.disabled = !!work;
+  workEl.disabled = !work && !!delay;
+  delayEl.classList.toggle('bg-light', !!work);
+  workEl.classList.toggle('bg-light', !work && !!delay);
+
   document.getElementById('cr_doBtn').disabled = !work && !delay;
   document.getElementById('cr_doHint').innerHTML = work
-    ? 'Saving marks this <b class="text-success">Done</b>.'
-    : (delay ? 'Saving marks this <b class="text-danger">Delayed</b>.'
-             : 'Fill in one of the two. Whichever you fill decides where it goes.');
+    ? 'Saving marks this <b class="text-success">Done</b>. <span class="text-muted">Clear this box if it is not done after all.</span>'
+    : (delay ? 'Saving marks this <b class="text-danger">Delayed</b>. <span class="text-muted">Clear this box if you have done it.</span>'
+             : 'Fill in one of the two — not both. Whichever you fill decides where it goes.');
 }
 
 async function cr_answer() {

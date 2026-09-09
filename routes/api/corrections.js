@@ -226,12 +226,18 @@ router.put('/:id', requireLogin, async (req, res) => {
       });
     }
 
+    // One or the other, never both. The status is derived from which was
+    // filled in, so keeping the other would leave a row saying it was done and
+    // giving a reason it was not - which is what a row did say before this.
+    // The screen stops it happening; this stops a stale page doing it anyway.
     const status = workNote ? 'done' : 'delayed';
     await db.query(
       `UPDATE corrections
           SET work_note = ?, delay_reason = ?, status = ?, closed_at = NOW()
         WHERE id = ?`,
-      [workNote || null, delayReason || null, status, row.id]
+      [status === 'done' ? workNote : null,
+       status === 'delayed' ? delayReason : null,
+       status, row.id]
     );
     await logOrderEvent(row.order_id,
       status === 'done' ? 'Correction done' : 'Correction delayed',
