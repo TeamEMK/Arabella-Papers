@@ -51,6 +51,10 @@ const SECTIONS = [
     id: 'o2dsummary', name: 'Analytics', icon: 'fa-chart-line',
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
   },
+  // Changes the client asks for by email after the design is done. Open to
+  // everyone: a designer's own corrections are the point of the page, and
+  // raising one is guarded in the API rather than by hiding the tab.
+  { id: 'corrections', name: 'Corrections', icon: 'fa-pen-ruler', rule: () => true },
   // Work that lives in a Google Sheet — an enquiry or an order walked through
   // its steps. Two tabs, because they are two jobs: mapping a sheet is done
   // once by whoever sets the process up, and working a step is done every day

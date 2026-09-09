@@ -1,0 +1,462 @@
+<%# Corrections — changes the client asked for by email after the design was
+    done. Raised against an order by a SuperAdmin, answered by the designer the
+    order already belongs to. %>
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-pen-ruler me-2"></i>Corrections</h3>
+      <div class="text-muted small" id="cr_sub">Changes the client asked for after the design was done.</div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary smooth-ui fw-bold d-none" id="cr_addBtn" onclick="cr_openRaise()"><i class="fas fa-plus me-1"></i> Raise a correction</button>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, cr_load, 'corrections')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
+  </div>
+
+  <!-- The three states, as buttons that filter. Same three whoever is looking:
+       a designer wants their own outstanding ones just as much. -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card shadow smooth-ui kpi-card" style="cursor:pointer;border-left:4px solid #ffc107;" id="cr_card_pending" onclick="cr_show('pending')">
+        <div class="card-body p-3"><h6 class="text-muted mb-0 small">Pending</h6>
+        <div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">waiting on the designer</div>
+        <h3 class="fw-bold text-warning mb-0" id="cr_n_pending">--</h3></div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card shadow smooth-ui kpi-card" style="cursor:pointer;border-left:4px solid #198754;" id="cr_card_done" onclick="cr_show('done')">
+        <div class="card-body p-3"><h6 class="text-muted mb-0 small">Done</h6>
+        <div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">corrected and written down</div>
+        <h3 class="fw-bold text-success mb-0" id="cr_n_done">--</h3></div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card shadow smooth-ui kpi-card" style="cursor:pointer;border-left:4px solid #dc3545;" id="cr_card_delayed" onclick="cr_show('delayed')">
+        <div class="card-body p-3"><h6 class="text-muted mb-0 small">Delayed</h6>
+        <div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">not done, with a reason given</div>
+        <h3 class="fw-bold text-danger mb-0" id="cr_n_delayed">--</h3></div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card shadow smooth-ui kpi-card" style="cursor:pointer;border-left:4px solid #6c757d;" id="cr_card_all" onclick="cr_show('')">
+        <div class="card-body p-3"><h6 class="text-muted mb-0 small">All</h6>
+        <div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">every round, newest first</div>
+        <h3 class="fw-bold text-secondary mb-0" id="cr_n_all">--</h3></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card bg-light-glass mb-3 shadow-sm">
+    <div class="card-body p-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-5">
+          <label class="form-label text-dark fw-bold small mb-0">Search</label>
+          <input type="text" id="cr_search" class="form-control form-control-sm" placeholder="Order number, designer, client..." onkeyup="cr_render()">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label text-dark fw-bold small mb-0">Designer</label>
+          <select id="cr_designer" class="form-select form-select-sm" onchange="cr_render()"><option value="">All</option></select>
+        </div>
+        <div class="col-6 col-md-2 text-end"><button class="btn btn-secondary btn-sm w-100" onclick="cr_clear()">Clear</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card bg-light-glass shadow-lg">
+    <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+      <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-list-check me-2"></i><span id="cr_title">All corrections</span></h5>
+      <span class="text-muted small" id="cr_shown"></span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive" data-fill-height style="overflow-y:auto;position:relative;">
+        <table class="table table-hover table-striped mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th style="position:sticky;top:0;background:#212529;color:white;">#</th>
+              <th style="position:sticky;top:0;background:#212529;color:white;">Order</th>
+              <th style="position:sticky;top:0;background:#212529;color:white;">Dealer</th>
+              <th style="position:sticky;top:0;background:#212529;color:white;">Client</th>
+              <th style="position:sticky;top:0;background:#212529;color:white;">Designer</th>
+              <th style="position:sticky;top:0;background:#212529;color:white;">Raised</th>
+              <th style="position:sticky;top:0;background:#212529;color:white;">What the client asked</th>
+              <th style="position:sticky;top:0;background:#212529;color:white;">Status</th>
+              <th style="position:sticky;top:0;background:#212529;color:white;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="cr_tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ RAISE ══ -->
+<div class="modal fade" id="cr_raiseModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title"><i class="fas fa-plus me-2"></i>Raise a correction</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div class="mb-3">
+        <label class="form-label fw-bold text-dark">Order number</label>
+        <input type="text" id="cr_orderId" class="form-control" placeholder="K-159929" autocomplete="off"
+               oninput="cr_lookupSoon()">
+        <div class="form-text" id="cr_lookup">Type the number — the designer comes up on its own.</div>
+      </div>
+
+      <!-- What the order turned out to be. Shown rather than asked for: the
+           point of typing a number is not having to remember the rest. -->
+      <div class="border rounded p-2 mb-3 bg-light d-none" id="cr_found">
+        <div class="row g-2 small">
+          <div class="col-6"><div class="text-muted">Designer</div><div class="fw-bold text-dark" id="cr_f_designer">-</div></div>
+          <div class="col-6"><div class="text-muted">Client</div><div class="fw-bold text-dark" id="cr_f_client">-</div></div>
+          <div class="col-12"><div class="text-muted">Dealer</div><div class="fw-bold text-dark" id="cr_f_dealer">-</div></div>
+        </div>
+        <div class="mt-2 d-none" id="cr_priorWrap">
+          <span class="badge bg-warning text-dark" id="cr_prior"></span>
+        </div>
+        <!-- Only when the order carries no designer, which the office does have. -->
+        <div class="mt-2 d-none" id="cr_pickWrap">
+          <label class="form-label fw-bold text-dark small mb-1">This order has no designer on it — who is this for?</label>
+          <select id="cr_pickDesigner" class="form-select form-select-sm"></select>
+        </div>
+      </div>
+
+      <div class="mb-2">
+        <label class="form-label fw-bold text-dark">What the client asked for <span class="fw-normal text-muted">(optional)</span></label>
+        <textarea id="cr_clientNote" class="form-control" rows="3" placeholder="Paste or summarise the client's mail — or leave it, the designer has the mail."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary fw-bold" id="cr_saveBtn" onclick="cr_save()" disabled>Send to the designer</button>
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- ══ ANSWER ══ -->
+<div class="modal fade" id="cr_doModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-success text-white">
+      <h5 class="modal-title">Correction — <span id="cr_doOrder"></span></h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div class="mb-3" id="cr_doWhat"></div>
+      <div class="mb-3">
+        <label class="form-label fw-bold text-dark">What you corrected</label>
+        <textarea id="cr_workNote" class="form-control" rows="3" placeholder="The changes you made in this order" oninput="cr_doToggle()"></textarea>
+      </div>
+      <div class="mb-1">
+        <label class="form-label fw-bold text-dark">Or, if it is not done — why</label>
+        <textarea id="cr_delayReason" class="form-control" rows="2" placeholder="Reason for delay" oninput="cr_doToggle()"></textarea>
+      </div>
+      <div class="form-text" id="cr_doHint">Fill in one of the two. Whichever you fill decides where it goes.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-success fw-bold" id="cr_doBtn" onclick="cr_answer()" disabled>Save</button>
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    </div>
+  </div></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// CORRECTIONS
+// One page, two jobs. Whoever raises them sees everybody's and can add one;
+// a designer sees the ones on their own name and answers them. The server
+// decides which of those you are — the page only asks.
+// ══════════════════════════════════════════════════════
+var cr_all = [];
+var cr_canRaise = false;
+var cr_filter = 'pending';    // opens on the ones that need doing
+var cr_users = [];
+var cr_lookupTimer = null;
+var cr_found = null;          // the order the number resolved to
+var cr_doing = null;          // the correction being answered
+
+function crEsc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function cr_load() {
+  const res = await fetch('/api/corrections');
+  const j = await res.json();
+  if (!j.success) { showToast('error', j.error || 'Could not load.'); return 0; }
+  cr_all = j.data || [];
+  cr_canRaise = !!j.canRaise;
+  document.getElementById('cr_addBtn').classList.toggle('d-none', !cr_canRaise);
+  document.getElementById('cr_sub').textContent = cr_canRaise
+    ? 'Changes the client asked for after the design was done.'
+    : 'Changes the client asked for on your orders.';
+
+  document.getElementById('cr_n_pending').textContent = j.counts.pending;
+  document.getElementById('cr_n_done').textContent = j.counts.done;
+  document.getElementById('cr_n_delayed').textContent = j.counts.delayed;
+  document.getElementById('cr_n_all').textContent =
+    j.counts.pending + j.counts.done + j.counts.delayed;
+
+  // The designer filter is no use to a designer looking at their own.
+  const sel = document.getElementById('cr_designer');
+  sel.closest('.col-6').classList.toggle('d-none', !cr_canRaise);
+  const names = [...new Set(cr_all.map(c => c.designer).filter(Boolean))].sort();
+  const keep = sel.value;
+  sel.innerHTML = '<option value="">All</option>'
+    + names.map(n => '<option' + (n === keep ? ' selected' : '') + '>' + crEsc(n) + '</option>').join('');
+
+  cr_render();
+  return cr_all.length;
+}
+
+function cr_show(status) {
+  cr_filter = status;
+  cr_render();
+}
+
+function cr_clear() {
+  document.getElementById('cr_search').value = '';
+  document.getElementById('cr_designer').value = '';
+  cr_render();
+}
+
+var CR_LABEL = { pending: 'Pending corrections', done: 'Done', delayed: 'Delayed', '': 'All corrections' };
+var CR_BADGE = {
+  pending: '<span class="badge bg-warning text-dark">Pending</span>',
+  done: '<span class="badge bg-success">Done</span>',
+  delayed: '<span class="badge bg-danger">Delayed</span>',
+};
+
+function cr_render() {
+  ['pending', 'done', 'delayed', 'all'].forEach(function (k) {
+    const card = document.getElementById('cr_card_' + k);
+    if (card) card.classList.toggle('border-primary', (k === 'all' ? '' : k) === cr_filter);
+  });
+  document.getElementById('cr_title').textContent = CR_LABEL[cr_filter];
+
+  const q = (document.getElementById('cr_search').value || '').toLowerCase().trim();
+  const who = document.getElementById('cr_designer').value || '';
+  const rows = cr_all
+    .filter(c => !cr_filter || c.status === cr_filter)
+    .filter(c => !who || c.designer === who)
+    .filter(c => !q || (c.orderId + ' ' + c.designer + ' ' + c.client + ' ' + c.dealer + ' ' + c.clientNote)
+      .toLowerCase().includes(q));
+
+  document.getElementById('cr_shown').textContent =
+    rows.length + (rows.length === 1 ? ' correction' : ' corrections');
+
+  const body = document.getElementById('cr_tbody');
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">'
+      + (cr_filter === 'pending' ? 'Nothing waiting.' : 'Nothing here.') + '</td></tr>';
+    return;
+  }
+
+  body.innerHTML = rows.map(function (c, i) {
+    // Only the designer it belongs to answers it, and only while it is open.
+    const mine = !cr_canRaise || (APP_USER.username || '').trim().toLowerCase() === (c.designer || '').trim().toLowerCase();
+    const answer = c.status === 'pending' && mine
+      ? '<button class="btn btn-sm btn-success fw-bold" onclick="cr_openDo(' + c.id + ')">Answer</button>'
+      : '';
+    // Reopening is not a thing: a delayed one is still outstanding, so it is
+    // answered the same way as a pending one.
+    const redo = c.status === 'delayed' && mine
+      ? '<button class="btn btn-sm btn-outline-success fw-bold" onclick="cr_openDo(' + c.id + ')">Update</button>'
+      : '';
+    const remove = cr_canRaise
+      ? '<button class="btn btn-sm btn-outline-danger ms-1" onclick="cr_remove(' + c.id + ')" title="Raised against the wrong order"><i class="fas fa-trash"></i></button>'
+      : '';
+    return '<tr>'
+      + '<td>' + (i + 1) + '</td>'
+      + '<td class="fw-bold">' + crEsc(c.orderId) + '</td>'
+      + '<td>' + (crEsc(c.dealer) || '-') + '</td>'
+      + '<td>' + (crEsc(c.client) || '-') + '</td>'
+      + '<td>' + crEsc(c.designer) + '</td>'
+      + '<td class="text-nowrap small">' + crEsc((c.raisedAt || '').split(',')[0]) + '</td>'
+      + '<td class="text-wrap" style="max-width:280px;">'
+      +   (c.clientNote ? crEsc(c.clientNote) : '<span class="text-muted fst-italic">in the designer\'s mail</span>')
+      +   (c.workNote ? '<div class="small text-success mt-1"><b>Done:</b> ' + crEsc(c.workNote) + '</div>' : '')
+      +   (c.delayReason ? '<div class="small text-danger mt-1"><b>Delayed:</b> ' + crEsc(c.delayReason) + '</div>' : '')
+      + '</td>'
+      + '<td>' + (CR_BADGE[c.status] || c.status) + '</td>'
+      + '<td class="text-nowrap">' + answer + redo + remove + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+// ── Raising one ──
+function cr_openRaise() {
+  cr_found = null;
+  document.getElementById('cr_orderId').value = '';
+  document.getElementById('cr_clientNote').value = '';
+  document.getElementById('cr_found').classList.add('d-none');
+  document.getElementById('cr_pickWrap').classList.add('d-none');
+  document.getElementById('cr_priorWrap').classList.add('d-none');
+  document.getElementById('cr_lookup').textContent = 'Type the number — the designer comes up on its own.';
+  document.getElementById('cr_saveBtn').disabled = true;
+  new bootstrap.Modal(document.getElementById('cr_raiseModal')).show();
+}
+
+// Looked up as the number is typed, but not on every keystroke — an order
+// number is eight characters and half of them are not one yet.
+function cr_lookupSoon() {
+  clearTimeout(cr_lookupTimer);
+  cr_found = null;
+  document.getElementById('cr_saveBtn').disabled = true;
+  document.getElementById('cr_found').classList.add('d-none');
+  const v = (document.getElementById('cr_orderId').value || '').trim();
+  if (v.length < 4) {
+    document.getElementById('cr_lookup').textContent = 'Type the number — the designer comes up on its own.';
+    return;
+  }
+  document.getElementById('cr_lookup').textContent = 'Looking...';
+  cr_lookupTimer = setTimeout(cr_lookup, 400);
+}
+
+async function cr_lookup() {
+  const v = (document.getElementById('cr_orderId').value || '').trim();
+  if (!v) return;
+  try {
+    const res = await fetch('/api/corrections/order/' + encodeURIComponent(v));
+    const j = await res.json();
+    const hint = document.getElementById('cr_lookup');
+    if (!j.success) {
+      hint.innerHTML = '<span class="text-danger">' + crEsc(j.error) + '</span>';
+      return;
+    }
+    cr_found = j.data;
+    hint.textContent = '';
+    document.getElementById('cr_found').classList.remove('d-none');
+    document.getElementById('cr_f_designer').textContent = j.data.designer || '— none on this order —';
+    document.getElementById('cr_f_client').textContent = j.data.client || '-';
+    document.getElementById('cr_f_dealer').textContent = j.data.dealer || '-';
+
+    // Raising a third round on the same order is worth seeing before saving.
+    const prior = document.getElementById('cr_priorWrap');
+    prior.classList.toggle('d-none', !j.data.priorCorrections);
+    if (j.data.priorCorrections) {
+      document.getElementById('cr_prior').textContent =
+        j.data.priorCorrections + (j.data.priorCorrections === 1 ? ' earlier correction' : ' earlier corrections')
+        + ' on this order';
+    }
+
+    // The order carries no designer — rare, but it happens, and guessing one
+    // would put the work in front of the wrong person.
+    const pick = document.getElementById('cr_pickWrap');
+    pick.classList.toggle('d-none', !!j.data.designer);
+    if (!j.data.designer && !document.getElementById('cr_pickDesigner').options.length) {
+      document.getElementById('cr_pickDesigner').innerHTML =
+        '<option value="">Pick a designer</option>'
+        + cr_users.map(u => '<option>' + crEsc(u) + '</option>').join('');
+    }
+    document.getElementById('cr_saveBtn').disabled = false;
+  } catch (e) {
+    document.getElementById('cr_lookup').innerHTML = '<span class="text-danger">Server error.</span>';
+  }
+}
+
+async function cr_save() {
+  if (!cr_found) return;
+  const designer = cr_found.designer || document.getElementById('cr_pickDesigner').value;
+  if (!designer) { showToast('warning', 'Pick who this correction is for.'); return; }
+  showLoading(true);
+  try {
+    const res = await fetch('/api/corrections', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderId: cr_found.orderId,
+        designer,
+        clientNote: (document.getElementById('cr_clientNote').value || '').trim(),
+      }),
+    });
+    const j = await res.json();
+    showLoading(false);
+    if (!j.success) { showToast('error', j.error); return; }
+    bootstrap.Modal.getInstance(document.getElementById('cr_raiseModal')).hide();
+    showToast('success', 'Sent to ' + designer + '.');
+    cr_filter = 'pending';
+    await cr_load();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+// ── Answering one ──
+function cr_openDo(id) {
+  cr_doing = cr_all.find(c => c.id === id);
+  if (!cr_doing) return;
+  document.getElementById('cr_doOrder').textContent = cr_doing.orderId;
+  document.getElementById('cr_doWhat').innerHTML =
+    '<div class="small text-muted">What the client asked</div>'
+    + (cr_doing.clientNote
+      ? '<div class="fw-bold text-dark">' + crEsc(cr_doing.clientNote) + '</div>'
+      : '<div class="fst-italic text-muted">Nothing written here — check your mail for this order.</div>')
+    + '<div class="small text-muted mt-2">Raised ' + crEsc(cr_doing.raisedAt)
+    + (cr_doing.raisedBy ? ' by ' + crEsc(cr_doing.raisedBy) : '') + '</div>';
+  document.getElementById('cr_workNote').value = cr_doing.workNote || '';
+  document.getElementById('cr_delayReason').value = cr_doing.delayReason || '';
+  cr_doToggle();
+  new bootstrap.Modal(document.getElementById('cr_doModal')).show();
+}
+
+function cr_doToggle() {
+  const work = (document.getElementById('cr_workNote').value || '').trim();
+  const delay = (document.getElementById('cr_delayReason').value || '').trim();
+  document.getElementById('cr_doBtn').disabled = !work && !delay;
+  document.getElementById('cr_doHint').innerHTML = work
+    ? 'Saving marks this <b class="text-success">Done</b>.'
+    : (delay ? 'Saving marks this <b class="text-danger">Delayed</b>.'
+             : 'Fill in one of the two. Whichever you fill decides where it goes.');
+}
+
+async function cr_answer() {
+  if (!cr_doing) return;
+  showLoading(true);
+  try {
+    const res = await fetch('/api/corrections/' + cr_doing.id, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workNote: (document.getElementById('cr_workNote').value || '').trim(),
+        delayReason: (document.getElementById('cr_delayReason').value || '').trim(),
+      }),
+    });
+    const j = await res.json();
+    showLoading(false);
+    if (!j.success) { showToast('error', j.error); return; }
+    bootstrap.Modal.getInstance(document.getElementById('cr_doModal')).hide();
+    showToast('success', j.status === 'done' ? 'Marked done.' : 'Recorded as delayed.');
+    await cr_load();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+async function cr_remove(id) {
+  const c = cr_all.find(x => x.id === id);
+  const ok = await Swal.fire({
+    title: 'Remove this correction?',
+    html: 'For order <b>' + crEsc(c ? c.orderId : '') + '</b>. The order itself is not touched.',
+    icon: 'warning', showCancelButton: true, confirmButtonText: 'Remove', confirmButtonColor: '#dc3545',
+  });
+  if (!ok.isConfirmed) return;
+  showLoading(true);
+  try {
+    const res = await fetch('/api/corrections/' + id, { method: 'DELETE' });
+    const j = await res.json();
+    showLoading(false);
+    if (!j.success) { showToast('error', j.error); return; }
+    showToast('success', 'Removed.');
+    await cr_load();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+(async () => {
+  await cr_load();
+  // Only needed for an order that carries no designer, and only a raiser sees
+  // that box at all.
+  if (cr_canRaise) {
+    try {
+      const res = await fetch('/api/users');
+      const j = await res.json();
+      cr_users = (j.users || []).map(u => u.username).filter(Boolean).sort();
+    } catch (e) { cr_users = []; }
+  }
+})();
+</script>

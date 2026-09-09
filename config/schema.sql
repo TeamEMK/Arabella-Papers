@@ -349,6 +349,43 @@ CREATE TABLE IF NOT EXISTS fms_extra_rows (
   INDEX idx_fms_extra_step (step_id)
 );
 
+-- =============================================
+-- CORRECTIONS
+-- A client sends changes by email after the order has already been designed.
+-- Those used to live only in somebody's inbox: nobody could say how many were
+-- outstanding, or which designer was sitting on one.
+--
+-- One row per correction, not per order. The same order comes back a second
+-- and a third time, and each round is its own thing with its own date and its
+-- own account of what was changed - collapsing them into one row would lose
+-- exactly the history this is for.
+-- =============================================
+CREATE TABLE IF NOT EXISTS corrections (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id VARCHAR(20) NOT NULL,
+  -- The designer this landed on, by name, because that is how an order carries
+  -- one. Copied at the time it was raised: reassigning the order later must not
+  -- silently move a correction somebody has already done.
+  designer VARCHAR(200) NOT NULL,
+  -- What the client asked for. Optional - whoever raises it may only have the
+  -- order number to hand, and the designer has the mail anyway.
+  client_note TEXT,
+  raised_by VARCHAR(150),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  -- 'pending' until the designer answers, then 'done' or 'delayed'.
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  -- What was actually corrected, or why it was not. One or the other is
+  -- required to leave pending; which one decides the status.
+  work_note TEXT,
+  delay_reason TEXT,
+  closed_at DATETIME DEFAULT NULL,
+
+  INDEX idx_corr_order (order_id),
+  INDEX idx_corr_designer (designer),
+  INDEX idx_corr_status (status)
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR(128) NOT NULL PRIMARY KEY,
   expires INT(11) UNSIGNED NOT NULL,
