@@ -642,6 +642,7 @@ router.get('/dispatch', requireLogin, async (req, res) => {
       // For the dispatch notice: where it goes, and whether it has gone
       // already, so the modal does not offer to send a second one.
       Client_Email: r.dispatch_email || '',
+      Sample_Details: r.sample_details || '',
       Mail_Sent: r.dispatch_mail_sent_at
         ? new Date(r.dispatch_mail_sent_at).toLocaleString('en-GB', IST) : '',
     }));
@@ -662,7 +663,7 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
     }
 
     const { courier, docket, invoiceNo, invoiceAmount, boxes, weight, volWeight,
-            userEmail, clientEmail, sendClientMail } = req.body;
+            userEmail, clientEmail, sendClientMail, sampleDetails } = req.body;
     const orderId = req.params.id;
 
     // The modal no longer asks for a status: entering the courier and saving is
@@ -708,12 +709,12 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
       UPDATE orders SET
         courier = ?, ups_dhl_fedex_tracking_number = ?, status_4 = ?,
         invoice_number = ?, invoice_amount = ?, number_of_boxes = ?,
-        weight = ?, volumetric_weight = ?, dispatch_email = ?,
+        weight = ?, volumetric_weight = ?, dispatch_email = ?, sample_details = ?,
         actual_4 = CASE WHEN ? = 1 THEN COALESCE(actual_4, NOW()) ELSE NULL END,
         dispatch_updated_by = ?
       WHERE order_id = ?
     `, [courier, docket, status, invoiceNo, num(invoiceAmount), num(boxes), weight, volWeight,
-        mailTo || null, gone, userEmail, orderId]);
+        mailTo || null, String(sampleDetails || '').trim() || null, gone, userEmail, orderId]);
 
     // The dispatch notice. Only when the box is ticked - a saved edit to an
     // invoice number must never mail a client again - and only for a parcel
@@ -732,6 +733,7 @@ router.put('/dispatch/:id', requireLogin, async (req, res) => {
         boxes,
         docket,
         courier,
+        samples: String(sampleDetails || '').trim(),
       });
       if (mail.sent) {
         await db.query(

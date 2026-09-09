@@ -95,6 +95,10 @@ const COLUMN_MIGRATIONS = [
   // on an order already emailed - correcting an invoice number a week later
   // must not send a second dispatch notice.
   { table: 'orders', column: 'dispatch_mail_sent_at', type: 'DATETIME NULL' },
+  // What went in the parcel besides the order. Samples travel with a dispatch
+  // often enough that the client should be told in the same mail, and free
+  // text because no two are the same - "2 sample kits, gold foil swatch".
+  { table: 'orders', column: 'sample_details', type: 'TEXT NULL' },
 ];
 
 async function addMissingColumns() {

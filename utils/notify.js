@@ -154,6 +154,9 @@ async function notifyDesignerAssigned(order) {
 
 function dispatchedHtml(o) {
   const boxes = String(o.boxes || '').trim();
+  // Samples often travel with a dispatch, and the client should be told in the
+  // same mail rather than opening the box and wondering.
+  const samples = String(o.samples || '').trim();
   return `
   <div style="background:#f4f5f7;padding:24px 12px;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
     <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #e6e8eb;">
@@ -165,6 +168,10 @@ function dispatchedHtml(o) {
         <p style="margin:0 0 20px;font-size:14px;color:#495057;line-height:1.6;">
           We have dispatched your order${boxes ? ` in <b>${esc(boxes)}</b> ${boxes === '1' ? 'Box' : 'Boxes'}` : ''}.
         </p>
+        ${samples ? `
+        <p style="margin:0 0 20px;font-size:14px;color:#495057;line-height:1.6;">
+          Sent with it: <b>${esc(samples)}</b>
+        </p>` : ''}
         <p style="margin:0 0 8px;font-size:14px;color:#495057;">Here is the tracking number</p>
         <table style="border-collapse:collapse;margin:0 0 4px;">
           <tr>
@@ -184,10 +191,12 @@ function dispatchedHtml(o) {
 
 function dispatchedText(o) {
   const boxes = String(o.boxes || '').trim();
+  const samples = String(o.samples || '').trim();
   return [
     'Hello,',
     '',
     `We have dispatched your order${boxes ? ` in ${boxes} ${boxes === '1' ? 'Box' : 'Boxes'}` : ''}.`,
+    ...(samples ? ['', `Sent with it: ${samples}`] : []),
     '',
     'Here is the tracking number',
     '',
