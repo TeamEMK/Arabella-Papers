@@ -30,13 +30,24 @@
 
   <!-- The step train. Every step, not only yours: the point of seeing it is
        knowing where the work has got to, and a doer who can only see their own
-       square cannot tell whether the step before has even started. -->
+       coach cannot tell whether the one in front has even started. -->
   <div id="fms_stepsWrap" class="d-none">
     <div class="d-flex justify-content-between align-items-center mb-2">
       <h5 class="mb-0 text-dark fw-bold" id="fms_stepsTitle"></h5>
       <span class="text-muted small" id="fms_sheetNote"></span>
     </div>
-    <div class="row g-2 mb-4" id="fms_steps"></div>
+    <div class="fms-train-track">
+      <div class="fms-train-scroll" id="fms_trainInner"></div>
+    </div>
+    <div class="fms-train-speed mb-4">
+      <i class="fas fa-gauge-high"></i>
+      <span>Speed</span>
+      <input type="range" id="fms_speed" min="5" max="60" value="24" oninput="fms_setSpeed(this.value)">
+      <span class="fw-bold" id="fms_speedLabel">24s</span>
+      <button class="btn btn-sm btn-outline-secondary ms-auto" id="fms_pauseBtn" onclick="fms_togglePause()">
+        <i class="fas fa-pause me-1"></i>Pause
+      </button>
+    </div>
   </div>
 
   <!-- The rows of one step -->
@@ -149,32 +160,63 @@ async function fms_openFms(id) {
   } finally { showLoading(false); }
 }
 
-// One card per step. Yours are marked; the count on each is what says where
-// the work has piled up.
+// The train. One coach per step, in order, running along a track - which is
+// what a process is, and reads at a glance in a way a grid of cards does not.
+//
+// The coaches are drawn twice, end to end. The animation slides the strip by
+// exactly half its width, so the second set arrives where the first began and
+// the loop has no seam.
 function fms_drawSteps() {
-  const box = document.getElementById('fms_steps');
-  box.innerHTML = (fms_current.steps || []).map(function (s) {
+  const steps = fms_current.steps || [];
+  const name = (fms_current.sheet.fms_name || fms_current.sheet.sheet_name || '');
+
+  const engine = '<div class="fms-train-engine">'
+    + '<i class="fas fa-train"></i>'
+    + '<div class="fms-engine-name">' + fmsEsc(name.slice(0, 14)) + '</div>'
+    + '</div><div class="fms-coach-link"></div>';
+
+  const coaches = steps.map(function (s, i) {
     const st = s.stats || { pending: 0, done: 0, delayed: 0 };
     const mine = s.isMyStep;
-    const busy = st.pending > 0;
-    const border = st.delayed ? '#dc3545' : (busy ? '#ffc107' : '#198754');
-    return '<div class="col-12 col-sm-6 col-lg-3">'
-      + '<div class="card shadow-sm smooth-ui h-100" style="cursor:pointer;border-left:4px solid ' + border + ';"'
-      + ' onclick="fms_openStep(' + s.id + ')">'
-      + '<div class="card-body p-3">'
-      + '<div class="d-flex justify-content-between align-items-start gap-2">'
-      + '<div class="text-muted small">Step ' + s.step_order + '</div>'
-      + (mine ? '<span class="badge bg-primary">mine</span>' : '')
+    // Colour says the state of the work, not whose it is: red where something
+    // is late, amber where something waits, green where nothing does.
+    const state = st.delayed ? 'late' : (st.pending ? 'busy' : 'clear');
+    return '<div class="fms-coach ' + (mine ? 'mine' : 'not-mine') + ' ' + state + '"'
+      + (mine ? ' onclick="fms_openStep(' + s.id + ')" title="Open the rows on this step"'
+              : ' title="Not your step"')
+      + ' data-step="' + s.id + '">'
+      +   '<div class="fms-coach-num">Step ' + s.step_order + (mine ? ' &middot; yours' : '') + '</div>'
+      +   '<div class="fms-coach-name">' + fmsEsc(s.step_name) + '</div>'
+      +   '<div class="fms-coach-counts">'
+      +     '<span class="' + (st.pending ? 'to-do' : '') + '">' + st.pending + ' to do</span>'
+      +     '<span class="done">' + st.done + ' done</span>'
+      +     (st.delayed ? '<span class="late">' + st.delayed + ' late</span>' : '')
+      +   '</div>'
+      +   '<div class="fms-coach-doers">' + (s.doerNames ? fmsEsc(s.doerNames) : 'nobody assigned') + '</div>'
       + '</div>'
-      + '<div class="fw-bold text-dark" style="line-height:1.25;">' + fmsEsc(s.step_name) + '</div>'
-      + '<div class="mt-2 d-flex gap-3 small">'
-      + '<span class="fw-bold ' + (busy ? 'text-warning' : 'text-muted') + '">' + st.pending + ' to do</span>'
-      + '<span class="text-success">' + st.done + ' done</span>'
-      + (st.delayed ? '<span class="text-danger fw-bold">' + st.delayed + ' late</span>' : '')
-      + '</div>'
-      + (s.doerNames ? '<div class="text-muted mt-2" style="font-size:.72rem;">' + fmsEsc(s.doerNames) + '</div>' : '')
-      + '</div></div></div>';
+      + (i < steps.length - 1 ? '<div class="fms-coach-link"></div>' : '');
   }).join('');
+
+  const half = engine + coaches + '<div class="fms-coach-gap"></div>';
+  document.getElementById('fms_trainInner').innerHTML = half + half;
+  fms_setSpeed(document.getElementById('fms_speed').value);
+}
+
+// Longer bar, slower train. The label says the seconds, so the number means
+// something rather than being a position on a slider.
+function fms_setSpeed(v) {
+  const secs = Number(v) || 24;
+  document.getElementById('fms_speedLabel').textContent = secs + 's';
+  document.getElementById('fms_trainInner').style.setProperty('--train-dur', secs + 's');
+}
+
+var fms_paused = false;
+function fms_togglePause() {
+  fms_paused = !fms_paused;
+  document.getElementById('fms_trainInner').style.animationPlayState = fms_paused ? 'paused' : 'running';
+  document.getElementById('fms_pauseBtn').innerHTML = fms_paused
+    ? '<i class="fas fa-play me-1"></i>Run'
+    : '<i class="fas fa-pause me-1"></i>Pause';
 }
 
 async function fms_openStep(stepId) {
@@ -197,6 +239,10 @@ async function fms_showRows(done) {
     if (!j.success) { showToast('error', j.error); return; }
     fms_rows = j.data.rows || [];
     document.getElementById('fms_rowsTitle').textContent = fms_step.step_name;
+    // Both copies of the coach, since the strip is drawn twice.
+    [...document.querySelectorAll('.fms-coach')].forEach(function (el) {
+      el.classList.toggle('active', Number(el.dataset.step) === fms_step.id);
+    });
     document.getElementById('fms_rowsCard').classList.remove('d-none');
     fms_drawRows(j.data.showHeaders || []);
   } finally { showLoading(false); }
@@ -264,7 +310,7 @@ function fms_openDone(i) {
       // The cell holds a link, so the file goes to Drive first and the link is
       // what gets written. Uploaded on pick rather than on submit, so a slow
       // upload does not look like a slow save.
-      input = '<input type="file" id="' + id + '" class="form-control" onchange="fms_upload(this, '' + id + '')">'
+      input = '<input type="file" id="' + id + '" class="form-control" onchange="fms_upload(this, &quot;' + id + '&quot;)">'
         + '<div class="form-text" id="' + id + '_note"></div>';
     } else {
       input = '<input type="text" id="' + id + '" class="form-control">';

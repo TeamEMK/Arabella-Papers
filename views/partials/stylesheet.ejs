@@ -78,6 +78,79 @@
   .side-link.active { background: rgba(255,204,0,0.14); color: #ffcc00; font-weight: 600; box-shadow: inset 3px 0 0 #ffcc00; }
   .side-icon { flex: 0 0 20px; width: 20px; text-align: center; font-size: 16px; }
   .side-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── FMS step train ──────────────────────────────────────────────
+     One coach per step, running along a track. A process is a line of
+     things in order, and this reads as one; a grid of cards does not.
+     The strip is drawn twice and slid by exactly half its width, so the
+     second set arrives where the first began and the loop has no seam. */
+  .fms-train-track { position: relative; background: #1b2431; border-radius: 14px;
+    padding: 22px 0 38px; overflow: hidden; }
+  /* the rail, and the sleepers under it */
+  .fms-train-track::before { content: ''; position: absolute; left: 0; right: 0; bottom: 26px;
+    height: 4px; background: #4a5a70; border-radius: 2px; }
+  .fms-train-track::after { content: ''; position: absolute; left: 0; right: 0; bottom: 20px;
+    height: 10px; opacity: .45;
+    background: repeating-linear-gradient(90deg, #33415580 0 28px, transparent 28px 48px); }
+
+  .fms-train-scroll { display: flex; align-items: flex-end; gap: 6px; width: max-content;
+    padding: 0 24px 16px; animation: fmsTrain var(--train-dur, 24s) linear infinite; }
+  /* Hovering stops it, so reading a coach does not mean chasing it. */
+  .fms-train-scroll:hover { animation-play-state: paused !important; }
+  @keyframes fmsTrain { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+  .fms-train-engine { flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
+    gap: 4px; min-width: 86px; padding: 14px 16px; color: #fff; font-size: 22px;
+    background: linear-gradient(135deg, #2b3a4f, #1b2431);
+    border: 2px solid #ffc107; border-radius: 12px 4px 4px 12px; position: relative; }
+  .fms-engine-name { font-size: 9px; opacity: .75; text-align: center; word-break: break-word;
+    line-height: 1.2; max-width: 74px; }
+
+  .fms-coach { flex-shrink: 0; position: relative; min-width: 172px; max-width: 210px;
+    padding: 11px 13px; border-radius: 9px; color: #fff; background: #2b3a4f;
+    border: 2px solid transparent; display: flex; flex-direction: column; gap: 3px;
+    transition: transform .18s, box-shadow .18s; }
+  /* The wheels. Purely for the look, and cheap: two characters per coach. */
+  .fms-train-engine::before, .fms-coach::before,
+  .fms-train-engine::after, .fms-coach::after {
+    content: ''; position: absolute; bottom: -9px; width: 9px; height: 9px;
+    border-radius: 50%; background: #64748b; }
+  .fms-train-engine::before, .fms-coach::before { left: 14px; }
+  .fms-train-engine::after, .fms-coach::after { right: 14px; }
+
+  /* Whose step it is decides whether it can be opened. */
+  .fms-coach.mine { cursor: pointer; }
+  .fms-coach.mine:hover { transform: translateY(-5px); box-shadow: 0 10px 24px rgba(0,0,0,.45); }
+  .fms-coach.not-mine { opacity: .5; cursor: default; }
+  .fms-coach.active { border-color: #ffc107; box-shadow: 0 0 0 3px rgba(255,193,7,.25); transform: translateY(-5px); }
+  /* The state of the work, as a stripe down the leading edge. */
+  .fms-coach.busy  { border-left-color: #ffc107; }
+  .fms-coach.late  { border-left-color: #dc3545; }
+  .fms-coach.clear { border-left-color: #198754; }
+
+  .fms-coach-num { font-size: 9.5px; font-weight: 700; letter-spacing: .5px;
+    text-transform: uppercase; opacity: .65; }
+  .fms-coach-name { font-size: 12px; font-weight: 700; line-height: 1.25; word-break: break-word; }
+  .fms-coach-counts { display: flex; gap: 8px; font-size: 10px; margin-top: 2px; }
+  .fms-coach-counts .to-do { color: #ffc107; font-weight: 700; }
+  .fms-coach-counts .done { color: #6ee7b7; }
+  .fms-coach-counts .late { color: #fca5a5; font-weight: 700; }
+  .fms-coach-doers { font-size: 9.5px; opacity: .6; word-break: break-word; }
+
+  .fms-coach-link { flex-shrink: 0; width: 18px; height: 7px; margin-bottom: 15px;
+    background: #4a5a70; border-radius: 2px; align-self: flex-end; }
+  /* The break between the end of one set of coaches and the start of the next. */
+  .fms-coach-gap { flex-shrink: 0; width: 90px; }
+
+  .fms-train-speed { display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+    background: #eef1f5; border-radius: 0 0 12px 12px; font-size: 12px; color: #6c757d; }
+  .fms-train-speed input[type=range] { width: 150px; accent-color: #ffc107; }
+
+  @media (max-width: 576px) {
+    .fms-coach { min-width: 150px; }
+    .fms-train-speed input[type=range] { width: 90px; }
+  }
+
   /* The heading over each block of tabs. Quiet on purpose: it is there to
      break the column up, not to be read. */
   .side-group { padding: 10px 12px 2px; }
