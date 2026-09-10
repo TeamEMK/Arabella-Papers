@@ -74,6 +74,7 @@ document.getElementById('tillApprovalRoot').innerHTML = `
   <div class="modal-dialog"><div class="modal-content">
     <div class="modal-header bg-warning text-dark"><h5 class="modal-title">Final Client Approval: <span id="ta_editId"></span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
+      <div class="alert alert-warning py-2 px-3 small d-none" id="ta_dispatchNote"></div>
       <div class="mb-3">
         <label class="form-label text-dark fw-bold">Client Approval Status*</label>
         <div class="form-check mb-1"><input class="form-check-input" type="radio" name="ta_approvalStatus" id="ta_st_proofing" value="Proofing Done" checked><label class="form-check-label text-info fw-bold" for="ta_st_proofing">Proofing Done</label></div>
@@ -247,6 +248,32 @@ async function ta_openView(orderId) {
   }
   body.innerHTML = html + '</div>';
 }
+// The statuses that take an order off the dispatch board, kept in step with
+// SEND_BACK_STATUSES on the server.
+var TA_SENDS_BACK = ['Reprint', 'Reorder', 'Sample', 'Final Approval For Production'];
+
+/**
+ * Warn before an approval pulls an order off the dispatch board.
+ *
+ * Nearly every dispatched order already carries "Final Approval For
+ * Production", so somebody opening this box on a finished order to attach a
+ * file or fix a remark would move it back to Production without meaning to.
+ * The notice only appears when both halves are true - the order has gone out,
+ * and the chosen status is one that moves it - so it says something every time
+ * it is on screen.
+ */
+function ta_syncDispatchNotice() {
+  const note = document.getElementById('ta_dispatchNote');
+  if(!note) return;
+  const o = ta_data.find(x => x.ID.toString() === String(ta_editId||''));
+  const status = document.querySelector('input[name="ta_approvalStatus"]:checked')?.value || '';
+  if(!o || !o.Dispatched || !TA_SENDS_BACK.includes(status)) { note.classList.add('d-none'); return; }
+  note.innerHTML = '<i class="fas fa-truck me-1"></i>This order has already '
+    + (o.Dispatch_Date ? 'been dispatched on <b>' + o.Dispatch_Date + '</b>' : 'gone to Dispatch')
+    + '. Saving this will take it off the Dispatch board and put it back on Production.';
+  note.classList.remove('d-none');
+}
+
 function ta_openEdit(id) {
   ta_editId = id;
   const o = ta_data.find(x => x.ID.toString() === id.toString());
@@ -255,6 +282,8 @@ function ta_openEdit(id) {
   document.getElementById(s.includes('final')?'ta_st_final':s.includes('mod')?'ta_st_mod':s.includes('reorder')?'ta_st_reorder':s.includes('reprint')?'ta_st_reprint':s.includes('sample')?'ta_st_sample':s.includes('cancel')?'ta_st_cancel':'ta_st_proofing').checked = true;
   document.getElementById('ta_remark').value = '';
   document.getElementById('ta_fileUpload').value = '';
+  document.querySelectorAll('input[name="ta_approvalStatus"]').forEach(r => { r.onchange = ta_syncDispatchNotice; });
+  ta_syncDispatchNotice();
   new bootstrap.Modal(document.getElementById('ta_editModal')).show();
 }
 async function taHandleApprovalSubmit() {
@@ -272,7 +301,13 @@ async function taHandleApprovalSubmit() {
     const res = await fetch(`/api/dashboards/till-approval/${ta_editId}`, {method:'PUT', body:formData});
     const json = await res.json();
     showLoading(false);
-    if(json.success) { bootstrap.Modal.getInstance(document.getElementById('ta_editModal')).hide(); showToast('success',`Updated to: ${approvalStatus}`); fetchApprovalData(); }
+    if(json.success) {
+      bootstrap.Modal.getInstance(document.getElementById('ta_editModal')).hide();
+      showToast('success', json.sentBack
+        ? `${approvalStatus} - back on the Production board`
+        : `Updated to: ${approvalStatus}`);
+      fetchApprovalData();
+    }
     else showToast('error', json.error);
   } catch(e) { showLoading(false); showToast('error','Server error.'); }
 }
@@ -282,8 +317,13 @@ function openBulkApprovalModal() {
   if(!ta_selected.size) { showToast('warning','Select at least one order.'); return; }
   const tbody = document.getElementById('ta_bulkBody'); tbody.innerHTML = '';
   ta_selected.forEach(id => {
+    // Same warning as the single box, in the only room this one has for it.
+    const o = ta_data.find(x => x.ID.toString() === id.toString());
+    const gone = o && o.Dispatched
+      ? `<div class="badge bg-warning text-dark mt-1" title="An approval here brings it back to Production">Dispatched${o.Dispatch_Date ? ' ' + o.Dispatch_Date : ''}</div>`
+      : '';
     tbody.insertAdjacentHTML('beforeend',`<tr class="ta_bulk_row" data-id="${id}">
-      <td class="fw-bold">${id}</td>
+      <td class="fw-bold">${id}${gone}</td>
       <td><select class="form-select form-select-sm ta_bulk_status">
         <option value="Proofing Done">Proofing Done</option>
         <option value="Final Approval For Production" selected>Final Approval For Production</option>
@@ -308,7 +348,14 @@ async function taSubmitBulk() {
     const res = await fetch('/api/dashboards/till-approval/bulk', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates})});
     const json = await res.json();
     btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i> Update All';
-    if(json.success) { ta_selected.clear(); const mc = document.getElementById('ta_selectAll'); if(mc) mc.checked = false; bootstrap.Modal.getInstance(document.getElementById('ta_bulkModal')).hide(); showToast('success',`Updated ${json.count} orders.`); fetchApprovalData(); }
+    if(json.success) {
+      ta_selected.clear();
+      const mc = document.getElementById('ta_selectAll'); if(mc) mc.checked = false;
+      bootstrap.Modal.getInstance(document.getElementById('ta_bulkModal')).hide();
+      showToast('success', `Updated ${json.count} orders.`
+        + (json.sentBack ? ` ${json.sentBack} back on Production.` : ''));
+      fetchApprovalData();
+    }
     else showToast('error', json.error);
   } catch(e) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i> Update All'; showToast('error','Server error.'); }
 }

@@ -118,9 +118,16 @@ const REACHED_PRODUCTION = `(
   OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
 )`;
 
-// Client approvals that mean the job is to be made again. An order carrying
-// one of these is production's work afresh, however far it got last time.
-const REMAKE_STATUSES = ['Reprint', 'Reorder', 'Sample'];
+// Client approvals that take an order which has already gone out back to the
+// floor. The first three say "make it again" outright.
+//
+// The fourth is the ordinary approval, and it is here because approving an
+// order that shipped weeks ago is the client asking for it afresh. K-159343
+// went out on 01/09 and was approved for production again on 10/09; it stayed
+// on the dispatch board marked Dispatched, and nobody on the floor was ever
+// told to make it. Nothing happens to an order that has not been dispatched
+// yet, which is almost every order this status is ever given to.
+const SEND_BACK_STATUSES = ['Reprint', 'Reorder', 'Sample', 'Final Approval For Production'];
 
 // An order nobody is going to make: cancelled, or rejected by the client.
 const DEAD_ORDER = `(
@@ -152,6 +159,29 @@ const PRODUCTION_QUEUE_WHERE = `
   AND ${REACHED_PRODUCTION}
 `;
 
+/**
+ * The dispatch columns to clear when an approval sends an order back.
+ *
+ * Clearing them is what moves it: the production board asks for orders that
+ * have not left for dispatch, so an order with those columns blank is in the
+ * queue again. The delivery that already happened stays in the change log, and
+ * the courier and docket stay on the row until a new parcel overwrites them.
+ *
+ * Returns null when there is nothing to move - the status is not one of these,
+ * or the order never went out in the first place. Three routes set an approval
+ * and all three ask this, or the board an order lands on would depend on which
+ * screen it was approved from.
+ */
+async function sendBackColumns(orderId, status) {
+  if (!SEND_BACK_STATUSES.includes(String(status || '').trim())) return null;
+  const [[before]] = await db.query(
+    'SELECT status_4, actual_4 FROM orders WHERE order_id = ? LIMIT 1',
+    [orderId],
+  );
+  if (!before || !(before.status_4 || before.actual_4)) return null;
+  return { status_4: null, actual_4: null, dispatch_ready_at: null, dispatch_board: null };
+}
+
 router.get('/till-approval', requireLogin, async (req, res) => {
   try {
     if (!(await canSee(req.session.user, 'tillApproval'))) {
@@ -181,6 +211,11 @@ router.get('/till-approval', requireLogin, async (req, res) => {
       Dealer_name: r.dealer_name,
       Client_name: r.client_name,
       Design_Approval_Status_From_Client: r.design_approval_status_from_client || '',
+      // Whether this one has already left for Dispatch. The approval box uses
+      // it to say so before saving, since an approval here would pull the order
+      // off the dispatch board and that is not obvious from this screen.
+      Dispatched: !!(r.status_4 || r.actual_4),
+      Dispatch_Date: r.actual_4 ? new Date(r.actual_4).toLocaleDateString('en-GB', IST) : '',
       // rowData ab on-demand aata hai (GET /api/dashboards/order-details/:id)
     }));
 
@@ -215,26 +250,13 @@ router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req
     if (fileUrl) updates.approved_design = fileUrl;
     if (approvalStatus === 'Rejected') updates.design_status = 'Rejected';
 
-    // A reprint on an order that has already gone out is a new job on an old
+    // An approval on an order that has already gone out is a new job on an old
     // row: it has to leave Dispatch and go back to the floor, or it sits on the
-    // dispatch board marked Delivered while somebody is expected to make it
-    // again. Clearing the dispatch columns is what moves it - the previous
-    // delivery is in the change log, and the courier and docket stay on the
-    // row until the new parcel overwrites them.
-    let sentBack = false;
-    if (REMAKE_STATUSES.includes((approvalStatus || '').trim())) {
-      const [[before]] = await db.query(
-        'SELECT status_4, actual_4 FROM orders WHERE order_id = ? LIMIT 1',
-        [orderId]
-      );
-      if (before && (before.status_4 || before.actual_4)) {
-        updates.status_4 = null;
-        updates.actual_4 = null;
-        updates.dispatch_ready_at = null;
-        updates.dispatch_board = null;
-        sentBack = true;
-      }
-    }
+    // dispatch board marked Dispatched while somebody is expected to make it
+    // again.
+    const back = await sendBackColumns(orderId, approvalStatus);
+    const sentBack = !!back;
+    if (back) Object.assign(updates, back);
 
     await logOrderUpdate(orderId, updates, req.session.user || userEmail);
     if (sentBack) {
@@ -252,7 +274,7 @@ router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req
     // The round the client just answered, kept whatever they answer next.
     await logApproval(orderId, approvalStatus, approvedAt, req.session.user || userEmail);
 
-    res.json({ success: true });
+    res.json({ success: true, sentBack });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
@@ -266,16 +288,17 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
     if (!Array.isArray(updates)) return res.json({ success: false, error: 'Invalid data' });
 
     let count = 0;
+    let sentBack = 0;
     for (const u of updates) {
       await logOrderUpdate(u.id, {
         design_approval_status_from_client: u.status,
         remarks: u.remark,
       }, req.session.user || u.userEmail);
 
-      // Same rule as the single update: a reprint on an order that has already
-      // gone out sends it back to the floor, or it sits on Dispatch marked
-      // Delivered with somebody waiting to make it again.
-      const remake = REMAKE_STATUSES.includes((u.status || '').trim());
+      // Same rule as the single update and through the same helper: approving
+      // an order that has already gone out sends it back to the floor, or it
+      // sits on Dispatch marked Dispatched with somebody waiting to make it.
+      const back = await sendBackColumns(u.id, u.status);
       const approvedAt = new Date();
       await db.query(`
         UPDATE orders SET
@@ -283,13 +306,22 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
           remarks = ?,
           actual_2 = ?,
           approval_updated_by = ?
-          ${remake ? ', status_4 = NULL, actual_4 = NULL, dispatch_ready_at = NULL, dispatch_board = NULL' : ''}
+          ${back ? ', status_4 = NULL, actual_4 = NULL, dispatch_ready_at = NULL, dispatch_board = NULL' : ''}
         WHERE order_id = ?
       `, [u.status, u.remark, approvedAt, u.userEmail, u.id]);
+      if (back) {
+        await logOrderEvent(
+          u.id,
+          'Back to Production',
+          `Marked ${u.status} after dispatch`,
+          req.session.user || u.userEmail,
+        );
+        sentBack++;
+      }
       await logApproval(u.id, u.status, approvedAt, req.session.user || u.userEmail);
       count++;
     }
-    res.json({ success: true, count });
+    res.json({ success: true, count, sentBack });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -959,14 +991,23 @@ router.put('/quick/:id', requireLogin, async (req, res) => {
       return res.json({ success: false, error: 'Nothing to update.' });
     }
 
+    // The same send-back the other two approval routes do. Analytics sets the
+    // approval on orders that are already finished more often than Till
+    // Approval does, so leaving it out here is exactly where the gap would show.
+    const back = quickApproval ? await sendBackColumns(orderId, quickApproval) : null;
+    if (back) Object.assign(updates, back);
+
     await logOrderUpdate(orderId, updates, user);
 
     const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
 
+    if (back) {
+      await logOrderEvent(orderId, 'Back to Production', `Marked ${quickApproval} after dispatch`, user);
+    }
     if (quickApproval) await logApproval(orderId, quickApproval, now, user);
 
-    res.json({ success: true });
+    res.json({ success: true, sentBack: !!back });
   } catch (err) {
     console.error('Quick update failed:', err);
     res.status(500).json({ success: false, error: err.message });
