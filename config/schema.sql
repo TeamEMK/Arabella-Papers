@@ -386,6 +386,25 @@ CREATE TABLE IF NOT EXISTS corrections (
   INDEX idx_corr_status (status)
 );
 
+-- =============================================
+-- GNA DESIGNERS
+-- A short list of people a correction can be handed to instead of whoever the
+-- order says designed it. GNA work comes back for changes through a different
+-- set of hands, and the order's own designer is sometimes somebody with no
+-- login at all - Naman is on 26 orders and has never signed in, so a
+-- correction sent his way would simply sit there.
+--
+-- Names, not user ids: a correction stores the designer by name, because that
+-- is how an order carries one.
+-- =============================================
+CREATE TABLE IF NOT EXISTS gna_designers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  added_by VARCHAR(150),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_gna_name (name)
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR(128) NOT NULL PRIMARY KEY,
   expires INT(11) UNSIGNED NOT NULL,

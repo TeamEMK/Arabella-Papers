@@ -113,6 +113,24 @@ async function addMissingColumns() {
   return added;
 }
 
+/**
+ * The three names the office gave for the GNA list, put in once.
+ *
+ * Only when the table is empty. Seeding on every boot would undo a deletion
+ * the next time the app restarted, which is a worse bug than an empty list.
+ */
+const GNA_SEED = ['Ram Chandra Sharma', 'Dinesh', 'Rakesh'];
+
+async function seedGnaDesigners() {
+  const [[row]] = await db.query('SELECT COUNT(*) AS c FROM gna_designers');
+  if (row.c) return 0;
+  await db.query(
+    `INSERT INTO gna_designers (name, added_by) VALUES ${GNA_SEED.map(() => '(?, ?)').join(', ')}`,
+    GNA_SEED.flatMap(n => [n, 'setup']),
+  );
+  return GNA_SEED.length;
+}
+
 async function run() {
   const [existing] = await db.query("SHOW TABLES LIKE 'users'");
   const created = !existing.length;
@@ -131,7 +149,8 @@ async function run() {
   // Checked even when the tables already exist, so a database that lost its
   // users can still be recovered by setting ADMIN_PASSWORD and restarting.
   const admin = await seedAdmin();
-  return { created, admin, columns };
+  const gna = await seedGnaDesigners();
+  return { created, admin, columns, gna };
 }
 
 let ready = null;

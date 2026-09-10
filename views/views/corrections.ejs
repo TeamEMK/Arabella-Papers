@@ -131,6 +131,17 @@
         </div>
       </div>
 
+      <!-- GNA work comes back through a different set of hands, so a correction
+           can be handed to one of them whatever the order says. It is also the
+           way round an order whose designer has no login - Naman is on 26 of
+           them and has never signed in. -->
+      <div class="mb-3">
+        <label class="form-label fw-bold text-dark">GNA Designers
+          <span class="fw-normal text-muted">— hand it to one of these instead</span></label>
+        <select id="cr_gna" class="form-select" onchange="cr_gnaPicked()"></select>
+        <div class="form-text" id="cr_gnaHint">Leave it to send the correction to the order's own designer.</div>
+      </div>
+
       <div class="mb-2">
         <label class="form-label fw-bold text-dark">What the client asked for <span class="fw-normal text-muted">(optional)</span></label>
         <textarea id="cr_clientNote" class="form-control" rows="3" placeholder="Paste or summarise the client's mail — or leave it, the designer has the mail."></textarea>
@@ -181,6 +192,7 @@ var cr_canRaise = false;
 var cr_filter = 'pending';    // opens on the ones that need doing
 var cr_users = [];
 var cr_lookupTimer = null;
+var cr_gna = [];              // the GNA designers, for the dropdown
 var cr_found = null;          // the order the number resolved to
 var cr_doing = null;          // the correction being answered
 
@@ -314,11 +326,85 @@ function cr_render() {
   }).join('');
 }
 
+// ── The GNA list ──
+async function cr_loadGna() {
+  try {
+    const res = await fetch('/api/corrections/gna');
+    const j = await res.json();
+    cr_gna = j.success ? (j.data || []) : [];
+  } catch (e) { cr_gna = []; }
+  cr_drawGna();
+}
+
+function cr_drawGna(selected) {
+  document.getElementById('cr_gna').innerHTML =
+    '<option value="">— the order\'s own designer —</option>'
+    + cr_gna.map(g => '<option' + (g.name === selected ? ' selected' : '') + '>' + crEsc(g.name) + '</option>').join('')
+    + '<option value="__add">+ Add more…</option>';
+}
+
+/**
+ * Picking a GNA designer sends the correction to them instead of whoever the
+ * order is credited to. Said out loud on the screen, because quietly rerouting
+ * somebody's work is how a correction goes missing.
+ */
+function cr_gnaPicked() {
+  const sel = document.getElementById('cr_gna');
+  const hint = document.getElementById('cr_gnaHint');
+
+  if (sel.value === '__add') { sel.value = ''; cr_addGna(); return; }
+
+  if (!sel.value) {
+    hint.textContent = "Leave it to send the correction to the order's own designer.";
+    return;
+  }
+  const onOrder = cr_found && cr_found.designer;
+  hint.innerHTML = (onOrder && onOrder !== sel.value)
+    ? 'Goes to <b>' + crEsc(sel.value) + '</b> instead of <b>' + crEsc(onOrder) + '</b>.'
+    : 'Goes to <b>' + crEsc(sel.value) + '</b>.';
+}
+
+// Anyone with a login can be added. The list is short and hand-kept on purpose
+// — it is who does GNA corrections, not a role the app can work out.
+async function cr_addGna() {
+  const already = new Set(cr_gna.map(g => g.name.toLowerCase()));
+  const choices = cr_users.filter(u => !already.has(u.toLowerCase()));
+  if (!choices.length) { showToast('info', 'Everybody is already on the list.'); return; }
+
+  const picked = await Swal.fire({
+    title: 'Add to GNA Designers',
+    input: 'select',
+    inputOptions: Object.fromEntries(choices.map(u => [u, u])),
+    inputPlaceholder: 'Pick a person',
+    showCancelButton: true,
+    confirmButtonText: 'Add',
+  });
+  if (!picked.isConfirmed || !picked.value) return;
+
+  showLoading(true);
+  try {
+    const res = await fetch('/api/corrections/gna', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: picked.value }),
+    });
+    const j = await res.json();
+    showLoading(false);
+    if (!j.success) { showToast('error', j.error); return; }
+    await cr_loadGna();
+    cr_drawGna(picked.value);
+    cr_gnaPicked();
+    showToast('success', picked.value + ' added.');
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
 // ── Raising one ──
 function cr_openRaise() {
   cr_found = null;
   document.getElementById('cr_orderId').value = '';
   document.getElementById('cr_clientNote').value = '';
+  cr_drawGna();
+  document.getElementById('cr_gnaHint').textContent =
+    "Leave it to send the correction to the order's own designer.";
   document.getElementById('cr_found').classList.add('d-none');
   document.getElementById('cr_pickWrap').classList.add('d-none');
   document.getElementById('cr_priorWrap').classList.add('d-none');
@@ -380,6 +466,7 @@ async function cr_lookup() {
         + cr_users.map(u => '<option>' + crEsc(u) + '</option>').join('');
     }
     document.getElementById('cr_saveBtn').disabled = false;
+    cr_gnaPicked();          // the hint can now name the order's own designer
   } catch (e) {
     document.getElementById('cr_lookup').innerHTML = '<span class="text-danger">Server error.</span>';
   }
@@ -387,7 +474,11 @@ async function cr_lookup() {
 
 async function cr_save() {
   if (!cr_found) return;
-  const designer = cr_found.designer || document.getElementById('cr_pickDesigner').value;
+  // A GNA designer wins over the name on the order; the picker below only
+  // appears when the order carries no name at all.
+  const designer = document.getElementById('cr_gna').value
+    || cr_found.designer
+    || document.getElementById('cr_pickDesigner').value;
   if (!designer) { showToast('warning', 'Pick who this correction is for.'); return; }
   showLoading(true);
   try {
@@ -494,6 +585,7 @@ async function cr_remove(id) {
 
 (async () => {
   await cr_load();
+  await cr_loadGna();
   // Only needed for an order that carries no designer, and only a raiser sees
   // that box at all.
   if (cr_canRaise) {

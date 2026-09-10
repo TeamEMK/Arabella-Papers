@@ -54,6 +54,60 @@ const SELECT = `
     LEFT JOIN orders o ON o.order_id = c.order_id
 `;
 
+// ── GNA designers ──
+// The short list a correction can be handed to instead of the order's own
+// designer. Registered before /order/:id and /:id so "gna" is never read as
+// one of those.
+
+// GET /api/corrections/gna — the list, for the dropdown.
+router.get('/gna', requireLogin, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT id, name FROM gna_designers ORDER BY name');
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('GNA list failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/corrections/gna — add a name to it.
+router.post('/gna', requireLogin, async (req, res) => {
+  try {
+    if (!canRaise(req.session.user)) {
+      return res.status(403).json({ success: false, error: 'Only a SuperAdmin can change this list.' });
+    }
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.status(400).json({ success: false, error: 'Pick a name.' });
+
+    const existing = await one(
+      'SELECT id FROM gna_designers WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1', [name]);
+    if (existing) return res.json({ success: true, id: existing.id, already: true });
+
+    const [ins] = await db.query(
+      'INSERT INTO gna_designers (name, added_by) VALUES (?, ?)',
+      [name, req.session.user.username || req.session.user.email || '']);
+    res.json({ success: true, id: ins.insertId });
+  } catch (err) {
+    console.error('GNA add failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/corrections/gna/:id — take one off the list. Corrections already
+// sent to that person are untouched: they are still theirs to answer.
+router.delete('/gna/:id', requireLogin, async (req, res) => {
+  try {
+    if (!canRaise(req.session.user)) {
+      return res.status(403).json({ success: false, error: 'Only a SuperAdmin can change this list.' });
+    }
+    await db.query('DELETE FROM gna_designers WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('GNA delete failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 /**
  * GET /api/corrections/order/:id — who this order belongs to.
  *
@@ -170,9 +224,13 @@ router.post('/', requireLogin, async (req, res) => {
     );
     if (!order) return res.status(404).json({ success: false, error: 'No order with that number.' });
 
-    // The name on the order, unless the order has none and one was picked by
-    // hand. Copied rather than looked up later: reassigning the order next
-    // month must not move a correction somebody has already answered.
+    // Whoever was picked, else the name on the order. A GNA correction goes to
+    // one of the GNA designers however the order is credited - and the order's
+    // own designer is sometimes somebody with no login, which is a correction
+    // nobody would ever see.
+    //
+    // Copied rather than looked up later: reassigning the order next month must
+    // not move a correction somebody has already answered.
     const designer = String(req.body.designer || order.india_designer || order.overseas_designer || '').trim();
     if (!designer) {
       return res.status(400).json({
