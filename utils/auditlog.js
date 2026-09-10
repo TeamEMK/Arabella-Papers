@@ -117,17 +117,32 @@ async function logOrderEvent(orderId, action, detail, user) {
  * holding only the ones somebody remembered to add. Never throws: an approval
  * must be saved whether or not its history row was.
  *
- * The same status on the same second is ignored by the unique key, so a save
- * that only changed a remark does not add a round.
+ * One round per answer, and an answer is a status on a day - not a save. The
+ * same status entered again the same day is the same answer being corrected or
+ * re-entered, so it moves the existing round's time rather than adding a
+ * second one. K-159343 collected two rounds fifty minutes apart on 10/09 and
+ * the board printed the same date twice, which tells a reader nothing.
+ *
+ * The unique key cannot express this on its own - it sees the whole timestamp,
+ * so two saves in one day are two different keys - which is why the day is
+ * matched here instead.
  */
 async function logApproval(orderId, status, when, user) {
   const value = String(status || '').trim();
   if (!orderId || !value) return;
+  const at = when || new Date();
   try {
+    const [res] = await db.query(
+      `UPDATE order_approvals SET approved_at = ?, approved_by = ?
+        WHERE order_id = ? AND status = ? AND DATE(approved_at) = DATE(?)`,
+      [at, actor(user), orderId, value, at],
+    );
+    if (res.affectedRows) return;
+
     await db.query(
       `INSERT IGNORE INTO order_approvals (order_id, status, approved_at, approved_by)
        VALUES (?, ?, ?, ?)`,
-      [orderId, value, when || new Date(), actor(user)],
+      [orderId, value, at, actor(user)],
     );
   } catch (err) {
     console.error(`[approvals] ${orderId}: could not record "${value}":`, err.message);

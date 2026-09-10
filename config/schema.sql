@@ -427,8 +427,9 @@ CREATE TABLE IF NOT EXISTS order_approvals (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_appr_order (order_id),
   INDEX idx_appr_when (approved_at),
-  -- The same answer twice on the same day is one answer, not two: a save that
-  -- changed a remark and nothing else must not add a round.
+  -- Guards the exact repeat only. The same answer twice on the same day is one
+  -- answer and not two, but the key sees the whole timestamp and two saves an
+  -- hour apart are two different keys - logApproval() matches on the day.
   UNIQUE KEY uq_appr_day (order_id, status, approved_at)
 );
 
