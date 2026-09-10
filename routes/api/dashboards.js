@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
 const { uploadToDrive } = require('../../utils/drive');
-const { logOrderUpdate, logOrderEvent } = require('../../utils/auditlog');
+const { logOrderUpdate, logOrderEvent, logApproval } = require('../../utils/auditlog');
 const { notifyClientDispatched } = require('../../utils/notify');
 const { requireLogin } = require('../../middleware/auth');
 // The board a request is asking for is the same thing the side panel decides
@@ -202,9 +202,12 @@ router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req
       fileUrl = await uploadToDrive(req.file.buffer, req.file.originalname, req.file.mimetype);
     }
 
+    // One moment, used for the column and for the history row, so the two can
+    // never sit a second apart and read as different events.
+    const approvedAt = new Date();
     const updates = {
       design_approval_status_from_client: approvalStatus,
-      actual_2: new Date(),
+      actual_2: approvedAt,
       approval_updated_by: userEmail,
       remarks: remark,
     };
@@ -246,6 +249,9 @@ router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req
     const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
 
+    // The round the client just answered, kept whatever they answer next.
+    await logApproval(orderId, approvalStatus, approvedAt, req.session.user || userEmail);
+
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -270,15 +276,17 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
       // gone out sends it back to the floor, or it sits on Dispatch marked
       // Delivered with somebody waiting to make it again.
       const remake = REMAKE_STATUSES.includes((u.status || '').trim());
+      const approvedAt = new Date();
       await db.query(`
         UPDATE orders SET
           design_approval_status_from_client = ?,
           remarks = ?,
-          actual_2 = NOW(),
+          actual_2 = ?,
           approval_updated_by = ?
           ${remake ? ', status_4 = NULL, actual_4 = NULL, dispatch_ready_at = NULL, dispatch_board = NULL' : ''}
         WHERE order_id = ?
-      `, [u.status, u.remark, u.userEmail, u.id]);
+      `, [u.status, u.remark, approvedAt, u.userEmail, u.id]);
+      await logApproval(u.id, u.status, approvedAt, req.session.user || u.userEmail);
       count++;
     }
     res.json({ success: true, count });
@@ -327,10 +335,35 @@ router.get('/production', requireLogin, async (req, res) => {
       ORDER BY COALESCE(actual_2, timestamp) DESC, id DESC
     `, [PRODUCTION_ARCHIVE_FROM]);
 
+    // One query for the whole board rather than one per row.
+    const approvalsByOrder = new Map();
+    if (rows.length) {
+      const ids = rows.map(r => r.order_id);
+      const [appr] = await db.query(
+        `SELECT order_id, status, approved_at FROM order_approvals
+          WHERE order_id IN (${ids.map(() => '?').join(', ')})
+          ORDER BY approved_at ASC`,
+        ids,
+      );
+      for (const a of appr) {
+        const list = approvalsByOrder.get(a.order_id) || [];
+        list.push(a);
+        approvalsByOrder.set(a.order_id, list);
+      }
+    }
+
     const data = rows.map(r => ({
       ID: r.order_id,
       Timestamp: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
       Actual_Date: r.actual_2 ? new Date(r.actual_2).toLocaleString('en-GB', IST) : '',
+      // Every round the client answered, oldest first. An order approved as a
+      // Sample in July and for production in September belongs on both days,
+      // and one column could only ever show the second.
+      Approvals: (approvalsByOrder.get(r.order_id) || []).map(a => ({
+        status: a.status,
+        at: new Date(a.approved_at).toLocaleString('en-GB', IST),
+        day: new Date(a.approved_at).toLocaleDateString('en-GB'),
+      })),
       // The date this order reached production. 88 of the orders on this board
       // carry no approval date - imported rows, mostly - so they fall back to
       // when they were punched rather than showing an empty cell.
@@ -902,12 +935,17 @@ router.put('/quick/:id', requireLogin, async (req, res) => {
     const updates = {};
     const now = new Date();
 
+    // The third way an approval gets set, and it has to leave the same record
+    // behind as the other two - a history that only holds what some screens
+    // wrote is worse than none.
+    let quickApproval = null;
     if (req.body.clientStatus !== undefined) {
       const status = String(req.body.clientStatus || '').trim();
       if (!status) return res.json({ success: false, error: 'Pick a status.' });
       updates.design_approval_status_from_client = status;
       updates.actual_2 = now;
       updates.approval_updated_by = user.email || '';
+      quickApproval = status;
     }
 
     if (req.body.reasonForDelay !== undefined) {
@@ -925,6 +963,8 @@ router.put('/quick/:id', requireLogin, async (req, res) => {
 
     const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
+
+    if (quickApproval) await logApproval(orderId, quickApproval, now, user);
 
     res.json({ success: true });
   } catch (err) {

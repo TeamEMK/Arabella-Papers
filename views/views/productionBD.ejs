@@ -164,6 +164,26 @@ function prod_fillSelect(id, set) {
 // the production progress for these.
 var PROD_ORDER_KINDS = ['Reorder', 'Reprint', 'Sample'];
 
+/**
+ * The production date, and the rounds behind it.
+ *
+ * One date was all this column ever showed, and a second approval wrote over
+ * the first - an order approved as a Sample in July and for production in
+ * September looked as though July never happened. Every round is printed now,
+ * newest first, with what the client said each time.
+ */
+function prod_approvalCell(o) {
+  const rounds = o.Approvals || [];
+  if (!rounds.length) return o.Production_Date || '';
+
+  const latest = rounds[rounds.length - 1];
+  const earlier = rounds.slice(0, -1).reverse();
+  return latest.at
+    + earlier.map(a =>
+        '<div class="text-muted fw-normal" style="font-size:.72rem;">'
+        + a.day + ' &middot; ' + (a.status || '') + '</div>').join('');
+}
+
 // What counts as a sample, asked in one place so the card and the filter can
 // never disagree about it.
 function prod_isSample(o) {
@@ -185,14 +205,24 @@ function prodApplyFilters() {
     if(!o) return false;
     let dm = true;
     if(startV || endV) {
+      // An order the client answered twice belongs on both days. Picking 17
+      // July has to find the order that was approved as a Sample that day,
+      // even though it was approved again for production in September and the
+      // column now shows September.
+      const s = dayStart(startV), e = dayEnd(endV);
+      const inRange = (d) => d && !(s && d < s) && !(e && d > e);
+      const rounds = (o.Approvals || []).map(a => parseDMY(a.at)).filter(Boolean);
+      if (rounds.length) {
+        if (!rounds.some(inRange)) dm = false;
+      } else {
       // Filter on the same date the column shows, or picking a day would
       // hide rows that are plainly in range.
       const od = parseDMY(o.Production_Date);
       if(od) {
-        const s = dayStart(startV), e = dayEnd(endV);
         if(s && od < s) dm = false;
         if(e && od > e) dm = false;
       } else dm = false;
+      }
     }
     if(!dm) return false;
     const isCompleted = (o.Card_Assembly||'').toLowerCase().includes('done');
@@ -259,7 +289,7 @@ function prod_rowHtml(o, sr) {
       <td><div class="d-flex gap-1"><button class="btn btn-sm btn-info" onclick="prod_openView('${o.ID}')"><i class="fas fa-eye text-white"></i></button><button class="btn btn-sm btn-warning" onclick="prod_openEdit('${o.ID}')"><i class="fas fa-edit text-dark"></i></button></div></td>
       <td class="text-center">${readyBtn}</td>
       <td class="fw-bold">${o.ID}</td>
-      <td class="text-primary fw-bold">${o.Production_Date||''}</td>
+      <td class="text-primary fw-bold">${prod_approvalCell(o)}</td>
       <td>${o.Dealer_name||''}</td>
       <td>${o.Client_name||''}</td>
       <td><small class="text-muted">${o.Designer||''}</small></td>

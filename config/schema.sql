@@ -405,6 +405,33 @@ CREATE TABLE IF NOT EXISTS gna_designers (
   UNIQUE KEY uq_gna_name (name)
 );
 
+-- =============================================
+-- APPROVAL HISTORY
+-- Every time the client answers on an order, with the day they answered.
+--
+-- orders.actual_2 holds one date, so a second approval wrote over the first:
+-- an order approved as a Sample in July and again for production in September
+-- kept only September, and July was gone from the system entirely. That has
+-- already happened on 66 orders.
+--
+-- One row per answer. actual_2 stays as it is - it is the latest, which is
+-- what every board that asks "when did this reach production" wants - and this
+-- is the record behind it.
+-- =============================================
+CREATE TABLE IF NOT EXISTS order_approvals (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id VARCHAR(20) NOT NULL,
+  status VARCHAR(100) NOT NULL,
+  approved_at DATETIME NOT NULL,
+  approved_by VARCHAR(150),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_appr_order (order_id),
+  INDEX idx_appr_when (approved_at),
+  -- The same answer twice on the same day is one answer, not two: a save that
+  -- changed a remark and nothing else must not add a round.
+  UNIQUE KEY uq_appr_day (order_id, status, approved_at)
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR(128) NOT NULL PRIMARY KEY,
   expires INT(11) UNSIGNED NOT NULL,

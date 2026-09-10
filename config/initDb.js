@@ -131,6 +131,34 @@ async function seedGnaDesigners() {
   return GNA_SEED.length;
 }
 
+/**
+ * The approval each order already carries, put into the history once.
+ *
+ * orders.actual_2 holds the latest approval and nothing else, so this is all
+ * the history that can be recovered - the rounds it overwrote are gone. It is
+ * still worth having: without it every order looks as though it was never
+ * approved until the next time somebody touches it.
+ *
+ * Only into an empty table. Running it again would be harmless (the unique key
+ * catches repeats) but it would also be pointless work on every boot.
+ */
+async function seedApprovalHistory() {
+  const [[row]] = await db.query('SELECT COUNT(*) AS c FROM order_approvals');
+  if (row.c) return 0;
+  const [res] = await db.query(
+    `INSERT IGNORE INTO order_approvals (order_id, status, approved_at, approved_by)
+     SELECT order_id,
+            TRIM(design_approval_status_from_client),
+            actual_2,
+            COALESCE(approval_updated_by, 'before this was recorded')
+       FROM orders
+      WHERE is_deleted = 0
+        AND actual_2 IS NOT NULL
+        AND TRIM(IFNULL(design_approval_status_from_client, '')) <> ''`,
+  );
+  return res.affectedRows || 0;
+}
+
 async function run() {
   const [existing] = await db.query("SHOW TABLES LIKE 'users'");
   const created = !existing.length;
@@ -150,7 +178,8 @@ async function run() {
   // users can still be recovered by setting ADMIN_PASSWORD and restarting.
   const admin = await seedAdmin();
   const gna = await seedGnaDesigners();
-  return { created, admin, columns, gna };
+  const approvals = await seedApprovalHistory();
+  return { created, admin, columns, gna, approvals };
 }
 
 let ready = null;

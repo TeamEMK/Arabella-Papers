@@ -110,4 +110,28 @@ async function logOrderEvent(orderId, action, detail, user) {
   }
 }
 
-module.exports = { logOrderUpdate, logOrderEvent, FIELDS };
+/**
+ * Write down that the client answered on an order.
+ *
+ * Called from every path that sets the approval, so the history cannot end up
+ * holding only the ones somebody remembered to add. Never throws: an approval
+ * must be saved whether or not its history row was.
+ *
+ * The same status on the same second is ignored by the unique key, so a save
+ * that only changed a remark does not add a round.
+ */
+async function logApproval(orderId, status, when, user) {
+  const value = String(status || '').trim();
+  if (!orderId || !value) return;
+  try {
+    await db.query(
+      `INSERT IGNORE INTO order_approvals (order_id, status, approved_at, approved_by)
+       VALUES (?, ?, ?, ?)`,
+      [orderId, value, when || new Date(), actor(user)],
+    );
+  } catch (err) {
+    console.error(`[approvals] ${orderId}: could not record "${value}":`, err.message);
+  }
+}
+
+module.exports = { logOrderUpdate, logOrderEvent, logApproval, FIELDS };
