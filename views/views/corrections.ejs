@@ -106,18 +106,6 @@
       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
     </div>
     <div class="modal-body">
-      <!-- The dealer's mail, pasted whole. The order number is in it already,
-           so reading it off the screen and typing it back in is work the page
-           can do - and it is where a digit gets dropped. -->
-      <div class="mb-3">
-        <label class="form-label fw-bold text-dark">Paste the dealer's mail
-          <span class="fw-normal text-muted">— the order number is picked out of it</span></label>
-        <textarea id="cr_paste" class="form-control" rows="3"
-                  placeholder="Paste the whole mail here, or just type the order number below."
-                  oninput="cr_readPaste()"></textarea>
-        <div class="form-text" id="cr_pasteHint"></div>
-      </div>
-
       <div class="mb-3">
         <label class="form-label fw-bold text-dark">Order number</label>
         <input type="text" id="cr_orderId" class="form-control" placeholder="K-159929" autocomplete="off"
@@ -329,8 +317,6 @@ function cr_render() {
 // ── Raising one ──
 function cr_openRaise() {
   cr_found = null;
-  document.getElementById('cr_paste').value = '';
-  document.getElementById('cr_pasteHint').textContent = '';
   document.getElementById('cr_orderId').value = '';
   document.getElementById('cr_clientNote').value = '';
   document.getElementById('cr_found').classList.add('d-none');
@@ -339,60 +325,6 @@ function cr_openRaise() {
   document.getElementById('cr_lookup').textContent = 'Type the number — the designer comes up on its own.';
   document.getElementById('cr_saveBtn').disabled = true;
   new bootstrap.Modal(document.getElementById('cr_raiseModal')).show();
-}
-
-// Order numbers as they are actually written: K-159929, and the handful of
-// K-154395-B reissues. Four digits at least, so a stray "K-12" in a sentence
-// is not mistaken for one.
-var CR_ORDER_RE = /\bK-\d{4,}(?:-[A-Za-z])?\b/gi;
-
-/**
- * Pull the order number out of a pasted mail.
- *
- * One number found and it is filled in and looked up. Several, and they are
- * offered as buttons rather than guessed between — a mail that mentions three
- * orders is exactly where picking the wrong one is expensive.
- *
- * The mail itself becomes the note, unless what was pasted is only the number,
- * in which case there is nothing to say.
- */
-function cr_readPaste() {
-  const text = document.getElementById('cr_paste').value || '';
-  const hint = document.getElementById('cr_pasteHint');
-  const found = [...new Set((text.match(CR_ORDER_RE) || []).map(x => x.toUpperCase()))];
-
-  if (!text.trim()) { hint.textContent = ''; return; }
-
-  if (!found.length) {
-    hint.innerHTML = '<span class="text-danger">No order number in that text.</span> Type it below instead.';
-    return;
-  }
-
-  if (found.length > 1) {
-    hint.innerHTML = '<b>' + found.length + ' order numbers</b> in that mail — pick one: '
-      + found.map(n => '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 ms-1"'
-        + ' onclick="cr_usePasted(\'' + n + '\')">' + crEsc(n) + '</button>').join('');
-    return;
-  }
-
-  hint.innerHTML = 'Found <b>' + crEsc(found[0]) + '</b>.';
-  cr_usePasted(found[0], true);
-}
-
-function cr_usePasted(number, quiet) {
-  document.getElementById('cr_orderId').value = number;
-  if (!quiet) {
-    document.getElementById('cr_pasteHint').innerHTML = 'Using <b>' + crEsc(number) + '</b>.';
-  }
-  // The mail is the context the designer would otherwise have to go and find,
-  // so it fills the note — unless somebody has already written their own, or
-  // the paste was nothing but the number itself.
-  const text = (document.getElementById('cr_paste').value || '').trim();
-  const note = document.getElementById('cr_clientNote');
-  const onlyTheNumber = text.replace(CR_ORDER_RE, '').replace(/[\s.,;:—-]/g, '') === '';
-  if (!note.value.trim() && !onlyTheNumber) note.value = text;
-
-  cr_lookup();
 }
 
 // Looked up as the number is typed, but not on every keystroke — an order
