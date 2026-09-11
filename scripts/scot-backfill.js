@@ -183,6 +183,9 @@ async function main() {
     spreadsheetId: scot.SHEET_ID,
     requestBody: { valueInputOption: 'USER_ENTERED', data },
   });
+  // "Date for calling" is a formula returning a date, and a date with no date
+  // format on the cell shows as the five-digit number underneath it.
+  await scot.ensureCallDateFormat();
   sheets.invalidateSheet(scot.SHEET_ID);
   console.log(`\nho gaya - ${dealers.length} dealers sheet par.`);
 }

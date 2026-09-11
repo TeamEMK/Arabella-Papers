@@ -176,6 +176,42 @@ async function dealerHistory(dealerName, from) {
 // ── writing ───────────────────────────────────────────
 
 /**
+ * Make sure "Date for calling" is formatted as a date all the way down.
+ *
+ * The column holds a formula that returns a date, and a date in Sheets is a
+ * number - 18 September 2026 is 46283. Without a date format on the cell that
+ * is exactly what shows. The first dozen rows carried the format from the
+ * sample data they used to hold, and every row written below them came out as
+ * a five-digit number.
+ *
+ * Applied to the whole column rather than the rows in use, so a dealer added
+ * later lands on a cell that is already right.
+ */
+async function ensureCallDateFormat() {
+  const tab = await sheets.findTabByTitle(SHEET_ID, TAB);
+  if (!tab) throw new Error(`'${TAB}' tab nahi mila`);
+  const api = await sheets.getWriteClient();
+  await api.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: {
+      requests: [{
+        repeatCell: {
+          range: {
+            sheetId: tab.sheetId,
+            startRowIndex: FIRST_ROW - 1,
+            endRowIndex: 404,
+            startColumnIndex: 11,   // L
+            endColumnIndex: 12,
+          },
+          cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'd-MMM-yyyy' } } },
+          fields: 'userEnteredFormat.numberFormat',
+        },
+      }],
+    },
+  });
+}
+
+/**
  * The ranges that carry one dealer's details, written as separate blocks so
  * the columns in between are never touched.
  *
@@ -254,6 +290,10 @@ async function syncDealer(dealerName, { from = FROM_DAY } = {}) {
   });
   sheets.invalidateSheet(SHEET_ID);
 
+  // Only for a row that did not exist before. The format covers the whole
+  // column, so doing this on every punch would be one wasted call each time.
+  if (isNew) await ensureCallDateFormat();
+
   return { name, row, isNew, days: onGrid.length, frequency: freq && freq.label };
 }
 
@@ -277,6 +317,6 @@ module.exports = {
   SHEET_ID, TAB, FIRST_ROW, FIRST_GRID_COL, NOT_A_CLIENT, FROM_DAY,
   colLetters, dayKey, serialToDay,
   calendar, forgetCalendar, rowIndex,
-  frequencyFrom, dealerHistory, detailRanges,
+  frequencyFrom, dealerHistory, detailRanges, ensureCallDateFormat,
   syncDealer, recordPunchedOrder,
 };
