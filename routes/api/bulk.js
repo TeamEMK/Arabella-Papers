@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
 const { logOrderEvent } = require('../../utils/auditlog');
+const { recordPunchedOrder } = require('../../utils/scot');
 const { requireRole } = require('../../middleware/auth');
 const { readRows, normalizeHeader, toCsv } = require('../../utils/sheet');
 const { generateOrderIds } = require('../../utils/idgen');
@@ -350,6 +351,13 @@ router.post('/import', canImport, async (req, res) => {
       // answer "where did this row come from" months later.
       for (let i = 0; i < valid.length; i++) {
         await logOrderEvent(ids[i], 'Imported', (valid[i].dealer || '-') + ' / ' + (valid[i].client || '-'), req.session.user);
+      }
+
+      // An import is a punch as far as the calling sheet is concerned. Once per
+      // dealer, not once per order: a file of forty orders from one dealer
+      // would otherwise rewrite the same row forty times over.
+      for (const dealer of new Set(valid.map(v => String(v.dealer || '').trim()).filter(Boolean))) {
+        await recordPunchedOrder(dealer);
       }
     } else if (type === 'dealers') {
       imported = await insertChunks(

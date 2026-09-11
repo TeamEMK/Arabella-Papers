@@ -6,6 +6,7 @@ const { uploadToDrive } = require('../../utils/drive');
 const { generateOrderId } = require('../../utils/idgen');
 const { notifyDesignerAssigned } = require('../../utils/notify');
 const { logOrderUpdate, logOrderEvent } = require('../../utils/auditlog');
+const { recordPunchedOrder } = require('../../utils/scot');
 const { requireLogin } = require('../../middleware/auth');
 // Dates are stored as IST wall-clock and read back through a +05:30
 // connection. Vercel runs the server in UTC, so without naming the zone here
@@ -174,6 +175,13 @@ router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
     ]);
 
     await logOrderEvent(orderId, 'Created', (dealer || '-') + ' / ' + (client || '-'), req.session.user);
+
+    // The calling sheet counts orders by the day they were punched, so this is
+    // the moment it changes. Awaited for the same reason the designer's mail
+    // below is - the container stops when the response goes out - and it can
+    // only ever return, never throw, so a sheet nobody shared with us cannot
+    // stop the office taking an order.
+    await recordPunchedOrder(dealer);
 
     // Let the designer know before we answer. On Vercel the container is
     // frozen the moment the response goes out, so anything left running after
