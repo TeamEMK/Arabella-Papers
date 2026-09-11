@@ -30,10 +30,14 @@ const FIRST_ROW = 5;
 // at B, and the day grid starts at N.
 const FIRST_GRID_COL = 14;
 
-// A dealer name that is not a person to ring. Local Order is the bucket the
-// office punches walk-in work against - 171 orders under one name, and calling
-// it would mean calling nobody.
-const NOT_A_CLIENT = new Set(['local order', '']);
+// Names that cannot be a row. Only the blank one: a dealer with no name is not
+// somebody to ring, and giving it a row would collect every unnamed order in
+// the office under one heading.
+//
+// Local Order belongs here on paper - it is the bucket walk-in work is punched
+// against rather than a person - but the office wants it counted, and it is
+// far and away the busiest line on the sheet.
+const NOT_A_CLIENT = new Set(['']);
 
 // How far back the grid goes. The sheet's own calendar starts in April, but
 // the office asked for the year from August, and the backfill and the live
