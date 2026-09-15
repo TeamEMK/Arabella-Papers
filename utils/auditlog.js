@@ -117,28 +117,31 @@ async function logOrderEvent(orderId, action, detail, user) {
  * holding only the ones somebody remembered to add. Never throws: an approval
  * must be saved whether or not its history row was.
  *
- * One round per answer, and an answer is a status on a day - not a save. The
- * same status entered again the same day is the same answer being corrected or
- * re-entered, so it moves the existing round's time rather than adding a
- * second one. K-159343 collected two rounds fifty minutes apart on 10/09 and
- * the board printed the same date twice, which tells a reader nothing.
+ * One round a day, and the last answer of the day is the one that counts.
  *
- * The unique key cannot express this on its own - it sees the whole timestamp,
- * so two saves in one day are two different keys - which is why the day is
- * matched here instead.
+ * Matching on the status as well was not enough. K-159181 was set to Reprint
+ * and put right to Reorder two minutes later, and the board then showed 15/09
+ * twice - once for the slip and once for the correction - as though the client
+ * had answered twice in one evening. Two different answers on one order on one
+ * day is somebody fixing a mistake, near enough always, and the change log
+ * keeps the full trail either way.
+ *
+ * That is also the granularity orders.actual_2 has always had: it holds one
+ * approval date, and the history should not claim to know more than it does.
+ *
+ * The unique key cannot express this - it sees the whole timestamp, so two
+ * saves in one day are two different keys - which is why the day is matched
+ * here instead.
  */
 async function logApproval(orderId, status, when, user) {
   const value = String(status || '').trim();
   if (!orderId || !value) return;
   const at = when || new Date();
   try {
-    const [res] = await db.query(
-      `UPDATE order_approvals SET approved_at = ?, approved_by = ?
-        WHERE order_id = ? AND status = ? AND DATE(approved_at) = DATE(?)`,
-      [at, actor(user), orderId, value, at],
+    await db.query(
+      'DELETE FROM order_approvals WHERE order_id = ? AND DATE(approved_at) = DATE(?)',
+      [orderId, at],
     );
-    if (res.affectedRows) return;
-
     await db.query(
       `INSERT IGNORE INTO order_approvals (order_id, status, approved_at, approved_by)
        VALUES (?, ?, ?, ?)`,

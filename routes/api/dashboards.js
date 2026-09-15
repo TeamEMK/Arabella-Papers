@@ -175,11 +175,38 @@ const PRODUCTION_QUEUE_WHERE = `
 async function sendBackColumns(orderId, status) {
   if (!SEND_BACK_STATUSES.includes(String(status || '').trim())) return null;
   const [[before]] = await db.query(
-    'SELECT status_4, actual_4 FROM orders WHERE order_id = ? LIMIT 1',
+    'SELECT status_4, actual_4, production_board FROM orders WHERE order_id = ? LIMIT 1',
     [orderId],
   );
-  if (!before || !(before.status_4 || before.actual_4)) return null;
-  return { status_4: null, actual_4: null, dispatch_ready_at: null, dispatch_board: null };
+  if (!before) return null;
+
+  const cols = {};
+
+  // Gone out already: clear what Dispatch wrote and it is back in the queue.
+  if (before.status_4 || before.actual_4) {
+    cols.status_4 = null;
+    cols.actual_4 = null;
+    cols.dispatch_ready_at = null;
+    cols.dispatch_board = null;
+  }
+
+  // Or never dispatched, just given up on and pushed to Backup Production.
+  // That pin overrides the cutoff date, so an order carrying it stays on the
+  // backup board however recently it was worked on - K-159181 was re-ordered
+  // on 15/09 and was still sitting where Ranjan had filed it on 31/08, with
+  // nobody on the live board ever seeing it. Clearing the pin puts the cutoff
+  // date back in charge, and the approval just made is today.
+  if (before.production_board === 'old') cols.production_board = null;
+
+  return Object.keys(cols).length ? cols : null;
+}
+
+/** Where the order was sitting, for the line the change log keeps. */
+function whereFrom(back) {
+  const parts = [];
+  if ('status_4' in back) parts.push('after dispatch');
+  if ('production_board' in back) parts.push('from Backup Production');
+  return parts.join(' and ');
 }
 
 router.get('/till-approval', requireLogin, async (req, res) => {
@@ -211,11 +238,12 @@ router.get('/till-approval', requireLogin, async (req, res) => {
       Dealer_name: r.dealer_name,
       Client_name: r.client_name,
       Design_Approval_Status_From_Client: r.design_approval_status_from_client || '',
-      // Whether this one has already left for Dispatch. The approval box uses
-      // it to say so before saving, since an approval here would pull the order
-      // off the dispatch board and that is not obvious from this screen.
+      // Where this one is sitting now. The approval box uses both to say what
+      // saving will do, since an approval here moves the order off whichever
+      // board it is on and that is not visible from this screen.
       Dispatched: !!(r.status_4 || r.actual_4),
       Dispatch_Date: r.actual_4 ? new Date(r.actual_4).toLocaleDateString('en-GB', IST) : '',
+      On_Backup_Production: r.production_board === 'old',
       // rowData ab on-demand aata hai (GET /api/dashboards/order-details/:id)
     }));
 
@@ -263,7 +291,7 @@ router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req
       await logOrderEvent(
         orderId,
         'Back to Production',
-        `Marked ${approvalStatus} after dispatch`,
+        `Marked ${approvalStatus} ${whereFrom(back)}`,
         req.session.user || userEmail
       );
     }
@@ -300,20 +328,23 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
       // sits on Dispatch marked Dispatched with somebody waiting to make it.
       const back = await sendBackColumns(u.id, u.status);
       const approvedAt = new Date();
+      // Built from the helper's own keys rather than spelled out again, so the
+      // two routes cannot drift apart over which columns a send-back clears.
+      const clears = back ? Object.keys(back).map(k => `, ${k} = NULL`).join('') : '';
       await db.query(`
         UPDATE orders SET
           design_approval_status_from_client = ?,
           remarks = ?,
           actual_2 = ?,
           approval_updated_by = ?
-          ${back ? ', status_4 = NULL, actual_4 = NULL, dispatch_ready_at = NULL, dispatch_board = NULL' : ''}
+          ${clears}
         WHERE order_id = ?
       `, [u.status, u.remark, approvedAt, u.userEmail, u.id]);
       if (back) {
         await logOrderEvent(
           u.id,
           'Back to Production',
-          `Marked ${u.status} after dispatch`,
+          `Marked ${u.status} ${whereFrom(back)}`,
           req.session.user || u.userEmail,
         );
         sentBack++;
@@ -1003,7 +1034,7 @@ router.put('/quick/:id', requireLogin, async (req, res) => {
     await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, [...Object.values(updates), orderId]);
 
     if (back) {
-      await logOrderEvent(orderId, 'Back to Production', `Marked ${quickApproval} after dispatch`, user);
+      await logOrderEvent(orderId, 'Back to Production', `Marked ${quickApproval} ${whereFrom(back)}`, user);
     }
     if (quickApproval) await logApproval(orderId, quickApproval, now, user);
 
