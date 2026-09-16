@@ -251,6 +251,9 @@ async function ta_openView(orderId) {
 // The statuses that take an order off the dispatch board, kept in step with
 // SEND_BACK_STATUSES on the server.
 var TA_SENDS_BACK = ['Reprint', 'Reorder', 'Sample', 'Final Approval For Production'];
+// Of those, the three that also put the production stages back to Pending -
+// REMAKE_STATUSES on the server.
+var TA_REMAKES = ['Reprint', 'Reorder', 'Sample'];
 
 /**
  * Warn before an approval pulls an order off the dispatch board.
@@ -268,12 +271,26 @@ function ta_syncDispatchNotice() {
   const o = ta_data.find(x => x.ID.toString() === String(ta_editId||''));
   const status = document.querySelector('input[name="ta_approvalStatus"]:checked')?.value || '';
   const parked = o && (o.Dispatched || o.On_Backup_Production);
-  if(!parked || !TA_SENDS_BACK.includes(status)) { note.classList.add('d-none'); return; }
-  const where = o.Dispatched
-    ? (o.Dispatch_Date ? 'was dispatched on <b>' + o.Dispatch_Date + '</b>' : 'has gone to Dispatch')
-    : 'is on <b>Backup Production</b>';
-  note.innerHTML = '<i class="fas fa-truck me-1"></i>This order ' + where
-    + '. Saving this will bring it back onto the live Production board.';
+  const remake = TA_REMAKES.includes(status);
+  // Either half is worth saying on its own: an order can be parked without
+  // being remade, and remade without being parked.
+  if(!o || (!remake && !(parked && TA_SENDS_BACK.includes(status)))) {
+    note.classList.add('d-none'); return;
+  }
+
+  const lines = [];
+  if(parked && TA_SENDS_BACK.includes(status)) {
+    const where = o.Dispatched
+      ? (o.Dispatch_Date ? 'was dispatched on <b>' + o.Dispatch_Date + '</b>' : 'has gone to Dispatch')
+      : 'is on <b>Backup Production</b>';
+    lines.push('<i class="fas fa-truck me-1"></i>This order ' + where
+      + '. Saving this will bring it back onto the live Production board.');
+  }
+  if(remake) {
+    lines.push('<i class="fas fa-rotate-left me-1"></i>The production stages will go back to '
+      + '<b>Pending</b> so the floor can record the new run. What they say now is kept in the change log.');
+  }
+  note.innerHTML = lines.join('<hr class="my-2">');
   note.classList.remove('d-none');
 }
 

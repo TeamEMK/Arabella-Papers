@@ -129,6 +129,70 @@ const REACHED_PRODUCTION = `(
 // yet, which is almost every order this status is ever given to.
 const SEND_BACK_STATUSES = ['Reprint', 'Reorder', 'Sample', 'Final Approval For Production'];
 
+// Of those, the three that mean the job is to be MADE AGAIN rather than simply
+// made. The floor has to start from the beginning on these, so the production
+// stages go back to how a fresh order carries them.
+//
+// "Final Approval For Production" is deliberately not here. It is the ordinary
+// approval, given to orders that are part way through the floor every day of
+// the week, and resetting on it would wipe real work.
+const REMAKE_STATUSES = ['Reprint', 'Reorder', 'Sample'];
+
+// What a production stage says before anybody has touched it. Taken from the
+// update box on the production board - every dropdown there opens on Pending,
+// and Printing Type opens on nothing at all.
+const PRODUCTION_DEFAULTS = {
+  guest_name: 'Pending',
+  paper_cutting: 'Pending',
+  dye_status: 'Pending',
+  block_status: 'Pending',
+  printing: 'Pending',
+  printing_type: null,
+  edges: 'Pending',
+  laser_cutting: 'Pending',
+  output: 'Pending',
+  card_assembly: 'Pending',
+  // The old run's hold-up, which has nothing to say about the new one.
+  reason_for_delay: null,
+};
+
+// The stamps behind those stages. They have to go with them: the production
+// date a board prints is the latest of these, so a stage left stamped August
+// would keep a re-order made today looking like August's work.
+//
+// The production remark is left alone on purpose. It is the one free-text note
+// on the stage box and it as often carries something still true of the job
+// - the paper, what the client asked for - as something about the finished run.
+const PRODUCTION_STAMPS = [
+  'guest_name_actual_time', 'paper_cutting_actual_time',
+  'dye_status_actual_time', 'no_die_actual_time', 'die_not_received_actual_time',
+  'die_cutting_done_actual_time', 'die_sent_actual_time',
+  'block_status_actual_time', 'no_block_actual_time', 'block_not_received_actual_time',
+  'block_printed_actual_time', 'block_sent_actual_time',
+  'printing_actual_time', 'edges_actual_time',
+  'no_laser_cutting_actual_time', 'done_laser_cutting_actual_time',
+  'pending_laser_cutting_actual_time',
+  'no_output_actual_time', 'output_done_actual_time', 'output_pending_actual_time',
+  'card_assembly_actual_time', 'reason_for_delay_actual_time',
+];
+
+/**
+ * The production stages put back to where a fresh order carries them.
+ *
+ * Asked for by the floor: a re-order arriving with last time's stages still
+ * marked Done has nothing left to tick, so the work looks finished before it
+ * has started and there is nowhere to record the new run.
+ *
+ * Every column here is in the change log's field list, so what it overwrites
+ * is written down one line per stage before it goes.
+ */
+function productionResetColumns(status) {
+  if (!REMAKE_STATUSES.includes(String(status || '').trim())) return null;
+  const cols = { ...PRODUCTION_DEFAULTS };
+  for (const stamp of PRODUCTION_STAMPS) cols[stamp] = null;
+  return cols;
+}
+
 // An order nobody is going to make: cancelled, or rejected by the client.
 const DEAD_ORDER = `(
   LOWER(IFNULL(design_approval_status_from_client, '')) LIKE '%rejected%'
@@ -286,12 +350,25 @@ router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req
     const sentBack = !!back;
     if (back) Object.assign(updates, back);
 
+    // Made again means made from the beginning: last time's stages go back to
+    // Pending so the floor has somewhere to record the new run.
+    const reset = productionResetColumns(approvalStatus);
+    if (reset) Object.assign(updates, reset);
+
     await logOrderUpdate(orderId, updates, req.session.user || userEmail);
     if (sentBack) {
       await logOrderEvent(
         orderId,
         'Back to Production',
         `Marked ${approvalStatus} ${whereFrom(back)}`,
+        req.session.user || userEmail
+      );
+    }
+    if (reset) {
+      await logOrderEvent(
+        orderId,
+        'Production reset',
+        `Stages back to Pending for the ${approvalStatus}`,
         req.session.user || userEmail
       );
     }
@@ -302,7 +379,7 @@ router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req
     // The round the client just answered, kept whatever they answer next.
     await logApproval(orderId, approvalStatus, approvedAt, req.session.user || userEmail);
 
-    res.json({ success: true, sentBack });
+    res.json({ success: true, sentBack, reset: !!reset });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
@@ -327,19 +404,27 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
       // an order that has already gone out sends it back to the floor, or it
       // sits on Dispatch marked Dispatched with somebody waiting to make it.
       const back = await sendBackColumns(u.id, u.status);
+      const reset = productionResetColumns(u.status);
       const approvedAt = new Date();
-      // Built from the helper's own keys rather than spelled out again, so the
-      // two routes cannot drift apart over which columns a send-back clears.
-      const clears = back ? Object.keys(back).map(k => `, ${k} = NULL`).join('') : '';
+
+      // Built from the helpers' own keys rather than spelled out again, so the
+      // three approval routes cannot drift apart over what a remake changes.
+      // Placeholders, not literal NULLs: a reset writes 'Pending', not a blank.
+      const extra = { ...(back || {}), ...(reset || {}) };
+      const extraCols = Object.keys(extra);
+      if (reset) await logOrderUpdate(u.id, reset, req.session.user || u.userEmail);
+
       await db.query(`
         UPDATE orders SET
           design_approval_status_from_client = ?,
           remarks = ?,
           actual_2 = ?,
           approval_updated_by = ?
-          ${clears}
+          ${extraCols.map(k => `, ${k} = ?`).join('')}
         WHERE order_id = ?
-      `, [u.status, u.remark, approvedAt, u.userEmail, u.id]);
+      `, [u.status, u.remark, approvedAt, u.userEmail,
+          ...extraCols.map(k => extra[k]), u.id]);
+
       if (back) {
         await logOrderEvent(
           u.id,
@@ -348,6 +433,14 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
           req.session.user || u.userEmail,
         );
         sentBack++;
+      }
+      if (reset) {
+        await logOrderEvent(
+          u.id,
+          'Production reset',
+          `Stages back to Pending for the ${u.status}`,
+          req.session.user || u.userEmail,
+        );
       }
       await logApproval(u.id, u.status, approvedAt, req.session.user || u.userEmail);
       count++;
@@ -1027,6 +1120,8 @@ router.put('/quick/:id', requireLogin, async (req, res) => {
     // Approval does, so leaving it out here is exactly where the gap would show.
     const back = quickApproval ? await sendBackColumns(orderId, quickApproval) : null;
     if (back) Object.assign(updates, back);
+    const reset = quickApproval ? productionResetColumns(quickApproval) : null;
+    if (reset) Object.assign(updates, reset);
 
     await logOrderUpdate(orderId, updates, user);
 
@@ -1035,6 +1130,9 @@ router.put('/quick/:id', requireLogin, async (req, res) => {
 
     if (back) {
       await logOrderEvent(orderId, 'Back to Production', `Marked ${quickApproval} ${whereFrom(back)}`, user);
+    }
+    if (reset) {
+      await logOrderEvent(orderId, 'Production reset', `Stages back to Pending for the ${quickApproval}`, user);
     }
     if (quickApproval) await logApproval(orderId, quickApproval, now, user);
 
