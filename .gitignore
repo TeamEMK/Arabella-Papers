@@ -8,3 +8,6 @@ uploads/
 # Live database connection string for scripts/backup-live.js
 .env.backup
 credentials.json
+
+# Order snapshots taken before a repair — live data, kept to hand, not in the repo.
+*-before-repair.json
