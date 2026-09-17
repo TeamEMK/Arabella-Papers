@@ -30,14 +30,13 @@ const FIRST_ROW = 5;
 // at B, and the day grid starts at N.
 const FIRST_GRID_COL = 14;
 
-// Names that cannot be a row. Only the blank one: a dealer with no name is not
-// somebody to ring, and giving it a row would collect every unnamed order in
-// the office under one heading.
+// Names that cannot be a row on a calling list.
 //
-// Local Order belongs here on paper - it is the bucket walk-in work is punched
-// against rather than a person - but the office wants it counted, and it is
-// far and away the busiest line on the sheet.
-const NOT_A_CLIENT = new Set(['']);
+// A blank one, because that would collect every unnamed order in the office
+// under a single heading. And Local Order, which is the bucket walk-in work is
+// punched against rather than a person - at 196 orders it was the longest line
+// on the sheet, and there is nobody behind it to ring.
+const NOT_A_CLIENT = new Set(['', 'local order']);
 
 // How far back to fill. Nothing by default - the sheet's own calendar decides,
 // which is the only answer that cannot drift.
