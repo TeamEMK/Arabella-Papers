@@ -103,6 +103,11 @@ const COLUMN_MIGRATIONS = [
   // before this arrived carries NULL - the field became compulsory from the
   // day it went in, not retrospectively.
   { table: 'orders', column: 'order_quantity', type: 'INT NULL' },
+  // The order this one is a repeat of. Set on the new entry a Re-print or a
+  // Re-order opens, blank on everything else. Holds the plain number even when
+  // the repeat is itself being repeated, so every run of a job points at the
+  // one number the office, the dealer and the invoice all use.
+  { table: 'orders', column: 'remake_of', type: 'VARCHAR(20) NULL' },
 ];
 
 async function addMissingColumns() {

@@ -5,6 +5,10 @@ const db = require('../../config/db');
 const { uploadToDrive } = require('../../utils/drive');
 const { logOrderUpdate, logOrderEvent, logApproval } = require('../../utils/auditlog');
 const { notifyClientDispatched } = require('../../utils/notify');
+// A Re-print or a Re-order on an order that has already gone out opens a new
+// entry instead of writing over the old one. Every route that sets an approval
+// asks this first, and does what it always did when it comes back empty.
+const { raiseRemake } = require('../../utils/remake');
 const { requireLogin } = require('../../middleware/auth');
 // The board a request is asking for is the same thing the side panel decides
 // whether to show - role rule plus whatever was granted on the Access Control
@@ -136,6 +140,9 @@ const SEND_BACK_STATUSES = ['Reprint', 'Reorder', 'Sample', 'Final Approval For 
 // "Final Approval For Production" is deliberately not here. It is the ordinary
 // approval, given to orders that are part way through the floor every day of
 // the week, and resetting on it would wipe real work.
+// Reprint and Reorder only reach here on an order that never went out. Once
+// one has been dispatched they open a new entry instead - see utils/remake.js
+// - and the finished run is left exactly as it was.
 const REMAKE_STATUSES = ['Reprint', 'Reorder', 'Sample'];
 
 // What a production stage says before anybody has touched it. Taken from the
@@ -302,6 +309,7 @@ router.get('/till-approval', requireLogin, async (req, res) => {
       Dealer_name: r.dealer_name,
       Client_name: r.client_name,
       Design_Approval_Status_From_Client: r.design_approval_status_from_client || '',
+      Remake_Of: r.remake_of || '',
       // Where this one is sitting now. The approval box uses both to say what
       // saving will do, since an approval here moves the order off whichever
       // board it is on and that is not visible from this screen.
@@ -328,6 +336,15 @@ router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req
     if (req.file) {
       fileUrl = await uploadToDrive(req.file.buffer, req.file.originalname, req.file.mimetype);
     }
+
+    // Made again, and the last one has already gone out: that is a new job on
+    // a new row. The order in front of us is left exactly as it was - its
+    // dates, its stages, the parcel that went - and the reason typed in the
+    // box belongs to the new entry, not over whatever the designer wrote here.
+    const remake = await raiseRemake(orderId, approvalStatus, {
+      remark, fileUrl, user: req.session.user, userEmail,
+    });
+    if (remake) return res.json({ success: true, remake });
 
     // One moment, used for the column and for the history row, so the two can
     // never sit a second apart and read as different events.
@@ -394,7 +411,15 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
 
     let count = 0;
     let sentBack = 0;
+    const remade = [];
     for (const u of updates) {
+      // Same rule as the single box: a repeat of an order that has been sent
+      // opens its own entry, and this one is left alone.
+      const remake = await raiseRemake(u.id, u.status, {
+        remark: u.remark, user: req.session.user, userEmail: u.userEmail,
+      });
+      if (remake) { remade.push(remake); count++; continue; }
+
       await logOrderUpdate(u.id, {
         design_approval_status_from_client: u.status,
         remarks: u.remark,
@@ -445,7 +470,7 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
       await logApproval(u.id, u.status, approvedAt, req.session.user || u.userEmail);
       count++;
     }
-    res.json({ success: true, count, sentBack });
+    res.json({ success: true, count, sentBack, remade });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -524,6 +549,10 @@ router.get('/production', requireLogin, async (req, res) => {
       // carry no approval date - imported rows, mostly - so they fall back to
       // when they were punched rather than showing an empty cell.
       Production_Date: new Date(r.actual_2 || r.timestamp).toLocaleString('en-GB', IST),
+      // Set when this entry was opened by a Re-print or a Re-order. The floor
+      // asks which run it is against as soon as they see one, and the old
+      // entry is still there to be looked up.
+      Remake_Of: r.remake_of || '',
       Dealer_name: r.dealer_name,
       Client_name: r.client_name,
       Designer: r.india_designer || r.overseas_designer || '',
@@ -804,9 +833,32 @@ router.get('/dispatch', requireLogin, async (req, res) => {
                id DESC
     `, [DISPATCH_ARCHIVE_FROM]);
 
+    // Which of these orders have been asked for again, in one query. The old
+    // entry stays on this board untouched when a re-print is raised, so
+    // without this there is nothing on it to say the job came back.
+    const remadeAs = new Map();
+    if (rows.length) {
+      const ids = rows.map(r => r.order_id);
+      const [kids] = await db.query(
+        `SELECT remake_of, order_id FROM orders
+          WHERE is_deleted = 0 AND remake_of IN (${ids.map(() => '?').join(', ')})
+          ORDER BY id ASC`,
+        ids,
+      );
+      for (const k of kids) {
+        const list = remadeAs.get(k.remake_of) || [];
+        list.push(k.order_id);
+        remadeAs.set(k.remake_of, list);
+      }
+    }
+
     const data = rows.map(r => ({
       ID: r.order_id,
       Timestamp: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
+      // Both ends of a repeat: the run this entry is a remake of, and the
+      // entries opened because this one came back.
+      Remake_Of: r.remake_of || '',
+      Remade_As: remadeAs.get(r.order_id) || [],
       Dealer_name: r.dealer_name,
       Client_name: r.client_name,
       Dispatch_Courier_Name: r.courier || '',
@@ -1095,13 +1147,22 @@ router.put('/quick/:id', requireLogin, async (req, res) => {
     // behind as the other two - a history that only holds what some screens
     // wrote is worse than none.
     let quickApproval = null;
+    let remake = null;
     if (req.body.clientStatus !== undefined) {
       const status = String(req.body.clientStatus || '').trim();
       if (!status) return res.json({ success: false, error: 'Pick a status.' });
-      updates.design_approval_status_from_client = status;
-      updates.actual_2 = now;
-      updates.approval_updated_by = user.email || '';
-      quickApproval = status;
+
+      // A repeat opens its own entry here too. Analytics is where somebody is
+      // most likely to flag a finished order as a re-order, which is exactly
+      // the case that must not write over the run that finished. The delay
+      // reason below, if one was sent with it, still belongs to this order.
+      remake = await raiseRemake(orderId, status, { user });
+      if (!remake) {
+        updates.design_approval_status_from_client = status;
+        updates.actual_2 = now;
+        updates.approval_updated_by = user.email || '';
+        quickApproval = status;
+      }
     }
 
     if (req.body.reasonForDelay !== undefined) {
@@ -1112,7 +1173,9 @@ router.put('/quick/:id', requireLogin, async (req, res) => {
     }
 
     if (!Object.keys(updates).length) {
-      return res.json({ success: false, error: 'Nothing to update.' });
+      return remake
+        ? res.json({ success: true, remake })
+        : res.json({ success: false, error: 'Nothing to update.' });
     }
 
     // The same send-back the other two approval routes do. Analytics sets the
@@ -1136,7 +1199,7 @@ router.put('/quick/:id', requireLogin, async (req, res) => {
     }
     if (quickApproval) await logApproval(orderId, quickApproval, now, user);
 
-    res.json({ success: true, sentBack: !!back });
+    res.json({ success: true, sentBack: !!back, remake });
   } catch (err) {
     console.error('Quick update failed:', err);
     res.status(500).json({ success: false, error: err.message });
@@ -1555,6 +1618,7 @@ router.get('/clients', requireLogin, async (req, res) => {
 function buildFullRowData(r) {
   return {
     'Order ID': r.order_id,
+    'Re-print / Re-order of': r.remake_of || '',
     'Timestamp': r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
     'Email address': r.email_address,
     'Order Punched by': r.order_punched_by,

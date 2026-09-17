@@ -200,7 +200,8 @@ function ta_rowHtml(o, sr) {
       </td>
       <td>${o.Timestamp||''}</td>
       <td>${o.Actual_1||''}</td>
-      <td class="fw-bold">${o.ID}</td>
+      <td class="fw-bold">${o.ID}${o.Remake_Of
+        ? '<div class="text-muted fw-normal" style="font-size:.72rem;">repeat of ' + o.Remake_Of + '</div>' : ''}</td>
       <td>${o.Designer||''}</td>
       <td>${o.Dealer_name||''}</td>
       <td>${o.Client_name||''}</td>
@@ -254,6 +255,10 @@ var TA_SENDS_BACK = ['Reprint', 'Reorder', 'Sample', 'Final Approval For Product
 // Of those, the three that also put the production stages back to Pending -
 // REMAKE_STATUSES on the server.
 var TA_REMAKES = ['Reprint', 'Reorder', 'Sample'];
+// The two that open a new entry instead, once the order has gone out -
+// SPLIT_STATUSES in utils/remake.js. Nothing on this order is touched then, so
+// none of the warnings below apply to it.
+var TA_SPLITS = ['Reprint', 'Reorder'];
 
 /**
  * Warn before an approval pulls an order off the dispatch board.
@@ -271,6 +276,21 @@ function ta_syncDispatchNotice() {
   const o = ta_data.find(x => x.ID.toString() === String(ta_editId||''));
   const status = document.querySelector('input[name="ta_approvalStatus"]:checked')?.value || '';
   const parked = o && (o.Dispatched || o.On_Backup_Production);
+
+  // Made again, and this one has already gone: a new entry, and this order is
+  // left alone. Said first and on its own, because the two warnings below are
+  // about an order being pulled back and re-made in place, which is precisely
+  // what no longer happens here.
+  if(o && o.Dispatched && TA_SPLITS.includes(status)) {
+    const kind = status === 'Reorder' ? 'Re-order' : 'Re-print';
+    note.innerHTML = '<i class="fas fa-file-circle-plus me-1"></i>A new entry will be opened for this '
+      + kind.toLowerCase() + ', dated today and with the production stages blank. <b>' + o.ID
+      + '</b> stays exactly as it went out'
+      + (o.Dispatch_Date ? ' on <b>' + o.Dispatch_Date + '</b>' : '') + '.';
+    note.classList.remove('d-none');
+    return;
+  }
+
   const remake = TA_REMAKES.includes(status);
   // Either half is worth saying on its own: an order can be parked without
   // being remade, and remade without being parked.
@@ -323,7 +343,15 @@ async function taHandleApprovalSubmit() {
     showLoading(false);
     if(json.success) {
       bootstrap.Modal.getInstance(document.getElementById('ta_editModal')).hide();
-      showToast('success', json.sentBack
+      // A repeat leaves this order alone, so saying "updated" would be the one
+      // thing that did not happen. Name the entry that was opened instead -
+      // that is the number the floor needs.
+      if(json.remake) {
+        showToast('success', json.remake.created
+          ? `${approvalStatus} opened as ${json.remake.childId} - ${ta_editId} left as it was`
+          : `${approvalStatus} already open as ${json.remake.childId} - updated that one`);
+      }
+      else showToast('success', json.sentBack
         ? `${approvalStatus} - back on the Production board`
         : `Updated to: ${approvalStatus}`);
       fetchApprovalData();
@@ -372,8 +400,10 @@ async function taSubmitBulk() {
       ta_selected.clear();
       const mc = document.getElementById('ta_selectAll'); if(mc) mc.checked = false;
       bootstrap.Modal.getInstance(document.getElementById('ta_bulkModal')).hide();
+      const remade = json.remade || [];
       showToast('success', `Updated ${json.count} orders.`
-        + (json.sentBack ? ` ${json.sentBack} back on Production.` : ''));
+        + (json.sentBack ? ` ${json.sentBack} back on Production.` : '')
+        + (remade.length ? ` New entries: ${remade.map(r => r.childId).join(', ')}.` : ''));
       fetchApprovalData();
     }
     else showToast('error', json.error);

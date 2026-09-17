@@ -321,7 +321,7 @@ function dsp_renderTable(data) {
     return `<tr>
       <td><input type="checkbox" class="dsp_checkbox" value="${o.ID}" data-row="${i}" ${dsp_selected.has(o.ID.toString()) ? 'checked' : ''} onclick="dsp_handleCheck(event, '${o.ID}', ${i})"></td>
       <td>${i + 1}</td>
-      <td class="fw-bold">${o.ID}</td>
+      <td class="fw-bold">${o.ID}${dsp_repeatNote(o)}</td>
       <td class="text-nowrap">${o.Ready_Date||'-'}</td>
       <td class="text-nowrap">${o.Dispatch_Date||'-'}</td>
       <td>${o.Dealer_name||''}</td>
@@ -341,6 +341,23 @@ function dsp_renderTable(data) {
       </td>
     </tr>`;
   }).join('');
+}
+/**
+ * Both ends of a repeat, under the order number.
+ *
+ * A dispatched order stays on this board untouched when the client asks for it
+ * again - that is the whole point of opening a separate entry - so this is the
+ * only thing on the row that says the job came back. And a repeat sitting here
+ * has to name the run it is a repeat of, or the two read as unrelated orders
+ * for the same client.
+ */
+function dsp_repeatNote(o) {
+  const lines = [];
+  if(o.Remake_Of) lines.push('repeat of ' + o.Remake_Of);
+  if((o.Remade_As||[]).length) lines.push('asked again as ' + o.Remade_As.join(', '));
+  if(!lines.length) return '';
+  return '<div class="text-muted fw-normal" style="font-size:.72rem;">'
+    + lines.join('<br>') + '</div>';
 }
 async function dsp_openView(orderId) {
   const body = document.getElementById('dsp_viewBody');

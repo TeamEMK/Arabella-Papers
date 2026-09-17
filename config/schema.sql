@@ -188,6 +188,10 @@ CREATE TABLE IF NOT EXISTS orders (
   volumetric_weight VARCHAR(50),
   dispatch_updated_by VARCHAR(150),
   
+  -- The order this one is a repeat of: a Re-print or a Re-order opens a new
+  -- entry rather than writing over the run that has already been made.
+  remake_of VARCHAR(20) NULL,
+
   -- Meta
   is_deleted TINYINT(1) DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
