@@ -53,6 +53,7 @@ document.getElementById('dispRoot').innerHTML = `
             <tr>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;"><input type="checkbox" id="dsp_selectAll" onclick="dspToggleSelectAll(this)" title="Select everything shown"></th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">#</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Sent to Dispatch</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dispatch Date</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dealer</th>
@@ -69,7 +70,7 @@ document.getElementById('dispRoot').innerHTML = `
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
             </tr>
           </thead>
-          <tbody id="dsp_tbody"><tr><td colspan="16" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="dsp_tbody"><tr><td colspan="17" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -311,7 +312,7 @@ var dsp_shown = [];
 function dsp_renderTable(data) {
   dsp_shown = data;
   const tbody = document.getElementById('dsp_tbody');
-  if(!data.length) { tbody.innerHTML = '<tr><td colspan="16" class="text-center">No orders found.</td></tr>'; return; }
+  if(!data.length) { tbody.innerHTML = '<tr><td colspan="17" class="text-center">No orders found.</td></tr>'; return; }
   tbody.innerHTML = data.map((o, i) => {
     const s = o.Dispatch_Status||'Ready';
     let b = 'warning';
@@ -320,6 +321,7 @@ function dsp_renderTable(data) {
     return `<tr>
       <td><input type="checkbox" class="dsp_checkbox" value="${o.ID}" data-row="${i}" ${dsp_selected.has(o.ID.toString()) ? 'checked' : ''} onclick="dsp_handleCheck(event, '${o.ID}', ${i})"></td>
       <td>${i + 1}</td>
+      <td class="fw-bold">${o.ID}</td>
       <td class="text-nowrap">${o.Ready_Date||'-'}</td>
       <td class="text-nowrap">${o.Dispatch_Date||'-'}</td>
       <td>${o.Dealer_name||''}</td>
