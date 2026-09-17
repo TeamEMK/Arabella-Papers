@@ -151,6 +151,87 @@ router.get('/order/:id', requireLogin, async (req, res) => {
 });
 
 /**
+ * The order numbers out of whatever was pasted in.
+ *
+ * The office copies them from a mail, a sheet cell or a chat message, so they
+ * arrive separated by commas, spaces, semicolons or line breaks - and often
+ * several of those in one paste. Split on all of them and keep the order they
+ * were typed in, so the list on screen reads the way the paste did.
+ *
+ * Repeats are dropped rather than refused: pasting the same number twice is a
+ * slip, and raising two identical corrections would be the wrong answer to it.
+ */
+function parseOrderIds(input) {
+  const raw = Array.isArray(input) ? input : String(input || '').split(/[\s,;]+/);
+  const out = [];
+  const seen = new Set();
+  for (const piece of raw) {
+    const id = String(piece || '').trim();
+    if (!id) continue;
+    const key = id.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(id);
+  }
+  return out;
+}
+
+// One correction is one order, but they are raised a batch at a time, and a
+// cap keeps a stray paste from turning into a thousand rows nobody meant.
+const MAX_AT_ONCE = 200;
+
+/**
+ * POST /api/corrections/lookup — what several order numbers turn out to be.
+ *
+ * A POST rather than a GET because the list can be long, and a hundred order
+ * numbers in a query string is a request some proxy will quietly truncate.
+ */
+router.post('/lookup', requireLogin, async (req, res) => {
+  try {
+    if (!canRaise(req.session.user)) {
+      return res.status(403).json({ success: false, error: 'Only a SuperAdmin can raise a correction.' });
+    }
+    const ids = parseOrderIds(req.body.orderIds);
+    if (!ids.length) return res.json({ success: true, data: [] });
+    if (ids.length > MAX_AT_ONCE) {
+      return res.json({ success: false, error: `That is ${ids.length} orders — ${MAX_AT_ONCE} at a time is the limit.` });
+    }
+
+    // Two queries for the whole list rather than two per order.
+    const marks = ids.map(() => '?').join(', ');
+    const [orders] = await db.query(
+      `SELECT order_id, dealer_name, client_name, india_designer, overseas_designer
+         FROM orders WHERE is_deleted = 0 AND order_id IN (${marks})`, ids);
+    const [prior] = await db.query(
+      `SELECT order_id, COUNT(*) AS c FROM corrections
+        WHERE order_id IN (${marks}) GROUP BY order_id`, ids);
+
+    const byId = new Map(orders.map(o => [String(o.order_id).toLowerCase(), o]));
+    const priorBy = new Map(prior.map(p => [String(p.order_id).toLowerCase(), p.c]));
+
+    res.json({
+      success: true,
+      data: ids.map(id => {
+        const o = byId.get(id.toLowerCase());
+        if (!o) return { typed: id, found: false };
+        return {
+          typed: id,
+          found: true,
+          orderId: o.order_id,
+          designer: (o.india_designer || o.overseas_designer || '').trim(),
+          dealer: o.dealer_name || '',
+          client: o.client_name || '',
+          priorCorrections: priorBy.get(id.toLowerCase()) || 0,
+        };
+      }),
+    });
+  } catch (err) {
+    console.error('Correction lookup failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * GET /api/corrections?status=pending|done|delayed
  *
  * Whoever raises them sees every correction; everybody else sees the ones on
@@ -214,15 +295,22 @@ router.post('/', requireLogin, async (req, res) => {
     if (!canRaise(user)) {
       return res.status(403).json({ success: false, error: 'Only a SuperAdmin can raise a correction.' });
     }
-    const orderId = String(req.body.orderId || '').trim();
-    if (!orderId) return res.status(400).json({ success: false, error: 'Give the order number.' });
+    // One order or a hundred: the same route, so the two cannot drift apart
+    // over who a correction goes to or what gets written in the log.
+    const ids = parseOrderIds(req.body.orderIds || req.body.orderId);
+    if (!ids.length) return res.status(400).json({ success: false, error: 'Give the order number.' });
+    if (ids.length > MAX_AT_ONCE) {
+      return res.status(400).json({
+        success: false,
+        error: `That is ${ids.length} orders — ${MAX_AT_ONCE} at a time is the limit.`,
+      });
+    }
 
-    const order = await one(
+    const marks = ids.map(() => '?').join(', ');
+    const [orders] = await db.query(
       `SELECT order_id, india_designer, overseas_designer
-         FROM orders WHERE order_id = ? AND is_deleted = 0 LIMIT 1`,
-      [orderId]
-    );
-    if (!order) return res.status(404).json({ success: false, error: 'No order with that number.' });
+         FROM orders WHERE is_deleted = 0 AND order_id IN (${marks})`, ids);
+    const byId = new Map(orders.map(o => [String(o.order_id).toLowerCase(), o]));
 
     // Whoever was picked, else the name on the order. A GNA correction goes to
     // one of the GNA designers however the order is credited - and the order's
@@ -231,25 +319,44 @@ router.post('/', requireLogin, async (req, res) => {
     //
     // Copied rather than looked up later: reassigning the order next month must
     // not move a correction somebody has already answered.
-    const designer = String(req.body.designer || order.india_designer || order.overseas_designer || '').trim();
-    if (!designer) {
-      return res.status(400).json({
-        success: false,
-        error: 'That order has no designer on it. Pick who this correction is for.',
-      });
+    const chosen = String(req.body.designer || '').trim();
+    const clientNote = String(req.body.clientNote || '').trim() || null;
+    const raisedBy = user.username || user.email || '';
+
+    // Each order is judged on its own. One bad number in a paste of fifty must
+    // not throw away the other forty-nine, so the failures are reported back
+    // rather than raised as an error for the whole batch.
+    const results = [];
+    for (const typed of ids) {
+      const order = byId.get(typed.toLowerCase());
+      if (!order) { results.push({ typed, ok: false, error: 'No order with that number.' }); continue; }
+
+      const designer = chosen
+        || String(order.india_designer || order.overseas_designer || '').trim();
+      if (!designer) {
+        results.push({ typed, ok: false, error: 'No designer on this order — pick who it is for.' });
+        continue;
+      }
+
+      try {
+        await db.query(
+          `INSERT INTO corrections (order_id, designer, client_note, raised_by)
+           VALUES (?, ?, ?, ?)`,
+          [order.order_id, designer, clientNote, raisedBy],
+        );
+        await logOrderEvent(order.order_id, 'Correction raised', 'for ' + designer, user);
+        results.push({ typed, ok: true, orderId: order.order_id, designer });
+      } catch (e) {
+        console.error(`[corrections] ${order.order_id}:`, e.message);
+        results.push({ typed, ok: false, error: 'Could not save this one.' });
+      }
     }
 
-    // The client's note is optional: whoever raises it often has nothing but
-    // the order number to hand, and the designer has the mail anyway.
-    await db.query(
-      `INSERT INTO corrections (order_id, designer, client_note, raised_by)
-       VALUES (?, ?, ?, ?)`,
-      [order.order_id, designer, String(req.body.clientNote || '').trim() || null,
-       user.username || user.email || '']
-    );
-    await logOrderEvent(order.order_id, 'Correction raised', 'for ' + designer, user);
-
-    res.json({ success: true });
+    const created = results.filter(r => r.ok).length;
+    // Nothing saved at all is a failure worth showing as one; anything else is
+    // a partial success the caller can read off the results.
+    res.json({ success: created > 0, created, results,
+      error: created ? undefined : (results[0] && results[0].error) || 'Nothing was saved.' });
   } catch (err) {
     console.error('Correction create failed:', err);
     res.status(500).json({ success: false, error: err.message });

@@ -107,26 +107,29 @@
     </div>
     <div class="modal-body">
       <div class="mb-3">
-        <label class="form-label fw-bold text-dark">Order number</label>
-        <input type="text" id="cr_orderId" class="form-control" placeholder="K-159929" autocomplete="off"
-               oninput="cr_lookupSoon()">
-        <div class="form-text" id="cr_lookup">Type the number — the designer comes up on its own.</div>
+        <label class="form-label fw-bold text-dark">Order numbers</label>
+        <textarea id="cr_orderId" class="form-control" rows="2" autocomplete="off"
+                  placeholder="K-159929, K-159930, K-159931 — as many as you like"
+                  oninput="cr_lookupSoon()"></textarea>
+        <div class="form-text" id="cr_lookup">
+          Type or paste the numbers — commas, spaces or new lines all work, and the
+          designers come up on their own.
+        </div>
       </div>
 
-      <!-- What the order turned out to be. Shown rather than asked for: the
+      <!-- What the orders turned out to be. Shown rather than asked for: the
            point of typing a number is not having to remember the rest. -->
-      <div class="border rounded p-2 mb-3 bg-light d-none" id="cr_found">
-        <div class="row g-2 small">
-          <div class="col-6"><div class="text-muted">Designer</div><div class="fw-bold text-dark" id="cr_f_designer">-</div></div>
-          <div class="col-6"><div class="text-muted">Client</div><div class="fw-bold text-dark" id="cr_f_client">-</div></div>
-          <div class="col-12"><div class="text-muted">Dealer</div><div class="fw-bold text-dark" id="cr_f_dealer">-</div></div>
+      <div class="border rounded mb-3 bg-light d-none" id="cr_found">
+        <div class="px-2 pt-2 small fw-bold text-dark" id="cr_summary"></div>
+        <div style="max-height:220px;overflow-y:auto;">
+          <table class="table table-sm mb-0 align-middle">
+            <tbody id="cr_foundRows"></tbody>
+          </table>
         </div>
-        <div class="mt-2 d-none" id="cr_priorWrap">
-          <span class="badge bg-warning text-dark" id="cr_prior"></span>
-        </div>
-        <!-- Only when the order carries no designer, which the office does have. -->
-        <div class="mt-2 d-none" id="cr_pickWrap">
-          <label class="form-label fw-bold text-dark small mb-1">This order has no designer on it — who is this for?</label>
+        <!-- Only for the orders that carry no designer, which the office does have. -->
+        <div class="p-2 border-top d-none" id="cr_pickWrap">
+          <label class="form-label fw-bold text-dark small mb-1" id="cr_pickLabel">
+            No designer on this order — who is it for?</label>
           <select id="cr_pickDesigner" class="form-select form-select-sm"></select>
         </div>
       </div>
@@ -358,9 +361,9 @@ function cr_gnaPicked() {
     hint.textContent = "Leave it to send the correction to the order's own designer.";
     return;
   }
-  const onOrder = cr_found && cr_found.designer;
-  hint.innerHTML = (onOrder && onOrder !== sel.value)
-    ? 'Goes to <b>' + crEsc(sel.value) + '</b> instead of <b>' + crEsc(onOrder) + '</b>.'
+  const n = (cr_found || []).filter(o => o.found).length;
+  hint.innerHTML = n > 1
+    ? 'All <b>' + n + '</b> go to <b>' + crEsc(sel.value) + '</b>, whatever the orders say.'
     : 'Goes to <b>' + crEsc(sel.value) + '</b>.';
 }
 
@@ -407,22 +410,37 @@ function cr_openRaise() {
     "Leave it to send the correction to the order's own designer.";
   document.getElementById('cr_found').classList.add('d-none');
   document.getElementById('cr_pickWrap').classList.add('d-none');
-  document.getElementById('cr_priorWrap').classList.add('d-none');
-  document.getElementById('cr_lookup').textContent = 'Type the number — the designer comes up on its own.';
+  document.getElementById('cr_pickDesigner').value = '';
+  document.getElementById('cr_lookup').textContent =
+    'Type or paste the numbers — commas, spaces or new lines all work.';
   document.getElementById('cr_saveBtn').disabled = true;
+  document.getElementById('cr_saveBtn').textContent = 'Send to the designer';
   new bootstrap.Modal(document.getElementById('cr_raiseModal')).show();
 }
 
-// Looked up as the number is typed, but not on every keystroke — an order
+// The typed box into a list of order numbers, the same way the server splits
+// it — commas, spaces, semicolons or line breaks, repeats dropped.
+function cr_ids() {
+  const out = [], seen = new Set();
+  for (const piece of (document.getElementById('cr_orderId').value || '').split(/[\s,;]+/)) {
+    const id = piece.trim();
+    if (!id || seen.has(id.toLowerCase())) continue;
+    seen.add(id.toLowerCase());
+    out.push(id);
+  }
+  return out;
+}
+
+// Looked up as the numbers are typed, but not on every keystroke — an order
 // number is eight characters and half of them are not one yet.
 function cr_lookupSoon() {
   clearTimeout(cr_lookupTimer);
   cr_found = null;
   document.getElementById('cr_saveBtn').disabled = true;
   document.getElementById('cr_found').classList.add('d-none');
-  const v = (document.getElementById('cr_orderId').value || '').trim();
-  if (v.length < 4) {
-    document.getElementById('cr_lookup').textContent = 'Type the number — the designer comes up on its own.';
+  if (!cr_ids().some(id => id.length >= 4)) {
+    document.getElementById('cr_lookup').textContent =
+      'Type or paste the numbers — commas, spaces or new lines all work.';
     return;
   }
   document.getElementById('cr_lookup').textContent = 'Looking...';
@@ -430,10 +448,13 @@ function cr_lookupSoon() {
 }
 
 async function cr_lookup() {
-  const v = (document.getElementById('cr_orderId').value || '').trim();
-  if (!v) return;
+  const ids = cr_ids();
+  if (!ids.length) return;
   try {
-    const res = await fetch('/api/corrections/order/' + encodeURIComponent(v));
+    const res = await fetch('/api/corrections/lookup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderIds: ids }),
+    });
     const j = await res.json();
     const hint = document.getElementById('cr_lookup');
     if (!j.success) {
@@ -442,62 +463,126 @@ async function cr_lookup() {
     }
     cr_found = j.data;
     hint.textContent = '';
-    document.getElementById('cr_found').classList.remove('d-none');
-    document.getElementById('cr_f_designer').textContent = j.data.designer || '— none on this order —';
-    document.getElementById('cr_f_client').textContent = j.data.client || '-';
-    document.getElementById('cr_f_dealer').textContent = j.data.dealer || '-';
-
-    // Raising a third round on the same order is worth seeing before saving.
-    const prior = document.getElementById('cr_priorWrap');
-    prior.classList.toggle('d-none', !j.data.priorCorrections);
-    if (j.data.priorCorrections) {
-      document.getElementById('cr_prior').textContent =
-        j.data.priorCorrections + (j.data.priorCorrections === 1 ? ' earlier correction' : ' earlier corrections')
-        + ' on this order';
-    }
-
-    // The order carries no designer — rare, but it happens, and guessing one
-    // would put the work in front of the wrong person.
-    const pick = document.getElementById('cr_pickWrap');
-    pick.classList.toggle('d-none', !!j.data.designer);
-    if (!j.data.designer && !document.getElementById('cr_pickDesigner').options.length) {
-      document.getElementById('cr_pickDesigner').innerHTML =
-        '<option value="">Pick a designer</option>'
-        + cr_users.map(u => '<option>' + crEsc(u) + '</option>').join('');
-    }
-    document.getElementById('cr_saveBtn').disabled = false;
-    cr_gnaPicked();          // the hint can now name the order's own designer
+    cr_drawFound();
   } catch (e) {
     document.getElementById('cr_lookup').innerHTML = '<span class="text-danger">Server error.</span>';
   }
 }
 
+/**
+ * The looked-up orders, one line each.
+ *
+ * Every number typed gets a line, including the ones that came to nothing -
+ * a paste of forty where two are wrong should say which two, not quietly
+ * raise thirty-eight.
+ */
+function cr_drawFound() {
+  const box = document.getElementById('cr_found');
+  const rows = document.getElementById('cr_foundRows');
+  if (!cr_found || !cr_found.length) { box.classList.add('d-none'); return; }
+  box.classList.remove('d-none');
+
+  rows.innerHTML = cr_found.map(o => {
+    if (!o.found) {
+      return '<tr><td class="text-danger fw-bold">' + crEsc(o.typed) + '</td>'
+        + '<td colspan="2" class="text-danger small">no order with that number</td></tr>';
+    }
+    const who = o.designer
+      ? '<span class="fw-bold text-dark">' + crEsc(o.designer) + '</span>'
+      : '<span class="text-warning fw-bold">no designer</span>';
+    const prior = o.priorCorrections
+      ? ' <span class="badge bg-warning text-dark">' + o.priorCorrections + ' earlier</span>'
+      : '';
+    return '<tr><td class="fw-bold text-dark">' + crEsc(o.orderId) + '</td>'
+      + '<td class="small">' + who + prior + '</td>'
+      + '<td class="small text-muted">' + crEsc(o.client || o.dealer || '') + '</td></tr>';
+  }).join('');
+
+  const ok = cr_found.filter(o => o.found);
+  const missing = cr_found.length - ok.length;
+  const noDesigner = ok.filter(o => !o.designer).length;
+
+  const bits = [ok.length + (ok.length === 1 ? ' order' : ' orders') + ' found'];
+  if (missing) bits.push(missing + ' not found');
+  if (noDesigner) bits.push(noDesigner + ' with no designer');
+  document.getElementById('cr_summary').textContent = bits.join(' · ');
+
+  // One picker for all the orders that carry no name, since they go to the
+  // same person often enough and asking twenty times would be worse.
+  const pick = document.getElementById('cr_pickWrap');
+  pick.classList.toggle('d-none', noDesigner === 0);
+  if (noDesigner) {
+    document.getElementById('cr_pickLabel').textContent = noDesigner === 1
+      ? 'One order has no designer on it — who is it for?'
+      : noDesigner + ' orders have no designer on them — who are they for?';
+    if (!document.getElementById('cr_pickDesigner').options.length) {
+      document.getElementById('cr_pickDesigner').innerHTML =
+        '<option value="">Pick a designer</option>'
+        + cr_users.map(u => '<option>' + crEsc(u) + '</option>').join('');
+    }
+  }
+
+  document.getElementById('cr_saveBtn').disabled = !ok.length;
+  document.getElementById('cr_saveBtn').textContent = ok.length > 1
+    ? 'Send all ' + ok.length + ' to the designers'
+    : 'Send to the designer';
+  cr_gnaPicked();          // the hint can now name the orders' own designers
+}
+
 async function cr_save() {
-  if (!cr_found) return;
-  // A GNA designer wins over the name on the order; the picker below only
-  // appears when the order carries no name at all.
-  const designer = document.getElementById('cr_gna').value
-    || cr_found.designer
-    || document.getElementById('cr_pickDesigner').value;
-  if (!designer) { showToast('warning', 'Pick who this correction is for.'); return; }
+  if (!cr_found || !cr_found.length) return;
+  const ok = cr_found.filter(o => o.found);
+  if (!ok.length) return;
+
+  // A GNA designer wins over the names on the orders and applies to all of
+  // them; the picker below only covers the ones carrying no name at all.
+  const gna = document.getElementById('cr_gna').value;
+  const fallback = document.getElementById('cr_pickDesigner').value;
+  if (!gna && ok.some(o => !o.designer) && !fallback) {
+    showToast('warning', 'Pick who the orders with no designer are for.'); return;
+  }
+
+  // Sent as one request per designer-decision rather than per order: the
+  // server takes the whole list and reports back on each one.
+  const byDesigner = new Map();
+  for (const o of ok) {
+    const who = gna || o.designer || fallback;
+    if (!byDesigner.has(who)) byDesigner.set(who, []);
+    byDesigner.get(who).push(o.orderId);
+  }
+
+  const clientNote = (document.getElementById('cr_clientNote').value || '').trim();
   showLoading(true);
+  let created = 0;
+  const failed = [];
   try {
-    const res = await fetch('/api/corrections', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        orderId: cr_found.orderId,
-        designer,
-        clientNote: (document.getElementById('cr_clientNote').value || '').trim(),
-      }),
-    });
-    const j = await res.json();
+    for (const [designer, orderIds] of byDesigner) {
+      const res = await fetch('/api/corrections', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds, designer, clientNote }),
+      });
+      const j = await res.json();
+      created += j.created || 0;
+      for (const r of (j.results || [])) if (!r.ok) failed.push(r.typed + ' — ' + r.error);
+    }
     showLoading(false);
-    if (!j.success) { showToast('error', j.error); return; }
-    bootstrap.Modal.getInstance(document.getElementById('cr_raiseModal')).hide();
-    showToast('success', 'Sent to ' + designer + '.');
-    cr_filter = 'pending';
-    await cr_load();
-  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); return; }
+
+  if (!created) { showToast('error', failed[0] || 'Nothing was saved.'); return; }
+
+  bootstrap.Modal.getInstance(document.getElementById('cr_raiseModal')).hide();
+  const who = byDesigner.size === 1 ? [...byDesigner.keys()][0] + '.' : byDesigner.size + ' designers.';
+  showToast(failed.length ? 'warning' : 'success',
+    created + (created === 1 ? ' correction' : ' corrections') + ' sent to ' + who
+    + (failed.length ? '  ' + failed.length + ' could not be raised.' : ''));
+  if (failed.length) {
+    Swal.fire({
+      icon: 'warning', title: 'Some were left out',
+      html: '<div class="text-start small">' + failed.map(crEsc).join('<br>') + '</div>',
+    });
+  }
+  cr_filter = 'pending';
+  await cr_load();
 }
 
 // ── Answering one ──
