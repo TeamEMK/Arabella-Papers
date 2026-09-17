@@ -298,6 +298,22 @@ async function syncDealer(dealerName, { from = FROM_DAY } = {}) {
 }
 
 /**
+ * Whether this process is allowed to write to the sheet at all.
+ *
+ * There is one calling sheet and every copy of this app knows its address, so
+ * a developer punching a test order on their own machine rewrote the office's
+ * row from their own database - Local Order went from 196 orders to 83 that
+ * way, and it took a full re-run to put right.
+ *
+ * The deployment writes; anything else has to say so. SCOT_SYNC=on is the way
+ * to test the sync locally on purpose, and scripts/scot-backfill.js does not
+ * come through here - running it is already saying so.
+ */
+function syncAllowed() {
+  return !!process.env.VERCEL || process.env.SCOT_SYNC === 'on';
+}
+
+/**
  * Called when an order is punched. Never throws.
  *
  * Awaited by the route rather than left running: on Vercel the container stops
@@ -305,6 +321,7 @@ async function syncDealer(dealerName, { from = FROM_DAY } = {}) {
  * dropped.
  */
 async function recordPunchedOrder(dealerName) {
+  if (!syncAllowed()) return null;
   try {
     return await syncDealer(dealerName);
   } catch (err) {
@@ -318,5 +335,5 @@ module.exports = {
   colLetters, dayKey, serialToDay,
   calendar, forgetCalendar, rowIndex,
   frequencyFrom, dealerHistory, detailRanges, ensureCallDateFormat,
-  syncDealer, recordPunchedOrder,
+  syncDealer, recordPunchedOrder, syncAllowed,
 };
