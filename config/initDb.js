@@ -99,6 +99,10 @@ const COLUMN_MIGRATIONS = [
   // often enough that the client should be told in the same mail, and free
   // text because no two are the same - "2 sample kits, gold foil swatch".
   { table: 'orders', column: 'sample_details', type: 'TEXT NULL' },
+  // How many of the invitation itself. Nullable, and every order punched
+  // before this arrived carries NULL - the field became compulsory from the
+  // day it went in, not retrospectively.
+  { table: 'orders', column: 'order_quantity', type: 'INT NULL' },
 ];
 
 async function addMissingColumns() {
@@ -129,6 +133,54 @@ async function seedGnaDesigners() {
     GNA_SEED.flatMap(n => [n, 'setup']),
   );
   return GNA_SEED.length;
+}
+
+/**
+ * The cards the office named, put in once.
+ *
+ * Only when the table is empty, for the same reason as the GNA list: seeding
+ * on every boot would bring back a card somebody had deleted.
+ */
+const ADD_ON_SEED = [
+  'RSVP Card', 'Thank You Card', 'Accommodation Card', 'Welcome Card',
+  'Map Card', 'Rehearsal Dinner Card', 'Details Card', 'Direction Card',
+  'Place Card', 'Menu Card', 'Program Card', 'Escort Card',
+  'Reception Card', 'Parking Card',
+];
+
+async function seedAddOns() {
+  const [[row]] = await db.query('SELECT COUNT(*) AS c FROM add_ons');
+  if (row.c) return 0;
+  await db.query(
+    `INSERT INTO add_ons (name, added_by) VALUES ${ADD_ON_SEED.map(() => '(?, ?)').join(', ')}`,
+    ADD_ON_SEED.flatMap(n => [n, 'setup']),
+  );
+  return ADD_ON_SEED.length;
+}
+
+/**
+ * The settings that have a sensible starting position, written once each.
+ *
+ * INSERT IGNORE rather than a count: a second setting added later has to be
+ * seeded even though the table is no longer empty, and a value the office has
+ * since changed must not be put back.
+ */
+const SETTING_SEED = [
+  // Order Quantity is compulsory on a punch. The office asked to be able to
+  // relax that themselves rather than come back for a code change.
+  ['order_quantity_required', '1'],
+];
+
+async function seedSettings() {
+  let n = 0;
+  for (const [name, value] of SETTING_SEED) {
+    const [res] = await db.query(
+      'INSERT IGNORE INTO app_settings (name, value, updated_by) VALUES (?, ?, ?)',
+      [name, value, 'setup'],
+    );
+    n += res.affectedRows || 0;
+  }
+  return n;
 }
 
 /**
@@ -178,8 +230,10 @@ async function run() {
   // users can still be recovered by setting ADMIN_PASSWORD and restarting.
   const admin = await seedAdmin();
   const gna = await seedGnaDesigners();
+  const addOns = await seedAddOns();
+  const settings = await seedSettings();
   const approvals = await seedApprovalHistory();
-  return { created, admin, columns, gna, approvals };
+  return { created, admin, columns, gna, addOns, settings, approvals };
 }
 
 let ready = null;

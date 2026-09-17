@@ -1348,6 +1348,9 @@ router.get('/form-options', requireLogin, async (req, res) => {
   try {
     const [dealers] = await db.query('SELECT name FROM dealers ORDER BY name ASC');
     const [designers] = await db.query('SELECT india_name, overseas_name FROM designers ORDER BY india_name ASC');
+    const [addOns] = await db.query('SELECT name FROM add_ons ORDER BY name ASC');
+    const [[qtyRule]] = await db.query(
+      `SELECT value FROM app_settings WHERE name = 'order_quantity_required'`);
 
     const indian = designers.map(d => d.india_name).filter(Boolean);
     const cassie = designers.map(d => d.overseas_name).filter(Boolean);
@@ -1357,7 +1360,103 @@ router.get('/form-options', requireLogin, async (req, res) => {
       dealers: dealers.map(d => d.name),
       indian,
       cassie,
+      addOns: addOns.map(a => a.name),
+      // The punch form asks the server rather than deciding for itself, so
+      // turning the rule off in Manage Data reaches every open screen on its
+      // next load instead of needing a deploy.
+      orderQuantityRequired: !qtyRule || qtyRule.value !== '0',
     });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// ADD ONS
+// The extra cards an order can carry. Managed like dealers and designers:
+// listed for everyone who punches, changed only by the people who own the
+// master data.
+// ═══════════════════════════════════════════════
+const canEditMaster = (u) => u && (u.role === 'SuperAdmin' || u.domain === 'Head');
+
+router.get('/add-ons', requireLogin, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      'SELECT id, name, added_by, created_at FROM add_ons ORDER BY name ASC');
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/add-ons', requireLogin, async (req, res) => {
+  try {
+    if (!canEditMaster(req.session.user)) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.json({ success: false, error: 'Write a name.' });
+
+    const [dupe] = await db.query(
+      'SELECT id FROM add_ons WHERE LOWER(name) = LOWER(?) LIMIT 1', [name]);
+    if (dupe.length) return res.json({ success: false, error: `"${name}" is already on the list.` });
+
+    await db.query('INSERT INTO add_ons (name, added_by) VALUES (?, ?)',
+      [name, req.session.user.email || req.session.user.username || '']);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.delete('/add-ons/:id', requireLogin, async (req, res) => {
+  try {
+    if (!canEditMaster(req.session.user)) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    // Only off the list to choose from. Orders that already carry this card
+    // keep it - order_add_ons holds the name, not a link to this row.
+    await db.query('DELETE FROM add_ons WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════
+
+router.get('/settings', requireLogin, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT name, value FROM app_settings');
+    const out = {};
+    for (const r of rows) out[r.name] = r.value;
+    res.json({ success: true, data: out });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Only the settings named here can be set, so a typo or a crafted request
+// cannot invent a row that nothing reads.
+const SETTABLE = new Set(['order_quantity_required']);
+
+router.put('/settings/:name', requireLogin, async (req, res) => {
+  try {
+    if (!canEditMaster(req.session.user)) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    const name = String(req.params.name || '');
+    if (!SETTABLE.has(name)) return res.json({ success: false, error: 'No such setting.' });
+
+    const value = req.body.value ? '1' : '0';
+    await db.query(
+      `INSERT INTO app_settings (name, value, updated_by) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE value = VALUES(value), updated_by = VALUES(updated_by)`,
+      [name, value, req.session.user.email || ''],
+    );
+    res.json({ success: true, value });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -37,14 +37,18 @@ const TYPES = {
       { key: 'remarks', header: 'Remarks / Subject Line', aliases: ['remarks', 'subject line', 'subject'], required: false },
       { key: 'designer', header: 'Designer', aliases: ['designer name'], required: true },
       { key: 'designTime', header: 'Possible Design Time', aliases: ['design time'], required: true },
+      // Whether this one is compulsory is the office's to decide, so it is not
+      // marked required here - validate() asks the setting instead.
+      { key: 'orderQuantity', header: 'Order Quantity', aliases: ['order qty', 'quantity', 'qty'], required: false },
+      { key: 'addOns', header: 'Add Ons', aliases: ['add on', 'addons', 'addon'], required: false },
     ],
     // Spread across the samples: both punched-by values, several design times,
     // and a blank optional column — so the file answers "what goes here?"
     // without anyone having to read a separate note.
     samples: [
-      ['orders@arabella.com', 'India Team', 'Sharma Traders', 'Hotel Grand', 'Menu card reprint', 'Ravi Kumar', '2 Hours'],
-      ['orders@arabella.com', 'India Team', 'Verma Papers', 'Cafe Mocha', 'Wedding invite - gold foil', 'Priya Sharma', 'EOD'],
-      ['orders@arabella.com', 'India Team', 'Gupta Enterprises', 'Sunrise Hotel', '', 'Neha Sharma', '10 Minutes'],
+      ['orders@arabella.com', 'India Team', 'Sharma Traders', 'Hotel Grand', 'Menu card reprint', 'Ravi Kumar', '2 Hours', '250', 'RSVP Card x 50; Menu Card x 250'],
+      ['orders@arabella.com', 'India Team', 'Verma Papers', 'Cafe Mocha', 'Wedding invite - gold foil', 'Priya Sharma', 'EOD', '120', 'Thank You Card x 120'],
+      ['orders@arabella.com', 'India Team', 'Gupta Enterprises', 'Sunrise Hotel', '', 'Neha Sharma', '10 Minutes', '80', ''],
     ],
   },
   dealers: {
@@ -107,6 +111,39 @@ function fromKeys(type, obj) {
   return out;
 }
 
+/**
+ * "RSVP Card x 50; Menu Card x 250" into rows.
+ *
+ * One cell has to carry a list of pairs, so the file needs a shape a person
+ * can type. Semicolons separate the cards - names contain commas often enough
+ * that a comma would split them in the wrong place - and x, * or : separates
+ * the name from the number, because three offices will type three of them.
+ *
+ * Returns { rows } or { error }.
+ */
+function parseAddOnCell(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return { rows: [] };
+
+  const rows = [];
+  const seen = new Set();
+  for (const piece of text.split(/[;\n]+/)) {
+    const part = piece.trim();
+    if (!part) continue;
+    const m = part.match(/^(.*?)\s*[x*:]\s*(\d+)$/i);
+    if (!m) return { error: `Add Ons: "${part}" should read like "RSVP Card x 50"` };
+    const name = m[1].trim();
+    const qty = Number(m[2]);
+    if (!name) return { error: `Add Ons: "${part}" has no card name` };
+    if (qty < 1) return { error: `Add Ons: quantity for "${name}" must be 1 or more` };
+    const key = name.toLowerCase();
+    if (seen.has(key)) return { error: `Add Ons: "${name}" is listed twice` };
+    seen.add(key);
+    rows.push({ name, qty });
+  }
+  return { rows };
+}
+
 function validate(type, data, context) {
   const errors = [];
   const warnings = [];
@@ -137,6 +174,30 @@ function validate(type, data, context) {
     if (data.dealer && context.dealerEmails && !context.dealerEmails.has(data.dealer.toLowerCase())) {
       warnings.push('Dealer not in master list — will import with no dealer email');
     }
+
+    // Same rule the punch form follows, and from the same setting, so a file
+    // cannot put in what the form would have refused.
+    const qty = String(data.orderQuantity ?? '').trim();
+    if (qty === '') {
+      if (context.orderQuantityRequired) errors.push('Order Quantity is required');
+    } else if (!/^\d+$/.test(qty) || Number(qty) < 1) {
+      errors.push('Order Quantity must be a whole number of 1 or more');
+    } else {
+      data.orderQuantity = Number(qty);
+    }
+
+    const parsed = parseAddOnCell(data.addOns);
+    if (parsed.error) {
+      errors.push(parsed.error);
+    } else {
+      data.addOnRows = parsed.rows;
+      const unknown = parsed.rows
+        .filter(r => context.addOnNames && !context.addOnNames.has(r.name.toLowerCase()))
+        .map(r => r.name);
+      if (unknown.length) {
+        warnings.push(`Not on the Add Ons list — will import anyway: ${unknown.join(', ')}`);
+      }
+    }
   }
 
   if (type === 'dealers' || type === 'designers') {
@@ -158,7 +219,16 @@ async function buildContext(type, team) {
     const [dealers] = await db.query('SELECT name, email FROM dealers');
     const dealerEmails = new Map();
     for (const d of dealers) dealerEmails.set(String(d.name || '').toLowerCase(), d.email || '');
-    return { dealerEmails };
+
+    const [addOns] = await db.query('SELECT name FROM add_ons');
+    const [[qtyRule]] = await db.query(
+      `SELECT value FROM app_settings WHERE name = 'order_quantity_required'`);
+
+    return {
+      dealerEmails,
+      addOnNames: new Set(addOns.map(a => String(a.name || '').toLowerCase())),
+      orderQuantityRequired: !qtyRule || qtyRule.value !== '0',
+    };
   }
   if (type === 'dealers') {
     const [rows] = await db.query('SELECT name FROM dealers');
@@ -223,19 +293,31 @@ router.get('/template/:type', canImport, (req, res) => {
 });
 
 // GET /api/bulk/columns/:type — what the UI shows above the file picker
-router.get('/columns/:type', canImport, (req, res) => {
+router.get('/columns/:type', canImport, async (req, res) => {
   const type = TYPES[req.params.type];
   if (!type) return res.status(404).json({ success: false, error: 'Unknown import type.' });
+
+  // Order Quantity is the one column whose requiredness the office controls,
+  // so the hint has to ask rather than read it off the spec - otherwise it
+  // would say optional while the import refused the file.
+  let qtyRequired = true;
+  if (req.params.type === 'orders') {
+    const [[row]] = await db.query(
+      `SELECT value FROM app_settings WHERE name = 'order_quantity_required'`);
+    qtyRequired = !row || row.value !== '0';
+  }
 
   res.json({
     success: true,
     columns: type.columns.map(c => ({
       key: c.key,
       header: c.header,
-      required: !!c.required,
+      required: c.key === 'orderQuantity' ? qtyRequired : !!c.required,
       allowed: c.key === 'punchedBy' ? PUNCHED_BY
         : c.key === 'designTime' ? DESIGN_TIMES
         : null,
+      // Nothing else in the file needs explaining; this one does.
+      hint: c.key === 'addOns' ? 'e.g. RSVP Card x 50; Menu Card x 250' : null,
     })),
   });
 });
@@ -337,20 +419,40 @@ router.post('/import', canImport, async (req, res) => {
         d.remarks || '',
         'No Files',
         'Fresh Design',
+        d.orderQuantity || null,
       ]);
       imported = await insertChunks(
         `INSERT INTO orders
            (order_id, email_address, order_punched_by, dealer_name, dealer_email,
             client_name, india_designer, overseas_designer, possible_design_time,
-            special_remarks, upload_design_file, design_status)
+            special_remarks, upload_design_file, design_status, order_quantity)
          VALUES ?`,
         values,
       );
+
+      // The cards each imported order carries. One statement for the whole
+      // file rather than one per order - a 2000-row import would otherwise
+      // spend longer on its add-ons than on the orders themselves.
+      const addOnValues = [];
+      valid.forEach((d, i) => {
+        for (const a of (d.addOnRows || [])) addOnValues.push([ids[i], a.name, a.qty]);
+      });
+      if (addOnValues.length) {
+        await insertChunks(
+          'INSERT IGNORE INTO order_add_ons (order_id, name, qty) VALUES ?',
+          addOnValues,
+        );
+      }
 
       // Imported orders get the same trail as punched ones, so the log can
       // answer "where did this row come from" months later.
       for (let i = 0; i < valid.length; i++) {
         await logOrderEvent(ids[i], 'Imported', (valid[i].dealer || '-') + ' / ' + (valid[i].client || '-'), req.session.user);
+        const rows = valid[i].addOnRows || [];
+        if (rows.length) {
+          await logOrderEvent(ids[i], 'Add-ons',
+            rows.map(a => `${a.name} x${a.qty}`).join(', '), req.session.user);
+        }
       }
 
       // An import is a punch as far as the calling sheet is concerned. Once per

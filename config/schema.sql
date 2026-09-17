@@ -433,6 +433,53 @@ CREATE TABLE IF NOT EXISTS order_approvals (
   UNIQUE KEY uq_appr_day (order_id, status, approved_at)
 );
 
+-- =============================================
+-- ADD ONS
+-- The extra cards an order can carry beside the invitation itself - an RSVP
+-- card, a menu card, a map. The list is the office's, not the code's: it is a
+-- table so a new card can be added from Manage Data without a deploy.
+-- =============================================
+CREATE TABLE IF NOT EXISTS add_ons (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  added_by VARCHAR(150),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_add_on_name (name)
+);
+
+-- =============================================
+-- WHAT EACH ORDER ORDERED
+-- One row per add-on on an order, with how many of it. A child table rather
+-- than a column: an order takes as many add-ons as it takes, and a list packed
+-- into one column cannot be counted, filtered or totalled later.
+--
+-- The name is stored, not a link to add_ons. Renaming a card in Manage Data
+-- must not rewrite what was ordered last March, the same way an order keeps
+-- the dealer name it was punched with.
+-- =============================================
+CREATE TABLE IF NOT EXISTS order_add_ons (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id VARCHAR(20) NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  qty INT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_order_add_ons (order_id),
+  -- The same card twice on one order is one line with a bigger number.
+  UNIQUE KEY uq_order_add_on (order_id, name)
+);
+
+-- =============================================
+-- SETTINGS
+-- The few choices the office should be able to change without a deploy. Kept
+-- as text against a name so adding the next one costs no migration.
+-- =============================================
+CREATE TABLE IF NOT EXISTS app_settings (
+  name VARCHAR(60) NOT NULL PRIMARY KEY,
+  value VARCHAR(255),
+  updated_by VARCHAR(150),
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR(128) NOT NULL PRIMARY KEY,
   expires INT(11) UNSIGNED NOT NULL,

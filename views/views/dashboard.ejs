@@ -283,6 +283,25 @@
               <option value="EOD">EOD</option>
             </select>
           </div>
+          <div class="col-md-6">
+            <label class="form-label text-dark fw-bold">
+              Order Quantity <span id="punchQtyStar" class="text-danger">*</span>
+            </label>
+            <input type="number" id="punchOrderQty" class="form-control" min="1" step="1"
+                   placeholder="How many?" autocomplete="off"/>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-dark fw-bold">Add On</label>
+            <select id="punchAddOnPick" class="form-select" onchange="addOnPicked(this)">
+              <option value="">Choose a card...</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <!-- One row per card chosen, each with its own quantity. Hidden
+                 until there is something in it so the form does not open with
+                 an empty box nobody asked for. -->
+            <div id="punchAddOnRows" class="d-none border rounded p-2 bg-light"></div>
+          </div>
           <div class="col-12">
             <label class="form-label text-dark fw-bold">Upload Files</label>
             <div class="file-box text-center">
@@ -423,12 +442,14 @@
         <div class="p-3 bg-light border-bottom">
           <div class="input-group">
             <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
-            <input type="text" id="manageSearchInput" class="form-control text-dark bg-white" placeholder="Search Dealers or Designers..." onkeyup="filterManageTables()"/>
+            <input type="text" id="manageSearchInput" class="form-control text-dark bg-white" placeholder="Search Dealers, Designers or Add Ons..." onkeyup="filterManageTables()"/>
           </div>
         </div>
         <ul class="nav nav-tabs nav-fill" id="manageTabs">
           <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#viewDealers">Dealers</button></li>
           <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#viewDesigners">Designers</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#viewAddOns">Add Ons</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#viewSettings">Settings</button></li>
         </ul>
         <div class="tab-content p-3">
           <div class="tab-pane fade show active" id="viewDealers">
@@ -445,6 +466,39 @@
                 <thead class="table-dark"><tr><th>India Name</th><th>India Email</th><th>Action</th><th>Overseas Name</th><th>Overseas Email</th><th>Action</th></tr></thead>
                 <tbody id="tbl_manage_designers"></tbody>
               </table>
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="viewAddOns">
+            <div class="input-group input-group-sm mb-3">
+              <input type="text" id="addOnNewName" class="form-control" placeholder="New card name..."
+                     onkeydown="if(event.key==='Enter') createAddOn()"/>
+              <button class="btn btn-success" onclick="createAddOn()"><i class="fas fa-plus me-1"></i> Add</button>
+            </div>
+            <div class="table-responsive" style="max-height:360px; overflow-y:auto;">
+              <table class="table table-sm table-bordered table-hover mb-0">
+                <thead class="table-dark"><tr><th>Card</th><th style="width:90px;">Action</th></tr></thead>
+                <tbody id="tbl_manage_addons"><tr><td colspan="2" class="text-center">Loading...</td></tr></tbody>
+              </table>
+            </div>
+            <div class="form-text mt-2">
+              Removing a card only takes it off the list to choose from. Orders that
+              already carry it keep it.
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="viewSettings">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="setOrderQtyRequired"
+                     onchange="saveSetting('order_quantity_required', this.checked)"/>
+              <label class="form-check-label text-dark fw-bold" for="setOrderQtyRequired">
+                Order Quantity is compulsory
+              </label>
+            </div>
+            <div class="form-text">
+              On, an order cannot be punched or imported without it. Off, the field
+              stays on the form but may be left blank. Orders punched before this
+              field existed are not affected either way.
             </div>
           </div>
         </div>
@@ -826,6 +880,22 @@ async function handleFormSubmit() {
 
   if(!dealer || !designer || !client || !remarks || !designTime) { showToast('warning','Please fill all required fields.'); return; }
 
+  // Checked here as well as on the server, so a mistake is caught before the
+  // files start uploading rather than after.
+  const qtyRaw = document.getElementById('punchOrderQty').value.trim();
+  if(!qtyRaw) {
+    if(db_forms.orderQuantityRequired !== false) { showToast('warning','Order Quantity is required.'); return; }
+  } else if(!/^\d+$/.test(qtyRaw) || Number(qtyRaw) < 1) {
+    showToast('warning','Order Quantity must be 1 or more.'); return;
+  }
+
+  for(const a of punchAddOns) {
+    const q = String(a.qty).trim();
+    if(!q || !/^\d+$/.test(q) || Number(q) < 1) {
+      showToast('warning', `Quantity for "${a.name}" must be 1 or more.`); return;
+    }
+  }
+
   const btn = document.getElementById('btnSubmit');
   const origText = btn.innerHTML;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Processing...';
@@ -839,6 +909,10 @@ async function handleFormSubmit() {
   formData.append('remarks', remarks);
   formData.append('designer', designer);
   formData.append('designTime', designTime);
+  formData.append('orderQuantity', qtyRaw);
+  // JSON because the form is multipart and a repeated field would leave the
+  // server unable to tell which quantity belongs to which card.
+  formData.append('addOns', JSON.stringify(punchAddOns.map(a => ({ name: a.name, qty: Number(a.qty) }))));
   const fileInput = document.getElementById('fileInput');
   if(fileInput.files.length > 0) {
     Array.from(fileInput.files).forEach(f => formData.append('files', f));
@@ -1015,6 +1089,87 @@ async function loadMasterData() {
     renderDealerTable(json.dealers || []);
     renderDesignerTable(json.designers || []);
   } catch(e) { console.error(e); }
+  loadAddOnTable();
+  loadSettings();
+}
+
+// ═══ ADD ONS (master data) ═══
+async function loadAddOnTable() {
+  const tbody = document.getElementById('tbl_manage_addons');
+  if (!tbody) return;
+  try {
+    const json = await (await fetch('/api/dashboards/add-ons')).json();
+    const rows = json.data || [];
+    tbody.innerHTML = rows.map(a => `
+      <tr class="manage-row">
+        <td class="text-dark">${bulkEsc(a.name)}</td>
+        <td class="text-center">
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteAddOn(${a.id}, '${bulkEsc(a.name)}')">
+            <i class="fas fa-trash"></i></button>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="2" class="text-center">No cards yet</td></tr>';
+    // The punch form reads this list, so refresh what it holds too rather than
+    // waiting for a page reload to catch up.
+    db_forms.addOns = rows.map(a => a.name);
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="2" class="text-center text-danger">Could not load</td></tr>';
+  }
+}
+
+async function createAddOn() {
+  const box = document.getElementById('addOnNewName');
+  const name = box.value.trim();
+  if (!name) { showToast('warning','Write a name.'); return; }
+  try {
+    const res = await fetch('/api/dashboards/add-ons', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name }),
+    });
+    const json = await res.json();
+    if (!json.success) { showToast('error', json.error || 'Could not add.'); return; }
+    box.value = '';
+    showToast('success', `"${name}" added.`);
+    loadAddOnTable();
+  } catch(e) { showToast('error','Server error.'); }
+}
+
+async function deleteAddOn(id, name) {
+  if (!confirm(`Remove "${name}" from the list? Orders that already have it keep it.`)) return;
+  try {
+    const json = await (await fetch('/api/dashboards/add-ons/' + id, { method: 'DELETE' })).json();
+    if (!json.success) { showToast('error', json.error || 'Could not remove.'); return; }
+    showToast('success', `"${name}" removed.`);
+    loadAddOnTable();
+  } catch(e) { showToast('error','Server error.'); }
+}
+
+// ═══ SETTINGS ═══
+async function loadSettings() {
+  const box = document.getElementById('setOrderQtyRequired');
+  if (!box) return;
+  try {
+    const json = await (await fetch('/api/dashboards/settings')).json();
+    const on = !json.data || json.data.order_quantity_required !== '0';
+    box.checked = on;
+    db_forms.orderQuantityRequired = on;
+  } catch(e) { /* leave it as it is rather than showing a wrong position */ }
+}
+
+async function saveSetting(name, value) {
+  try {
+    const res = await fetch('/api/dashboards/settings/' + name, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ value }),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      showToast('error', json.error || 'Could not save.');
+      loadSettings();   // put the switch back where the server says it is
+      return;
+    }
+    if (name === 'order_quantity_required') db_forms.orderQuantityRequired = value;
+    showToast('success', value ? 'Order Quantity is now compulsory.' : 'Order Quantity is now optional.');
+  } catch(e) { showToast('error','Server error.'); loadSettings(); }
 }
 function renderDealerTable(dealers) {
   dealers.sort((a,b) => (a.name||'').localeCompare(b.name||''));
@@ -1100,7 +1255,7 @@ async function deleteDesigner(id) {
 }
 function filterManageTables() {
   const query = document.getElementById('manageSearchInput').value.toLowerCase().trim();
-  ['tbl_manage_dealers','tbl_manage_designers'].forEach(id => {
+  ['tbl_manage_dealers','tbl_manage_designers','tbl_manage_addons'].forEach(id => {
     const tbody = document.getElementById(id);
     if(!tbody) return;
     Array.from(tbody.getElementsByTagName('tr')).forEach(row => {
@@ -1200,6 +1355,61 @@ function handleCheckboxChange(id, isChecked) {
   if(isChecked) selectedOrderIds.add(id.toString());
   else selectedOrderIds.delete(id.toString());
 }
+// ═══ ADD ONS ═══
+// The cards chosen so far, in the order they were picked. Kept as an array
+// rather than read back off the rows each time, so a half-typed quantity is
+// not lost when another card is added.
+var punchAddOns = [];
+
+function fillAddOnPicker() {
+  const sel = document.getElementById('punchAddOnPick');
+  if (!sel) return;
+  const chosen = new Set(punchAddOns.map(a => a.name));
+  // Already-chosen cards come out of the list: picking one twice would mean
+  // two lines for the same card, and the server refuses that anyway.
+  sel.innerHTML = '<option value="">Choose a card...</option>'
+    + (db_forms.addOns || [])
+      .filter(n => !chosen.has(n))
+      .map(n => `<option value="${bulkEsc(n)}">${bulkEsc(n)}</option>`).join('');
+}
+
+function addOnPicked(sel) {
+  const name = sel.value;
+  if (!name) return;
+  punchAddOns.push({ name, qty: '' });
+  sel.value = '';
+  renderAddOnRows();
+  fillAddOnPicker();
+  // Straight into the quantity box - choosing the card is only half of it.
+  const boxes = document.querySelectorAll('.punch-addon-qty');
+  if (boxes.length) boxes[boxes.length - 1].focus();
+}
+
+function addOnQty(i, value) { if (punchAddOns[i]) punchAddOns[i].qty = value; }
+
+function addOnRemove(i) {
+  punchAddOns.splice(i, 1);
+  renderAddOnRows();
+  fillAddOnPicker();
+}
+
+function renderAddOnRows() {
+  const box = document.getElementById('punchAddOnRows');
+  if (!box) return;
+  if (!punchAddOns.length) { box.classList.add('d-none'); box.innerHTML = ''; return; }
+  box.classList.remove('d-none');
+  box.innerHTML = punchAddOns.map((a, i) => `
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <span class="fw-bold text-dark flex-grow-1">${bulkEsc(a.name)}</span>
+      <label class="small text-muted mb-0">Qty</label>
+      <input type="number" class="form-control form-control-sm punch-addon-qty" style="width:110px;"
+             min="1" step="1" value="${bulkEsc(a.qty)}" placeholder="1"
+             oninput="addOnQty(${i}, this.value)"/>
+      <button type="button" class="btn btn-sm btn-outline-danger" title="Remove"
+              onclick="addOnRemove(${i})"><i class="fas fa-times"></i></button>
+    </div>`).join('');
+}
+
 function resetForm() {
   document.getElementById('punchEmail').value = APP_USER.email;
   const teamRadio = document.querySelector('input[name="punchedBy"][value="India Team"]');
@@ -1214,6 +1424,15 @@ function resetForm() {
   document.getElementById('fileInput').value = '';
   document.getElementById('fileText').textContent = 'Click or Drag files here';
   document.getElementById('fileText').style.color = '#6c757d';
+
+  document.getElementById('punchOrderQty').value = '';
+  // The star follows the setting rather than the markup, so turning the rule
+  // off in Manage Data stops the form asking for it as well as the server.
+  const star = document.getElementById('punchQtyStar');
+  if (star) star.classList.toggle('d-none', db_forms.orderQuantityRequired === false);
+  punchAddOns = [];
+  renderAddOnRows();
+  fillAddOnPicker();
 }
 document.getElementById('fileInput')?.addEventListener('change', function() {
   const txt = document.getElementById('fileText');
@@ -1278,7 +1497,12 @@ async function loadBulkFormat(type, box) {
     const parts = data.columns.map(function(c) {
       let s = bulkEsc(c.header);
       if (c.allowed) s += ' (' + c.allowed.map(bulkEsc).join('/') + ')';
+      else if (c.hint) s += ' (' + bulkEsc(c.hint) + ')';
       else if (c.required) s += ' (required)';
+      else return s;
+      // Both at once for the one column that is compulsory and needs an
+      // example, rather than silently dropping one of the two.
+      if (c.required && c.hint) s += ' (required)';
       return s;
     });
     line.innerHTML = '<b>Format:</b> ' + parts.join(', ')

@@ -127,6 +127,12 @@ router.get('/:id/details', requireLogin, async (req, res) => {
     // belongs to, which is most of what was being hidden.
     if (!rows.length) return res.status(404).json({ success: false, error: 'Order not found.' });
 
+    const [addOns] = await db.query(
+      'SELECT name, qty FROM order_add_ons WHERE order_id = ? ORDER BY name ASC',
+      [req.params.id],
+    );
+    rows[0].add_ons_text = addOns.map(a => `${a.name} x ${a.qty}`).join(', ');
+
     res.json({ success: true, rowData: buildRowData(rows[0], mine.isAdmin) });
   } catch (err) {
     console.error('Order details failed:', err);
@@ -137,9 +143,68 @@ router.get('/:id/details', requireLogin, async (req, res) => {
 // ─────────────────────────────────────────────
 // POST /api/orders — Submit New Order
 // ─────────────────────────────────────────────
+/**
+ * The add-ons sent with a punch, checked before anything is written.
+ *
+ * Arrives as JSON because the form is multipart - files ride along with it -
+ * and a repeated field would give the server no way to tell which quantity
+ * belongs to which card.
+ *
+ * Returns { rows } or { error }. Every quantity has to be a whole number of at
+ * least one: a card ordered zero times is a card nobody ordered, and letting
+ * it through would put a line on the order that means nothing.
+ */
+function parseAddOns(raw) {
+  if (!raw) return { rows: [] };
+  let list;
+  try { list = JSON.parse(raw); } catch (_) { return { error: 'Add-ons could not be read.' }; }
+  if (!Array.isArray(list)) return { error: 'Add-ons could not be read.' };
+
+  const rows = [];
+  const seen = new Set();
+  for (const item of list) {
+    const name = String((item && item.name) || '').trim();
+    if (!name) continue;
+    const qty = Number(item.qty);
+    if (!Number.isInteger(qty) || qty < 1) {
+      return { error: `Quantity for "${name}" must be 1 or more.` };
+    }
+    const key = name.toLowerCase();
+    if (seen.has(key)) return { error: `"${name}" is listed twice.` };
+    seen.add(key);
+    rows.push({ name, qty });
+  }
+  return { rows };
+}
+
+/** Whether Order Quantity has to be filled in. The office can turn this off. */
+async function orderQuantityRequired() {
+  const [[row]] = await db.query(
+    `SELECT value FROM app_settings WHERE name = 'order_quantity_required'`);
+  return !row || row.value !== '0';
+}
+
 router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
   try {
     const { email, punchedBy, dealer, client, remarks, designer, designTime } = req.body;
+
+    // Checked before the order id is taken and before anything reaches Drive,
+    // so a rejected punch does not burn a number or leave a file behind.
+    const { rows: addOns, error: addOnError } = parseAddOns(req.body.addOns);
+    if (addOnError) return res.json({ success: false, error: addOnError });
+
+    const rawQty = String(req.body.orderQuantity ?? '').trim();
+    let orderQuantity = null;
+    if (rawQty !== '') {
+      const n = Number(rawQty);
+      if (!Number.isInteger(n) || n < 1) {
+        return res.json({ success: false, error: 'Order Quantity must be 1 or more.' });
+      }
+      orderQuantity = n;
+    } else if (await orderQuantityRequired()) {
+      return res.json({ success: false, error: 'Order Quantity is required.' });
+    }
+
     const orderId = await generateOrderId();
 
     // Upload files to Drive
@@ -166,15 +231,26 @@ router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
       INSERT INTO orders 
         (order_id, email_address, order_punched_by, dealer_name, dealer_email,
          client_name, india_designer, overseas_designer, possible_design_time,
-         special_remarks, upload_design_file, design_status)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+         special_remarks, upload_design_file, design_status, order_quantity)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
       orderId, email, punchedBy, dealer, dealerEmail,
       client, indiaDesigner, overseasDesigner, designTime,
-      remarks, finalLinks, 'Fresh Design'
+      remarks, finalLinks, 'Fresh Design', orderQuantity
     ]);
 
+    if (addOns.length) {
+      await db.query(
+        `INSERT INTO order_add_ons (order_id, name, qty) VALUES ${addOns.map(() => '(?,?,?)').join(', ')}`,
+        addOns.flatMap(a => [orderId, a.name, a.qty]),
+      );
+    }
+
     await logOrderEvent(orderId, 'Created', (dealer || '-') + ' / ' + (client || '-'), req.session.user);
+    if (addOns.length) {
+      await logOrderEvent(orderId, 'Add-ons',
+        addOns.map(a => `${a.name} x${a.qty}`).join(', '), req.session.user);
+    }
 
     // The calling sheet counts orders by the day they were punched, so this is
     // the moment it changes. Awaited for the same reason the designer's mail
@@ -418,6 +494,10 @@ function buildRowData(r, isAdmin) {
     'India Designer': r.india_designer || '',
     'Overseas Designer': r.overseas_designer || '',
     'Possible Design Time': r.possible_design_time,
+    'Order Quantity': r.order_quantity == null ? '' : r.order_quantity,
+    // Filled in by the details route, which has to fetch them separately -
+    // they live on their own table, one row per card.
+    'Add Ons': r.add_ons_text || '',
     'Special Remarks/E-mail Subject Line': r.special_remarks,
     'Upload the one Design file': r.upload_design_file,
     'Design Status': r.design_status,
