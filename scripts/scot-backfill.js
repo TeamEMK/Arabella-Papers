@@ -5,8 +5,8 @@
 // per dealer. Written as one pass rather than a loop over utils/scot.js so
 // sixty dealers cost two requests instead of a hundred and twenty.
 //
-//   node scripts/scot-backfill.js 2026-08-01 --dry     local database, nothing written
-//   node scripts/scot-backfill.js 2026-08-01 --live    the real one
+//   node scripts/scot-backfill.js --live --dry        everything the sheet holds
+//   node scripts/scot-backfill.js 2026-08-01 --live   from one date only
 //
 // --dry prints exactly what would be written and touches nothing. Run it first.
 // --live reads the office database over the connection string in .env.backup,
@@ -44,20 +44,29 @@ const db = require('../config/db');
 const sheets = require('../utils/sheets');
 const scot = require('../utils/scot');
 
-const from = process.argv[2] || '2026-08-01';
+// No date given means everything the sheet has columns for, which is also the
+// window a punch syncs. The two have to ask for the same thing, or a fill from
+// April and a sync from August leave one dealer's row four months shorter than
+// the rest.
+const fromArg = process.argv.slice(2).find(a => /^\d{4}-\d{2}-\d{2}$/.test(a)) || null;
 const dry = process.argv.includes('--dry');
 
 async function main() {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) {
-    throw new Error(`date aise do: YYYY-MM-DD (mila "${from}")`);
-  }
+  const badDate = process.argv.slice(2).find(a => !a.startsWith('--') && a !== fromArg);
+  if (badDate) throw new Error(`date aise do: YYYY-MM-DD (mila "${badDate}")`);
+
   console.log(`SCOT sheet  : ${scot.SHEET_ID}`);
   console.log(`signed in as: ${sheets.serviceAccountEmail()}`);
-  console.log(`orders from : ${from}${dry ? '   [DRY RUN - kuch nahi likha jayega]' : ''}\n`);
 
   const cal = await scot.calendar();
   const days = [...cal.keys()].sort();
-  console.log(`sheet ka calendar: ${days[0]} se ${days[days.length - 1]} tak, ${days.length} din\n`);
+  console.log(`sheet ka calendar: ${days[0]} se ${days[days.length - 1]} tak, ${days.length} din`);
+
+  const from = fromArg || days[0];
+  if (fromArg && fromArg < days[0]) {
+    console.log(`note: ${fromArg} se pehle sheet me koi column nahi hai`);
+  }
+  console.log(`orders from : ${from}${dry ? '   [DRY RUN - kuch nahi likha jayega]' : ''}\n`);
 
   // ── every dealer with work in the window, and every day they ordered ──
   const [rows] = await db.query(

@@ -39,10 +39,21 @@ const FIRST_GRID_COL = 14;
 // far and away the busiest line on the sheet.
 const NOT_A_CLIENT = new Set(['']);
 
-// How far back the grid goes. The sheet's own calendar starts in April, but
-// the office asked for the year from August, and the backfill and the live
-// sync have to agree or a punch would quietly pull in months the fill left out.
-const FROM_DAY = process.env.SCOT_FROM || '2026-08-01';
+// How far back to fill. Nothing by default - the sheet's own calendar decides,
+// which is the only answer that cannot drift.
+//
+// It was a fixed date once, and the two sides then disagreed: the sheet was
+// filled from April while a punch rewrote the dealer's row from August, wiping
+// four months off that one line and no other. Reading the first day of the
+// grid means the fill and the sync are always asking for the same window.
+const FROM_DAY = process.env.SCOT_FROM || null;
+
+/** The first day the sheet has a column for. */
+async function firstDay() {
+  if (FROM_DAY) return FROM_DAY;
+  const days = [...(await calendar()).keys()].sort();
+  return days[0];
+}
 
 // ── small helpers ─────────────────────────────────────
 
@@ -251,12 +262,12 @@ function detailRanges(name, freq, row) {
  *
  * Returns what it did, or null when there was nothing to do.
  */
-async function syncDealer(dealerName, { from = FROM_DAY } = {}) {
+async function syncDealer(dealerName, { from } = {}) {
   const name = String(dealerName || '').trim();
   if (!name || NOT_A_CLIENT.has(name.toLowerCase())) return null;
 
   const cal = await calendar();
-  const { all, onGrid } = await dealerHistory(name, from);
+  const { all, onGrid } = await dealerHistory(name, from || await firstDay());
   const freq = frequencyFrom(all);
 
   const { byName, firstFree } = await rowIndex();
@@ -332,7 +343,7 @@ async function recordPunchedOrder(dealerName) {
 
 module.exports = {
   SHEET_ID, TAB, FIRST_ROW, FIRST_GRID_COL, NOT_A_CLIENT, FROM_DAY,
-  colLetters, dayKey, serialToDay,
+  colLetters, dayKey, serialToDay, firstDay,
   calendar, forgetCalendar, rowIndex,
   frequencyFrom, dealerHistory, detailRanges, ensureCallDateFormat,
   syncDealer, recordPunchedOrder, syncAllowed,
