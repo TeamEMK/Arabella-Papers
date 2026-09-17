@@ -126,12 +126,6 @@
             <tbody id="cr_foundRows"></tbody>
           </table>
         </div>
-        <!-- Only for the orders that carry no designer, which the office does have. -->
-        <div class="p-2 border-top d-none" id="cr_pickWrap">
-          <label class="form-label fw-bold text-dark small mb-1" id="cr_pickLabel">
-            No designer on this order — who is it for?</label>
-          <select id="cr_pickDesigner" class="form-select form-select-sm"></select>
-        </div>
       </div>
 
       <!-- GNA work comes back through a different set of hands, so a correction
@@ -140,9 +134,9 @@
            them and has never signed in. -->
       <div class="mb-3">
         <label class="form-label fw-bold text-dark">GNA Designers
-          <span class="fw-normal text-muted">— hand it to one of these instead</span></label>
+          <span class="fw-normal text-muted">— hand them all to one of these</span></label>
         <select id="cr_gna" class="form-select" onchange="cr_gnaPicked()"></select>
-        <div class="form-text" id="cr_gnaHint">Leave it to send the correction to the order's own designer.</div>
+        <div class="form-text" id="cr_gnaHint">Leave it to send each correction to the order's own designer.</div>
       </div>
 
       <div class="mb-2">
@@ -357,13 +351,34 @@ function cr_gnaPicked() {
 
   if (sel.value === '__add') { sel.value = ''; cr_addGna(); return; }
 
+  // Sets every row. Each row can still be changed afterwards - that is the
+  // whole point of having both, and cr_setDesigner says so when one is.
+  // Clearing it puts every row back to the name its own order carries.
+  const ok = (cr_found || []).filter(o => o.found);
+  for (const o of ok) o.assigned = sel.value || (o.designer || '').trim();
+  if (ok.length) cr_drawFound();   // which writes the hint on its way out
+  else cr_gnaHint();
+}
+
+/**
+ * What the GNA box says underneath itself, read off the state as it stands.
+ *
+ * Kept apart from the handler above because cr_drawFound() needs it too, and
+ * the handler redrawing while the redraw called the handler was a loop with no
+ * way out of it.
+ */
+function cr_gnaHint() {
+  const sel = document.getElementById('cr_gna');
+  const hint = document.getElementById('cr_gnaHint');
+  const ok = (cr_found || []).filter(o => o.found);
+
   if (!sel.value) {
-    hint.textContent = "Leave it to send the correction to the order's own designer.";
+    hint.textContent = "Leave it to send each correction to the order's own designer.";
     return;
   }
-  const n = (cr_found || []).filter(o => o.found).length;
-  hint.innerHTML = n > 1
-    ? 'All <b>' + n + '</b> go to <b>' + crEsc(sel.value) + '</b>, whatever the orders say.'
+  hint.innerHTML = ok.length > 1
+    ? 'All <b>' + ok.length + '</b> set to <b>' + crEsc(sel.value)
+      + '</b> — change any one of them in the list above.'
     : 'Goes to <b>' + crEsc(sel.value) + '</b>.';
 }
 
@@ -407,10 +422,8 @@ function cr_openRaise() {
   document.getElementById('cr_clientNote').value = '';
   cr_drawGna();
   document.getElementById('cr_gnaHint').textContent =
-    "Leave it to send the correction to the order's own designer.";
+    "Leave it to send each correction to the order's own designer.";
   document.getElementById('cr_found').classList.add('d-none');
-  document.getElementById('cr_pickWrap').classList.add('d-none');
-  document.getElementById('cr_pickDesigner').value = '';
   document.getElementById('cr_lookup').textContent =
     'Type or paste the numbers — commas, spaces or new lines all work.';
   document.getElementById('cr_saveBtn').disabled = true;
@@ -461,7 +474,10 @@ async function cr_lookup() {
       hint.innerHTML = '<span class="text-danger">' + crEsc(j.error) + '</span>';
       return;
     }
-    cr_found = j.data;
+    // The order's own designer to begin with, or whatever the GNA box is
+    // already set to. From here each row is its own answer.
+    const gna = document.getElementById('cr_gna').value;
+    cr_found = j.data.map(o => ({ ...o, assigned: gna || (o.designer || '').trim() }));
     hint.textContent = '';
     cr_drawFound();
   } catch (e) {
@@ -482,51 +498,86 @@ function cr_drawFound() {
   if (!cr_found || !cr_found.length) { box.classList.add('d-none'); return; }
   box.classList.remove('d-none');
 
-  rows.innerHTML = cr_found.map(o => {
+  rows.innerHTML = cr_found.map((o, i) => {
     if (!o.found) {
       return '<tr><td class="text-danger fw-bold">' + crEsc(o.typed) + '</td>'
         + '<td colspan="2" class="text-danger small">no order with that number</td></tr>';
     }
-    const who = o.designer
-      ? '<span class="fw-bold text-dark">' + crEsc(o.designer) + '</span>'
-      : '<span class="text-warning fw-bold">no designer</span>';
     const prior = o.priorCorrections
-      ? ' <span class="badge bg-warning text-dark">' + o.priorCorrections + ' earlier</span>'
+      ? '<div><span class="badge bg-warning text-dark">' + o.priorCorrections + ' earlier</span></div>'
       : '';
-    return '<tr><td class="fw-bold text-dark">' + crEsc(o.orderId) + '</td>'
-      + '<td class="small">' + who + prior + '</td>'
-      + '<td class="small text-muted">' + crEsc(o.client || o.dealer || '') + '</td></tr>';
+    return '<tr><td class="fw-bold text-dark align-middle">' + crEsc(o.orderId) + prior + '</td>'
+      + '<td style="min-width:190px;">'
+      + '<select class="form-select form-select-sm" onchange="cr_setDesigner(' + i + ', this.value)">'
+      + cr_designerOptions(o) + '</select></td>'
+      + '<td class="small text-muted align-middle">' + crEsc(o.client || o.dealer || '') + '</td></tr>';
   }).join('');
 
   const ok = cr_found.filter(o => o.found);
   const missing = cr_found.length - ok.length;
-  const noDesigner = ok.filter(o => !o.designer).length;
+  const unset = ok.filter(o => !o.assigned).length;
 
   const bits = [ok.length + (ok.length === 1 ? ' order' : ' orders') + ' found'];
   if (missing) bits.push(missing + ' not found');
-  if (noDesigner) bits.push(noDesigner + ' with no designer');
+  if (unset) bits.push(unset + ' still need a designer');
   document.getElementById('cr_summary').textContent = bits.join(' · ');
 
-  // One picker for all the orders that carry no name, since they go to the
-  // same person often enough and asking twenty times would be worse.
-  const pick = document.getElementById('cr_pickWrap');
-  pick.classList.toggle('d-none', noDesigner === 0);
-  if (noDesigner) {
-    document.getElementById('cr_pickLabel').textContent = noDesigner === 1
-      ? 'One order has no designer on it — who is it for?'
-      : noDesigner + ' orders have no designer on them — who are they for?';
-    if (!document.getElementById('cr_pickDesigner').options.length) {
-      document.getElementById('cr_pickDesigner').innerHTML =
-        '<option value="">Pick a designer</option>'
-        + cr_users.map(u => '<option>' + crEsc(u) + '</option>').join('');
-    }
-  }
-
-  document.getElementById('cr_saveBtn').disabled = !ok.length;
+  document.getElementById('cr_saveBtn').disabled = !ok.length || unset > 0;
   document.getElementById('cr_saveBtn').textContent = ok.length > 1
     ? 'Send all ' + ok.length + ' to the designers'
     : 'Send to the designer';
-  cr_gnaPicked();          // the hint can now name the orders' own designers
+  cr_gnaHint();            // the hint can now name the orders' own designers
+}
+
+/**
+ * Who one order's correction can go to.
+ *
+ * The name on the order first, since that is the answer nine times in ten,
+ * then the GNA designers, then everybody with a login. Grouped, because a flat
+ * list of forty names hides the two that matter.
+ */
+function cr_designerOptions(o) {
+  const own = (o.designer || '').trim();
+  const gnaNames = cr_gna.map(g => g.name);
+  const opt = (n) => '<option' + (n === o.assigned ? ' selected' : '') + '>' + crEsc(n) + '</option>';
+
+  let html = own
+    ? '<option value="' + crEsc(own) + '"' + (own === o.assigned ? ' selected' : '') + '>'
+      + crEsc(own) + ' — on the order</option>'
+    : '<option value=""' + (o.assigned ? '' : ' selected') + '>Pick a designer</option>';
+
+  const gna = gnaNames.filter(n => n !== own);
+  if (gna.length) html += '<optgroup label="GNA Designers">' + gna.map(opt).join('') + '</optgroup>';
+
+  const rest = cr_users.filter(u => u !== own && !gnaNames.includes(u));
+  if (rest.length) html += '<optgroup label="Everybody else">' + rest.map(opt).join('') + '</optgroup>';
+  return html;
+}
+
+// Changing one row changes only that row. The GNA box above sets them all at
+// once; this is how one of them is then put right.
+function cr_setDesigner(i, name) {
+  if (!cr_found || !cr_found[i]) return;
+  cr_found[i].assigned = (name || '').trim();
+
+  const ok = cr_found.filter(o => o.found);
+  const unset = ok.filter(o => !o.assigned).length;
+  const missing = cr_found.length - ok.length;
+  const bits = [ok.length + (ok.length === 1 ? ' order' : ' orders') + ' found'];
+  if (missing) bits.push(missing + ' not found');
+  if (unset) bits.push(unset + ' still need a designer');
+  document.getElementById('cr_summary').textContent = bits.join(' · ');
+  document.getElementById('cr_saveBtn').disabled = !ok.length || unset > 0;
+
+  // The box above no longer describes what is on screen once a row is changed
+  // by hand, so it stops claiming to.
+  const sel = document.getElementById('cr_gna');
+  if (sel.value && ok.some(o => o.assigned !== sel.value)) {
+    document.getElementById('cr_gnaHint').innerHTML =
+      'Changed by hand in the list — the list is what will be sent.';
+  } else {
+    cr_gnaHint();
+  }
 }
 
 async function cr_save() {
@@ -534,21 +585,18 @@ async function cr_save() {
   const ok = cr_found.filter(o => o.found);
   if (!ok.length) return;
 
-  // A GNA designer wins over the names on the orders and applies to all of
-  // them; the picker below only covers the ones carrying no name at all.
-  const gna = document.getElementById('cr_gna').value;
-  const fallback = document.getElementById('cr_pickDesigner').value;
-  if (!gna && ok.some(o => !o.designer) && !fallback) {
-    showToast('warning', 'Pick who the orders with no designer are for.'); return;
+  // Each row carries its own answer by now: the name on the order, or whatever
+  // the GNA box set them all to, or whatever was picked on that one line.
+  if (ok.some(o => !o.assigned)) {
+    showToast('warning', 'Every order needs a designer.'); return;
   }
 
-  // Sent as one request per designer-decision rather than per order: the
-  // server takes the whole list and reports back on each one.
+  // One request per designer rather than per order: the server takes a list
+  // and reports back on each one.
   const byDesigner = new Map();
   for (const o of ok) {
-    const who = gna || o.designer || fallback;
-    if (!byDesigner.has(who)) byDesigner.set(who, []);
-    byDesigner.get(who).push(o.orderId);
+    if (!byDesigner.has(o.assigned)) byDesigner.set(o.assigned, []);
+    byDesigner.get(o.assigned).push(o.orderId);
   }
 
   const clientNote = (document.getElementById('cr_clientNote').value || '').trim();
