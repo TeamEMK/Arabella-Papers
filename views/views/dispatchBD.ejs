@@ -53,7 +53,6 @@ document.getElementById('dispRoot').innerHTML = `
             <tr>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;"><input type="checkbox" id="dsp_selectAll" onclick="dspToggleSelectAll(this)" title="Select everything shown"></th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">#</th>
-              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Sent to Dispatch</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dispatch Date</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Dealer</th>
@@ -65,6 +64,7 @@ document.getElementById('dispRoot').innerHTML = `
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Boxes</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Weight</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Vol. Weight</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Status</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
             </tr>
@@ -320,7 +320,6 @@ function dsp_renderTable(data) {
     return `<tr>
       <td><input type="checkbox" class="dsp_checkbox" value="${o.ID}" data-row="${i}" ${dsp_selected.has(o.ID.toString()) ? 'checked' : ''} onclick="dsp_handleCheck(event, '${o.ID}', ${i})"></td>
       <td>${i + 1}</td>
-      <td class="fw-bold">${o.ID}</td>
       <td class="text-nowrap">${o.Ready_Date||'-'}</td>
       <td class="text-nowrap">${o.Dispatch_Date||'-'}</td>
       <td>${o.Dealer_name||''}</td>
@@ -332,6 +331,7 @@ function dsp_renderTable(data) {
       <td>${o.Number_of_Boxes||'-'}</td>
       <td>${o.Weight||'-'}</td>
       <td>${o.Volumetric_Weight||'-'}</td>
+      <td class="fw-bold">${o.ID}</td>
       <td><span class="badge bg-${b}">${s}</span></td>
       <td>
         <button class="btn btn-sm btn-info me-1" onclick="dsp_openView('${o.ID}')"><i class="fas fa-eye"></i></button>
