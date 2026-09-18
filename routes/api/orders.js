@@ -66,9 +66,17 @@ router.get('/', requireLogin, async (req, res) => {
     // "Local Order" is a real dealer the shop still punches against, so this
     // list shows it. The working boards do not - see LOCAL_ORDER_OFF_BOARDS in
     // dashboards.js for why.
+    //
+    // A repeat is not on this list at all. It is a second run of an order that
+    // was taken once, months ago - it was never punched, no dealer placed it,
+    // and listing it here would count the same order twice in everything this
+    // page feeds. Asked for by name: "it should appear with the same old
+    // number in production not order dashboard". Production is where the work
+    // is; the repeat is there.
     let query = `
       SELECT * FROM orders
       WHERE is_deleted = 0
+        AND remake_of IS NULL
     `;
     const params = [];
 

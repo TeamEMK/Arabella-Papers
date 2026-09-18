@@ -200,8 +200,8 @@ function ta_rowHtml(o, sr) {
       </td>
       <td>${o.Timestamp||''}</td>
       <td>${o.Actual_1||''}</td>
-      <td class="fw-bold">${o.ID}${o.Remake_Of
-        ? '<div class="text-muted fw-normal" style="font-size:.72rem;">repeat of ' + o.Remake_Of + '</div>' : ''}</td>
+      <td class="fw-bold">${o.Display_ID || o.ID}${o.Remake_Of
+        ? '<div class="text-muted fw-normal" style="font-size:.72rem;">repeat run</div>' : ''}</td>
       <td>${o.Designer||''}</td>
       <td>${o.Dealer_name||''}</td>
       <td>${o.Client_name||''}</td>
@@ -255,10 +255,17 @@ var TA_SENDS_BACK = ['Reprint', 'Reorder', 'Sample', 'Final Approval For Product
 // Of those, the three that also put the production stages back to Pending -
 // REMAKE_STATUSES on the server.
 var TA_REMAKES = ['Reprint', 'Reorder', 'Sample'];
-// The two that open a new entry instead, once the order has gone out -
+// Every one of them opens a new entry instead, once the order has gone out -
 // SPLIT_STATUSES in utils/remake.js. Nothing on this order is touched then, so
 // none of the warnings below apply to it.
-var TA_SPLITS = ['Reprint', 'Reorder'];
+var TA_SPLITS = ['Reprint', 'Reorder', 'Sample', 'Final Approval For Production'];
+// What the office calls each, for the line the box prints.
+var TA_SPLIT_LABEL = {
+  Reprint: 're-print',
+  Reorder: 're-order',
+  Sample: 'sample',
+  'Final Approval For Production': 're-approval',
+};
 
 /**
  * Warn before an approval pulls an order off the dispatch board.
@@ -282,11 +289,14 @@ function ta_syncDispatchNotice() {
   // about an order being pulled back and re-made in place, which is precisely
   // what no longer happens here.
   if(o && o.Dispatched && TA_SPLITS.includes(status)) {
-    const kind = status === 'Reorder' ? 'Re-order' : 'Re-print';
+    const kind = TA_SPLIT_LABEL[status] || 'repeat';
+    const num = o.Display_ID || o.ID;
     note.innerHTML = '<i class="fas fa-file-circle-plus me-1"></i>A new entry will be opened for this '
-      + kind.toLowerCase() + ', dated today and with the production stages blank. <b>' + o.ID
-      + '</b> stays exactly as it went out'
-      + (o.Dispatch_Date ? ' on <b>' + o.Dispatch_Date + '</b>' : '') + '.';
+      + kind + ', dated today and with the production stages blank. It carries the same number, <b>'
+      + num + '</b>, and goes onto the Production board — not the Orders dashboard.'
+      + '<hr class="my-2">The run that went out'
+      + (o.Dispatch_Date ? ' on <b>' + o.Dispatch_Date + '</b>' : '')
+      + ' is not touched. It moves to <b>Backup Dispatch</b> with its stages, docket and invoice intact.';
     note.classList.remove('d-none');
     return;
   }
@@ -348,8 +358,8 @@ async function taHandleApprovalSubmit() {
       // that is the number the floor needs.
       if(json.remake) {
         showToast('success', json.remake.created
-          ? `${approvalStatus} opened as ${json.remake.childId} - ${ta_editId} left as it was`
-          : `${approvalStatus} already open as ${json.remake.childId} - updated that one`);
+          ? `${approvalStatus} opened as a new run of ${json.remake.root} - the old run is untouched`
+          : `${approvalStatus} already open on ${json.remake.root} - updated that run`);
       }
       else showToast('success', json.sentBack
         ? `${approvalStatus} - back on the Production board`
@@ -403,7 +413,7 @@ async function taSubmitBulk() {
       const remade = json.remade || [];
       showToast('success', `Updated ${json.count} orders.`
         + (json.sentBack ? ` ${json.sentBack} back on Production.` : '')
-        + (remade.length ? ` New entries: ${remade.map(r => r.childId).join(', ')}.` : ''));
+        + (remade.length ? ` New runs opened: ${remade.map(r => r.root).join(', ')}.` : ''));
       fetchApprovalData();
     }
     else showToast('error', json.error);

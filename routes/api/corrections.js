@@ -13,6 +13,9 @@ const router = express.Router();
 const db = require('../../config/db');
 const { requireLogin } = require('../../middleware/auth');
 const { logOrderEvent } = require('../../utils/auditlog');
+// A number typed here names the job, and a job can have been made more than
+// once. This turns it into the run that is on the floor now.
+const { liveRunFor } = require('../../utils/remake');
 
 const IST = { timeZone: 'Asia/Kolkata', hour12: true };
 const stamp = d => (d ? new Date(d).toLocaleString('en-GB', IST) : '');
@@ -124,7 +127,7 @@ router.get('/order/:id', requireLogin, async (req, res) => {
       `SELECT order_id, dealer_name, client_name,
               india_designer, overseas_designer, design_status
          FROM orders WHERE order_id = ? AND is_deleted = 0 LIMIT 1`,
-      [String(req.params.id).trim()]
+      [await liveRunFor(String(req.params.id).trim())]
     );
     if (!order) return res.status(404).json({ success: false, error: 'No order with that number.' });
 
@@ -191,8 +194,14 @@ router.post('/lookup', requireLogin, async (req, res) => {
     if (!canRaise(req.session.user)) {
       return res.status(403).json({ success: false, error: 'Only a SuperAdmin can raise a correction.' });
     }
-    const ids = parseOrderIds(req.body.orderIds);
-    if (!ids.length) return res.json({ success: true, data: [] });
+    const typed = parseOrderIds(req.body.orderIds);
+    if (!typed.length) return res.json({ success: true, data: [] });
+
+    // Every run of a job carries the same number, so a number typed here means
+    // the run being made now - not the one that shipped months ago. The
+    // correction is about work in front of somebody, and that is the open run.
+    const ids = [];
+    for (const t of typed) ids.push(await liveRunFor(t));
     if (ids.length > MAX_AT_ONCE) {
       return res.json({ success: false, error: `That is ${ids.length} orders — ${MAX_AT_ONCE} at a time is the limit.` });
     }
@@ -211,11 +220,11 @@ router.post('/lookup', requireLogin, async (req, res) => {
 
     res.json({
       success: true,
-      data: ids.map(id => {
+      data: ids.map((id, i) => {
         const o = byId.get(id.toLowerCase());
-        if (!o) return { typed: id, found: false };
+        if (!o) return { typed: typed[i], found: false };
         return {
-          typed: id,
+          typed: typed[i],
           found: true,
           orderId: o.order_id,
           designer: (o.india_designer || o.overseas_designer || '').trim(),
@@ -297,8 +306,13 @@ router.post('/', requireLogin, async (req, res) => {
     }
     // One order or a hundred: the same route, so the two cannot drift apart
     // over who a correction goes to or what gets written in the log.
-    const ids = parseOrderIds(req.body.orderIds || req.body.orderId);
-    if (!ids.length) return res.status(400).json({ success: false, error: 'Give the order number.' });
+    const typed = parseOrderIds(req.body.orderIds || req.body.orderId);
+    if (!typed.length) return res.status(400).json({ success: false, error: 'Give the order number.' });
+    // Onto the run being made now, the same as the lookup that listed them.
+    // Idempotent, so it makes no difference whether the screen sent back the
+    // number somebody typed or the one the lookup resolved it to.
+    const ids = [];
+    for (const t of typed) ids.push(await liveRunFor(t));
     if (ids.length > MAX_AT_ONCE) {
       return res.status(400).json({
         success: false,

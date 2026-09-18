@@ -8,7 +8,7 @@ const { notifyClientDispatched } = require('../../utils/notify');
 // A Re-print or a Re-order on an order that has already gone out opens a new
 // entry instead of writing over the old one. Every route that sets an approval
 // asks this first, and does what it always did when it comes back empty.
-const { raiseRemake } = require('../../utils/remake');
+const { raiseRemake, rootOrderId } = require('../../utils/remake');
 const { requireLogin } = require('../../middleware/auth');
 // The board a request is asking for is the same thing the side panel decides
 // whether to show - role rule plus whatever was granted on the Access Control
@@ -131,6 +131,9 @@ const REACHED_PRODUCTION = `(
 // on the dispatch board marked Dispatched, and nobody on the floor was ever
 // told to make it. Nothing happens to an order that has not been dispatched
 // yet, which is almost every order this status is ever given to.
+// SPLIT_STATUSES in utils/remake.js is this same list, and the two have to
+// stay identical: an approval that moves an order off the dispatch board but
+// opens no entry for the new run is the hole that lost K-159295's September.
 const SEND_BACK_STATUSES = ['Reprint', 'Reorder', 'Sample', 'Final Approval For Production'];
 
 // Of those, the three that mean the job is to be MADE AGAIN rather than simply
@@ -302,6 +305,7 @@ router.get('/till-approval', requireLogin, async (req, res) => {
 
     const data = rows.map(r => ({
       ID: r.order_id,
+      Display_ID: rootOrderId(r.order_id),
       Timestamp: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
       Actual_1: r.actual_1 ? new Date(r.actual_1).toLocaleString('en-GB', IST) : '',
       Actual: r.actual_1 ? new Date(r.actual_1).toLocaleString('en-GB', IST) : '',
@@ -516,6 +520,21 @@ router.get('/production', requireLogin, async (req, res) => {
       ORDER BY COALESCE(actual_2, timestamp) DESC, id DESC
     `, [PRODUCTION_ARCHIVE_FROM]);
 
+    // When each repeat's previous run was approved and sent, in one query.
+    // A repeat prints the same number as the run it came from, so without this
+    // there is nothing on the row to say when it was last made - and that is
+    // the first thing the floor asks.
+    const prevRuns = new Map();
+    const parents = [...new Set(rows.map(r => r.remake_of).filter(Boolean))];
+    if (parents.length) {
+      const [prev] = await db.query(
+        `SELECT order_id, actual_2, actual_4 FROM orders
+          WHERE order_id IN (${parents.map(() => '?').join(', ')})`,
+        parents,
+      );
+      for (const p of prev) prevRuns.set(p.order_id, p);
+    }
+
     // One query for the whole board rather than one per row.
     const approvalsByOrder = new Map();
     if (rows.length) {
@@ -533,10 +552,22 @@ router.get('/production', requireLogin, async (req, res) => {
       }
     }
 
-    const data = rows.map(r => ({
+    const data = rows.map(r => {
+      const prev = prevRuns.get(r.remake_of);
+      return {
+      // The row's own key, which every button on the board sends back.
       ID: r.order_id,
+      // And the number to print. A repeat carries the number of the job, not
+      // a new one of its own: that is what the dealer, the invoice and the
+      // floor all call it. -R1 is the database's business, not theirs.
+      Display_ID: rootOrderId(r.order_id),
       Timestamp: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
       Actual_Date: r.actual_2 ? new Date(r.actual_2).toLocaleString('en-GB', IST) : '',
+      // When the run before this one was approved and when it went out.
+      Previous_Run: prev ? {
+        approved: prev.actual_2 ? new Date(prev.actual_2).toLocaleDateString('en-GB', IST) : '',
+        dispatched: prev.actual_4 ? new Date(prev.actual_4).toLocaleDateString('en-GB', IST) : '',
+      } : null,
       // Every round the client answered, oldest first. An order approved as a
       // Sample in July and for production in September belongs on both days,
       // and one column could only ever show the second.
@@ -573,7 +604,8 @@ router.get('/production', requireLogin, async (req, res) => {
       Remark: r.remark || '',
       Reason_For_Delay: r.reason_for_delay || '',
       Dispatch_Status: r.status_4 || '',
-    }));
+      };
+    });
 
     // The queue only holds work still to do, so August orders that have left it
     // are on it nowhere. Count them, over the same date range as the rows above
@@ -854,6 +886,7 @@ router.get('/dispatch', requireLogin, async (req, res) => {
 
     const data = rows.map(r => ({
       ID: r.order_id,
+      Display_ID: rootOrderId(r.order_id),
       Timestamp: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
       // Both ends of a repeat: the run this entry is a remake of, and the
       // entries opened because this one came back.
@@ -1617,8 +1650,8 @@ router.get('/clients', requireLogin, async (req, res) => {
 // ═══════════════════════════════════════════════
 function buildFullRowData(r) {
   return {
-    'Order ID': r.order_id,
-    'Re-print / Re-order of': r.remake_of || '',
+    'Order ID': rootOrderId(r.order_id),
+    'Repeat of an earlier run of': r.remake_of || '',
     'Timestamp': r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
     'Email address': r.email_address,
     'Order Punched by': r.order_punched_by,

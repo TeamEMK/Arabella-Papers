@@ -321,7 +321,7 @@ function dsp_renderTable(data) {
     return `<tr>
       <td><input type="checkbox" class="dsp_checkbox" value="${o.ID}" data-row="${i}" ${dsp_selected.has(o.ID.toString()) ? 'checked' : ''} onclick="dsp_handleCheck(event, '${o.ID}', ${i})"></td>
       <td>${i + 1}</td>
-      <td class="fw-bold">${o.ID}${dsp_repeatNote(o)}</td>
+      <td class="fw-bold">${o.Display_ID || o.ID}${dsp_repeatNote(o)}</td>
       <td class="text-nowrap">${o.Ready_Date||'-'}</td>
       <td class="text-nowrap">${o.Dispatch_Date||'-'}</td>
       <td>${o.Dealer_name||''}</td>
@@ -333,7 +333,7 @@ function dsp_renderTable(data) {
       <td>${o.Number_of_Boxes||'-'}</td>
       <td>${o.Weight||'-'}</td>
       <td>${o.Volumetric_Weight||'-'}</td>
-      <td class="fw-bold">${o.ID}</td>
+      <td class="fw-bold">${o.Display_ID || o.ID}</td>
       <td><span class="badge bg-${b}">${s}</span></td>
       <td>
         <button class="btn btn-sm btn-info me-1" onclick="dsp_openView('${o.ID}')"><i class="fas fa-eye"></i></button>
@@ -343,18 +343,20 @@ function dsp_renderTable(data) {
   }).join('');
 }
 /**
- * Both ends of a repeat, under the order number.
+ * Which run of the job this row is.
  *
- * A dispatched order stays on this board untouched when the client asks for it
- * again - that is the whole point of opening a separate entry - so this is the
- * only thing on the row that says the job came back. And a repeat sitting here
- * has to name the run it is a repeat of, or the two read as unrelated orders
- * for the same client.
+ * Every run prints the same order number, so on the day a repeat ships there
+ * would otherwise be two rows reading K-159295 with nothing to tell them
+ * apart. Naming the other run's number would not help - it is the same number.
+ * Which run it is, is the thing worth saying.
+ *
+ * The earlier run is pinned to Backup Dispatch the moment a repeat is opened,
+ * so in practice these two lines are on different boards.
  */
 function dsp_repeatNote(o) {
   const lines = [];
-  if(o.Remake_Of) lines.push('repeat of ' + o.Remake_Of);
-  if((o.Remade_As||[]).length) lines.push('asked again as ' + o.Remade_As.join(', '));
+  if(o.Remake_Of) lines.push('repeat run');
+  if((o.Remade_As||[]).length) lines.push('asked for again — later run opened');
   if(!lines.length) return '';
   return '<div class="text-muted fw-normal" style="font-size:.72rem;">'
     + lines.join('<br>') + '</div>';

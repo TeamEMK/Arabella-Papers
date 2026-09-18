@@ -20,13 +20,29 @@ const { remakeOrderId, rootOrderId } = require('./idgen');
 const { logOrderUpdate, logOrderEvent, logApproval } = require('./auditlog');
 
 /**
- * The two answers that mean "make this one again".
+ * Every answer that sends an order that has already gone out back to the floor.
  *
- * Sample is deliberately not here. It is a round on the way to a job rather
- * than a repeat of a finished one - an order is approved as a Sample first and
- * for production afterwards - so there is no earlier run to keep.
+ * Re-print and Re-order say "make it again" outright. Sample means make one
+ * again to look at. And the ordinary approval belongs here too once the order
+ * has shipped - approving something that went out three weeks ago is the
+ * client asking for it afresh, not a note about the run that has been.
+ *
+ * It began as the first two, which was the wrong place to stop: all four take
+ * a finished order back to production, and all four used to write over the run
+ * that had been made and sent. This is the same list as SEND_BACK_STATUSES in
+ * routes/api/dashboards.js, and it has to stay that way - an approval that
+ * moves an order off the dispatch board and does not open an entry for the new
+ * run is exactly the hole this was written to close.
  */
-const SPLIT_STATUSES = ['Reprint', 'Reorder'];
+const SPLIT_STATUSES = ['Reprint', 'Reorder', 'Sample', 'Final Approval For Production'];
+
+/** What the office calls each of them, for the lines people read. */
+const LABELS = {
+  Reprint: 'Re-print',
+  Reorder: 'Re-order',
+  Sample: 'Sample',
+  'Final Approval For Production': 'Re-approval',
+};
 
 /** Has this order already been made and sent? */
 const LEFT_FOR_DISPATCH = (r) =>
@@ -164,14 +180,60 @@ async function raiseRemake(parentId, status, opts = {}) {
     [childId, parentId],
   );
 
-  const label = value === 'Reorder' ? 'Re-order' : 'Re-print';
+  // The run that has been goes to Backup Dispatch.
+  //
+  // Both runs print the same number - that is what the office asked for - so
+  // leaving the old one on the live board would mean two rows reading
+  // K-159295 the day the repeat ships, with nothing on either to say which is
+  // which. Pinned rather than hidden: the pin is what the Backup Dispatch
+  // board is for, the row keeps its parcel, its docket and its invoice, and
+  // nothing that counts a dispatch reads the pin.
+  await db.query(
+    "UPDATE orders SET dispatch_board = 'old' WHERE order_id = ?",
+    [parentId],
+  );
+
+  const label = LABELS[value] || value;
   await logOrderEvent(childId, 'Created',
     `${label} of ${parentId} - ${parent.dealer_name || '-'} / ${parent.client_name || '-'}`, who);
   await logOrderEvent(parentId, `${label} raised`,
-    `New entry ${childId}. This order is left as it went out.`, who);
+    `New entry ${childId}, shown as ${root}. This run moves to Backup Dispatch.`, who);
   await logApproval(childId, value, now, who);
 
   return { childId, root, created: true, status: value };
 }
 
-module.exports = { raiseRemake, isRemakeStatus, SPLIT_STATUSES };
+/**
+ * The run that is being made now, for a number somebody typed.
+ *
+ * Every run of a job prints the same number, so "K-159295" on a correction
+ * slip or in a chat message means whichever run is on the floor today - not
+ * the one that shipped in September. Falls back to the number itself, which is
+ * the answer whenever there is no repeat open.
+ */
+async function liveRunFor(orderId) {
+  const root = rootOrderId(orderId);
+  if (!root) return orderId;
+  const open = await openRemake(root);
+  return open ? open.order_id : orderId;
+}
+
+/**
+ * The dates of the run before this one, for the repeat to print under its own.
+ *
+ * Asked for so a repeat carries its history on its face: the floor should not
+ * have to open another board to find out when this was last made and sent.
+ */
+async function previousRun(remakeOf) {
+  if (!remakeOf) return null;
+  const [[prev]] = await db.query(
+    'SELECT actual_2, actual_4 FROM orders WHERE order_id = ? LIMIT 1',
+    [remakeOf],
+  );
+  return prev || null;
+}
+
+module.exports = {
+  raiseRemake, isRemakeStatus, SPLIT_STATUSES, LABELS,
+  liveRunFor, previousRun, rootOrderId,
+};
