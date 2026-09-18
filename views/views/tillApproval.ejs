@@ -187,6 +187,29 @@ function ta_attachScroll() {
   });
 }
 
+/**
+ * Says an order has already gone out, on the row rather than inside the box.
+ *
+ * Nothing on this list distinguished a dispatched order from one still being
+ * made, so the first anyone knew of it was the warning that appeared after
+ * they had opened the approval box - and the box opens on the order's current
+ * status, which on a dispatched order is almost always Final Approval For
+ * Production. Saving without changing anything then opens a run nobody asked
+ * for. Cheaper to say so before the box is open.
+ */
+function ta_goneBadge(o) {
+  if (!o) return '';
+  const why = 'Already gone out — an approval here opens a new run and leaves this one alone';
+  if (o.Dispatched) {
+    return `<div class="badge bg-warning text-dark mt-1" title="${why}">Dispatched${
+      o.Dispatch_Date ? ' ' + o.Dispatch_Date : ''}</div>`;
+  }
+  if (o.On_Backup_Production) {
+    return '<div class="badge bg-secondary mt-1" title="Parked on the Backup Production board">Backup Production</div>';
+  }
+  return '';
+}
+
 function ta_rowHtml(o, sr) {
   {
     const badge = ta_getStatusBadge(o.Design_Approval_Status_From_Client);
@@ -201,7 +224,8 @@ function ta_rowHtml(o, sr) {
       <td>${o.Timestamp||''}</td>
       <td>${o.Actual_1||''}</td>
       <td class="fw-bold">${o.Display_ID || o.ID}${o.Remake_Of
-        ? '<div class="text-muted fw-normal" style="font-size:.72rem;">repeat run</div>' : ''}</td>
+        ? '<div class="text-muted fw-normal" style="font-size:.72rem;">repeat run</div>' : ''}${
+        ta_goneBadge(o)}</td>
       <td>${o.Designer||''}</td>
       <td>${o.Dealer_name||''}</td>
       <td>${o.Client_name||''}</td>
@@ -375,13 +399,10 @@ function openBulkApprovalModal() {
   if(!ta_selected.size) { showToast('warning','Select at least one order.'); return; }
   const tbody = document.getElementById('ta_bulkBody'); tbody.innerHTML = '';
   ta_selected.forEach(id => {
-    // Same warning as the single box, in the only room this one has for it.
+    // The same badge the list carries, in the only room this one has for it.
     const o = ta_data.find(x => x.ID.toString() === id.toString());
-    const gone = o && o.Dispatched
-      ? `<div class="badge bg-warning text-dark mt-1" title="An approval here brings it back to Production">Dispatched${o.Dispatch_Date ? ' ' + o.Dispatch_Date : ''}</div>`
-      : '';
     tbody.insertAdjacentHTML('beforeend',`<tr class="ta_bulk_row" data-id="${id}">
-      <td class="fw-bold">${id}${gone}</td>
+      <td class="fw-bold">${(o && o.Display_ID) || id}${ta_goneBadge(o)}</td>
       <td><select class="form-select form-select-sm ta_bulk_status">
         <option value="Proofing Done">Proofing Done</option>
         <option value="Final Approval For Production" selected>Final Approval For Production</option>
