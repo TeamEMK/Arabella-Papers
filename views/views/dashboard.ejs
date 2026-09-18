@@ -283,25 +283,6 @@
               <option value="EOD">EOD</option>
             </select>
           </div>
-          <div class="col-md-6">
-            <label class="form-label text-dark fw-bold">
-              Order Quantity <span id="punchQtyStar" class="text-danger">*</span>
-            </label>
-            <input type="number" id="punchOrderQty" class="form-control" min="1" step="1"
-                   placeholder="How many?" autocomplete="off"/>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label text-dark fw-bold">Add On</label>
-            <select id="punchAddOnPick" class="form-select" onchange="addOnPicked(this)">
-              <option value="">Choose a card...</option>
-            </select>
-          </div>
-          <div class="col-12">
-            <!-- One row per card chosen, each with its own quantity. Hidden
-                 until there is something in it so the form does not open with
-                 an empty box nobody asked for. -->
-            <div id="punchAddOnRows" class="d-none border rounded p-2 bg-light"></div>
-          </div>
           <div class="col-12">
             <label class="form-label text-dark fw-bold">Upload Files</label>
             <div class="file-box text-center">
@@ -361,6 +342,32 @@
           <label class="form-label text-dark fw-bold">Upload File</label>
           <input class="form-control" type="file" id="fileUpload" accept="image/*,application/pdf"/>
           <small class="text-muted">Max file size: 10MB</small>
+        </div>
+        <!-- Asked for by the office: at the moment an order is taken the
+             quantity is often not settled and the cards are not decided. Both
+             are, by the time the designer has proofed it, so they are asked
+             for here rather than on the punch form. Neither is compulsory -
+             a designer who does not know yet leaves them. -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label text-dark fw-bold">Order Quantity
+              <span class="fw-normal text-muted">(optional)</span></label>
+            <input type="number" id="editOrderQty" class="form-control" min="1" step="1"
+                   placeholder="How many?" autocomplete="off"/>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-dark fw-bold">Add On
+              <span class="fw-normal text-muted">(optional)</span></label>
+            <select id="editAddOnPick" class="form-select" onchange="addOnPicked(this)">
+              <option value="">Choose a card...</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <!-- One row per card chosen, each with its own quantity. Hidden
+                 until there is something in it, so the box does not open with
+                 an empty frame nobody asked for. -->
+            <div id="editAddOnRows" class="d-none border rounded p-2 bg-light"></div>
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label text-dark fw-bold">Remark</label>
@@ -492,13 +499,13 @@
               <input class="form-check-input" type="checkbox" id="setOrderQtyRequired"
                      onchange="saveSetting('order_quantity_required', this.checked)"/>
               <label class="form-check-label text-dark fw-bold" for="setOrderQtyRequired">
-                Order Quantity is compulsory
+                Order Quantity is compulsory in a CSV import
               </label>
             </div>
             <div class="form-text">
-              On, an order cannot be punched or imported without it. Off, the field
-              stays on the form but may be left blank. Orders punched before this
-              field existed are not affected either way.
+              On, a CSV row without a quantity is refused. Off, it imports blank.
+              Punching an order does not ask for the quantity at all — the designer
+              fills it in at proofing, where it is optional either way.
             </div>
           </div>
         </div>
@@ -843,6 +850,10 @@ function openEditModal(ID) {
   // Clear file input
   document.getElementById('fileUpload').value = '';
   document.getElementById('editRemark').value = '';
+  // Whatever the order already carries, so a designer correcting one card does
+  // not have to type the other four again. Not awaited - the box opens now and
+  // fills a moment later.
+  loadAddOnsFor(ID);
   new bootstrap.Modal(document.getElementById('editModal')).show();
 }
 
@@ -880,21 +891,6 @@ async function handleFormSubmit() {
 
   if(!dealer || !designer || !client || !remarks || !designTime) { showToast('warning','Please fill all required fields.'); return; }
 
-  // Checked here as well as on the server, so a mistake is caught before the
-  // files start uploading rather than after.
-  const qtyRaw = document.getElementById('punchOrderQty').value.trim();
-  if(!qtyRaw) {
-    if(db_forms.orderQuantityRequired !== false) { showToast('warning','Order Quantity is required.'); return; }
-  } else if(!/^\d+$/.test(qtyRaw) || Number(qtyRaw) < 1) {
-    showToast('warning','Order Quantity must be 1 or more.'); return;
-  }
-
-  for(const a of punchAddOns) {
-    const q = String(a.qty).trim();
-    if(!q || !/^\d+$/.test(q) || Number(q) < 1) {
-      showToast('warning', `Quantity for "${a.name}" must be 1 or more.`); return;
-    }
-  }
 
   const btn = document.getElementById('btnSubmit');
   const origText = btn.innerHTML;
@@ -909,10 +905,6 @@ async function handleFormSubmit() {
   formData.append('remarks', remarks);
   formData.append('designer', designer);
   formData.append('designTime', designTime);
-  formData.append('orderQuantity', qtyRaw);
-  // JSON because the form is multipart and a repeated field would leave the
-  // server unable to tell which quantity belongs to which card.
-  formData.append('addOns', JSON.stringify(punchAddOns.map(a => ({ name: a.name, qty: Number(a.qty) }))));
   const fileInput = document.getElementById('fileInput');
   if(fileInput.files.length > 0) {
     Array.from(fileInput.files).forEach(f => formData.append('files', f));
@@ -936,10 +928,28 @@ async function handleEditFormSubmit() {
   if(!designStatus) { showToast('warning','Please select a status.'); return; }
   const remark = document.getElementById('editRemark').value;
   const file = document.getElementById('fileUpload').files[0];
+
+  // Neither is compulsory - a designer who does not know the quantity yet
+  // leaves it - but a number typed in has to be a real one.
+  const qtyRaw = document.getElementById('editOrderQty').value.trim();
+  if(qtyRaw && (!/^\d+$/.test(qtyRaw) || Number(qtyRaw) < 1)) {
+    showToast('warning','Order Quantity must be 1 or more.'); return;
+  }
+  for(const a of editAddOns) {
+    const q = String(a.qty).trim();
+    if(!q || !/^\d+$/.test(q) || Number(q) < 1) {
+      showToast('warning', `Quantity for "${a.name}" must be 1 or more.`); return;
+    }
+  }
+
   const formData = new FormData();
   formData.append('designStatus', designStatus.value);
   formData.append('remark', remark);
   formData.append('userEmail', APP_USER.email);
+  formData.append('orderQuantity', qtyRaw);
+  // JSON because the form is multipart and a repeated field would leave the
+  // server unable to tell which quantity belongs to which card.
+  formData.append('addOns', JSON.stringify(editAddOns.map(a => ({ name: a.name, qty: Number(a.qty) }))));
   if(file) formData.append('file', file);
   showLoading(true);
   try {
@@ -1168,7 +1178,9 @@ async function saveSetting(name, value) {
       return;
     }
     if (name === 'order_quantity_required') db_forms.orderQuantityRequired = value;
-    showToast('success', value ? 'Order Quantity is now compulsory.' : 'Order Quantity is now optional.');
+    showToast('success', value
+      ? 'A CSV row now needs a quantity.'
+      : 'A CSV row may now leave the quantity blank.');
   } catch(e) { showToast('error','Server error.'); loadSettings(); }
 }
 function renderDealerTable(dealers) {
@@ -1356,15 +1368,15 @@ function handleCheckboxChange(id, isChecked) {
   else selectedOrderIds.delete(id.toString());
 }
 // ═══ ADD ONS ═══
-// The cards chosen so far, in the order they were picked. Kept as an array
-// rather than read back off the rows each time, so a half-typed quantity is
-// not lost when another card is added.
-var punchAddOns = [];
+// Filled in by the designer at proofing, on the Update Order Status box. Kept
+// as an array rather than read back off the rows each time, so a half-typed
+// quantity is not lost when another card is added.
+var editAddOns = [];
 
 function fillAddOnPicker() {
-  const sel = document.getElementById('punchAddOnPick');
+  const sel = document.getElementById('editAddOnPick');
   if (!sel) return;
-  const chosen = new Set(punchAddOns.map(a => a.name));
+  const chosen = new Set(editAddOns.map(a => a.name));
   // Already-chosen cards come out of the list: picking one twice would mean
   // two lines for the same card, and the server refuses that anyway.
   sel.innerHTML = '<option value="">Choose a card...</option>'
@@ -1376,33 +1388,62 @@ function fillAddOnPicker() {
 function addOnPicked(sel) {
   const name = sel.value;
   if (!name) return;
-  punchAddOns.push({ name, qty: '' });
+  editAddOns.push({ name, qty: '' });
   sel.value = '';
   renderAddOnRows();
   fillAddOnPicker();
   // Straight into the quantity box - choosing the card is only half of it.
-  const boxes = document.querySelectorAll('.punch-addon-qty');
+  const boxes = document.querySelectorAll('.edit-addon-qty');
   if (boxes.length) boxes[boxes.length - 1].focus();
 }
 
-function addOnQty(i, value) { if (punchAddOns[i]) punchAddOns[i].qty = value; }
+function addOnQty(i, value) { if (editAddOns[i]) editAddOns[i].qty = value; }
 
 function addOnRemove(i) {
-  punchAddOns.splice(i, 1);
+  editAddOns.splice(i, 1);
+  renderAddOnRows();
+  fillAddOnPicker();
+}
+
+/**
+ * What the order already carries, put into the box when it opens.
+ *
+ * Fetched rather than read off the list: the orders list stopped carrying the
+ * whole row long ago, and these two are only ever wanted one order at a time.
+ */
+async function loadAddOnsFor(orderId) {
+  editAddOns = [];
+  document.getElementById('editOrderQty').value = '';
+  renderAddOnRows();
+  fillAddOnPicker();
+  try {
+    const j = await (await fetch('/api/orders/' + encodeURIComponent(orderId) + '/details')).json();
+    if (!j.success) return;
+    const qty = j.rowData['Order Quantity'];
+    document.getElementById('editOrderQty').value = (qty === '' || qty == null) ? '' : qty;
+    // "RSVP Card x 50, Menu Card x 250" back into rows.
+    editAddOns = String(j.rowData['Add Ons'] || '').split(',')
+      .map(part => part.trim()).filter(Boolean)
+      .map(part => {
+        const m = /^(.*?)\s*x\s*(\d+)$/i.exec(part);
+        return m ? { name: m[1].trim(), qty: m[2] } : null;
+      })
+      .filter(Boolean);
+  } catch (e) { /* leave it empty rather than showing a half-loaded order */ }
   renderAddOnRows();
   fillAddOnPicker();
 }
 
 function renderAddOnRows() {
-  const box = document.getElementById('punchAddOnRows');
+  const box = document.getElementById('editAddOnRows');
   if (!box) return;
-  if (!punchAddOns.length) { box.classList.add('d-none'); box.innerHTML = ''; return; }
+  if (!editAddOns.length) { box.classList.add('d-none'); box.innerHTML = ''; return; }
   box.classList.remove('d-none');
-  box.innerHTML = punchAddOns.map((a, i) => `
+  box.innerHTML = editAddOns.map((a, i) => `
     <div class="d-flex align-items-center gap-2 mb-2">
       <span class="fw-bold text-dark flex-grow-1">${bulkEsc(a.name)}</span>
       <label class="small text-muted mb-0">Qty</label>
-      <input type="number" class="form-control form-control-sm punch-addon-qty" style="width:110px;"
+      <input type="number" class="form-control form-control-sm edit-addon-qty" style="width:110px;"
              min="1" step="1" value="${bulkEsc(a.qty)}" placeholder="1"
              oninput="addOnQty(${i}, this.value)"/>
       <button type="button" class="btn btn-sm btn-outline-danger" title="Remove"
@@ -1425,14 +1466,6 @@ function resetForm() {
   document.getElementById('fileText').textContent = 'Click or Drag files here';
   document.getElementById('fileText').style.color = '#6c757d';
 
-  document.getElementById('punchOrderQty').value = '';
-  // The star follows the setting rather than the markup, so turning the rule
-  // off in Manage Data stops the form asking for it as well as the server.
-  const star = document.getElementById('punchQtyStar');
-  if (star) star.classList.toggle('d-none', db_forms.orderQuantityRequired === false);
-  punchAddOns = [];
-  renderAddOnRows();
-  fillAddOnPicker();
 }
 document.getElementById('fileInput')?.addEventListener('change', function() {
   const txt = document.getElementById('fileText');

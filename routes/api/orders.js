@@ -185,34 +185,15 @@ function parseAddOns(raw) {
   return { rows };
 }
 
-/** Whether Order Quantity has to be filled in. The office can turn this off. */
-async function orderQuantityRequired() {
-  const [[row]] = await db.query(
-    `SELECT value FROM app_settings WHERE name = 'order_quantity_required'`);
-  return !row || row.value !== '0';
-}
-
 router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
   try {
     const { email, punchedBy, dealer, client, remarks, designer, designTime } = req.body;
 
-    // Checked before the order id is taken and before anything reaches Drive,
-    // so a rejected punch does not burn a number or leave a file behind.
-    const { rows: addOns, error: addOnError } = parseAddOns(req.body.addOns);
-    if (addOnError) return res.json({ success: false, error: addOnError });
-
-    const rawQty = String(req.body.orderQuantity ?? '').trim();
-    let orderQuantity = null;
-    if (rawQty !== '') {
-      const n = Number(rawQty);
-      if (!Number.isInteger(n) || n < 1) {
-        return res.json({ success: false, error: 'Order Quantity must be 1 or more.' });
-      }
-      orderQuantity = n;
-    } else if (await orderQuantityRequired()) {
-      return res.json({ success: false, error: 'Order Quantity is required.' });
-    }
-
+    // The quantity and the add-on cards are not asked for here any more. At the
+    // moment an order is taken the quantity is often not settled and the cards
+    // are not decided - both are, by the designer, at proofing - so asking now
+    // only recorded a guess that had to be corrected later. They are on the
+    // Update Order Status box instead: see PUT /:id/status below.
     const orderId = await generateOrderId();
 
     // Upload files to Drive
@@ -239,26 +220,15 @@ router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
       INSERT INTO orders 
         (order_id, email_address, order_punched_by, dealer_name, dealer_email,
          client_name, india_designer, overseas_designer, possible_design_time,
-         special_remarks, upload_design_file, design_status, order_quantity)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+         special_remarks, upload_design_file, design_status)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
       orderId, email, punchedBy, dealer, dealerEmail,
       client, indiaDesigner, overseasDesigner, designTime,
-      remarks, finalLinks, 'Fresh Design', orderQuantity
+      remarks, finalLinks, 'Fresh Design'
     ]);
 
-    if (addOns.length) {
-      await db.query(
-        `INSERT INTO order_add_ons (order_id, name, qty) VALUES ${addOns.map(() => '(?,?,?)').join(', ')}`,
-        addOns.flatMap(a => [orderId, a.name, a.qty]),
-      );
-    }
-
     await logOrderEvent(orderId, 'Created', (dealer || '-') + ' / ' + (client || '-'), req.session.user);
-    if (addOns.length) {
-      await logOrderEvent(orderId, 'Add-ons',
-        addOns.map(a => `${a.name} x${a.qty}`).join(', '), req.session.user);
-    }
 
     // The calling sheet counts orders by the day they were punched, so this is
     // the moment it changes. Awaited for the same reason the designer's mail
@@ -323,12 +293,56 @@ router.put('/:id/status', requireLogin, upload.single('file'), async (req, res) 
       else updates.upload_design = fileUrl;
     }
 
+    // The quantity and the cards, settled by the time proofing is done. Both
+    // optional: a designer who does not know yet leaves them, and what is
+    // already on the order stays. Only a field that was actually sent is
+    // written, so saving a status without touching them changes neither.
+    if (req.body.orderQuantity !== undefined) {
+      const raw = String(req.body.orderQuantity).trim();
+      if (raw === '') {
+        updates.order_quantity = null;
+      } else {
+        const n = Number(raw);
+        if (!Number.isInteger(n) || n < 1) {
+          return res.json({ success: false, error: 'Order Quantity must be 1 or more.' });
+        }
+        updates.order_quantity = n;
+      }
+    }
+
+    let addOns = null;
+    if (req.body.addOns !== undefined) {
+      const parsed = parseAddOns(req.body.addOns);
+      if (parsed.error) return res.json({ success: false, error: parsed.error });
+      addOns = parsed.rows;
+    }
+
     await logOrderUpdate(orderId, updates, req.session.user);
 
     const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     const values = [...Object.values(updates), orderId];
 
     await db.query(`UPDATE orders SET ${setClauses} WHERE order_id = ?`, values);
+
+    // Replaced rather than added to: the box hands over the whole list every
+    // time, so a card the designer took off has to come off the order too.
+    if (addOns) {
+      const [before] = await db.query(
+        'SELECT name, qty FROM order_add_ons WHERE order_id = ? ORDER BY name', [orderId]);
+      await db.query('DELETE FROM order_add_ons WHERE order_id = ?', [orderId]);
+      if (addOns.length) {
+        await db.query(
+          `INSERT INTO order_add_ons (order_id, name, qty) VALUES ${addOns.map(() => '(?,?,?)').join(', ')}`,
+          addOns.flatMap(a => [orderId, a.name, a.qty]),
+        );
+      }
+      const was = before.map(a => `${a.name} x${a.qty}`).join(', ');
+      const now = [...addOns].sort((a, b) => a.name.localeCompare(b.name))
+        .map(a => `${a.name} x${a.qty}`).join(', ');
+      if (was !== now) {
+        await logOrderEvent(orderId, 'Add-ons', now || '(none)', req.session.user);
+      }
+    }
 
     res.json({ success: true });
   } catch (err) {
