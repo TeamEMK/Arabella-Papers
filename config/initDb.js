@@ -150,7 +150,7 @@ const ADD_ON_SEED = [
   'RSVP Card', 'Thank You Card', 'Accommodation Card', 'Welcome Card',
   'Map Card', 'Rehearsal Dinner Card', 'Details Card', 'Direction Card',
   'Place Card', 'Menu Card', 'Program Card', 'Escort Card',
-  'Reception Card', 'Parking Card',
+  'Reception Card', 'Parking Card', 'Tag',
 ];
 
 async function seedAddOns() {
