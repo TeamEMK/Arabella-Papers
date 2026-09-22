@@ -214,8 +214,14 @@ function an_isDelayed(order) {
   return an_daysInProduction(order) > AN_DELAY_DAYS || !!(order.ReasonForDelay || '').trim();
 }
 
+// Still to make. What has gone out is not outstanding work, so it is off
+// these three counts for the same reason it is off the Production chart - and
+// they have to agree, or a button reading 22 sits above a slice reading 11 and
+// somebody has to explain which is wrong. Delay already asks the board, which
+// carries nothing that has been dispatched.
 function an_inList(order, key) {
   if (key === 'Delay') return an_isDelayed(order);
+  if (order.Stage === 'dispatched') return false;
   return (order.ClientStatus || '').trim().toLowerCase() === key.toLowerCase();
 }
 
@@ -234,7 +240,7 @@ function anOpenList(key) {
   document.getElementById('an_listLastCol').textContent = AN_LISTS[key].last;
   document.getElementById('an_listNote').textContent = key === 'Delay'
     ? 'On the production board for more than ' + AN_DELAY_DAYS + ' days, longest wait first. Click a row for the reason.'
-    : 'Not filtered by the dates above — this is everything on record. Click a row for details.';
+    : 'Still to make — what has already gone out is not counted. Not filtered by the dates above. Click a row for details.';
   document.getElementById('an_listSearch').value = '';
   anDrawList();
   new bootstrap.Modal(document.getElementById('an_listModal')).show();
