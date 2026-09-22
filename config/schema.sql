@@ -280,6 +280,64 @@ CREATE TABLE IF NOT EXISTS stock_items (
 );
 
 -- =============================================
+-- INVENTORY — company equipment and who is holding it
+--
+-- Two tables, not one. The item is a thing the company owns and keeps owning;
+-- an assignment is one spell of somebody holding it. Keeping the spells as
+-- their own rows is what lets the register answer "who had this laptop last
+-- year" — a `holder` column on the item would only ever know about today.
+-- =============================================
+CREATE TABLE IF NOT EXISTS inventory_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  -- What it is called on the card. There is no free-text name field on the
+  -- form: the type names the item, except for 'other', which is named by
+  -- whatever type the person typed in.
+  name VARCHAR(255) NOT NULL,
+  type VARCHAR(30) NOT NULL,
+  brand VARCHAR(255) DEFAULT '',
+  model VARCHAR(255) DEFAULT '',
+  serial_number VARCHAR(255) DEFAULT '',
+  -- A data: URL, shrunk in the browser before it is sent. Kept on the row
+  -- rather than on Drive: it is one small picture per item, and it has to
+  -- survive without the Drive credentials being in play.
+  photo LONGTEXT DEFAULT NULL,
+  -- `condition` is a reserved word in MySQL 8, hence the prefix.
+  item_condition VARCHAR(20) DEFAULT 'good',
+  -- available / assigned / damaged / retired. Only 'available' can be handed
+  -- out; where a returned item lands is decided by the return reason.
+  status VARCHAR(20) DEFAULT 'available',
+  notes TEXT,
+  created_by INT DEFAULT NULL,
+  is_deleted TINYINT DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_inventory_status (status),
+  INDEX idx_inventory_type (type)
+);
+
+-- One spell of somebody holding an item. Closed by a return rather than
+-- deleted, so the register keeps the history of who held what.
+CREATE TABLE IF NOT EXISTS inventory_assignments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  item_id INT NOT NULL,
+  user_id INT NOT NULL,
+  assigned_by INT NOT NULL,
+  assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  returned_at DATETIME DEFAULT NULL,
+  -- active -> pending_handover (someone has said it is coming back) ->
+  -- returned (the custodian has it in hand again).
+  handover_status VARCHAR(20) DEFAULT 'active',
+  handover_notes TEXT,
+  -- Why the spell ended. It decides where the item lands afterwards:
+  -- damaged/retired take it out of circulation, offboarding sends it back to
+  -- available stock.
+  return_reason VARCHAR(20) DEFAULT NULL,
+  INDEX idx_inv_assign_item (item_id),
+  INDEX idx_inv_assign_user (user_id),
+  INDEX idx_inv_assign_status (handover_status)
+);
+
+-- =============================================
 -- FMS — work that lives in a Google Sheet
 --
 -- A sheet where each row is a job and each step of that job has its own block

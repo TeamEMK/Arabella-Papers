@@ -71,6 +71,11 @@ const SECTIONS = [
   // What paper is in stock is asked by everyone who takes an order, so the
   // tab is open to all.
   { id: 'stock', group: 'Company', name: 'Stock', icon: 'fa-layer-group', rule: () => true },
+  // Company equipment — laptops, phones, SIMs, and who is holding them. Open
+  // to everyone, because what a person holds is theirs to look at and to hand
+  // back. Handing kit out and taking it in is the custodian's job, and that is
+  // guarded in the API rather than by hiding the tab.
+  { id: 'inventory', group: 'Company', name: 'Inventory', icon: 'fa-laptop', rule: () => true },
   // Everybody takes leave, so everybody gets the tab. What differs is what is
   // on it: your own requests, plus everyone's if you are the one deciding.
   { id: 'leave', group: 'Company', name: 'Leave', icon: 'fa-calendar-check', rule: () => true },

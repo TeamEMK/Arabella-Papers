@@ -20,6 +20,7 @@ const logsApi = require('./routes/api/logs');
 const hrApi = require('./routes/api/hr');
 const leavesApi = require('./routes/api/leaves');
 const stockApi = require('./routes/api/stock');
+const inventoryApi = require('./routes/api/inventory');
 const correctionsApi = require('./routes/api/corrections');
 const fmsApi = require('./routes/api/fms');
 const fmsTasksApi = require('./routes/api/fmsTasks');
@@ -48,8 +49,12 @@ const sessionStore = new MySQLStore({
 // refuses to set the secure session cookie.
 if (isServerless) app.set('trust proxy', 1);
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// 10mb rather than the 100kb default: an equipment photo is posted as a data
+// URL inside the JSON body. The browser shrinks it to roughly 1000px first, so
+// what actually arrives is a couple of hundred kilobytes - the headroom is for
+// the odd large one, not the normal case.
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Build the schema on the first request against an empty database. Runs before
@@ -90,6 +95,7 @@ app.use('/api/logs', logsApi);
 app.use('/api/hr', hrApi);
 app.use('/api/leaves', leavesApi);
 app.use('/api/stock', stockApi);
+app.use('/api/inventory', inventoryApi);
 app.use('/api/corrections', correctionsApi);
 app.use('/api/fms', fmsApi);
 app.use('/api/fms-tasks', fmsTasksApi);
