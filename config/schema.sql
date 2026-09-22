@@ -574,3 +574,106 @@ CREATE TABLE IF NOT EXISTS user_sections (
   UNIQUE KEY uniq_user_section (user_id, section),
   INDEX idx_user_sections_user (user_id)
 );
+
+-- =============================================
+-- RECRUITMENT — the hiring pipeline, and the letters it sends
+--
+-- `employees` next door is people already on the payroll. This is the step
+-- before: somebody being interviewed, what came of it, and — once they are
+-- selected — the details they send back before their first day.
+--
+-- Three tables rather than one, because they answer three different questions
+-- and only the first of them is ever edited by hand.
+-- =============================================
+CREATE TABLE IF NOT EXISTS recruit_candidates (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  phone VARCHAR(50) DEFAULT '',
+  profile_position VARCHAR(255) DEFAULT '',
+  -- Who is taking the interview, typed in when it is booked. They get their
+  -- own letter, carrying the candidate's phone and email.
+  interviewer_email VARCHAR(255) DEFAULT '',
+  interview_date DATE DEFAULT NULL,
+  interview_time VARCHAR(20) DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT 'Scheduled',
+  reschedule_date DATE DEFAULT NULL,
+  reschedule_time VARCHAR(20) DEFAULT '',
+  reschedule_reason TEXT,
+  joining_date DATE DEFAULT NULL,
+  salary VARCHAR(100) DEFAULT '',
+  notes TEXT,
+  -- The onboarding form is opened by a link, not a login, so this token is the
+  -- credential. One per candidate, made the first time the form is sent and
+  -- kept afterwards, so sending it twice sends the same form.
+  joining_form_token VARCHAR(64) DEFAULT NULL,
+  joining_form_sent_at DATETIME DEFAULT NULL,
+  created_by INT DEFAULT NULL,
+  is_deleted TINYINT(1) DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_recruit_token (joining_form_token),
+  INDEX idx_recruit_status (status),
+  INDEX idx_recruit_interview (interview_date)
+);
+
+-- Every letter this section sent, and why it failed when it did.
+--
+-- Not optional. Email fails quietly — a mistyped address, SMTP refusing, an
+-- app password that expired — and without this the first anybody hears of a
+-- bounced invitation is a candidate who never turned up. A failed one can be
+-- sent again from the page.
+CREATE TABLE IF NOT EXISTS recruit_messages (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  candidate_id INT DEFAULT NULL,
+  candidate_name VARCHAR(255) DEFAULT '',
+  email VARCHAR(255) DEFAULT '',
+  action VARCHAR(255) DEFAULT '',
+  subject VARCHAR(500) DEFAULT '',
+  status VARCHAR(10) NOT NULL DEFAULT 'Failed',
+  error_detail TEXT,
+  retry_count INT DEFAULT 0,
+  last_retry_at DATETIME NULL DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_recruit_msg_cand (candidate_id),
+  INDEX idx_recruit_msg_status (status)
+);
+
+-- What a selected candidate sends back through the onboarding form.
+--
+-- One row per candidate, so filling the form in a second time replaces the
+-- first answer rather than leaving two records and no way to tell which is
+-- believed. The document columns hold a Google Drive file id, never a public
+-- link: an Aadhaar scan must not sit at an address anybody can guess.
+CREATE TABLE IF NOT EXISTS recruit_joining (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  candidate_id INT NOT NULL,
+  full_name VARCHAR(255) DEFAULT '',
+  emp_mobile VARCHAR(20) DEFAULT '',
+  email VARCHAR(255) DEFAULT '',
+  dob DATE DEFAULT NULL,
+  -- Two people to reach. The relation is free text because the form's list
+  -- ends in an "Other" the candidate types into — an uncle or a cousin is
+  -- still the person to call.
+  guardian1_name VARCHAR(255) DEFAULT '',
+  guardian1_relation VARCHAR(100) DEFAULT '',
+  guardian1_mobile VARCHAR(20) DEFAULT '',
+  guardian2_name VARCHAR(255) DEFAULT '',
+  guardian2_relation VARCHAR(100) DEFAULT '',
+  guardian2_mobile VARCHAR(20) DEFAULT '',
+  street VARCHAR(500) DEFAULT '',
+  city VARCHAR(255) DEFAULT '',
+  state VARCHAR(255) DEFAULT '',
+  pincode VARCHAR(20) DEFAULT '',
+  aadhaar_no VARCHAR(20) DEFAULT '',
+  pan_no VARCHAR(20) DEFAULT '',
+  -- Aadhaar and PAN are each one PDF, or two photos, front and back.
+  resume_file VARCHAR(255) DEFAULT '',
+  aadhaar_file VARCHAR(255) DEFAULT '',
+  aadhaar_file_2 VARCHAR(255) DEFAULT '',
+  pan_file VARCHAR(255) DEFAULT '',
+  pan_file_2 VARCHAR(255) DEFAULT '',
+  submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_recruit_joining_candidate (candidate_id)
+);

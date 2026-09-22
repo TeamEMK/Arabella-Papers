@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Joining details · Arabella Papers</title>
+<!--
+  The onboarding form, opened by somebody who has no account here: a new hire,
+  usually on a phone, usually once. So it stands alone - no sidebar, no app
+  shell, nothing to navigate. The link in their email carries the token that
+  says whose form this is; everything else is asked for here.
+
+  Deliberately plain: one column, big targets, and every rule explained at the
+  field rather than in a red line after a failed submit.
+
+  It is served straight out of /public, which sits in front of the session
+  middleware - the token is the only credential, and it has to be, because the
+  person filling this in cannot log in.
+-->
+<style>
+  :root {
+    --ink:#212529; --body:#495057; --muted:#6c757d; --faint:#adb5bd;
+    --line:#e9ecef; --canvas:#f4f5f7; --card:#ffffff;
+    --brand:#ffa500; --ok:#198754; --bad:#dc3545;
+    --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  * { box-sizing:border-box }
+  body {
+    margin:0; background:var(--canvas); color:var(--body);
+    font-family:var(--font); font-size:15px; line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:640px; margin:0 auto; padding:24px 16px 56px }
+  .card { background:var(--card); border:1px solid #e6e8eb; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.05) }
+  .head { background:var(--ink); padding:22px 24px }
+  .head .who { color:var(--brand); font-size:17px; font-weight:700; letter-spacing:.5px }
+  .head h1 { margin:6px 0 0; font-size:14px; font-weight:400; color:#adb5bd; letter-spacing:.4px }
+  .intro { padding:20px 24px 4px }
+  .intro p { margin:0 0 12px }
+  .sec { padding:6px 24px 4px }
+  .sec h2 { margin:22px 0 2px; font-size:11.5px; letter-spacing:1.2px; text-transform:uppercase; color:var(--ink); font-weight:700 }
+  .sec h2 + .hint { margin:6px 0 14px }
+  .hint { font-size:12.5px; color:var(--muted); margin:0 0 14px }
+  .row { display:flex; gap:14px; flex-wrap:wrap }
+  .row > .f { flex:1 1 200px; min-width:0 }
+  .f { margin:0 0 14px }
+  label { display:block; font-size:12.5px; font-weight:600; color:var(--ink); margin:0 0 5px }
+  label .opt { font-weight:400; color:var(--faint) }
+  .req { color:var(--bad) }
+  input[type=text], input[type=email], input[type=tel], input[type=date], select {
+    width:100%; padding:11px 12px; font:inherit; font-size:15px; color:var(--ink);
+    background:#fff; border:1px solid #ced4da; border-radius:7px; outline:none;
+  }
+  input:focus, select:focus { border-color:var(--brand); box-shadow:0 0 0 3px rgba(255,165,0,.2) }
+  input[type=file] { width:100%; font:inherit; font-size:13px; color:var(--muted) }
+  .file { border:1px dashed #ced4da; border-radius:7px; padding:12px; background:#fcfcfd }
+  .file.has { border-style:solid; border-color:var(--brand); background:#fffaf0 }
+  .file .picked { margin-top:7px; font-size:12.5px; color:var(--ok); word-break:break-all }
+  .note { font-size:12px; color:var(--faint); margin-top:5px }
+  .foot { padding:18px 24px 24px; border-top:1px solid var(--line); margin-top:18px }
+  button {
+    width:100%; padding:14px 18px; font:inherit; font-size:15px; font-weight:700;
+    color:var(--ink); background:var(--brand); border:0; border-radius:8px; cursor:pointer;
+  }
+  button:disabled { opacity:.55; cursor:default }
+  .msg { margin:0 0 14px; padding:12px 14px; border-radius:7px; font-size:13.5px; display:none }
+  .msg.bad { display:block; background:#fff5f5; border:1px solid #f5c2c7; color:var(--bad) }
+  .msg.ok  { display:block; background:#f1f9f4; border:1px solid #badbcc; color:var(--ok) }
+  .done { padding:40px 24px 48px; text-align:center; display:none }
+  .done .tick { font-size:40px; line-height:1 }
+  .done h2 { margin:14px 0 6px; font-size:19px; color:var(--ink) }
+  .done p { margin:0; color:var(--muted) }
+  .credit { text-align:center; font-size:12px; color:var(--faint); margin:16px 0 0 }
+  @media (max-width:520px) { .row > .f { flex:1 1 100% } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="head">
+      <div class="who">ARABELLA PAPERS</div>
+      <h1 id="greeting">Joining details</h1>
+    </div>
+
+    <!-- Until the token has been checked there is nothing worth showing. -->
+    <div id="loading" class="intro"><p>Opening your form&hellip;</p></div>
+
+    <form id="form" style="display:none">
+      <div class="intro">
+        <p id="lede">A few details before your first day. It takes about five minutes.</p>
+        <div id="msg" class="msg"></div>
+      </div>
+
+      <div class="sec">
+        <h2>About you</h2>
+        <div class="f">
+          <label>Full name <span class="req">*</span></label>
+          <input type="text" id="full_name" autocomplete="name">
+        </div>
+        <div class="row">
+          <div class="f">
+            <label>Mobile number <span class="req">*</span></label>
+            <input type="tel" id="emp_mobile" inputmode="numeric" maxlength="10" autocomplete="tel">
+            <div class="note">10 digits, no +91</div>
+          </div>
+          <div class="f">
+            <label>Email <span class="req">*</span></label>
+            <input type="email" id="email" autocomplete="email">
+          </div>
+        </div>
+        <div class="f" style="max-width:260px">
+          <label>Date of birth <span class="req">*</span></label>
+          <input type="date" id="dob">
+        </div>
+      </div>
+
+      <div class="sec">
+        <h2>Family contacts</h2>
+        <p class="hint">Two people we can reach if we cannot reach you. Both numbers must be
+          different from yours and from each other.</p>
+
+        <div class="row">
+          <div class="f">
+            <label>First contact &mdash; name <span class="req">*</span></label>
+            <input type="text" id="guardian1_name">
+          </div>
+          <div class="f">
+            <label>Relation <span class="req">*</span></label>
+            <select id="guardian1_relation"></select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="f" id="g1_other_wrap" style="display:none">
+            <label>Which relation <span class="req">*</span></label>
+            <input type="text" id="guardian1_relation_other" placeholder="Uncle, brother, ...">
+          </div>
+          <div class="f">
+            <label>Mobile number <span class="req">*</span></label>
+            <input type="tel" id="guardian1_mobile" inputmode="numeric" maxlength="10">
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:8px">
+          <div class="f">
+            <label>Second contact &mdash; name <span class="req">*</span></label>
+            <input type="text" id="guardian2_name">
+          </div>
+          <div class="f">
+            <label>Relation <span class="req">*</span></label>
+            <select id="guardian2_relation"></select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="f" id="g2_other_wrap" style="display:none">
+            <label>Which relation <span class="req">*</span></label>
+            <input type="text" id="guardian2_relation_other" placeholder="Uncle, brother, ...">
+          </div>
+          <div class="f">
+            <label>Mobile number <span class="req">*</span></label>
+            <input type="tel" id="guardian2_mobile" inputmode="numeric" maxlength="10">
+          </div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h2>Where you live</h2>
+        <div class="f">
+          <label>Street / house number <span class="req">*</span></label>
+          <input type="text" id="street" autocomplete="address-line1">
+        </div>
+        <div class="row">
+          <div class="f">
+            <label>City <span class="req">*</span></label>
+            <input type="text" id="city" autocomplete="address-level2">
+          </div>
+          <div class="f">
+            <label>State</label>
+            <input type="text" id="state" autocomplete="address-level1">
+          </div>
+          <div class="f" style="flex:0 1 140px">
+            <label>Pincode <span class="req">*</span></label>
+            <input type="tel" id="pincode" inputmode="numeric" maxlength="6">
+          </div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h2>Documents</h2>
+        <p class="hint">A clear photo is easiest &mdash; your phone's camera is fine, and the
+          picture is shrunk here before it is sent. A PDF works too, up to 4 MB.</p>
+
+        <div class="f">
+          <label>Your CV <span class="req">*</span></label>
+          <div class="file" data-for="resume_file">
+            <input type="file" id="resume_file" accept=".pdf,.doc,.docx,image/*">
+            <div class="picked"></div>
+          </div>
+        </div>
+
+        <div class="f">
+          <label>Aadhaar &mdash; front side <span class="req">*</span></label>
+          <div class="file" data-for="aadhaar_file">
+            <input type="file" id="aadhaar_file" accept=".pdf,image/*">
+            <div class="picked"></div>
+          </div>
+        </div>
+        <div class="f">
+          <label>Aadhaar &mdash; back side</label>
+          <div class="file" data-for="aadhaar_file_2">
+            <input type="file" id="aadhaar_file_2" accept=".pdf,image/*">
+            <div class="picked"></div>
+          </div>
+          <div class="note">Skip this if the file above already has both sides.</div>
+        </div>
+
+        <div class="row">
+          <div class="f">
+            <label>Aadhaar number <span class="opt">(optional)</span></label>
+            <input type="tel" id="aadhaar_no" inputmode="numeric" maxlength="12">
+          </div>
+          <div class="f">
+            <label>PAN number <span class="opt">(optional)</span></label>
+            <input type="text" id="pan_no" maxlength="10" style="text-transform:uppercase" placeholder="ABCDE1234F">
+          </div>
+        </div>
+
+        <div class="f">
+          <label>PAN &mdash; front side <span class="opt">(optional)</span></label>
+          <div class="file" data-for="pan_file">
+            <input type="file" id="pan_file" accept=".pdf,image/*">
+            <div class="picked"></div>
+          </div>
+        </div>
+        <div class="f">
+          <label>PAN &mdash; back side <span class="opt">(optional)</span></label>
+          <div class="file" data-for="pan_file_2">
+            <input type="file" id="pan_file_2" accept=".pdf,image/*">
+            <div class="picked"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="foot">
+        <button type="submit" id="submit">Send my details</button>
+        <p class="note" style="text-align:center;margin-top:10px">
+          Your documents are stored privately and seen only by the Arabella Papers HR team.
+        </p>
+      </div>
+    </form>
+
+    <div class="done" id="done">
+      <div class="tick">&#9989;</div>
+      <h2>Thank you &mdash; we have your details</h2>
+      <p>We will be in touch before your first day.</p>
+      <p style="margin-top:10px">If something needs changing, reply to the email that brought you here.</p>
+    </div>
+  </div>
+  <p class="credit">Arabella Papers</p>
+</div>
+
+<script>
+// The token from the emailed link. Without it there is no form to open, so
+// everything below waits on it.
+var TOKEN = new URLSearchParams(location.search).get('t') || '';
+var $ = function (id) { return document.getElementById(id); };
+
+var FILE_FIELDS = ['resume_file', 'aadhaar_file', 'aadhaar_file_2', 'pan_file', 'pan_file_2'];
+
+// What actually gets sent for each field, once a photograph has been shrunk.
+// Keyed by field, so choosing a second file simply replaces the first.
+var PICKED = {};
+
+var RELATIONS = ['Father', 'Mother', 'Spouse', 'Brother', 'Sister', 'Other'];
+['guardian1_relation', 'guardian2_relation'].forEach(function (sel) {
+  $(sel).innerHTML = '<option value="">Choose...</option>'
+    + RELATIONS.map(function (r) { return '<option>' + r + '</option>'; }).join('');
+});
+// "Other" is a real answer - an uncle or a cousin is still the person to call -
+// so it opens a box rather than being refused.
+$('guardian1_relation').onchange = function () { $('g1_other_wrap').style.display = this.value === 'Other' ? '' : 'none'; };
+$('guardian2_relation').onchange = function () { $('g2_other_wrap').style.display = this.value === 'Other' ? '' : 'none'; };
+
+// Numbers only, while they type, so a pasted "+91 63675 77176" does not fail
+// validation for reasons nobody can see.
+['emp_mobile', 'guardian1_mobile', 'guardian2_mobile', 'pincode', 'aadhaar_no'].forEach(function (id) {
+  $(id).addEventListener('input', function (e) { e.target.value = e.target.value.replace(/\D/g, ''); });
+});
+
+/**
+ * A photograph of an Aadhaar card off a phone is three or four megabytes, and
+ * this app runs as a serverless function whose whole request body has to stay
+ * under about four and a half. Five such photos would never arrive at all.
+ *
+ * So the picture is drawn into a canvas at 1600px first - wide enough that the
+ * number on the card is still readable - and what leaves the browser is a few
+ * hundred kilobytes. A PDF cannot be shrunk this way and is sent as it is.
+ */
+function shrink(file) {
+  return new Promise(function (resolve) {
+    if (!/^image\//.test(file.type) || file.type === 'image/heic') return resolve(file);
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var img = new Image();
+      img.onload = function () {
+        var max = 1600;
+        var scale = Math.min(1, max / Math.max(img.width, img.height));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(function (blob) {
+          // Only if it actually helped. A small clean scan should not be
+          // re-encoded into something larger and blurrier than it started.
+          if (!blob || blob.size >= file.size) return resolve(file);
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.82);
+      };
+      // A file the browser cannot decode never fires onload - send the
+      // original rather than silently dropping the document.
+      img.onerror = function () { resolve(file); };
+      img.src = e.target.result;
+    };
+    reader.onerror = function () { resolve(file); };
+    reader.readAsDataURL(file);
+  });
+}
+
+// A chosen file should be visibly chosen. The browser's own label is easy to
+// miss on a phone, and a form that silently lost an upload is the worst kind.
+FILE_FIELDS.forEach(function (id) {
+  $(id).addEventListener('change', function () {
+    var box = $(id).closest('.file');
+    var picked = box.querySelector('.picked');
+    var file = this.files[0];
+    if (!file) { delete PICKED[id]; box.classList.remove('has'); picked.textContent = ''; return; }
+    picked.textContent = 'Reading...';
+    shrink(file).then(function (out) {
+      PICKED[id] = out;
+      box.classList.add('has');
+      picked.textContent = '✓ ' + file.name + ' (' + Math.round(out.size / 1024) + ' KB)';
+    });
+  });
+});
+
+function say(text, kind) {
+  var m = $('msg');
+  m.className = 'msg ' + kind;
+  m.textContent = text;
+  if (text) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+(function open() {
+  if (!TOKEN) {
+    $('loading').innerHTML = '<p>This link is incomplete. Please open the form from the email we sent you.</p>';
+    return;
+  }
+  fetch('/api/joining/' + encodeURIComponent(TOKEN))
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j.success) throw new Error(res.j.error || 'This link is not valid.');
+      var info = res.j.data;
+      $('greeting').textContent = 'Hello ' + info.name;
+      $('loading').style.display = 'none';
+      $('form').style.display = '';
+      // Pre-filled from what we already know, and still editable: the number
+      // on file may be the one they are about to change.
+      $('full_name').value = info.name || '';
+      $('email').value = info.email || '';
+      $('emp_mobile').value = String(info.phone || '').replace(/\D/g, '').slice(-10);
+      if (info.position) {
+        $('lede').textContent = 'A few details before you join us as ' + info.position + '. It takes about five minutes.';
+      }
+      // A form already sent back can be sent again - people remember a
+      // document they left out - but say so, or they will wonder whether the
+      // first one arrived.
+      if (info.submitted) say('You have already sent these details. Filling this in again will replace them.', 'ok');
+    })
+    .catch(function (err) {
+      $('loading').innerHTML = '<p>' + err.message + '</p><p>Ask us to send the form again and it will work.</p>';
+    });
+})();
+
+$('form').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var btn = $('submit');
+  if (btn.disabled) return;
+
+  function relation(n) {
+    var v = $('guardian' + n + '_relation').value;
+    return v === 'Other' ? $('guardian' + n + '_relation_other').value.trim() : v;
+  }
+
+  var text = {
+    full_name: $('full_name').value.trim(),
+    emp_mobile: $('emp_mobile').value,
+    email: $('email').value.trim(),
+    dob: $('dob').value,
+    guardian1_name: $('guardian1_name').value.trim(),
+    guardian1_relation: relation(1),
+    guardian1_mobile: $('guardian1_mobile').value,
+    guardian2_name: $('guardian2_name').value.trim(),
+    guardian2_relation: relation(2),
+    guardian2_mobile: $('guardian2_mobile').value,
+    street: $('street').value.trim(),
+    city: $('city').value.trim(),
+    state: $('state').value.trim(),
+    pincode: $('pincode').value,
+    aadhaar_no: $('aadhaar_no').value,
+    pan_no: $('pan_no').value.trim().toUpperCase(),
+  };
+
+  // Caught here first, so somebody on a slow connection is not made to upload
+  // their documents before being told a mobile number is short.
+  var short = [];
+  if (!text.full_name) short.push('your name');
+  if (text.emp_mobile.length !== 10) short.push('a 10-digit mobile number');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text.email)) short.push('a valid email');
+  if (!text.dob) short.push('your date of birth');
+  if (!text.guardian1_name || !text.guardian1_relation || text.guardian1_mobile.length !== 10) short.push('the first contact in full');
+  if (!text.guardian2_name || !text.guardian2_relation || text.guardian2_mobile.length !== 10) short.push('the second contact in full');
+  if (!text.street || !text.city) short.push('your address');
+  if (text.pincode.length !== 6) short.push('a 6-digit pincode');
+  if (!PICKED.resume_file) short.push('your CV');
+  if (!PICKED.aadhaar_file) short.push('the front of your Aadhaar');
+  if (short.length) return say('Still needed: ' + short.join(', ') + '.', 'bad');
+
+  var mobiles = [text.emp_mobile, text.guardian1_mobile, text.guardian2_mobile];
+  if (new Set(mobiles).size !== 3) return say('Your number and both contact numbers must be different.', 'bad');
+
+  if (text.pan_no && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(text.pan_no)) {
+    return say('That PAN does not look right - it reads like ABCDE1234F.', 'bad');
+  }
+
+  var fd = new FormData();
+  Object.keys(text).forEach(function (k) { fd.append(k, text[k]); });
+  var total = 0;
+  FILE_FIELDS.forEach(function (id) {
+    if (!PICKED[id]) return;
+    fd.append(id, PICKED[id], PICKED[id].name);
+    total += PICKED[id].size;
+  });
+
+  // The host refuses a request body past about four and a half megabytes
+  // before any of our code sees it, and the browser is given no reason why.
+  // Photographs are already shrunk, so hitting this means large PDFs - and
+  // saying so here is far better than a blank failure at the other end.
+  if (total > 4 * 1024 * 1024) {
+    return say('Those documents come to ' + Math.round(total / 1024 / 1024 * 10) / 10
+      + ' MB together, which is more than we can accept at once. A photo of each card is usually'
+      + ' much smaller than a scanned PDF - please try photographing them instead.', 'bad');
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  say('', '');
+  fetch('/api/joining/' + encodeURIComponent(TOKEN), { method: 'POST', body: fd })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j.success) throw new Error(res.j.error || 'Something went wrong. Please try again.');
+      $('form').style.display = 'none';
+      $('done').style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    })
+    .catch(function (err) {
+      say(err.message, 'bad');
+      btn.disabled = false;
+      btn.textContent = 'Send my details';
+    });
+});
+</script>
+</body>
+</html>

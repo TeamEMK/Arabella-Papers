@@ -85,6 +85,13 @@ const SECTIONS = [
     id: 'hr', group: 'Company', name: 'HR', icon: 'fa-id-card',
     rule: (role) => role === 'SuperAdmin' || role.includes('HR'),
   },
+  // The step before HR: people being interviewed, and what a selected one
+  // sends back before their first day. Same guard as HR and for a stronger
+  // reason - this one holds Aadhaar and PAN scans.
+  {
+    id: 'recruitment', group: 'Company', name: 'Recruitment', icon: 'fa-user-plus',
+    rule: (role) => role === 'SuperAdmin' || role.includes('HR'),
+  },
   {
     id: 'o2dsummary', group: 'Admin', name: 'Analytics', icon: 'fa-chart-line',
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',

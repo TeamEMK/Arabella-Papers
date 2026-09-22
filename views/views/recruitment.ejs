@@ -1,0 +1,674 @@
+<%# Recruitment — the hiring pipeline. Same guard as HR: SuperAdmin, the HR
+    role, or somebody handed the section on the Access Control page. %>
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-user-plus me-2"></i>Recruitment</h3>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="rec_openLog()"><i class="fas fa-envelope me-1"></i> Sent mail</button>
+      <button class="btn btn-primary smooth-ui fw-bold" onclick="rec_openAdd()"><i class="fas fa-plus me-1"></i> Schedule Interview</button>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, rec_fetch, 'candidates')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-2"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #0d6efd;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Candidates</h6><h3 class="fw-bold text-primary mb-0" id="rec_kpiTotal">--</h3></div></div></div>
+    <div class="col-6 col-md-2"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #0dcaf0;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Interviews ahead</h6><h3 class="fw-bold text-info mb-0" id="rec_kpiUpcoming">--</h3></div></div></div>
+    <div class="col-6 col-md-2"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #198754;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Selected</h6><h3 class="fw-bold text-success mb-0" id="rec_kpiSelected">--</h3></div></div></div>
+    <div class="col-6 col-md-2"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #6c757d;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Rejected</h6><h3 class="fw-bold text-secondary mb-0" id="rec_kpiRejected">--</h3></div></div></div>
+    <%# The two worth acting on, which is why they sit at the end in warning
+        colours rather than being buried in a log nobody opens. %>
+    <div class="col-6 col-md-2"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #fd7e14;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Forms waiting</h6><h3 class="fw-bold mb-0" style="color:#fd7e14" id="rec_kpiWaiting">--</h3></div></div></div>
+    <div class="col-6 col-md-2"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #dc3545;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">Mail failed</h6><h3 class="fw-bold text-danger mb-0" id="rec_kpiFailed">--</h3></div></div></div>
+  </div>
+
+  <%# A letter that never arrived is the kind of thing nobody notices until a
+      candidate does not turn up, so it is said on the page, not only in a log. %>
+  <div class="alert alert-warning d-none align-items-center justify-content-between flex-wrap gap-2" id="rec_mailNote">
+    <span id="rec_mailNoteText"></span>
+    <button class="btn btn-sm btn-warning fw-bold" onclick="rec_openLog(true)">See why</button>
+  </div>
+
+  <div class="card bg-light-glass mb-4 shadow-sm">
+    <div class="card-body p-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-5"><label class="form-label text-dark fw-bold small mb-0">Search</label><input type="text" id="rec_search" class="form-control form-control-sm" placeholder="Name, email, phone, position..." onkeyup="rec_render()"></div>
+        <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Status</label><select id="rec_status" class="form-select form-select-sm" onchange="rec_render()"><option value="">All</option><option>Scheduled</option><option>Rescheduled</option><option>Selected</option><option>Rejected</option><option>Offer Sent</option></select></div>
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Onboarding</label><select id="rec_form" class="form-select form-select-sm" onchange="rec_render()"><option value="">All</option><option value="waiting">Sent, waiting</option><option value="received">Received</option><option value="none">Not sent</option></select></div>
+        <div class="col-12 col-md-2 text-end"><button class="btn btn-secondary btn-sm w-100" onclick="rec_clear()">Clear</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card bg-light-glass shadow-lg">
+    <div class="card-header bg-transparent border-0"><h5 class="mb-0 text-dark fw-bold"><i class="fas fa-users me-2"></i>Candidates</h5></div>
+    <div class="card-body p-0">
+      <div class="table-responsive" data-fill-height style="overflow-y:auto;position:relative;">
+        <table class="table table-hover table-striped mb-0 text-nowrap">
+          <thead class="table-dark">
+            <tr>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">#</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Candidate</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Position</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Interview</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Status</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Joining</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Onboarding</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="rec_tbody"><tr><td colspan="8" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add / edit a candidate. Editing never emails anybody — only the Status
+     dialog does that. -->
+<div class="modal fade" id="rec_modal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title"><span id="rec_modalTitle">Schedule Interview</span></h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">The candidate</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-6"><label class="form-label fw-bold text-dark small">Name *</label><input class="form-control" id="rec_f_name" placeholder="Full name"></div>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark small">Email * <span class="text-muted fw-normal">(the invitation goes here)</span></label><input class="form-control" id="rec_f_email" type="email" placeholder="name@example.com"></div>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark small">Phone</label><input class="form-control" id="rec_f_phone" placeholder="9876543210"></div>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark small">Position / profile</label><input class="form-control" id="rec_f_profile_position" placeholder="e.g. MIS Executive"></div>
+      </div>
+
+      <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">The interview</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-4"><label class="form-label fw-bold text-dark small">Date</label><input class="form-control" type="date" id="rec_f_interview_date"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark small">Time</label><input class="form-control" type="time" step="300" id="rec_f_interview_time"></div>
+        <div class="col-md-4"><label class="form-label fw-bold text-dark small">Interviewer email</label><input class="form-control" type="email" id="rec_f_interviewer_email" placeholder="Leave blank to tell nobody"></div>
+        <div class="col-12"><div class="form-text mt-0">The interviewer gets their own letter, carrying the candidate's phone and email. The note below is not in it — that is written for the candidate.</div></div>
+        <div class="col-12"><label class="form-label fw-bold text-dark small">Note to the candidate</label><textarea class="form-control" id="rec_f_notes" rows="3" placeholder="Office address, which floor, a map link — whatever they need to get there"></textarea></div>
+      </div>
+
+      <%# Neither of these has an answer yet when a first interview is being
+          booked: salary comes out of the conversation, and the joining date is
+          asked for in the Status dialog. Hidden while adding. %>
+      <div id="rec_laterFields" style="display:none">
+        <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Afterwards</h6>
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label fw-bold text-dark small">Salary discussed</label><input class="form-control" id="rec_f_salary"></div>
+          <div class="col-md-6"><label class="form-label fw-bold text-dark small">Expected joining</label><input class="form-control" type="date" id="rec_f_joining_date"></div>
+        </div>
+      </div>
+
+      <div class="form-check mt-3" id="rec_sendWrap">
+        <input class="form-check-input" type="checkbox" id="rec_f_sendEmail" checked>
+        <label class="form-check-label fw-bold text-dark small" for="rec_f_sendEmail">Email the invitation now</label>
+        <div class="form-text">Only sent when an interview date is set. Untick to add the candidate quietly and invite them later.</div>
+      </div>
+    </div>
+    <div class="modal-footer justify-content-between">
+      <button class="btn btn-outline-danger" id="rec_deleteBtn" onclick="rec_delete()"><i class="fas fa-trash me-1"></i>Remove</button>
+      <div class="d-flex gap-2">
+        <button class="btn btn-success" id="rec_saveBtn" onclick="rec_save(this)">Save</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<!-- Change status. Its own dialog because this is the one thing that writes to
+     the candidate, and a decision should not be a stray keystroke. -->
+<div class="modal fade" id="rec_statusModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-dark text-white">
+      <h5 class="modal-title">Change Status</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div class="text-muted small mb-3" id="rec_statusWho"></div>
+      <label class="form-label fw-bold text-dark small">New status</label>
+      <select class="form-select mb-3" id="rec_s_status" onchange="rec_statusFields()">
+        <option>Scheduled</option><option>Rescheduled</option><option>Selected</option><option>Rejected</option><option>Offer Sent</option>
+      </select>
+
+      <div id="rec_reschedFields" style="display:none">
+        <div class="row g-3 mb-3">
+          <div class="col-6"><label class="form-label fw-bold text-dark small">New date *</label><input class="form-control" type="date" id="rec_s_reschedule_date"></div>
+          <div class="col-6"><label class="form-label fw-bold text-dark small">New time</label><input class="form-control" type="time" step="300" id="rec_s_reschedule_time"></div>
+          <div class="col-12"><label class="form-label fw-bold text-dark small">Reason <span class="text-muted fw-normal">(shown to the candidate)</span></label><input class="form-control" id="rec_s_reschedule_reason" placeholder="e.g. Interviewer travelling"></div>
+        </div>
+      </div>
+
+      <div id="rec_joinFields" style="display:none">
+        <div class="mb-3"><label class="form-label fw-bold text-dark small">Expected joining date</label><input class="form-control" type="date" id="rec_s_joining_date"></div>
+      </div>
+
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="rec_s_sendEmail" checked>
+        <label class="form-check-label fw-bold text-dark small" for="rec_s_sendEmail" id="rec_s_mailLabel">Email the candidate</label>
+        <div class="form-text" id="rec_s_mailNote"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-success" id="rec_statusSaveBtn" onclick="rec_saveStatus(this)">Save</button>
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- The onboarding form: where it has got to, and what came back. -->
+<div class="modal fade" id="rec_joinModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-dark text-white">
+      <h5 class="modal-title" id="rec_joinTitle">Onboarding form</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body" id="rec_joinBody"></div>
+    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div>
+  </div></div>
+</div>
+
+<!-- Every letter this section sent, and why it failed when it did. -->
+<div class="modal fade" id="rec_logModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-dark text-white">
+      <h5 class="modal-title">Sent mail</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted small">Every letter this section sent, and why it failed when it did. A failed one can be sent again — the candidate's current address is used, not the one that failed.</p>
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" id="rec_logOnlyFailed" onchange="rec_loadLog()">
+        <label class="form-check-label fw-bold text-dark small" for="rec_logOnlyFailed">Only the ones that failed</label>
+      </div>
+      <div class="table-responsive" style="max-height:60vh;overflow-y:auto;">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-dark"><tr><th>When</th><th>Candidate</th><th>Letter</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="rec_logBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div>
+  </div></div>
+</div>
+
+<script>
+var rec_data = [], rec_editId = null, rec_join = null, rec_busy = false;
+
+// Every field on the add/edit form, so loading and saving do not each carry
+// their own list that can drift apart.
+var REC_FIELDS = ['name', 'email', 'phone', 'profile_position', 'interviewer_email',
+  'interview_date', 'interview_time', 'salary', 'joining_date', 'notes'];
+
+// Which statuses write to the candidate, so the dialog can say so honestly
+// instead of offering a tick box that does nothing.
+var REC_MAILS = {
+  Rescheduled: 'They get the new date and time.',
+  Selected: 'They are told they have been selected, and the onboarding form follows.',
+  Rejected: 'They are told the outcome — short, and without false comfort.',
+};
+
+var REC_PILL = {
+  'Scheduled': 'primary', 'Rescheduled': 'warning', 'Selected': 'success',
+  'Rejected': 'secondary', 'Offer Sent': 'info',
+};
+
+const rec_esc = v => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// "2026-10-02" → "02 Oct 2026". Empty stays a dash rather than "Invalid Date".
+function rec_date(d) {
+  if (!d) return '-';
+  const dt = new Date(String(d).slice(0, 10) + 'T00:00:00');
+  if (isNaN(dt)) return rec_esc(String(d));
+  return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function rec_time(t) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(t || '').trim());
+  if (!m) return '';
+  let h = Number(m[1]); const ap = h < 12 ? 'AM' : 'PM'; h = h % 12 || 12;
+  return h + ':' + m[2] + ' ' + ap;
+}
+
+async function rec_fetch() {
+  try {
+    const [list, stats] = await Promise.all([
+      fetch('/api/recruitment/candidates').then(r => r.json()),
+      fetch('/api/recruitment/stats').then(r => r.json()),
+    ]);
+    rec_data = list.data || [];
+    rec_kpis(stats.data || {});
+    rec_render();
+    return rec_data.length;
+  } catch (e) {
+    document.getElementById('rec_tbody').innerHTML =
+      '<tr><td colspan="8" class="text-center text-danger py-4">Could not load candidates.</td></tr>';
+    return 0;
+  }
+}
+
+function rec_kpis(s) {
+  const by = s.byStatus || {};
+  const put = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  put('rec_kpiTotal', s.total || 0);
+  put('rec_kpiUpcoming', s.upcoming || 0);
+  put('rec_kpiSelected', by['Selected'] || 0);
+  put('rec_kpiRejected', by['Rejected'] || 0);
+  put('rec_kpiWaiting', s.formsWaiting || 0);
+  put('rec_kpiFailed', s.failedEmails || 0);
+
+  const note = document.getElementById('rec_mailNote');
+  if (s.failedEmails) {
+    document.getElementById('rec_mailNoteText').innerHTML =
+      '<i class="fas fa-triangle-exclamation me-2"></i><b>' + s.failedEmails + '</b> letter'
+      + (s.failedEmails === 1 ? '' : 's') + ' could not be sent.';
+    note.classList.remove('d-none');
+    note.classList.add('d-flex');
+  } else {
+    note.classList.add('d-none');
+    note.classList.remove('d-flex');
+  }
+}
+
+// Three states, and the cell says which: nothing sent, sent and waiting, or
+// the details are in. The middle one is the one worth seeing at a glance — a
+// form sent a fortnight ago and never filled in is somebody to chase.
+function rec_joinCell(c) {
+  const open = 'onclick="rec_openJoin(' + c.id + ')"';
+  if (c.joining_submitted_at) {
+    return '<button class="btn btn-sm btn-success" ' + open + '><i class="fas fa-check me-1"></i>Received</button>';
+  }
+  if (c.joining_form_sent_at) {
+    const days = Math.floor((Date.now() - new Date(String(c.joining_form_sent_at).replace(' ', 'T')).getTime()) / 86400000);
+    const late = days >= 3;
+    return '<button class="btn btn-sm ' + (late ? 'btn-warning' : 'btn-outline-secondary') + '" ' + open + '>'
+      + 'Sent' + (days > 0 ? ' · ' + days + 'd' : '') + '</button>';
+  }
+  return '<button class="btn btn-sm btn-outline-secondary" ' + open + '>Send...</button>';
+}
+
+function rec_render() {
+  const q = (document.getElementById('rec_search').value || '').toLowerCase().trim();
+  const status = document.getElementById('rec_status').value;
+  const form = document.getElementById('rec_form').value;
+
+  const rows = rec_data.filter(c => {
+    if (status && (c.status || '') !== status) return false;
+    if (form === 'received' && !c.joining_submitted_at) return false;
+    if (form === 'waiting' && !(c.joining_form_sent_at && !c.joining_submitted_at)) return false;
+    if (form === 'none' && c.joining_form_sent_at) return false;
+    if (q && !JSON.stringify(c).toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('rec_tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4">No candidates found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((c, i) => {
+    // A rescheduled interview shows the new time; the original is no longer
+    // when anybody is meeting.
+    const d = c.reschedule_date || c.interview_date;
+    const t = c.reschedule_date ? c.reschedule_time : c.interview_time;
+    const moved = c.reschedule_date ? ' <span class="badge bg-light text-secondary fw-normal">moved</span>' : '';
+    return '<tr>'
+      + '<td>' + (i + 1) + '</td>'
+      + '<td><span class="fw-bold">' + rec_esc(c.name) + '</span>' + moved
+        + '<div class="small text-muted">' + rec_esc(c.email) + (c.phone ? ' · ' + rec_esc(c.phone) : '') + '</div></td>'
+      + '<td>' + (rec_esc(c.profile_position) || '-') + '</td>'
+      + '<td>' + rec_date(d) + (t ? '<div class="small text-muted">' + rec_time(t) + '</div>' : '') + '</td>'
+      + '<td><span class="badge bg-' + (REC_PILL[c.status] || 'light') + '">' + rec_esc(c.status) + '</span></td>'
+      + '<td>' + rec_date(c.joining_date) + '</td>'
+      + '<td>' + rec_joinCell(c) + '</td>'
+      + '<td>'
+        + '<button class="btn btn-sm btn-dark me-1" onclick="rec_openStatus(' + c.id + ')" title="Change status">Status</button>'
+        + '<button class="btn btn-sm btn-warning" onclick="rec_openEdit(' + c.id + ')" title="Open"><i class="fas fa-pen-to-square"></i></button>'
+      + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function rec_clear() {
+  ['rec_search', 'rec_status', 'rec_form'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  rec_render();
+}
+
+// ── Add / edit ────────────────────────────────────────
+function rec_openAdd() {
+  rec_editId = null;
+  document.getElementById('rec_modalTitle').textContent = 'Schedule Interview';
+  REC_FIELDS.forEach(f => { const el = document.getElementById('rec_f_' + f); if (el) el.value = ''; });
+  document.getElementById('rec_f_sendEmail').checked = true;
+  document.getElementById('rec_sendWrap').style.display = '';
+  // Salary and joining date have no answer yet when a first interview is being
+  // booked — asking for them there is asking somebody to guess.
+  document.getElementById('rec_laterFields').style.display = 'none';
+  document.getElementById('rec_deleteBtn').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('rec_modal')).show();
+}
+
+function rec_openEdit(id) {
+  const c = rec_data.find(x => x.id === id);
+  if (!c) return;
+  rec_editId = id;
+  document.getElementById('rec_modalTitle').textContent = c.name;
+  REC_FIELDS.forEach(f => { const el = document.getElementById('rec_f_' + f); if (el) el.value = c[f] == null ? '' : c[f]; });
+  // Editing never emails — only adding does, and only then because an
+  // invitation is the point of adding somebody.
+  document.getElementById('rec_sendWrap').style.display = 'none';
+  document.getElementById('rec_laterFields').style.display = '';
+  document.getElementById('rec_deleteBtn').style.display = '';
+  new bootstrap.Modal(document.getElementById('rec_modal')).show();
+}
+
+// Saving takes a few seconds, because the letters go out before the reply
+// comes back. While nothing appears to happen the obvious thing to do is press
+// Save again — which used to send everything twice. The button says what it is
+// doing and will not take a second press; the server refuses a repeat as well.
+function rec_hold(btn, label) {
+  const was = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>' + label;
+  return () => { btn.disabled = false; btn.innerHTML = was; };
+}
+
+// What the toast should say about the letters that were sent.
+function rec_mailSays(mail) {
+  if (!mail || (!mail.sent && !mail.failed)) return '';
+  if (mail.failed) return ' — ' + mail.failed + ' letter' + (mail.failed === 1 ? '' : 's') + ' failed, see Sent mail';
+  return ' — ' + (mail.sent === 1 ? 'letter sent' : mail.sent + ' letters sent');
+}
+
+async function rec_save(btn) {
+  if (rec_busy) return;
+  const body = {};
+  REC_FIELDS.forEach(f => { const el = document.getElementById('rec_f_' + f); if (el) body[f] = el.value; });
+  if (!body.name.trim()) { showToast('warning', 'Name is required.'); return; }
+  if (!rec_editId) body.sendEmail = document.getElementById('rec_f_sendEmail').checked;
+
+  rec_busy = true;
+  const release = rec_hold(btn, rec_editId ? 'Saving...' : 'Sending...');
+  try {
+    const res = await fetch(rec_editId ? '/api/recruitment/candidates/' + rec_editId : '/api/recruitment/candidates', {
+      method: rec_editId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (!json.success) { showToast('error', json.error || 'Could not save.'); return; }
+    bootstrap.Modal.getInstance(document.getElementById('rec_modal')).hide();
+    const d = json.data || {};
+    if (d.duplicate) {
+      // The server recognised this as the same save arriving twice. Nothing
+      // was written again and nobody was emailed again, so say that rather
+      // than reporting a send that never happened.
+      showToast('success', 'Already saved a moment ago — nothing was sent twice.');
+    } else if (rec_editId) {
+      showToast('success', 'Candidate updated.');
+    } else {
+      const m = d.mail || {};
+      showToast(m.failed ? 'warning' : 'success', 'Candidate added' + rec_mailSays(m) + '.');
+    }
+    rec_fetch();
+  } catch (e) {
+    showToast('error', 'Server error.');
+  } finally {
+    rec_busy = false;
+    release();
+  }
+}
+
+async function rec_delete() {
+  if (!rec_editId) return;
+  const c = rec_data.find(x => x.id === rec_editId);
+  const ok = await Swal.fire({
+    title: 'Remove this candidate?',
+    html: '<b>' + rec_esc(c ? c.name : '') + '</b> will be taken off the list.'
+      + '<br><br><span class="text-muted small">The record is kept, not erased, and the letters already sent to them stay in Sent mail.</span>',
+    icon: 'warning', showCancelButton: true, confirmButtonText: 'Remove', confirmButtonColor: '#dc3545',
+  });
+  if (!ok.isConfirmed) return;
+
+  showLoading(true);
+  try {
+    const json = await fetch('/api/recruitment/candidates/' + rec_editId, { method: 'DELETE' }).then(r => r.json());
+    showLoading(false);
+    if (!json.success) { showToast('error', json.error || 'Could not remove.'); return; }
+    bootstrap.Modal.getInstance(document.getElementById('rec_modal')).hide();
+    showToast('success', 'Candidate removed.');
+    rec_fetch();
+  } catch (e) { showLoading(false); showToast('error', 'Server error.'); }
+}
+
+// ── Status ────────────────────────────────────────────
+function rec_openStatus(id) {
+  const c = rec_data.find(x => x.id === id);
+  if (!c) return;
+  rec_editId = id;
+  document.getElementById('rec_statusWho').innerHTML =
+    '<b>' + rec_esc(c.name) + '</b> · ' + rec_esc(c.email)
+    + (c.profile_position ? ' · ' + rec_esc(c.profile_position) : '');
+  document.getElementById('rec_s_status').value = c.status || 'Scheduled';
+  document.getElementById('rec_s_reschedule_date').value = c.reschedule_date || '';
+  document.getElementById('rec_s_reschedule_time').value = c.reschedule_time || '';
+  document.getElementById('rec_s_reschedule_reason').value = c.reschedule_reason || '';
+  document.getElementById('rec_s_joining_date').value = c.joining_date || '';
+  rec_statusFields();
+  new bootstrap.Modal(document.getElementById('rec_statusModal')).show();
+}
+
+// Shows the fields the chosen status actually needs, and says plainly whether
+// it writes to the candidate.
+function rec_statusFields() {
+  const st = document.getElementById('rec_s_status').value;
+  document.getElementById('rec_reschedFields').style.display = st === 'Rescheduled' ? '' : 'none';
+  document.getElementById('rec_joinFields').style.display = st === 'Selected' ? '' : 'none';
+
+  const mails = REC_MAILS[st];
+  const box = document.getElementById('rec_s_sendEmail');
+  box.disabled = !mails;
+  // Follows the status both ways. Only unticking it left the box dead after
+  // moving from a status that sends nothing to one that does — the dialog said
+  // the candidate would be told, and then quietly told nobody.
+  box.checked = !!mails;
+  document.getElementById('rec_s_mailLabel').textContent = mails ? 'Email the candidate' : 'No letter for this status';
+  document.getElementById('rec_s_mailNote').textContent = mails
+    || 'Scheduled and Offer Sent move the pipeline only; nothing is sent.';
+}
+
+// Same reasoning as the Add form: this one can post a rejection, and posting it
+// twice is worse than posting it slowly.
+async function rec_saveStatus(btn) {
+  if (rec_busy) return;
+  const status = document.getElementById('rec_s_status').value;
+  const body = { status, sendEmail: document.getElementById('rec_s_sendEmail').checked };
+  if (status === 'Rescheduled') {
+    body.reschedule_date = document.getElementById('rec_s_reschedule_date').value;
+    body.reschedule_time = document.getElementById('rec_s_reschedule_time').value;
+    body.reschedule_reason = document.getElementById('rec_s_reschedule_reason').value.trim();
+  }
+  if (status === 'Selected') body.joining_date = document.getElementById('rec_s_joining_date').value;
+
+  rec_busy = true;
+  const release = rec_hold(btn, body.sendEmail ? 'Sending...' : 'Saving...');
+  try {
+    const json = await fetch('/api/recruitment/candidates/' + rec_editId + '/status', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(r => r.json());
+    if (!json.success) { showToast('error', json.error || 'Could not save.'); return; }
+    bootstrap.Modal.getInstance(document.getElementById('rec_statusModal')).hide();
+    const d = json.data || {};
+    let msg = 'Status set to ' + status;
+    if (d.duplicate) msg += ' — the letter had already gone';
+    else msg += rec_mailSays(d.mail);
+    if (d.formSent === true) msg += ', onboarding form sent';
+    if (d.formSent === false) msg += ', but the onboarding form failed';
+    showToast((d.mail && d.mail.failed) || d.formSent === false ? 'warning' : 'success', msg + '.');
+    rec_fetch();
+  } catch (e) {
+    showToast('error', 'Server error.');
+  } finally {
+    rec_busy = false;
+    release();
+  }
+}
+
+// ── Onboarding form ───────────────────────────────────
+async function rec_openJoin(id) {
+  const box = document.getElementById('rec_joinBody');
+  box.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</div>';
+  new bootstrap.Modal(document.getElementById('rec_joinModal')).show();
+  try {
+    const json = await fetch('/api/recruitment/candidates/' + id + '/joining-details').then(r => r.json());
+    if (!json.success) { box.innerHTML = '<div class="alert alert-danger mb-0">' + rec_esc(json.error) + '</div>'; return; }
+    rec_join = json.data;
+    document.getElementById('rec_joinTitle').textContent =
+      'Onboarding — ' + ((rec_join.candidate && rec_join.candidate.name) || '');
+    rec_renderJoin();
+  } catch (e) {
+    box.innerHTML = '<div class="alert alert-danger mb-0">Could not load this form.</div>';
+  }
+}
+
+var REC_DOCS = {
+  resume_file: 'CV', aadhaar_file: 'Aadhaar', aadhaar_file_2: 'Aadhaar (back)',
+  pan_file: 'PAN', pan_file_2: 'PAN (back)',
+};
+
+function rec_renderJoin() {
+  const r = rec_join || {};
+  const d = r.details;
+  const line = (k, v) => v
+    ? '<tr><td class="text-muted small pe-3" style="white-space:nowrap;vertical-align:top">' + k + '</td>'
+      + '<td class="fw-bold">' + rec_esc(String(v)) + '</td></tr>'
+    : '';
+
+  const docs = (r.files || []).map(f =>
+    '<a class="btn btn-sm btn-outline-dark me-2 mb-2" target="_blank" rel="noopener"'
+    + ' href="/api/recruitment/joining-file/' + r.id + '/' + f + '">'
+    + '<i class="fas fa-file-arrow-down me-1"></i>' + (REC_DOCS[f] || f) + '</a>').join('');
+
+  const when = v => rec_esc(String(v || '').slice(0, 16).replace('T', ' '));
+  const state = d
+    ? '<span class="badge bg-success">Received ' + when(d.submitted_at) + '</span>'
+    : r.sent_at
+      ? '<span class="badge bg-warning text-dark">Sent ' + when(r.sent_at) + ' — nothing back yet</span>'
+      : '<span class="badge bg-secondary">Not sent yet</span>';
+
+  document.getElementById('rec_joinBody').innerHTML =
+    '<p class="text-muted small">The details a new hire sends back before their first day. The link is theirs alone — it opens their form and nothing else.</p>'
+    + '<div class="d-flex align-items-center flex-wrap gap-2 border-bottom pb-3 mb-3">'
+      + state + '<div class="flex-grow-1"></div>'
+      + '<button class="btn btn-sm btn-outline-dark" onclick="rec_copyJoinLink()"><i class="fas fa-link me-1"></i>Copy link</button>'
+      + '<button class="btn btn-sm btn-primary" onclick="rec_sendJoinForm(this)">'
+        + (r.sent_at ? 'Send again' : 'Send the form') + '</button>'
+    + '</div>'
+    + (d
+      ? '<table class="table table-sm mb-3">'
+          + line('Name', d.full_name)
+          + line('Mobile', d.emp_mobile)
+          + line('Email', d.email)
+          + line('Date of birth', rec_date(d.dob))
+          + line('Address', [d.street, d.city, d.state, d.pincode].filter(Boolean).join(', '))
+          + line('Contact 1', [d.guardian1_name, d.guardian1_relation, d.guardian1_mobile].filter(Boolean).join(' · '))
+          + line('Contact 2', [d.guardian2_name, d.guardian2_relation, d.guardian2_mobile].filter(Boolean).join(' · '))
+          + line('Aadhaar no.', d.aadhaar_no)
+          + line('PAN', d.pan_no)
+        + '</table>'
+        + '<h6 class="fw-bold text-dark small text-uppercase">Documents</h6>'
+        + (docs || '<span class="text-muted small">None uploaded.</span>')
+      : '<p class="text-muted mb-0">Nothing has come back yet. '
+        + (r.sent_at
+          ? 'The candidate has the link — send it again if they have lost it.'
+          : 'Send the form and this panel fills in as soon as they submit it.')
+        + '</p>');
+}
+
+// Worth having by hand: a candidate who cannot find the email can be sent the
+// link on whatever channel the office already uses.
+function rec_copyJoinLink() {
+  const link = rec_join && rec_join.link;
+  if (!link) { showToast('warning', 'No link yet — send the form once and it is made.'); return; }
+  navigator.clipboard.writeText(link)
+    .then(() => showToast('success', 'Link copied.'))
+    .catch(() => showToast('warning', link));
+}
+
+async function rec_sendJoinForm(btn) {
+  const release = rec_hold(btn, 'Sending...');
+  try {
+    const json = await fetch('/api/recruitment/candidates/' + rec_join.id + '/joining-form', { method: 'POST' })
+      .then(r => r.json());
+    if (!json.success) { showToast('error', json.error || 'The letter failed — see Sent mail.'); return; }
+    showToast('success', 'Onboarding form emailed.');
+    await rec_openJoin(rec_join.id);
+    rec_fetch();
+  } catch (e) {
+    showToast('error', 'Server error.');
+  } finally { release(); }
+}
+
+// ── Sent mail ─────────────────────────────────────────
+function rec_openLog(onlyFailed) {
+  document.getElementById('rec_logOnlyFailed').checked = !!onlyFailed;
+  new bootstrap.Modal(document.getElementById('rec_logModal')).show();
+  rec_loadLog();
+}
+
+async function rec_loadLog() {
+  const body = document.getElementById('rec_logBody');
+  body.innerHTML = '<tr><td colspan="5" class="text-center py-3"><i class="fas fa-spinner fa-spin"></i></td></tr>';
+  const failed = document.getElementById('rec_logOnlyFailed').checked ? '?failed=1' : '';
+  try {
+    const json = await fetch('/api/recruitment/messages' + failed).then(r => r.json());
+    const rows = json.data || [];
+    if (!rows.length) { body.innerHTML = '<tr><td colspan="5" class="text-center py-3">Nothing here.</td></tr>'; return; }
+    body.innerHTML = rows.map(m => '<tr>'
+      + '<td class="small text-muted text-nowrap">' + rec_esc(m.created_at || '') + '</td>'
+      + '<td><span class="fw-bold">' + rec_esc(m.candidate_name || '-') + '</span>'
+        + '<div class="small text-muted">' + rec_esc(m.email || '') + '</div></td>'
+      + '<td class="small">' + rec_esc(m.action || '')
+        + '<div class="text-muted" style="font-size:11px">' + rec_esc(m.subject || '') + '</div></td>'
+      + '<td>' + (m.status === 'Sent'
+          ? '<span class="badge bg-success">Sent</span>'
+          : '<span class="badge bg-danger">Failed</span>'
+            + '<div class="text-muted" style="font-size:11px;max-width:240px;white-space:normal">' + rec_esc(m.error_detail || '') + '</div>')
+        + (m.retry_count ? '<div class="text-muted" style="font-size:11px">retried ' + m.retry_count + '&times;</div>' : '')
+      + '</td>'
+      + '<td class="text-nowrap">'
+        + (m.status === 'Failed' ? '<button class="btn btn-sm btn-warning me-1" onclick="rec_retry(' + m.id + ', this)">Send again</button>' : '')
+        + '<button class="btn btn-sm btn-outline-danger" onclick="rec_deleteLog(' + m.id + ')"><i class="fas fa-trash"></i></button>'
+      + '</td>'
+      + '</tr>').join('');
+  } catch (e) {
+    body.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-3">Could not load the log.</td></tr>';
+  }
+}
+
+async function rec_retry(id, btn) {
+  const release = rec_hold(btn, 'Sending...');
+  try {
+    const json = await fetch('/api/recruitment/messages/' + id + '/retry', { method: 'POST' }).then(r => r.json());
+    showToast(json.success ? 'success' : 'warning',
+      json.success ? 'Sent.' : 'Still failing — ' + (json.error || 'unknown'));
+    rec_loadLog();
+    rec_fetch();
+  } catch (e) {
+    showToast('error', 'Server error.');
+  } finally { release(); }
+}
+
+async function rec_deleteLog(id) {
+  try {
+    const json = await fetch('/api/recruitment/messages/' + id, { method: 'DELETE' }).then(r => r.json());
+    if (!json.success) { showToast('error', json.error || 'Could not remove.'); return; }
+    rec_loadLog();
+    rec_fetch();
+  } catch (e) { showToast('error', 'Server error.'); }
+}
+
+rec_fetch();
+</script>
