@@ -307,7 +307,7 @@ function cr_render() {
       : '';
     return '<tr>'
       + '<td>' + (i + 1) + '</td>'
-      + '<td class="fw-bold">' + crEsc(c.orderId) + '</td>'
+      + '<td class="fw-bold">' + crEsc(c.orderNo || c.orderId) + '</td>'
       + '<td>' + (crEsc(c.dealer) || '-') + '</td>'
       + '<td>' + (crEsc(c.client) || '-') + '</td>'
       + '<td>' + crEsc(c.designer) + '</td>'
@@ -506,7 +506,7 @@ function cr_drawFound() {
     const prior = o.priorCorrections
       ? '<div><span class="badge bg-warning text-dark">' + o.priorCorrections + ' earlier</span></div>'
       : '';
-    return '<tr><td class="fw-bold text-dark align-middle">' + crEsc(o.orderId) + prior + '</td>'
+    return '<tr><td class="fw-bold text-dark align-middle">' + crEsc(o.orderNo || o.orderId) + prior + '</td>'
       + '<td style="min-width:190px;">'
       + '<select class="form-select form-select-sm" onchange="cr_setDesigner(' + i + ', this.value)">'
       + cr_designerOptions(o) + '</select></td>'
@@ -637,7 +637,7 @@ async function cr_save() {
 function cr_openDo(id) {
   cr_doing = cr_all.find(c => c.id === id);
   if (!cr_doing) return;
-  document.getElementById('cr_doOrder').textContent = cr_doing.orderId;
+  document.getElementById('cr_doOrder').textContent = cr_doing.orderNo || cr_doing.orderId;
   document.getElementById('cr_doWhat').innerHTML =
     '<div class="small text-muted">What the client asked</div>'
     + (cr_doing.clientNote
@@ -701,7 +701,7 @@ async function cr_remove(id) {
   const c = cr_all.find(x => x.id === id);
   const ok = await Swal.fire({
     title: 'Remove this correction?',
-    html: 'For order <b>' + crEsc(c ? c.orderId : '') + '</b>. The order itself is not touched.',
+    html: 'For order <b>' + crEsc(c ? (c.orderNo || c.orderId) : '') + '</b>. The order itself is not touched.',
     icon: 'warning', showCancelButton: true, confirmButtonText: 'Remove', confirmButtonColor: '#dc3545',
   });
   if (!ok.isConfirmed) return;

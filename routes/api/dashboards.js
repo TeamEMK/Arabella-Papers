@@ -1265,7 +1265,10 @@ router.get('/today', requireLogin, async (req, res) => {
 
     const [total, dispatched, inDesign, inProgress, cancelledToday] = await Promise.all([
       // Orders punched today.
-      count(`SELECT COUNT(*) AS c FROM orders WHERE ${live} AND DATE(timestamp) = ?`, [today]),
+      count(
+        `SELECT COUNT(*) AS c FROM orders
+          WHERE ${live} AND remake_of IS NULL AND DATE(timestamp) = ?`,
+        [today]),
       // Parcels that actually went out today, whenever the order was punched.
       count(`SELECT COUNT(*) AS c FROM orders WHERE ${live} AND DATE(actual_4) = ?`, [today]),
       // Of today's intake, what is still with the designer or waiting on the
@@ -1379,7 +1382,12 @@ router.get('/analytics', requireLogin, async (req, res) => {
         }
 
         return {
-          ID: r.order_id,
+          ID: rootOrderId(r.order_id),
+          // A repeat is a second run of an order that was taken once. It is
+          // work, and the floor and dispatch figures want it - but it is not
+          // an order, and counting it as one is what put this page's Total
+          // Orders above what the business had actually taken in.
+          IsRepeat: !!r.remake_of,
           Date: r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
           RawDate: r.timestamp,
           Dealer: r.dealer_name || '',

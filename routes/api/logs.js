@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../config/db');
 const { requireLogin } = require('../../middleware/auth');
+const { rootOrderId } = require('../../utils/remake');
 
 // Dates are stored as IST wall-clock and read back through a +05:30
 // connection. Vercel runs in UTC, so the zone has to be named here or every
@@ -85,7 +86,10 @@ router.get('/', requireLogin, async (req, res) => {
     res.json({
       success: true,
       data: rows.map(r => ({
-        Order_ID: r.order_id,
+        // The job's number, the same one every other screen prints. The
+        // search above still matches on the stored id, so typing the number
+        // brings back every run of it - which is what a history should do.
+        Order_ID: rootOrderId(r.order_id),
         Action: r.action,
         Field: r.field || '',
         Old_Value: r.old_value || '',

@@ -447,7 +447,24 @@ function anClearFilters() {
 // change while this figure is fetched once and refreshed on its own.
 var an_boardCount = null;
 
-function renderKPIs(data) {
+/**
+ * The orders, as against the runs.
+ *
+ * A re-print or a re-order is a second run of an order that was taken once,
+ * months ago. Nobody placed it, no dealer sent it in, and it has no punch date
+ * of its own worth counting - so anything answering "how many orders" has to
+ * leave it out, or one order is counted twice and every figure on this page
+ * reads high. The client noticed it before we did.
+ *
+ * Everything that counts *work* rather than orders keeps them: the production
+ * board figure, the delay list, the re-print counts, the parcels that left.
+ */
+function an_ordersOnly(list) {
+  return (list || []).filter(o => o && !o.IsRepeat);
+}
+
+function renderKPIs(rows) {
+  const data = an_ordersOnly(rows);
   const at = stage => data.filter(o => o.Stage === stage).length;
   document.getElementById('kpi_total').textContent = data.length;
   document.getElementById('kpi_indesign').textContent = at('design');
@@ -522,8 +539,10 @@ function renderDesignerChart() {
   if(!sel) return;
   const month = sel.value;
 
+  // Orders only: a repeat is the same drawing going through the press again,
+  // and crediting the designer with it a second time overstates the month.
   const counts = {};
-  an_all.forEach(o => {
+  an_ordersOnly(an_all).forEach(o => {
     if(an_designMonthKey(o.DesignDone) !== month) return;
     const who = (o.Designer || '').trim() || 'Not assigned';
     counts[who] = (counts[who] || 0) + 1;
@@ -698,10 +717,11 @@ function renderPieChart(canvasId, countsObj) {
   });
 }
 
-function renderMonthly(data) {
-  // Group by Month-Year
+function renderMonthly(rows) {
+  // Group by Month-Year. Orders only - the columns are what came in that
+  // month, and a repeat came in no month.
   const months = {};
-  data.forEach(o => {
+  an_ordersOnly(rows).forEach(o => {
     const raw = o.RawDate || o.Date;
     const d = raw ? new Date(raw) : null;
     if(!d || isNaN(d)) return;
@@ -730,7 +750,12 @@ function renderMonthly(data) {
     </tr>`).join('');
 }
 
-function renderTable(data) {
+function renderTable(rows) {
+  // "All Orders Detail" means orders. A repeat prints the number of the order
+  // it is a run of, so listing it here put the same number on two rows - which
+  // is exactly what the client was looking at when they said two orders were
+  // being created.
+  const data = an_ordersOnly(rows);
   const tbody = document.getElementById('an_tbody');
   const badge = document.getElementById('an_count_badge');
   if(badge) badge.textContent = data.length + ' orders';

@@ -4,6 +4,7 @@ const multer = require('multer');
 const db = require('../../config/db');
 const { uploadToDrive } = require('../../utils/drive');
 const { generateOrderId } = require('../../utils/idgen');
+const { rootOrderId } = require('../../utils/remake');
 const { notifyDesignerAssigned } = require('../../utils/notify');
 const { logOrderUpdate, logOrderEvent } = require('../../utils/auditlog');
 const { recordPunchedOrder } = require('../../utils/scot');
@@ -507,7 +508,7 @@ function formatDate(d) {
 
 function buildRowData(r, isAdmin) {
   const data = {
-    'Order ID': r.order_id,
+    'Order ID': rootOrderId(r.order_id),
     'Timestamp': r.timestamp ? new Date(r.timestamp).toLocaleString('en-GB', IST) : '',
     'Email address': r.email_address,
     'Order Punched by': r.order_punched_by,

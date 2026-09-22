@@ -15,7 +15,7 @@ const { requireLogin } = require('../../middleware/auth');
 const { logOrderEvent } = require('../../utils/auditlog');
 // A number typed here names the job, and a job can have been made more than
 // once. This turns it into the run that is on the floor now.
-const { liveRunFor } = require('../../utils/remake');
+const { liveRunFor, rootOrderId } = require('../../utils/remake');
 
 const IST = { timeZone: 'Asia/Kolkata', hour12: true };
 const stamp = d => (d ? new Date(d).toLocaleString('en-GB', IST) : '');
@@ -35,7 +35,10 @@ const one = async (sql, params) => {
 function shape(r) {
   return {
     id: r.id,
+    // The run this correction is against, which is what every action sends
+    // back, and the number to print beside it. They differ only on a repeat.
     orderId: r.order_id,
+    orderNo: rootOrderId(r.order_id),
     designer: r.designer,
     clientNote: r.client_note || '',
     raisedBy: r.raised_by || '',
@@ -141,6 +144,7 @@ router.get('/order/:id', requireLogin, async (req, res) => {
       success: true,
       data: {
         orderId: order.order_id,
+        orderNo: rootOrderId(order.order_id),
         designer,
         dealer: order.dealer_name || '',
         client: order.client_name || '',
@@ -227,6 +231,7 @@ router.post('/lookup', requireLogin, async (req, res) => {
           typed: typed[i],
           found: true,
           orderId: o.order_id,
+          orderNo: rootOrderId(o.order_id),
           designer: (o.india_designer || o.overseas_designer || '').trim(),
           dealer: o.dealer_name || '',
           client: o.client_name || '',
@@ -359,7 +364,10 @@ router.post('/', requireLogin, async (req, res) => {
           [order.order_id, designer, clientNote, raisedBy],
         );
         await logOrderEvent(order.order_id, 'Correction raised', 'for ' + designer, user);
-        results.push({ typed, ok: true, orderId: order.order_id, designer });
+        results.push({
+          typed, ok: true, orderId: order.order_id,
+          orderNo: rootOrderId(order.order_id), designer,
+        });
       } catch (e) {
         console.error(`[corrections] ${order.order_id}:`, e.message);
         results.push({ typed, ok: false, error: 'Could not save this one.' });
