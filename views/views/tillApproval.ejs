@@ -351,10 +351,17 @@ function ta_syncDispatchNotice() {
 function ta_openEdit(id) {
   ta_editId = id;
   const o = ta_data.find(x => x.ID.toString() === id.toString());
-  document.getElementById('ta_editId').textContent = id;
+  document.getElementById('ta_editId').textContent = (o && o.Display_ID) || id;
   const s = (o?.Design_Approval_Status_From_Client||'Proofing Done').toLowerCase();
   document.getElementById(s.includes('final')?'ta_st_final':s.includes('mod')?'ta_st_mod':s.includes('reorder')?'ta_st_reorder':s.includes('reprint')?'ta_st_reprint':s.includes('sample')?'ta_st_sample':s.includes('cancel')?'ta_st_cancel':'ta_st_proofing').checked = true;
-  document.getElementById('ta_remark').value = '';
+  // Opened holding whatever is already written, not empty.
+  //
+  // This box has cleared the field since the system was built, and saving
+  // writes the column whatever is in it - so anybody who opened an order to
+  // change its status wiped the remark somebody else had put there, without
+  // ever seeing it. Showing it both answers "where did the remark go" and
+  // stops the next one being lost.
+  document.getElementById('ta_remark').value = (o && o.Remarks) || '';
   document.getElementById('ta_fileUpload').value = '';
   document.querySelectorAll('input[name="ta_approvalStatus"]').forEach(r => { r.onchange = ta_syncDispatchNotice; });
   ta_syncDispatchNotice();

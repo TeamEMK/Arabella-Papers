@@ -434,7 +434,7 @@ function prod_setSelect(sel, raw, plain) {
 function prod_openEdit(id) {
   prod_editId = id;
   const o = prod_data.find(x => x.ID.toString()===id.toString());
-  document.getElementById('prod_editId').textContent = id;
+  document.getElementById('prod_editId').textContent = (o && o.Display_ID) || id;
   const modal = document.getElementById('prod_editModal');
   PROD_COLS.forEach(col => {
     const input = modal.querySelector(`[name="${col}"]`);

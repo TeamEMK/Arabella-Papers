@@ -313,6 +313,10 @@ router.get('/till-approval', requireLogin, async (req, res) => {
       Dealer_name: r.dealer_name,
       Client_name: r.client_name,
       Design_Approval_Status_From_Client: r.design_approval_status_from_client || '',
+      // What is already written against this order. The box saves this column
+      // on every approval, so it has to open holding what is there - see
+      // ta_openEdit for what happened when it did not.
+      Remarks: r.remarks || '',
       Remake_Of: r.remake_of || '',
       // Where this one is sitting now. The approval box uses both to say what
       // saving will do, since an approval here moves the order off whichever

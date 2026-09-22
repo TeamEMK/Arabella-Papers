@@ -49,14 +49,22 @@ const LEFT_FOR_DISPATCH = (r) =>
   !!((r.status_4 && String(r.status_4).trim()) || r.actual_4);
 
 /**
- * What the new entry inherits: who it is for, and the design that was already
- * settled. Everything else - the production stages, the stamps behind them,
- * the dispatch, whichever board the old run was pinned to - belongs to the run
- * that has been and is left off, so the new row starts as blank as a freshly
- * punched order.
+ * What the new entry inherits: who it is for, the design that was already
+ * settled, and the notes that describe the job. The production stages, the
+ * stamps behind them, the dispatch and whichever board the old run was pinned
+ * to all belong to the run that has been, and are left off.
  *
- * `remarks` is left off too: the box on the approval screen is asking why it
- * is being made again, and that answer is about the new run, not the old.
+ * `remark` - the free-text note on the production stage box - is here because
+ * it as often says what the job is as what the last run did: "Full printed
+ * sample", "TOP Bottom Oval New Die", the paper, what the client asked for.
+ * The old reset kept it on the row for that reason, and a repeat that starts
+ * without it loses the floor a note that was still true. Its stamp is not
+ * inherited, so the new run does not date itself from the old one.
+ *
+ * `remarks` - the approval note - is not in this list but is carried all the
+ * same, below: whatever is typed in the box when the repeat is raised wins,
+ * and the old note stands when nothing is typed rather than the row going
+ * blank.
  */
 const INHERITED = [
   'email_address', 'order_punched_by',
@@ -66,6 +74,7 @@ const INHERITED = [
   'design_status', 'no_of_design_revision',
   'upload_design', 'revision_design_upload', 'approved_design',
   'order_quantity',
+  'remark',
 ];
 
 function isRemakeStatus(status) {
@@ -162,7 +171,10 @@ async function raiseRemake(parentId, status, opts = {}) {
     root,
     now, now,
     value, now, (user && user.email) || userEmail || '',
-    note || null,
+    // The reason for this run if one was given, else the note the order was
+    // already carrying. Blanking it would lose the only thing on the row that
+    // says what the client asked for.
+    note || parent.remarks || null,
   ];
   if (fileUrl) { fields.push('approved_design'); values.push(fileUrl); }
 
