@@ -507,6 +507,9 @@ router.get('/joining-file/:id/:field', requireLogin, async (req, res) => {
     if (!doc) return res.status(404).send('Not uploaded.');
 
     res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
+    // Stated rather than left to chunked encoding: a PDF viewer opening this
+    // in a tab wants to know how much there is before it starts drawing.
+    res.setHeader('Content-Length', doc.bytes.length);
     // Shown in the browser rather than downloaded: whoever opens this is
     // checking an Aadhaar against a form, not collecting files. The name still
     // travels, so a Save As gets something better than a number.
