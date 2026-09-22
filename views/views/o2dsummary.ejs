@@ -603,9 +603,18 @@ function renderBarChart(canvasId, labels, values) {
 // Fresh Order is everything that is not a repeat, so an order can be both
 // Fresh and Production. The rows do not add up to the total and are not
 // meant to.
+//
+// What has gone out is not being carried any more, so it is off this chart.
+// Asked for in those words: don't count the orders already dispatched, but if
+// something happens to one after it has gone, count it again. The second half
+// needs no rule of its own - an order only comes back one of two ways, and
+// both land it here. Sent back in place, Dispatch is cleared off the row. Made
+// again, a run of its own opens carrying no dispatch at all. Either way the
+// stage is no longer 'dispatched' and the order is on this chart again.
 function renderProductionCounts() {
+  const inHand = an_all.filter(o => o && o.Stage !== 'dispatched');
   const kind = o => (o.ClientStatus || '').trim().toLowerCase();
-  const count = test => an_all.filter(o => test(kind(o))).length;
+  const count = test => inHand.filter(o => test(kind(o))).length;
   const repeat = ['reorder', 'reprint', 'sample'];
 
   // Four slices that between them cover every order exactly once: Fresh Order
