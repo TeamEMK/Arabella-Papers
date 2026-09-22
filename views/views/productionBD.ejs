@@ -66,9 +66,10 @@ document.getElementById('prodRoot').innerHTML = `
               <th style="position:sticky;top:0;z-index:1020;background:#212529;">Laser</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;">Output</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Production Stages</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Remark</th>
             </tr>
           </thead>
-          <tbody id="prod_tbody"><tr><td colspan="15" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="prod_tbody"><tr><td colspan="16" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -277,7 +278,7 @@ function prod_renderTable(data) {
   prod_display = data;
   prod_shown = 0;
   tbody.innerHTML = '';
-  if(!data.length) { tbody.innerHTML = '<tr><td colspan="14" class="text-center">No orders found.</td></tr>'; return; }
+  if(!data.length) { tbody.innerHTML = '<tr><td colspan="16" class="text-center">No orders found.</td></tr>'; return; }
   prod_renderNextBatch();
 }
 
@@ -288,6 +289,28 @@ function prod_renderNextBatch() {
   const batch = prod_display.slice(prod_shown, prod_shown + PROD_BATCH);
   tbody.insertAdjacentHTML('beforeend', batch.map((o, i) => prod_rowHtml(o, prod_shown + i + 1)).join(''));
   prod_shown += batch.length;
+}
+
+// Free text off the production box, so it is escaped before it goes anywhere
+// near innerHTML - a client name with an ampersand in it is common enough.
+function prodEsc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * The note the floor left on the job.
+ *
+ * Asked for as a column of its own: it was only ever visible inside the update
+ * box, so nobody knew a job carried a note until they opened it. Wrapped
+ * rather than cut off - these are short, and a note half-shown is worse than
+ * none - with the whole of it on hover for the few that run long.
+ */
+function prod_remarkCell(o) {
+  const text = String((o && o.Remark) || '').trim();
+  if (!text) return '<span class="text-muted">-</span>';
+  return '<small title="' + prodEsc(text) + '" style="white-space:pre-wrap;">'
+    + prodEsc(text) + '</small>';
 }
 
 function prod_rowHtml(o, sr) {
@@ -313,6 +336,7 @@ function prod_rowHtml(o, sr) {
       <td>${o.Laser_Cutting||'-'}</td>
       <td>${o.Output||'-'}</td>
       <td>${badges}</td>
+      <td style="min-width:160px;max-width:260px;">${prod_remarkCell(o)}</td>
     </tr>`;
   }
 }
