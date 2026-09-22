@@ -5,7 +5,6 @@ const { requireLogin } = require('../../middleware/auth');
 const { canSee } = require('../../utils/access');
 const recruitEmail = require('../../utils/recruitEmail');
 const { FILE_FIELDS, formUrl, mailForm, logMessage } = require('../../utils/joiningForm');
-const { readFromDrive } = require('../../utils/drive');
 
 // ══════════════════════════════════════════════════════
 // RECRUITMENT (/api/recruitment/*)
@@ -460,6 +459,12 @@ router.get('/candidates/:id/joining-details', requireLogin, async (req, res) => 
               DATE_FORMAT(submitted_at, '%Y-%m-%d %H:%i') AS submitted_at
          FROM recruit_joining WHERE candidate_id = ?`, [id]);
 
+    // Which documents actually exist, so the panel shows five buttons or two
+    // rather than five with three of them dead. Deliberately without `bytes`:
+    // nothing is read out of the database until somebody opens a document.
+    const [docs] = await db.query(
+      'SELECT field, file_name, mime_type, size_bytes FROM recruit_files WHERE candidate_id = ?', [id]);
+
     res.json({
       success: true,
       data: {
@@ -468,9 +473,12 @@ router.get('/candidates/:id/joining-details', requireLogin, async (req, res) => 
         sent_at: c.joining_form_sent_at,
         link: c.joining_form_token ? formUrl(c.joining_form_token) : null,
         details: row || null,
-        // Which documents actually exist, so the panel shows five buttons or
-        // two rather than five with three of them dead.
-        files: row ? FILE_FIELDS.filter(f => row[f]) : [],
+        files: FILE_FIELDS
+          .filter(f => docs.some(doc => doc.field === f))
+          .map(f => {
+            const doc = docs.find(x => x.field === f);
+            return { field: f, name: doc.file_name, size: doc.size_bytes };
+          }),
       },
     });
   } catch (err) {
@@ -481,30 +489,32 @@ router.get('/candidates/:id/joining-details', requireLogin, async (req, res) => 
 
 // The documents themselves.
 //
-// Streamed through this route rather than linked to directly, because that is
-// the only way the login still applies to them. The file lives in a Drive
-// folder nothing is shared from, so this — and a person with the section — is
-// the only way in.
+// Sent through this route rather than linked to, because that is the only way
+// the login still applies to them. There is no file on a disk anywhere and no
+// URL to guess at: the bytes come out of the database, and only for somebody
+// who has this section.
 router.get('/joining-file/:id/:field', requireLogin, async (req, res) => {
   try {
     if (!(await guard(req, res))) return;
+    // The field name ends up in a query, so it is checked against the list
+    // rather than trusted.
     const field = String(req.params.field);
     if (!FILE_FIELDS.includes(field)) return res.status(400).send('Unknown document.');
 
-    const [[row]] = await db.query(
-      'SELECT * FROM recruit_joining WHERE candidate_id = ?', [parseInt(req.params.id, 10)]);
-    const fileId = row && row[field];
-    if (!fileId) return res.status(404).send('Not uploaded.');
+    const [[doc]] = await db.query(
+      'SELECT file_name, mime_type, bytes FROM recruit_files WHERE candidate_id = ? AND field = ?',
+      [parseInt(req.params.id, 10), field]);
+    if (!doc) return res.status(404).send('Not uploaded.');
 
-    const file = await readFromDrive(fileId);
-    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
     // Shown in the browser rather than downloaded: whoever opens this is
     // checking an Aadhaar against a form, not collecting files. The name still
-    // travels, so a Save As gets something better than the file id.
-    res.setHeader('Content-Disposition', `inline; filename="${String(file.name || field).replace(/"/g, '')}"`);
+    // travels, so a Save As gets something better than a number.
+    res.setHeader('Content-Disposition',
+      `inline; filename="${String(doc.file_name || field).replace(/[^\w. -]+/g, '_')}"`);
     // Never let a proxy or the browser keep a copy of somebody's ID card.
     res.setHeader('Cache-Control', 'private, no-store');
-    file.stream.pipe(res);
+    res.end(doc.bytes);
   } catch (err) {
     console.error('Joining file read failed:', err);
     res.status(500).send('That document could not be opened.');

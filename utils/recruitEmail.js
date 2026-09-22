@@ -20,6 +20,27 @@ const { sendMail } = require('./mailer');
 
 const FONT = 'Segoe UI,Helvetica,Arial,sans-serif';
 
+/**
+ * The office, as every candidate is told it.
+ *
+ * Standing text, not something typed into the Notes box per candidate. It is
+ * the same address every time, and retyping it is exactly how a line meant for
+ * one person on one day — "ask for so-and-so at reception" — ends up in
+ * somebody else's letter months later. A candidate's letter should name the
+ * company and nobody inside it.
+ *
+ * Filling these in is the only change needed: the "Where to come" block then
+ * appears in the interview and reschedule letters. Left empty, the letters
+ * read exactly as they did before it existed.
+ *
+ *   address: the building, floor and locality, one line per line
+ *   map:     a Google Maps share link, or blank for no map button
+ */
+const OFFICE = {
+  address: '',
+  map: '',
+};
+
 // Everything below builds HTML out of what somebody typed into a form. A stray
 // < or & in a name or a note would otherwise swallow the rest of the letter.
 const esc = (v) => String(v === null || v === undefined ? '' : v)
@@ -72,6 +93,30 @@ function note(text) {
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
     <tr><td style="background:#f8f9fa;border-left:3px solid #ffa500;border-radius:0 6px 6px 0;padding:13px 16px;
       font-family:${FONT};font-size:14.5px;line-height:1.6;color:#495057;">${linkify(esc(t)).replace(/\r?\n/g, '<br>')}</td></tr></table>`;
+}
+
+/**
+ * Where the interview is held — the same block in every letter that needs it.
+ *
+ * Set apart from the paragraphs, because it is the one thing in the letter
+ * somebody will come back to on their phone on the way over, and a map link
+ * they can tap beats an address they have to copy out.
+ */
+function whereToCome() {
+  const lines = String(OFFICE.address || '').split('\n')
+    .map(l => esc(l.trim())).filter(Boolean).join('<br>');
+  if (!lines) return '';
+  const map = OFFICE.map
+    ? `<div style="margin-top:10px"><a href="${esc(OFFICE.map)}" target="_blank"
+         style="font-family:${FONT};font-size:13.5px;font-weight:600;color:#0d6efd;text-decoration:underline">
+         Open in Google Maps</a></div>`
+    : '';
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+    <tr><td style="background:#f8f9fa;border-left:3px solid #ffa500;border-radius:0 6px 6px 0;padding:14px 16px;">
+      <div style="font-family:${FONT};font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:#6c757d;margin-bottom:7px;">Where to come</div>
+      <div style="font-family:${FONT};font-size:14.5px;line-height:1.6;color:#212529;font-weight:600;">${lines}</div>
+      ${map}
+    </td></tr></table>`;
 }
 
 // [label, value] pairs, the values already escaped. An empty one drops out
@@ -162,8 +207,11 @@ function buildInterviewEmail(c) {
   const body = para(`Dear ${esc(c.name)},`)
     + para(`Thank you for your interest in Arabella Papers. Your interview${c.profile_position ? ` for the role of <b>${esc(c.profile_position)}</b>` : ''} has been scheduled. The details are below.`)
     + detail([['Date &amp; time', esc(when)], ['Position', esc(c.profile_position)]])
+    + whereToCome()
     + note(c.notes)
-    + para('The interview is held at our office. Please arrive a few minutes early.')
+    + para(OFFICE.address
+      ? 'Please arrive a few minutes early.'
+      : 'The interview is held at our office. Please arrive a few minutes early.')
     + para('If you cannot make this time, reply to this email and we will arrange another.')
     + para('We look forward to meeting you.');
   return {
@@ -180,6 +228,10 @@ function buildRescheduleEmail(c) {
     + para('Your interview has been moved. The new time is below; everything else is unchanged.')
     + detail([['New date &amp; time', esc(when)], ['Position', esc(c.profile_position)],
               ['Reason', esc(c.reschedule_reason)]])
+    // Repeated here rather than left to the first letter: somebody reading
+    // "your interview has moved" on the day should not have to go hunting up
+    // the thread for the address.
+    + whereToCome()
     + note(c.notes)
     + para('Apologies for the change, and thank you for your patience.');
   return {

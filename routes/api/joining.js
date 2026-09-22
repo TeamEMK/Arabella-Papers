@@ -3,7 +3,6 @@ const multer = require('multer');
 const router = express.Router();
 const db = require('../../config/db');
 const { FILE_FIELDS } = require('../../utils/joiningForm');
-const { uploadPrivateToDrive, deleteFromDrive } = require('../../utils/drive');
 
 // ══════════════════════════════════════════════════════
 // THE ONBOARDING FORM (/api/joining/*) — no login
@@ -21,8 +20,8 @@ const { uploadPrivateToDrive, deleteFromDrive } = require('../../utils/drive');
 // routes/api/recruitment.js and stays behind the login.
 // ══════════════════════════════════════════════════════
 
-// Held in memory and sent on to Drive only once the whole submission has
-// passed, so a rejected form leaves no half-uploaded documents behind.
+// Held in memory and written to the database only once the whole submission
+// has passed, so a rejected form leaves no half-stored documents behind.
 //
 // 4MB a file rather than the 12MB the source portal allowed: this app runs as
 // a serverless function, and the platform refuses a request body much past
@@ -103,7 +102,11 @@ router.post('/:token', receive, async (req, res) => {
 
     const b = req.body || {};
     const files = req.files || {};
-    const [[existing]] = await db.query('SELECT * FROM recruit_joining WHERE candidate_id = ?', [c.id]);
+    // Which documents are already on file, so somebody filling the form in a
+    // second time is not made to find their CV again to correct a pincode.
+    // Only the field names — the bytes stay where they are.
+    const [held] = await db.query('SELECT field FROM recruit_files WHERE candidate_id = ?', [c.id]);
+    const alreadyHave = new Set(held.map(r => r.field));
 
     const d = {
       full_name: clean(b.full_name),
@@ -141,8 +144,8 @@ router.post('/:token', receive, async (req, res) => {
     if (!d.street) missing.push('Address');
     if (!d.city) missing.push('City');
     if (d.pincode.length !== 6) missing.push('Pincode (6 digits)');
-    if (!files.resume_file && !existing?.resume_file) missing.push('CV');
-    if (!files.aadhaar_file && !existing?.aadhaar_file) missing.push('Aadhaar (front side)');
+    if (!files.resume_file && !alreadyHave.has('resume_file')) missing.push('CV');
+    if (!files.aadhaar_file && !alreadyHave.has('aadhaar_file')) missing.push('Aadhaar (front side)');
     if (missing.length) {
       return res.status(400).json({ success: false, error: 'Still needed: ' + missing.join(', ') });
     }
@@ -167,37 +170,42 @@ router.post('/:token', receive, async (req, res) => {
       }
     }
 
-    // Everything has passed, so the documents can go to Drive — into the
-    // private HR folder, never shared, read back only through the download
-    // route behind the login. The row keeps the file id, not a link.
-    const saved = {};
-    const replaced = [];
+    // Everything has passed, so the documents can be written down. One row per
+    // candidate per document: uploading a clearer photograph of an Aadhaar
+    // overwrites the blurred one, rather than leaving both and no way to tell
+    // which is current. A document not sent this time is simply left alone.
+    //
+    // One statement per file, each carrying at most 4MB, rather than all five
+    // in one — MySQL refuses a packet larger than max_allowed_packet, and a
+    // single statement holding every document is the one most likely to hit
+    // it.
     for (const field of FILE_FIELDS) {
       const f = files[field] && files[field][0];
-      if (!f) { saved[field] = (existing && existing[field]) || ''; continue; }
-      saved[field] = await uploadPrivateToDrive(
-        f.buffer, `${c.id}-${c.name}-${field}`.replace(/[^\w.-]+/g, '_'), f.mimetype);
-      if (existing && existing[field] && existing[field] !== saved[field]) replaced.push(existing[field]);
+      if (!f) continue;
+      await db.query(
+        `INSERT INTO recruit_files (candidate_id, field, file_name, mime_type, size_bytes, bytes)
+         VALUES (?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE file_name = VALUES(file_name), mime_type = VALUES(mime_type),
+                                 size_bytes = VALUES(size_bytes), bytes = VALUES(bytes),
+                                 uploaded_at = NOW()`,
+        [c.id, field, clean(f.originalname), clean(f.mimetype, 120), f.size, f.buffer]);
     }
 
-    // One row per candidate: filling the form in a second time replaces the
-    // first answer rather than adding a second nobody knows which to believe.
-    const cols = ['candidate_id', ...Object.keys(d), ...FILE_FIELDS];
-    const values = [c.id, ...Object.values(d), ...FILE_FIELDS.map(f => saved[f])];
+    // The answers last, because submitted_at is what the portal reads as
+    // "their details are in" — and that should not be true until the
+    // documents actually are.
+    //
+    // One row per candidate here too: filling the form in a second time
+    // replaces the first answer rather than adding a second nobody knows
+    // which to believe.
+    const cols = ['candidate_id', ...Object.keys(d)];
+    const values = [c.id, ...Object.values(d)];
     const overwrite = cols.filter(k => k !== 'candidate_id').map(k => '`' + k + '` = VALUES(`' + k + '`)');
     await db.query(
       `INSERT INTO recruit_joining (${cols.map(k => '`' + k + '`').join(', ')})
        VALUES (${cols.map(() => '?').join(', ')})
        ON DUPLICATE KEY UPDATE ${overwrite.join(', ')}, submitted_at = NOW()`,
       values);
-
-    // Once the row is safely written, and before the reply — not after it.
-    // A document nothing points at any more is an Aadhaar scan left in a
-    // folder nobody knows to look in, and on a serverless host anything left
-    // running past the response is simply never run. deleteFromDrive swallows
-    // its own failures, so a file already gone by hand cannot fail the
-    // submission that was replacing it.
-    for (const fileId of replaced) await deleteFromDrive(fileId);
 
     res.json({ success: true, data: { name: c.name } });
   } catch (err) {

@@ -643,8 +643,7 @@ CREATE TABLE IF NOT EXISTS recruit_messages (
 --
 -- One row per candidate, so filling the form in a second time replaces the
 -- first answer rather than leaving two records and no way to tell which is
--- believed. The document columns hold a Google Drive file id, never a public
--- link: an Aadhaar scan must not sit at an address anybody can guess.
+-- believed. The documents themselves are in recruit_files below.
 CREATE TABLE IF NOT EXISTS recruit_joining (
   id INT AUTO_INCREMENT PRIMARY KEY,
   candidate_id INT NOT NULL,
@@ -667,13 +666,45 @@ CREATE TABLE IF NOT EXISTS recruit_joining (
   pincode VARCHAR(20) DEFAULT '',
   aadhaar_no VARCHAR(20) DEFAULT '',
   pan_no VARCHAR(20) DEFAULT '',
-  -- Aadhaar and PAN are each one PDF, or two photos, front and back.
-  resume_file VARCHAR(255) DEFAULT '',
-  aadhaar_file VARCHAR(255) DEFAULT '',
-  aadhaar_file_2 VARCHAR(255) DEFAULT '',
-  pan_file VARCHAR(255) DEFAULT '',
-  pan_file_2 VARCHAR(255) DEFAULT '',
   submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_recruit_joining_candidate (candidate_id)
+);
+
+-- The documents a new hire uploads: the CV, and the Aadhaar and PAN cards -
+-- each of those being either one PDF or two photographs, front and back.
+--
+-- The bytes are kept here rather than on disk, because this app has no disk it
+-- can rely on: it runs as a serverless function, where anything written to the
+-- filesystem is gone by the next request. The same reasoning as the equipment
+-- photo on inventory_items above, and for one reason more: a document can only
+-- be reached by a query, so the login is the only way in. There is no folder
+-- to share by mistake and no public URL to guess at, which for an Aadhaar
+-- matters more than the convenience of a link. They are also inside the
+-- nightly dump, which files sitting beside the app would not be.
+--
+-- Their own table, not five columns on recruit_joining. That row is read every
+-- time the panel is opened and joined against on the candidate list; blobs
+-- sitting in it would drag several megabytes through queries that only wanted
+-- a name and a date. Here nothing reads the bytes until somebody opens the
+-- document itself.
+--
+-- One row per candidate per document, so re-uploading replaces what was there
+-- rather than leaving the old Aadhaar behind with nothing pointing at it.
+CREATE TABLE IF NOT EXISTS recruit_files (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  candidate_id INT NOT NULL,
+  -- Which of the five: resume_file, aadhaar_file, aadhaar_file_2, pan_file,
+  -- pan_file_2. The route checks it against that list before it ever reaches
+  -- a query.
+  field VARCHAR(30) NOT NULL,
+  file_name VARCHAR(255) DEFAULT '',
+  mime_type VARCHAR(120) DEFAULT '',
+  size_bytes INT DEFAULT 0,
+  -- MEDIUMBLOB holds 16MB; the form refuses anything over 4MB, and shrinks
+  -- photographs in the browser long before that.
+  bytes MEDIUMBLOB NOT NULL,
+  uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_recruit_file (candidate_id, field),
+  INDEX idx_recruit_file_cand (candidate_id)
 );
