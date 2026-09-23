@@ -86,11 +86,16 @@ const SECTIONS = [
     rule: (role) => role === 'SuperAdmin' || role.includes('HR'),
   },
   // The step before HR: people being interviewed, and what a selected one
-  // sends back before their first day. Same guard as HR and for a stronger
-  // reason - this one holds Aadhaar and PAN scans.
+  // sends back before their first day.
+  //
+  // Tighter than HR, on purpose: this one holds Aadhaar and PAN scans, so it
+  // opens for nobody but a SuperAdmin by role. It is deliberately not `locked`
+  // — somebody who really does handle hiring can still be handed it, one
+  // person at a time, from the Access Control page, which leaves a decision
+  // behind it instead of a whole role quietly having it.
   {
     id: 'recruitment', group: 'Company', name: 'Recruitment', icon: 'fa-user-plus',
-    rule: (role) => role === 'SuperAdmin' || role.includes('HR'),
+    rule: (role) => role === 'SuperAdmin',
   },
   {
     id: 'o2dsummary', group: 'Admin', name: 'Analytics', icon: 'fa-chart-line',

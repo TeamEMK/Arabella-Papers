@@ -37,8 +37,8 @@ const FONT = 'Segoe UI,Helvetica,Arial,sans-serif';
  *   map:     a Google Maps share link, or blank for no map button
  */
 const OFFICE = {
-  address: '',
-  map: '',
+  address: 'Arabella Papers Pvt. Ltd.\nG1-592, RIICO Industrial Area, Sitapura\nJaipur 302022',
+  map: 'https://maps.app.goo.gl/PK9DVNy3AmncHHYP6',
 };
 
 // Everything below builds HTML out of what somebody typed into a form. A stray
