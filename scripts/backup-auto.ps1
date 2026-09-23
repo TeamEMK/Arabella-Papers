@@ -122,6 +122,21 @@ $looksRight = ($code -eq 0) -and ($fresh) -and ($fresh.LastWriteTime.Date -eq (G
 if ($looksRight) {
   $size = '{0:N1} MB' -f ($fresh.Length / 1MB)
   Write-Log ("done - {0}, {1}" -f $fresh.Name, $size)
+
+  # Only here, and only now. Thinning the folder on a morning the backup
+  # failed is how you end up with nothing at all - so the one call site is
+  # inside the branch that has just written a good one. And it is wrapped,
+  # because a backup that succeeded must not be reported as a failure over
+  # some housekeeping that did not.
+  try {
+    $pruned = @(& (Join-Path $PSScriptRoot 'backup-prune.ps1') -Path $backupDir)
+    if ($pruned.Count) {
+      Write-Log ("pruned {0} old backup(s) - {1}" -f $pruned.Count, ($pruned -join ', '))
+    }
+  } catch {
+    Write-Log ("could not thin out old backups - {0}" -f $_.Exception.Message)
+  }
+
   Show-Balloon 'Arabella Papers' ("Live database backed up - {0}, saved to Desktop\arabella-backups." -f $size)
   exit 0
 }
