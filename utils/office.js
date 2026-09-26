@@ -1,31 +1,53 @@
 // ══════════════════════════════════════════════════════
-// THE OFFICE, AS EVERY CANDIDATE IS TOLD IT
+// WHO THE COMPANY IS, AND WHERE
 //
-// Standing text, not something typed per candidate. It is the same address
-// every time, and retyping it is exactly how a line meant for one person on
-// one day — "ask for so-and-so at reception" — ends up in somebody else's
-// letter months later. A candidate's letter should name the company and
-// nobody inside it.
-//
-// It lives in its own file because two different things say it: the interview
-// and reschedule emails print a "Where to come" block from it, and the offer
-// letter PDF puts it at the head of the page. An emailed PDF has no printed
-// letterhead behind it, so without this the letter arrives on a blank sheet.
-// Kept in one place so a move never corrects one of them and misses the other.
-//
-//   address: the building and locality, one line per line
-//   map:     a Google Maps share link, or blank for no map button
-//
-// No floor: the office has one, but not which — and an invitation that sends
-// somebody to the wrong floor is worse than one that sends them to the gate.
-// RIICO rather than Ricco, because it is an acronym and this is the line a
-// candidate reads off their phone at a gate.
+// One file, because four different things say it: the interview and
+// reschedule emails print a "Where to come" block, every letter's footer
+// carries the address, and the offer letter PDF puts the whole letterhead at
+// the head of the page. Kept together so a change never corrects one of them
+// and misses the others.
 // ══════════════════════════════════════════════════════
 
 const COMPANY = 'Arabella Papers Private Limited';
 
+/**
+ * The letterhead, as the office's own Word template draws it: the name on the
+ * left, the contact details on the right behind a rule, and a double line
+ * under both.
+ *
+ * `blue` is taken by eye off that template and is the one thing here that is
+ * a guess — replace it with the brand's own value when there is one.
+ *
+ * The contact here is the company's, not whoever signs: SIGNATORY in
+ * offerLetter.js is the person, and the two are deliberately different.
+ */
+const LETTERHEAD = {
+  name: 'ARABELLA PAPERS PVT. LTD.',
+  lines: [
+    'G1-592, Sitapura Industrial Area',
+    'Sitapura, Jaipur - 302 022 (Raj.)',
+    'M. : +91-876-444-1111',
+    'Email : Jitendra@ArabellaPapers.com',
+    'CIN. : U18112RJ2025PTC108859',
+  ],
+  blue: '#5A6E96',
+};
+
+/**
+ * The postal address on its own, for the letters.
+ *
+ * Worded as the letterhead words it. It said "RIICO Industrial Area" until
+ * the office sent their own template through saying "Sitapura Industrial
+ * Area" — their letterhead is the one a candidate will hold, so it wins.
+ *
+ * No floor: the office has one, but not which — and an invitation that sends
+ * somebody to the wrong floor is worse than one that sends them to the gate.
+ *
+ *   address: one line per line
+ *   map:     a Google Maps share link, or blank for no map button
+ */
 const OFFICE = {
-  address: 'Arabella Papers Pvt. Ltd.\nG1-592, RIICO Industrial Area, Sitapura\nJaipur 302022',
+  address: 'Arabella Papers Pvt. Ltd.\nG1-592, Sitapura Industrial Area\nSitapura, Jaipur - 302 022 (Raj.)',
   map: 'https://maps.app.goo.gl/PK9DVNy3AmncHHYP6',
 };
 
@@ -34,4 +56,4 @@ function officeLines() {
   return String(OFFICE.address || '').split('\n').map(l => l.trim()).filter(Boolean);
 }
 
-module.exports = { COMPANY, OFFICE, officeLines };
+module.exports = { COMPANY, LETTERHEAD, OFFICE, officeLines };

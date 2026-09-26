@@ -1,5 +1,5 @@
 const PDFDocument = require('pdfkit');
-const { COMPANY, officeLines } = require('./office');
+const { COMPANY, LETTERHEAD } = require('./office');
 
 // ══════════════════════════════════════════════════════
 // THE OFFER LETTER
@@ -95,19 +95,58 @@ function buildOfferLetter(c, joining) {
 
   // ── Letterhead ──
   //
-  // The Word template has an empty header, because on paper it was printed on
-  // the company's own stationery. Emailed as a PDF there is no stationery
-  // behind it, and an offer of employment arriving on a blank sheet with no
-  // company name on it is not one anybody would want to sign. So the head of
-  // the page carries what the paper used to.
-  doc.font('Times-Bold').fontSize(15).fillColor(INK).text(COMPANY, { align: 'left' });
-  doc.font('Times-Roman').fontSize(9.5).fillColor('#3a3a3a');
-  for (const line of officeLines().slice(1)) doc.text(line, { align: 'left' });
-  doc.moveDown(0.55);
-  const ruleAt = doc.y;
+  // The offer template's own header is empty: on paper it printed onto the
+  // company's stationery. Emailed as a PDF there is no stationery behind it,
+  // and an offer of employment arriving on a blank sheet with no company name
+  // is not one anybody would want to sign. So the head of the page is drawn
+  // as the office's letterhead draws it — the name on the left, the contact
+  // details on the right behind a rule, a double line under both.
+  const L = LETTERHEAD;
+  const BLUE = L.blue;
+  const detailSize = 8.6;
+  const headTop = doc.y;
+
+  doc.font('Helvetica').fontSize(detailSize);
+  const rightW = Math.max(...L.lines.map(t => doc.widthOfString(t)));
+  const gutter = 15;
+  const rightX = doc.page.margins.left + W - rightW;
+  const dividerX = rightX - gutter;
+
+  // The name is set to whatever fits the space the details leave, so a longer
+  // address never pushes it off the page or overlaps the rule.
+  const nameW = dividerX - gutter - doc.page.margins.left;
+  const spacing = 1.1;
+  let nameSize = 23;
+  doc.font('Times-Roman');
+  while (nameSize > 9
+    && doc.fontSize(nameSize).widthOfString(L.name) + spacing * L.name.length > nameW) nameSize -= 0.5;
+
+  // Details first: they set how tall the block is, and the name is then
+  // centred against them rather than sitting on the first line.
+  doc.font('Helvetica').fontSize(detailSize).fillColor('#3F3F3F');
+  const lineH = doc.currentLineHeight() + 2.6;
+  L.lines.forEach((t, i) => {
+    doc.text(t, rightX, headTop + i * lineH, { width: rightW, align: 'left', lineBreak: false });
+  });
+  const blockH = L.lines.length * lineH;
+
+  doc.font('Times-Roman').fontSize(nameSize).fillColor(BLUE);
+  const nameH = doc.currentLineHeight();
+  doc.text(L.name, doc.page.margins.left, headTop + (blockH - nameH) / 2 - 1,
+    { width: nameW, align: 'left', characterSpacing: spacing, lineBreak: false });
+
+  // The upright rule between the two halves, and the double one beneath.
+  doc.moveTo(dividerX, headTop - 1).lineTo(dividerX, headTop + blockH - 2)
+     .lineWidth(1).strokeColor(BLUE).stroke();
+
+  const ruleAt = headTop + blockH + 7;
   doc.moveTo(doc.page.margins.left, ruleAt).lineTo(doc.page.margins.left + W, ruleAt)
-     .lineWidth(1).strokeColor('#999999').stroke();
-  doc.y = ruleAt + 14;
+     .lineWidth(2.4).strokeColor(BLUE).stroke();
+  doc.moveTo(doc.page.margins.left, ruleAt + 3.6).lineTo(doc.page.margins.left + W, ruleAt + 3.6)
+     .lineWidth(0.7).strokeColor(BLUE).stroke();
+
+  doc.y = ruleAt + 18;
+  doc.x = doc.page.margins.left;
 
   // ── The date, and who it is to ──
   body().text(dmy(new Date()), { align: 'left' });
