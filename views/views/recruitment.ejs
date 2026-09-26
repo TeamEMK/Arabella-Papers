@@ -307,6 +307,67 @@ function rec_joinCell(c) {
   return '<button class="btn btn-sm btn-outline-secondary" ' + open + '>Send...</button>';
 }
 
+// Every decision that can be taken about a candidate, on the row itself.
+//
+// It used to be one "Status" button that opened a dialog with a dropdown
+// inside it, so "reject this one" meant a click, a hunt and a second click.
+// The decisions are named here instead.
+//
+// Choosing one still only opens the dialog with that status already picked —
+// it does not act. Four of the five write to the candidate, and telling
+// somebody they were rejected should take a confirmation, not a stray click
+// on a menu. The envelope beside an item says which ones those are.
+var REC_DECISIONS = [
+  { status: 'Selected',    label: 'Selected',      icon: 'fa-circle-check',  cls: 'text-success' },
+  { status: 'Rejected',    label: 'Not selected',  icon: 'fa-circle-xmark',  cls: 'text-danger' },
+  { status: 'Offer Sent',  label: 'Send the offer letter', icon: 'fa-file-pdf', cls: 'text-primary' },
+  { status: 'Rescheduled', label: 'Reschedule',    icon: 'fa-calendar-day',  cls: 'text-warning' },
+  { status: 'Scheduled',   label: 'Back to Scheduled', icon: 'fa-rotate-left', cls: 'text-secondary' },
+];
+
+function rec_actions(c) {
+  const item = (d) => {
+    const here = (c.status || '') === d.status;
+    const mails = !!REC_MAILS[d.status];
+    return '<li><button type="button" class="dropdown-item d-flex align-items-center gap-2'
+      + (here ? ' active' : '') + '" onclick="rec_openStatus(' + c.id + ', \'' + d.status + '\')">'
+      + '<i class="fas ' + d.icon + ' ' + (here ? '' : d.cls) + '" style="width:16px"></i>'
+      + '<span class="flex-grow-1">' + d.label + '</span>'
+      // Said on the menu, so nobody has to open the dialog to find out whether
+      // the candidate is about to hear from us.
+      + (mails ? '<i class="fas fa-envelope small opacity-50" title="Writes to the candidate"></i>' : '')
+      + '</button></li>';
+  };
+
+  // The offer letter can only be read once it has something to say. Before the
+  // four fields are filled in it would open onto an error, which is a worse
+  // button than no button.
+  const canRead = c.department && c.work_location && c.joining_date && c.offer_valid_till;
+
+  return '<div class="dropdown d-inline-block me-1">'
+      + '<button class="btn btn-sm btn-dark dropdown-toggle" type="button"'
+      // fixed, or the menu is clipped by the table's own scrollbox
+      + ' data-bs-toggle="dropdown" data-bs-strategy="fixed" aria-expanded="false">Actions</button>'
+      + '<ul class="dropdown-menu shadow">'
+        + '<li><h6 class="dropdown-header">Decision</h6></li>'
+        + REC_DECISIONS.map(item).join('')
+        + '<li><hr class="dropdown-divider"></li>'
+        + '<li><button type="button" class="dropdown-item d-flex align-items-center gap-2" onclick="rec_openJoin(' + c.id + ')">'
+          + '<i class="fas fa-clipboard-list text-secondary" style="width:16px"></i>'
+          + '<span class="flex-grow-1">Onboarding form</span></button></li>'
+        + (canRead
+          ? '<li><a class="dropdown-item d-flex align-items-center gap-2" target="_blank" rel="noopener"'
+            + ' href="/api/recruitment/candidates/' + c.id + '/offer-letter">'
+            + '<i class="fas fa-file-pdf text-danger" style="width:16px"></i>'
+            + '<span class="flex-grow-1">Read the offer letter</span></a></li>'
+          : '')
+      // Editing is not in here: the pencil beside this menu already does it in
+      // one click, and two ways to open the same form is just noise on a row.
+      + '</ul>'
+    + '</div>'
+    + '<button class="btn btn-sm btn-warning" onclick="rec_openEdit(' + c.id + ')" title="Open"><i class="fas fa-pen-to-square"></i></button>';
+}
+
 function rec_render() {
   const q = (document.getElementById('rec_search').value || '').toLowerCase().trim();
   const status = document.getElementById('rec_status').value;
@@ -341,18 +402,7 @@ function rec_render() {
       + '<td><span class="badge bg-' + (REC_PILL[c.status] || 'light') + '">' + rec_esc(c.status) + '</span></td>'
       + '<td>' + rec_date(c.joining_date) + '</td>'
       + '<td>' + rec_joinCell(c) + '</td>'
-      + '<td>'
-        + '<button class="btn btn-sm btn-dark me-1" onclick="rec_openStatus(' + c.id + ')" title="Change status">Status</button>'
-        // Only once the letter has something to say. Before the offer fields
-        // are filled in it would open onto an error, which is a worse button
-        // than no button.
-        + (c.department && c.work_location && c.joining_date && c.offer_valid_till
-          ? '<a class="btn btn-sm btn-outline-danger me-1" target="_blank" rel="noopener"'
-            + ' href="/api/recruitment/candidates/' + c.id + '/offer-letter"'
-            + ' title="Read the offer letter"><i class="fas fa-file-pdf"></i></a>'
-          : '')
-        + '<button class="btn btn-sm btn-warning" onclick="rec_openEdit(' + c.id + ')" title="Open"><i class="fas fa-pen-to-square"></i></button>'
-      + '</td>'
+      + '<td>' + rec_actions(c) + '</td>'
       + '</tr>';
   }).join('');
 }
@@ -470,14 +520,16 @@ async function rec_delete() {
 }
 
 // ── Status ────────────────────────────────────────────
-function rec_openStatus(id) {
+// `preset` comes from the row menu, so the dialog opens on the decision
+// somebody has already made rather than on whatever the status is now.
+function rec_openStatus(id, preset) {
   const c = rec_data.find(x => x.id === id);
   if (!c) return;
   rec_editId = id;
   document.getElementById('rec_statusWho').innerHTML =
     '<b>' + rec_esc(c.name) + '</b> · ' + rec_esc(c.email)
     + (c.profile_position ? ' · ' + rec_esc(c.profile_position) : '');
-  document.getElementById('rec_s_status').value = c.status || 'Scheduled';
+  document.getElementById('rec_s_status').value = preset || c.status || 'Scheduled';
   document.getElementById('rec_s_reschedule_date').value = c.reschedule_date || '';
   document.getElementById('rec_s_reschedule_time').value = c.reschedule_time || '';
   document.getElementById('rec_s_reschedule_reason').value = c.reschedule_reason || '';
