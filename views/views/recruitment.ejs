@@ -32,7 +32,7 @@
     <div class="card-body p-2">
       <div class="row g-2 align-items-end">
         <div class="col-12 col-md-5"><label class="form-label text-dark fw-bold small mb-0">Search</label><input type="text" id="rec_search" class="form-control form-control-sm" placeholder="Name, email, phone, position..." onkeyup="rec_render()"></div>
-        <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Status</label><select id="rec_status" class="form-select form-select-sm" onchange="rec_render()"><option value="">All</option><option>Scheduled</option><option>Rescheduled</option><option>Selected</option><option>Rejected</option><option>Offer Sent</option></select></div>
+        <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Status</label><select id="rec_status" class="form-select form-select-sm" onchange="rec_render()"><option value="">All</option><option>Scheduled</option><option>Rescheduled</option><option>Selected</option><option>Onboarding</option><option>Offer Sent</option><option>Rejected</option></select></div>
         <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Onboarding</label><select id="rec_form" class="form-select form-select-sm" onchange="rec_render()"><option value="">All</option><option value="waiting">Sent, waiting</option><option value="received">Received</option><option value="none">Not sent</option></select></div>
         <div class="col-12 col-md-2 text-end"><button class="btn btn-secondary btn-sm w-100" onclick="rec_clear()">Clear</button></div>
       </div>
@@ -134,8 +134,13 @@
       <div class="text-muted small mb-3" id="rec_statusWho"></div>
       <label class="form-label fw-bold text-dark small">New status</label>
       <select class="form-select mb-3" id="rec_s_status" onchange="rec_statusFields()">
-        <option>Scheduled</option><option>Rescheduled</option><option>Selected</option><option>Rejected</option><option>Offer Sent</option>
+        <option>Scheduled</option><option>Rescheduled</option><option>Selected</option><option>Onboarding</option><option>Offer Sent</option><option>Rejected</option>
       </select>
+
+      <%# The offer cannot go until the candidate has sent their details back,
+          so the dialog says so and refuses rather than letting somebody fill
+          in four fields and then be turned down by the server. %>
+      <div class="alert alert-warning d-none" id="rec_offerBlocked"></div>
 
       <div id="rec_reschedFields" style="display:none">
         <div class="row g-3 mb-3">
@@ -175,16 +180,17 @@
   </div></div>
 </div>
 
-<!-- The onboarding form: where it has got to, and what came back. -->
-<div class="modal fade" id="rec_joinModal" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
-    <div class="modal-header bg-dark text-white">
-      <h5 class="modal-title" id="rec_joinTitle">Onboarding form</h5>
-      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-    </div>
-    <div class="modal-body" id="rec_joinBody"></div>
-    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div>
-  </div></div>
+<!-- The onboarding form: where it has got to, and what came back.
+     A panel down the right rather than a dialog in the middle, so the list
+     stays on screen behind it and one candidate can be read after another
+     without the table disappearing each time. -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="rec_joinPanel"
+     aria-labelledby="rec_joinTitle" style="width:min(540px,100%)">
+  <div class="offcanvas-header bg-dark text-white">
+    <h5 class="offcanvas-title" id="rec_joinTitle">Onboarding form</h5>
+    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body" id="rec_joinBody"></div>
 </div>
 
 <!-- Every letter this section sent, and why it failed when it did. -->
@@ -223,14 +229,15 @@ var REC_FIELDS = ['name', 'email', 'phone', 'profile_position', 'interviewer_ema
 // instead of offering a tick box that does nothing.
 var REC_MAILS = {
   Rescheduled: 'They get the new date and time.',
-  Selected: 'They are told they have been selected, and the onboarding form follows.',
+  Selected: 'They are told they have been selected. The onboarding form does not follow on its own — move them to Onboarding when you want to ask for it.',
+  Onboarding: 'They get the link to the form asking for their details and documents.',
   Rejected: 'They are told the outcome — short, and without false comfort.',
   'Offer Sent': 'The offer letter goes to them as a PDF, to sign and send back.',
 };
 
 var REC_PILL = {
   'Scheduled': 'primary', 'Rescheduled': 'warning', 'Selected': 'success',
-  'Rejected': 'secondary', 'Offer Sent': 'info',
+  'Onboarding': 'dark', 'Offer Sent': 'info', 'Rejected': 'secondary',
 };
 
 const rec_esc = v => String(v == null ? '' : v)
@@ -317,10 +324,16 @@ function rec_joinCell(c) {
 // it does not act. Four of the five write to the candidate, and telling
 // somebody they were rejected should take a confirmation, not a stray click
 // on a menu. The envelope beside an item says which ones those are.
+// In the order the pipeline runs, so the next step is the one under your
+// finger rather than something to look for.
 var REC_DECISIONS = [
   { status: 'Selected',    label: 'Selected',      icon: 'fa-circle-check',  cls: 'text-success' },
+  { status: 'Onboarding',  label: 'Ask for their details', icon: 'fa-clipboard-list', cls: 'text-dark' },
+  { status: 'Offer Sent',  label: 'Send the offer letter', icon: 'fa-file-pdf', cls: 'text-primary',
+    // Barred until the details are back: the letter is addressed to them at
+    // home, so it should not go out while the address on it is a guess.
+    needsForm: true },
   { status: 'Rejected',    label: 'Not selected',  icon: 'fa-circle-xmark',  cls: 'text-danger' },
-  { status: 'Offer Sent',  label: 'Send the offer letter', icon: 'fa-file-pdf', cls: 'text-primary' },
   { status: 'Rescheduled', label: 'Reschedule',    icon: 'fa-calendar-day',  cls: 'text-warning' },
   { status: 'Scheduled',   label: 'Back to Scheduled', icon: 'fa-rotate-left', cls: 'text-secondary' },
 ];
@@ -329,13 +342,23 @@ function rec_actions(c) {
   const item = (d) => {
     const here = (c.status || '') === d.status;
     const mails = !!REC_MAILS[d.status];
+    // Greyed rather than hidden, and with the reason on it: an option that
+    // vanishes leaves somebody hunting for it, while one that explains itself
+    // says what to do next.
+    const barred = d.needsForm && !c.joining_submitted_at;
+    const why = c.joining_form_sent_at
+      ? 'Their onboarding form has gone but nothing has come back yet'
+      : 'Ask for their details first — move them to Onboarding';
     return '<li><button type="button" class="dropdown-item d-flex align-items-center gap-2'
-      + (here ? ' active' : '') + '" onclick="rec_openStatus(' + c.id + ', \'' + d.status + '\')">'
-      + '<i class="fas ' + d.icon + ' ' + (here ? '' : d.cls) + '" style="width:16px"></i>'
+      + (here ? ' active' : '') + (barred ? ' disabled' : '') + '"'
+      + (barred ? ' title="' + why + '"' : ' onclick="rec_openStatus(' + c.id + ', \'' + d.status + '\')"')
+      + '>'
+      + '<i class="fas ' + d.icon + ' ' + (here || barred ? '' : d.cls) + '" style="width:16px"></i>'
       + '<span class="flex-grow-1">' + d.label + '</span>'
       // Said on the menu, so nobody has to open the dialog to find out whether
       // the candidate is about to hear from us.
-      + (mails ? '<i class="fas fa-envelope small opacity-50" title="Writes to the candidate"></i>' : '')
+      + (barred ? '<i class="fas fa-lock small opacity-50"></i>'
+        : mails ? '<i class="fas fa-envelope small opacity-50" title="Writes to the candidate"></i>' : '')
       + '</button></li>';
   };
 
@@ -555,9 +578,25 @@ function rec_inDays(n) {
 // it writes to the candidate.
 function rec_statusFields() {
   const st = document.getElementById('rec_s_status').value;
+  const c = rec_data.find(x => x.id === rec_editId) || {};
+
+  // No offer until their details are back. Said here rather than left to the
+  // server, so nobody fills in four fields and is then turned down.
+  const blocked = st === 'Offer Sent' && !c.joining_submitted_at;
+  const warn = document.getElementById('rec_offerBlocked');
+  if (blocked) {
+    warn.innerHTML = c.joining_form_sent_at
+      ? '<b>Their onboarding form has not come back yet.</b> The offer letter is addressed to them at home, so it cannot go until their details are in. Open the Onboarding panel to send the link again, or give them a nudge.'
+      : '<b>Their details have not been asked for yet.</b> Move them to <b>Onboarding</b> first — that sends them the form. The offer can go the moment it comes back.';
+    warn.classList.remove('d-none');
+  } else {
+    warn.classList.add('d-none');
+  }
+  document.getElementById('rec_statusSaveBtn').disabled = blocked;
+
   document.getElementById('rec_reschedFields').style.display = st === 'Rescheduled' ? '' : 'none';
   document.getElementById('rec_joinFields').style.display = st === 'Selected' ? '' : 'none';
-  document.getElementById('rec_offerFields').style.display = st === 'Offer Sent' ? '' : 'none';
+  document.getElementById('rec_offerFields').style.display = (st === 'Offer Sent' && !blocked) ? '' : 'none';
 
   const mails = REC_MAILS[st];
   const box = document.getElementById('rec_s_sendEmail');
@@ -628,7 +667,9 @@ async function rec_saveStatus(btn) {
 async function rec_openJoin(id) {
   const box = document.getElementById('rec_joinBody');
   box.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</div>';
-  new bootstrap.Modal(document.getElementById('rec_joinModal')).show();
+  // getOrCreateInstance, because sending the form reopens the same panel and a
+  // second instance would leave the first one's backdrop behind.
+  bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('rec_joinPanel')).show();
   try {
     const json = await fetch('/api/recruitment/candidates/' + id + '/joining-details').then(r => r.json());
     if (!json.success) { box.innerHTML = '<div class="alert alert-danger mb-0">' + rec_esc(json.error) + '</div>'; return; }

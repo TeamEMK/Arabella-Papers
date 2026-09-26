@@ -34,7 +34,11 @@ async function guard(req, res) {
   return false;
 }
 
-const STATUSES = ['Scheduled', 'Rescheduled', 'Selected', 'Rejected', 'Offer Sent'];
+// The pipeline, in the order it actually runs. Onboarding sits between the
+// selection and the offer because that is the shape the office asked for: the
+// candidate is told they are in, then asked for their details, and only once
+// those are back does the offer letter go.
+const STATUSES = ['Scheduled', 'Rescheduled', 'Selected', 'Onboarding', 'Offer Sent', 'Rejected'];
 
 // Which letter belongs to which status. A status with no entry sends nothing —
 // "Offer Sent" is here as a pipeline stage, and the offer letter itself is not
@@ -300,6 +304,23 @@ router.put('/candidates/:id/status', requireLogin, async (req, res) => {
     // knows them - and refused up front, because a letter that goes out with a
     // blank where the joining date should be cannot be taken back.
     if (status === 'Offer Sent') {
+      // No offer until the candidate has sent their details back. The office
+      // asked for this: the letter is addressed to them at home and is the
+      // document an employee file is opened with, so it should not go out
+      // while the address on it is still a guess.
+      //
+      // Checked before the fields below, because there is no point asking
+      // somebody to type a department into a letter that cannot be sent.
+      const [[back]] = await db.query('SELECT id FROM recruit_joining WHERE candidate_id = ?', [id]);
+      if (!back) {
+        return res.status(400).json({
+          success: false,
+          error: c.joining_form_sent_at
+            ? 'Their onboarding form has gone but nothing has come back yet, so the offer cannot be sent. Chase them, or open the Onboarding panel to send the link again.'
+            : 'The offer needs their onboarding details first. Move them to Onboarding — that sends them the form.',
+        });
+      }
+
       fields.department = clean(b.department);
       fields.work_location = clean(b.work_location);
       fields.offer_valid_till = dateOrNull(b.offer_valid_till);
@@ -356,14 +377,18 @@ router.put('/candidates/:id/status', requireLogin, async (req, res) => {
       letters.push(offer);
     }
 
-    // Being selected is the moment the onboarding form is due, so it follows
-    // the congratulations rather than waiting for somebody to remember. Sent
-    // once: if it has gone before, or they have already filled it in, the
-    // button on the candidate's row sends it again deliberately.
+    // The onboarding form is its own step now, not something that follows the
+    // congratulations on its own. Selecting somebody tells them they are in;
+    // moving them to Onboarding is what asks for their details, and it is a
+    // separate decision because it is a separate conversation.
+    //
+    // Not sent twice on its own: once it has gone, or they have already
+    // filled it in, the Actions menu sends it again deliberately.
     let formSent = null;
-    if (status === 'Selected' && b.sendEmail !== false && !c.joining_form_sent_at) {
+    if (status === 'Onboarding' && b.sendEmail !== false) {
       const [[done]] = await db.query('SELECT id FROM recruit_joining WHERE candidate_id = ?', [id]);
-      if (!done) formSent = await mailForm({ ...c, ...fields, id });
+      if (done) formSent = null;                       // already back; nothing to ask for
+      else if (!c.joining_form_sent_at) formSent = await mailForm({ ...c, ...fields, id });
     }
 
     res.json({
