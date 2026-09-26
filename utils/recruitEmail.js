@@ -1,6 +1,40 @@
+const fs = require('fs');
+const path = require('path');
 const { sendMail } = require('./mailer');
 const { buildOfferLetter } = require('./offerLetter');
 const { OFFICE, officeLines } = require('./office');
+
+// ── The brand mark ────────────────────────────────────
+//
+// The logo travels with the message as an inline attachment rather than as a
+// link back to mis.arabellapapers.com. Outlook blocks remote images by
+// default and Gmail fetches them through a proxy, so a header served over
+// HTTP is a header a good share of readers never see. A cid: image is part of
+// the mail itself and always renders.
+//
+// It is read once and kept, because every letter carries the same one. If the
+// file is ever missing the letters fall back to the orange wordmark rather
+// than showing a broken picture — vercel.json ships public/** with the
+// function, which is the only reason the file is there to read at all.
+const LOGO_CID = 'arabella-logo';
+const LOGO_FILE = path.join(__dirname, '..', 'public', 'logo.jpg');
+let _logo;
+function logoAttachment() {
+  if (_logo === undefined) {
+    try {
+      _logo = {
+        filename: 'arabella-papers.jpg',
+        content: fs.readFileSync(LOGO_FILE),
+        cid: LOGO_CID,
+        contentDisposition: 'inline',
+      };
+    } catch (err) {
+      console.warn('[mail] logo not found at', LOGO_FILE, '— letters will show the wordmark instead');
+      _logo = null;
+    }
+  }
+  return _logo;
+}
 
 // ══════════════════════════════════════════════════════
 // RECRUITMENT LETTERS
@@ -136,9 +170,17 @@ function shell({ head, eyebrow, body, footer }) {
   return `${preheader(head)}
   <div style="background:#f4f5f7;padding:24px 12px;font-family:${FONT};">
     <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #e6e8eb;">
-      <div style="background:#212529;padding:22px 24px;">
-        <div style="color:#ffa500;font-size:17px;font-weight:700;letter-spacing:.5px;">ARABELLA PAPERS</div>
-        ${eyebrow ? `<div style="color:#adb5bd;font-size:11px;letter-spacing:1.2px;margin-top:5px;">${esc(eyebrow)}</div>` : ''}
+      ${logoAttachment() ? `
+      <!-- The real wordmark, on white because that is the ground it was drawn
+           on: it is a dark blue serif in a JPEG, so there is no transparency
+           to let it sit on the dark bar below. -->
+      <div style="background:#ffffff;padding:17px 24px 15px;border-bottom:1px solid #e9ecef;">
+        <img src="cid:${LOGO_CID}" alt="ARABELLA PAPERS" width="220" height="17"
+             style="display:block;width:220px;height:17px;border:0;outline:none;text-decoration:none;">
+      </div>` : ''}
+      <div style="background:#212529;padding:${logoAttachment() ? '11px' : '22px'} 24px;">
+        ${logoAttachment() ? '' : `<div style="color:#ffa500;font-size:17px;font-weight:700;letter-spacing:.5px;">ARABELLA PAPERS</div>`}
+        ${eyebrow ? `<div style="color:#adb5bd;font-size:11px;letter-spacing:1.2px;${logoAttachment() ? '' : 'margin-top:5px;'}">${esc(eyebrow)}</div>` : ''}
       </div>
       <div style="padding:24px;">${body}</div>
       <div style="background:#f8f9fa;padding:14px 24px;border-top:1px solid #e9ecef;">
@@ -357,6 +399,20 @@ const BUILDERS = {
  * with the subject attached. A log row that cannot say what failed is not
  * much of a log.
  */
+/**
+ * The attachments a letter goes out with.
+ *
+ * The logo rides along only when the body actually shows it, so a letter that
+ * fell back to the wordmark does not arrive carrying a stray picture nobody
+ * asked for — which is also what stops it appearing in the attachment list
+ * beside the offer letter PDF in most clients.
+ */
+function withLogo(html, extra) {
+  const logo = String(html || '').includes(`cid:${LOGO_CID}`) ? logoAttachment() : null;
+  const list = (extra || []).concat(logo ? [logo] : []);
+  return list.length ? list : undefined;
+}
+
 function report(result, subject) {
   if (result.sent) return { ok: true, subject };
   return { ok: false, subject, reason: result.error || result.skipped || 'not sent' };
@@ -374,7 +430,7 @@ async function sendToCandidate(kind, candidate) {
   if (!build) return { ok: false, reason: 'unknown letter: ' + kind, subject: '' };
   const { subject, html, text } = build(candidate);
   if (!candidate.email) return { ok: false, reason: 'candidate has no email address', subject };
-  return report(await sendMail({ to: candidate.email, subject, html, text }), subject);
+  return report(await sendMail({ to: candidate.email, subject, html, text, attachments: withLogo(html) }), subject);
 }
 
 // Its own path rather than a `kind`, because the address it goes to is a
@@ -382,7 +438,7 @@ async function sendToCandidate(kind, candidate) {
 async function sendToInterviewer(candidate) {
   const { subject, html, text } = buildInterviewerEmail(candidate);
   if (!candidate.interviewer_email) return { ok: false, reason: 'no interviewer email', subject };
-  return report(await sendMail({ to: candidate.interviewer_email, subject, html, text }), subject);
+  return report(await sendMail({ to: candidate.interviewer_email, subject, html, text, attachments: withLogo(html) }), subject);
 }
 
 // Its own path again: this one needs the form's address, and the four
@@ -390,7 +446,7 @@ async function sendToInterviewer(candidate) {
 async function sendOnboardingForm(candidate, url) {
   const { subject, html, text } = buildOnboardingEmail(candidate, url);
   if (!candidate.email) return { ok: false, reason: 'candidate has no email address', subject };
-  return report(await sendMail({ to: candidate.email, subject, html, text }), subject);
+  return report(await sendMail({ to: candidate.email, subject, html, text, attachments: withLogo(html) }), subject);
 }
 
 // The only letter that carries a file. The PDF is drawn here rather than
@@ -402,7 +458,7 @@ async function sendOffer(candidate, joining) {
   const letter = await buildOfferLetter(candidate, joining);
   const r = await sendMail({
     to: candidate.email, subject, html, text,
-    attachments: [{ filename: letter.filename, content: letter.buffer, contentType: 'application/pdf' }],
+    attachments: withLogo(html, [{ filename: letter.filename, content: letter.buffer, contentType: 'application/pdf' }]),
   });
   return report(r, subject);
 }
