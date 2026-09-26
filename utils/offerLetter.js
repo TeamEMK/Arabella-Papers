@@ -197,19 +197,36 @@ function buildOfferLetter(c, joining) {
   if (doc.y + signBlock > doc.page.height - doc.page.margins.bottom) doc.addPage();
 
   doc.moveDown(0.8);
-  const signX = doc.page.margins.left + W * 0.52;
-  const signW = W * 0.48;
-  const signLine = (text, font) => {
-    doc.font(font || 'Times-Roman').fontSize(SIZE).fillColor(INK)
-       .text(text, signX, doc.y, { width: signW, align: 'left' });
-  };
-  signLine('Sincerely,');
-  signLine(`For ${COMPANY}`, 'Times-Bold');
-  doc.moveDown(2.4);
-  signLine('Authorized Signatory');
-  signLine(`Name: ${SIGNATORY.name}`);
-  signLine(`E-mail: ${SIGNATORY.email}`);
-  signLine(`Phone: ${SIGNATORY.phone}`);
+
+  // Anchored to the right margin, not started at the middle of the page.
+  //
+  // The block is measured and then placed so its longest line ends where the
+  // text does, which is what makes it read as the right-hand side of the
+  // letter. Each line inside it stays left-aligned against that edge —
+  // right-aligning the lines themselves would leave "Sincerely," and
+  // "Phone: ..." starting in different places, which is what a ragged left
+  // edge does to a block of unequal lines.
+  const signLines = [
+    ['Sincerely,', 'Times-Roman'],
+    [`For ${COMPANY}`, 'Times-Bold'],
+    [null, null],                       // room to sign
+    ['Authorized Signatory', 'Times-Roman'],
+    [`Name: ${SIGNATORY.name}`, 'Times-Roman'],
+    [`E-mail: ${SIGNATORY.email}`, 'Times-Roman'],
+    [`Phone: ${SIGNATORY.phone}`, 'Times-Roman'],
+  ];
+  const widest = Math.max(...signLines
+    .filter(([t]) => t)
+    .map(([t, f]) => doc.font(f).fontSize(SIZE).widthOfString(t)));
+  // A couple of points of slack, or a line exactly as wide as its box wraps.
+  const signW = Math.min(widest + 3, W);
+  const signX = doc.page.margins.left + W - signW;
+
+  for (const [text, font] of signLines) {
+    if (!text) { doc.moveDown(2.4); continue; }
+    doc.font(font).fontSize(SIZE).fillColor(INK)
+       .text(text, signX, doc.y, { width: signW, align: 'left', lineBreak: false });
+  }
 
   // ── What the candidate signs ──
   const acceptBlock = 150;
