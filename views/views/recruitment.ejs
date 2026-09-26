@@ -149,6 +149,19 @@
         <div class="mb-3"><label class="form-label fw-bold text-dark small">Expected joining date</label><input class="form-control" type="date" id="rec_s_joining_date"></div>
       </div>
 
+      <%# What the offer letter names and the interview form never asked for.
+          All four are required: a letter that goes out with a blank where the
+          joining date should be cannot be taken back. %>
+      <div id="rec_offerFields" style="display:none">
+        <div class="alert alert-light border small mb-3">These go into the offer letter itself. Read it once before it goes — <b>Preview</b> is on the candidate's row after you save.</div>
+        <div class="row g-3 mb-3">
+          <div class="col-6"><label class="form-label fw-bold text-dark small">Department *</label><input class="form-control" id="rec_s_department" placeholder="e.g. Operations"></div>
+          <div class="col-6"><label class="form-label fw-bold text-dark small">Location *</label><input class="form-control" id="rec_s_work_location" placeholder="e.g. Jaipur"></div>
+          <div class="col-6"><label class="form-label fw-bold text-dark small">Joining date *</label><input class="form-control" type="date" id="rec_s_offer_joining_date"></div>
+          <div class="col-6"><label class="form-label fw-bold text-dark small">Offer valid till *</label><input class="form-control" type="date" id="rec_s_offer_valid_till"></div>
+        </div>
+      </div>
+
       <div class="form-check">
         <input class="form-check-input" type="checkbox" id="rec_s_sendEmail" checked>
         <label class="form-check-label fw-bold text-dark small" for="rec_s_sendEmail" id="rec_s_mailLabel">Email the candidate</label>
@@ -212,6 +225,7 @@ var REC_MAILS = {
   Rescheduled: 'They get the new date and time.',
   Selected: 'They are told they have been selected, and the onboarding form follows.',
   Rejected: 'They are told the outcome — short, and without false comfort.',
+  'Offer Sent': 'The offer letter goes to them as a PDF, to sign and send back.',
 };
 
 var REC_PILL = {
@@ -329,6 +343,14 @@ function rec_render() {
       + '<td>' + rec_joinCell(c) + '</td>'
       + '<td>'
         + '<button class="btn btn-sm btn-dark me-1" onclick="rec_openStatus(' + c.id + ')" title="Change status">Status</button>'
+        // Only once the letter has something to say. Before the offer fields
+        // are filled in it would open onto an error, which is a worse button
+        // than no button.
+        + (c.department && c.work_location && c.joining_date && c.offer_valid_till
+          ? '<a class="btn btn-sm btn-outline-danger me-1" target="_blank" rel="noopener"'
+            + ' href="/api/recruitment/candidates/' + c.id + '/offer-letter"'
+            + ' title="Read the offer letter"><i class="fas fa-file-pdf"></i></a>'
+          : '')
         + '<button class="btn btn-sm btn-warning" onclick="rec_openEdit(' + c.id + ')" title="Open"><i class="fas fa-pen-to-square"></i></button>'
       + '</td>'
       + '</tr>';
@@ -460,8 +482,21 @@ function rec_openStatus(id) {
   document.getElementById('rec_s_reschedule_time').value = c.reschedule_time || '';
   document.getElementById('rec_s_reschedule_reason').value = c.reschedule_reason || '';
   document.getElementById('rec_s_joining_date').value = c.joining_date || '';
+  document.getElementById('rec_s_department').value = c.department || '';
+  document.getElementById('rec_s_work_location').value = c.work_location || '';
+  document.getElementById('rec_s_offer_joining_date').value = c.joining_date || '';
+  // Two weeks to decide, unless somebody has already set a date. Long enough
+  // to talk it over at home, short enough that the role is not held open for
+  // a month.
+  document.getElementById('rec_s_offer_valid_till').value = c.offer_valid_till || rec_inDays(14);
   rec_statusFields();
   new bootstrap.Modal(document.getElementById('rec_statusModal')).show();
+}
+
+function rec_inDays(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
 // Shows the fields the chosen status actually needs, and says plainly whether
@@ -470,6 +505,7 @@ function rec_statusFields() {
   const st = document.getElementById('rec_s_status').value;
   document.getElementById('rec_reschedFields').style.display = st === 'Rescheduled' ? '' : 'none';
   document.getElementById('rec_joinFields').style.display = st === 'Selected' ? '' : 'none';
+  document.getElementById('rec_offerFields').style.display = st === 'Offer Sent' ? '' : 'none';
 
   const mails = REC_MAILS[st];
   const box = document.getElementById('rec_s_sendEmail');
@@ -480,7 +516,7 @@ function rec_statusFields() {
   box.checked = !!mails;
   document.getElementById('rec_s_mailLabel').textContent = mails ? 'Email the candidate' : 'No letter for this status';
   document.getElementById('rec_s_mailNote').textContent = mails
-    || 'Scheduled and Offer Sent move the pipeline only; nothing is sent.';
+    || 'Scheduled only moves the pipeline; nothing is sent.';
 }
 
 // Same reasoning as the Add form: this one can post a rejection, and posting it
@@ -495,6 +531,20 @@ async function rec_saveStatus(btn) {
     body.reschedule_reason = document.getElementById('rec_s_reschedule_reason').value.trim();
   }
   if (status === 'Selected') body.joining_date = document.getElementById('rec_s_joining_date').value;
+  if (status === 'Offer Sent') {
+    body.department = document.getElementById('rec_s_department').value.trim();
+    body.work_location = document.getElementById('rec_s_work_location').value.trim();
+    body.joining_date = document.getElementById('rec_s_offer_joining_date').value;
+    body.offer_valid_till = document.getElementById('rec_s_offer_valid_till').value;
+    // Caught here as well as on the server, so nobody waits for a round trip
+    // to be told a box is empty.
+    const short = [];
+    if (!body.department) short.push('Department');
+    if (!body.work_location) short.push('Location');
+    if (!body.joining_date) short.push('Joining date');
+    if (!body.offer_valid_till) short.push('Offer valid till');
+    if (short.length) { showToast('warning', 'The offer letter needs: ' + short.join(', ') + '.'); return; }
+  }
 
   rec_busy = true;
   const release = rec_hold(btn, body.sendEmail ? 'Sending...' : 'Saving...');

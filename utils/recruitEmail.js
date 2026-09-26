@@ -1,4 +1,6 @@
 const { sendMail } = require('./mailer');
+const { buildOfferLetter } = require('./offerLetter');
+const { OFFICE } = require('./office');
 
 // ══════════════════════════════════════════════════════
 // RECRUITMENT LETTERS
@@ -20,26 +22,6 @@ const { sendMail } = require('./mailer');
 
 const FONT = 'Segoe UI,Helvetica,Arial,sans-serif';
 
-/**
- * The office, as every candidate is told it.
- *
- * Standing text, not something typed into the Notes box per candidate. It is
- * the same address every time, and retyping it is exactly how a line meant for
- * one person on one day — "ask for so-and-so at reception" — ends up in
- * somebody else's letter months later. A candidate's letter should name the
- * company and nobody inside it.
- *
- * Filling these in is the only change needed: the "Where to come" block then
- * appears in the interview and reschedule letters. Left empty, the letters
- * read exactly as they did before it existed.
- *
- *   address: the building, floor and locality, one line per line
- *   map:     a Google Maps share link, or blank for no map button
- */
-const OFFICE = {
-  address: 'Arabella Papers Pvt. Ltd.\nG1-592, RIICO Industrial Area, Sitapura\nJaipur 302022',
-  map: 'https://maps.app.goo.gl/PK9DVNy3AmncHHYP6',
-};
 
 // Everything below builds HTML out of what somebody typed into a form. A stray
 // < or & in a name or a note would otherwise swallow the rest of the letter.
@@ -329,6 +311,33 @@ function buildOnboardingEmail(c, url) {
   };
 }
 
+// The covering note the offer letter travels with.
+//
+// Deliberately short. The letter is the thing being sent; a long email in
+// front of it only competes with the attachment somebody has to open, sign
+// and send back. So: what it is, the few facts worth confirming at a glance,
+// and what to do with it by when.
+function buildOfferEmail(c) {
+  const body = para(`Dear ${esc(c.name)},`)
+    + para(`Please find your offer letter attached, for the position of <b>${esc(c.profile_position)}</b> at Arabella Papers Private Limited.`)
+    + detail([
+        ['Position', esc(c.profile_position)],
+        ['Department', esc(c.department)],
+        ['Location', esc(c.work_location)],
+        ['Joining date', esc(longDate(c.joining_date))],
+        ['Offer valid till', esc(longDate(c.offer_valid_till))],
+      ])
+    + para(`Please read it, sign the acknowledgement at the end, and send the signed copy back to this email on or before <b>${esc(longDate(c.offer_valid_till))}</b>.`)
+    + para('The letter also lists the documents to bring on your first day. It is worth looking at that list now rather than the night before — a few of them take time to get hold of.')
+    + para('If anything in the letter needs correcting, simply reply and we will put it right.')
+    + para('Congratulations, and welcome.');
+  return {
+    subject: `Your offer letter${c.profile_position ? ` — ${c.profile_position}` : ''}`,
+    html: shell({ head: 'Your offer letter is attached', eyebrow: 'OFFER LETTER', body, footer: FOOTER_CANDIDATE }),
+    text: stripTags(body),
+  };
+}
+
 const BUILDERS = {
   interview: buildInterviewEmail,
   rescheduled: buildRescheduleEmail,
@@ -378,10 +387,24 @@ async function sendOnboardingForm(candidate, url) {
   return report(await sendMail({ to: candidate.email, subject, html, text }), subject);
 }
 
+// The only letter that carries a file. The PDF is drawn here rather than
+// handed in by the caller, so the retry path and the status change both get
+// the same letter without either having to know how it is made.
+async function sendOffer(candidate, joining) {
+  const { subject, html, text } = buildOfferEmail(candidate);
+  if (!candidate.email) return { ok: false, reason: 'candidate has no email address', subject };
+  const letter = await buildOfferLetter(candidate, joining);
+  const r = await sendMail({
+    to: candidate.email, subject, html, text,
+    attachments: [{ filename: letter.filename, content: letter.buffer, contentType: 'application/pdf' }],
+  });
+  return report(r, subject);
+}
+
 module.exports = {
-  sendToCandidate, sendToInterviewer, sendOnboardingForm,
+  sendToCandidate, sendToInterviewer, sendOnboardingForm, sendOffer,
   // The builders are exported as well as the senders so a letter can be looked
   // at without one being posted to anybody.
-  BUILDERS, buildInterviewEmail, buildInterviewerEmail, buildOnboardingEmail,
+  BUILDERS, buildInterviewEmail, buildInterviewerEmail, buildOnboardingEmail, buildOfferEmail,
   longDate, niceTime,
 };

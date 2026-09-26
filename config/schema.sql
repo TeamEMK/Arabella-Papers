@@ -602,6 +602,13 @@ CREATE TABLE IF NOT EXISTS recruit_candidates (
   reschedule_reason TEXT,
   joining_date DATE DEFAULT NULL,
   salary VARCHAR(100) DEFAULT '',
+  -- What the offer letter needs and the interview never asked for. Typed when
+  -- the offer is sent, and kept, so sending it a second time does not make
+  -- somebody remember what they put the first time.
+  department VARCHAR(255) DEFAULT '',
+  work_location VARCHAR(255) DEFAULT '',
+  offer_valid_till DATE DEFAULT NULL,
+  offer_sent_at DATETIME DEFAULT NULL,
   notes TEXT,
   -- The onboarding form is opened by a link, not a login, so this token is the
   -- credential. One per candidate, made the first time the form is sent and

@@ -108,6 +108,13 @@ const COLUMN_MIGRATIONS = [
   // the repeat is itself being repeated, so every run of a job points at the
   // one number the office, the dealer and the invoice all use.
   { table: 'orders', column: 'remake_of', type: 'VARCHAR(20) NULL' },
+  // What the offer letter needs. recruit_candidates went in three days before
+  // these did, so schema.sql cannot deliver them - every CREATE in it is
+  // IF NOT EXISTS, and the table already exists.
+  { table: 'recruit_candidates', column: 'department', type: "VARCHAR(255) DEFAULT ''" },
+  { table: 'recruit_candidates', column: 'work_location', type: "VARCHAR(255) DEFAULT ''" },
+  { table: 'recruit_candidates', column: 'offer_valid_till', type: 'DATE NULL' },
+  { table: 'recruit_candidates', column: 'offer_sent_at', type: 'DATETIME NULL' },
 ];
 
 async function addMissingColumns() {

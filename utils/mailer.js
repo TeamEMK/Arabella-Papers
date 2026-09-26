@@ -35,9 +35,15 @@ function getTransporter() {
 /**
  * Send one mail. Never throws — a mail that fails is logged and reported back,
  * because none of the callers should fail their own job over it.
+ *
+ * `attachments` is nodemailer's own shape, so the usual
+ * `{ filename, content }` with a Buffer. Nothing is read from disk here: the
+ * app runs serverless, where the only file that reliably exists is the one
+ * still in memory.
+ *
  * @returns {Promise<{sent: boolean, skipped?: string, error?: string}>}
  */
-async function sendMail({ to, subject, html, text, replyTo }) {
+async function sendMail({ to, subject, html, text, replyTo, attachments }) {
   if (!isMailConfigured()) {
     if (!warned) {
       console.warn('[mail] SMTP_USER/SMTP_PASS not set — emails are disabled.');
@@ -57,6 +63,7 @@ async function sendMail({ to, subject, html, text, replyTo }) {
       text,
       html,
       replyTo: replyTo || undefined,
+      attachments: attachments && attachments.length ? attachments : undefined,
     });
     console.log(`[mail] sent "${subject}" to ${recipients.join(', ')} (${info.messageId})`);
     return { sent: true };

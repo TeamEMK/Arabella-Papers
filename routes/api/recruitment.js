@@ -5,6 +5,7 @@ const { requireLogin } = require('../../middleware/auth');
 const { canSee } = require('../../utils/access');
 const recruitEmail = require('../../utils/recruitEmail');
 const { FILE_FIELDS, formUrl, mailForm, logMessage } = require('../../utils/joiningForm');
+const { buildOfferLetter } = require('../../utils/offerLetter');
 
 // ══════════════════════════════════════════════════════
 // RECRUITMENT (/api/recruitment/*)
@@ -123,10 +124,13 @@ router.get('/candidates', requireLogin, async (req, res) => {
     const [rows] = await db.query(
       `SELECT c.id, c.name, c.email, c.phone, c.profile_position, c.interviewer_email,
               c.interview_time, c.reschedule_time, c.reschedule_reason, c.status,
-              c.salary, c.notes, u.username AS created_by_name,
+              c.salary, c.notes, c.department, c.work_location,
+              u.username AS created_by_name,
               DATE_FORMAT(c.interview_date,  '%Y-%m-%d') AS interview_date,
               DATE_FORMAT(c.reschedule_date, '%Y-%m-%d') AS reschedule_date,
               DATE_FORMAT(c.joining_date,    '%Y-%m-%d') AS joining_date,
+              DATE_FORMAT(c.offer_valid_till, '%Y-%m-%d') AS offer_valid_till,
+              DATE_FORMAT(c.offer_sent_at, '%Y-%m-%d %H:%i') AS offer_sent_at,
               DATE_FORMAT(c.created_at, '%Y-%m-%d %H:%i') AS created_at,
               -- Where the onboarding form has got to, so the row can say so
               -- without a request per candidate.
@@ -290,13 +294,37 @@ router.put('/candidates/:id/status', requireLogin, async (req, res) => {
     }
     if (status === 'Selected') fields.joining_date = dateOrNull(b.joining_date);
 
+    // The offer letter names a department, an office and two dates, and the
+    // interview form asked for none of them. They are wanted here rather than
+    // on the candidate record because this is the moment somebody actually
+    // knows them - and refused up front, because a letter that goes out with a
+    // blank where the joining date should be cannot be taken back.
+    if (status === 'Offer Sent') {
+      fields.department = clean(b.department);
+      fields.work_location = clean(b.work_location);
+      fields.offer_valid_till = dateOrNull(b.offer_valid_till);
+      fields.joining_date = dateOrNull(b.joining_date) || c.joining_date || null;
+
+      const missing = [];
+      if (!fields.department) missing.push('Department');
+      if (!fields.work_location) missing.push('Location');
+      if (!fields.joining_date) missing.push('Joining date');
+      if (!fields.offer_valid_till) missing.push('Offer valid till');
+      if (missing.length) {
+        return res.status(400).json({ success: false, error: 'The offer letter needs: ' + missing.join(', ') + '.' });
+      }
+    }
+
     const cols = Object.keys(fields);
     await db.query(
       `UPDATE recruit_candidates SET ${cols.map(k => '`' + k + '` = ?').join(', ')} WHERE id = ?`,
       [...cols.map(k => fields[k]), id]);
 
     const updated = { ...c, ...fields };
-    const action = `Status → ${status}`;
+    // The offer gets its own name in the log rather than "Status → Offer Sent":
+    // it is the one letter with a document attached, and the re-send has to be
+    // able to tell it apart from the four that are text alone.
+    const action = status === 'Offer Sent' ? 'Offer letter' : `Status → ${status}`;
 
     // The same double click, one screen along. Here the row may legitimately
     // be saved again — a reschedule that moves twice — so what is guarded is
@@ -312,6 +340,20 @@ router.put('/candidates/:id/status', requireLogin, async (req, res) => {
     const letters = [];
     if (kind && b.sendEmail !== false && !justSent) {
       letters.push(await sendAndLog(updated, kind, action));
+    }
+
+    // The offer is its own path: it carries a PDF, and the PDF wants the home
+    // address, which lives on the onboarding form if that has come back yet.
+    // offer_sent_at is stamped only when the letter actually went, so the row
+    // never claims to have sent something that bounced.
+    if (status === 'Offer Sent' && b.sendEmail !== false && !justSent) {
+      const [[joining]] = await db.query(
+        'SELECT street, city, state, pincode FROM recruit_joining WHERE candidate_id = ?', [id]);
+      const offer = await recruitEmail.sendOffer(updated, joining || null)
+        .catch(err => ({ ok: false, reason: err.message }));
+      await logMessage(updated, action, offer);
+      if (offer.ok) await db.query('UPDATE recruit_candidates SET offer_sent_at = NOW() WHERE id = ?', [id]);
+      letters.push(offer);
     }
 
     // Being selected is the moment the onboarding form is due, so it follows
@@ -383,11 +425,18 @@ router.post('/messages/:id/retry', requireLogin, async (req, res) => {
     const [[c]] = await db.query('SELECT * FROM recruit_candidates WHERE id = ?', [log.candidate_id]);
     if (!c) return res.status(400).json({ success: false, error: 'That candidate no longer exists.' });
 
-    // The onboarding form is its own letter with its own link, so it is sent
-    // by its own path rather than rebuilt from the log line.
+    // The onboarding form and the offer each have their own path - one needs
+    // the form's link, the other a freshly drawn PDF - so neither can be
+    // rebuilt from the log line the way the four plain letters can.
     let result;
     if (/onboarding/i.test(log.action)) {
       result = await mailForm(c);
+    } else if (/offer/i.test(log.action)) {
+      const [[joining]] = await db.query(
+        'SELECT street, city, state, pincode FROM recruit_joining WHERE candidate_id = ?', [c.id]);
+      result = await recruitEmail.sendOffer(c, joining || null)
+        .catch(err => ({ ok: false, reason: err.message }));
+      if (result.ok) await db.query('UPDATE recruit_candidates SET offer_sent_at = NOW() WHERE id = ?', [c.id]);
     } else {
       const kind = /reschedul/i.test(log.action) ? 'rescheduled'
         : /select/i.test(log.action) ? 'selected'
@@ -484,6 +533,46 @@ router.get('/candidates/:id/joining-details', requireLogin, async (req, res) => 
   } catch (err) {
     console.error('Joining details failed:', err);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// The offer letter itself, drawn fresh and opened in the browser.
+//
+// Worth having separately from sending it: the letter names a department, an
+// office and two dates that somebody typed in a hurry, and reading it once
+// before it goes to a candidate is cheaper than correcting it afterwards. It
+// is also how the copy that was emailed can be looked at again later, since
+// the PDF is built on demand rather than stored.
+router.get('/candidates/:id/offer-letter', requireLogin, async (req, res) => {
+  try {
+    if (!(await guard(req, res))) return;
+    const id = parseInt(req.params.id, 10);
+    const [[c]] = await db.query(
+      'SELECT * FROM recruit_candidates WHERE id = ? AND is_deleted = 0', [id]);
+    if (!c) return res.status(404).send('Candidate not found.');
+
+    const missing = [];
+    if (!c.department) missing.push('Department');
+    if (!c.work_location) missing.push('Location');
+    if (!c.joining_date) missing.push('Joining date');
+    if (!c.offer_valid_till) missing.push('Offer valid till');
+    if (missing.length) {
+      return res.status(400).send('The offer letter needs: ' + missing.join(', ')
+        + '. Set the status to Offer Sent to fill them in.');
+    }
+
+    const [[joining]] = await db.query(
+      'SELECT street, city, state, pincode FROM recruit_joining WHERE candidate_id = ?', [id]);
+    const letter = await buildOfferLetter(c, joining || null);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', letter.buffer.length);
+    res.setHeader('Content-Disposition', `inline; filename="${letter.filename}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.end(letter.buffer);
+  } catch (err) {
+    console.error('Offer letter failed:', err);
+    res.status(500).send('That letter could not be drawn.');
   }
 });
 
