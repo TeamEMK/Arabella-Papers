@@ -198,14 +198,11 @@ function buildOfferLetter(c, joining) {
 
   doc.moveDown(0.8);
 
-  // Anchored to the right margin, not started at the middle of the page.
-  //
-  // The block is measured and then placed so its longest line ends where the
-  // text does, which is what makes it read as the right-hand side of the
-  // letter. Each line inside it stays left-aligned against that edge —
-  // right-aligning the lines themselves would leave "Sincerely," and
-  // "Phone: ..." starting in different places, which is what a ragged left
-  // edge does to a block of unequal lines.
+  // On the left, as the office asked and as the Word file has it: the
+  // Name / E-mail / Phone lines in the template carry no tab at all and sit
+  // against the left margin, and only "Sincerely," was nudged in by a third
+  // of an inch. The whole block goes at the margin so it lines up with the
+  // letter above it rather than stepping in and out.
   const signLines = [
     ['Sincerely,', 'Times-Roman'],
     [`For ${COMPANY}`, 'Times-Bold'],
@@ -215,12 +212,8 @@ function buildOfferLetter(c, joining) {
     [`E-mail: ${SIGNATORY.email}`, 'Times-Roman'],
     [`Phone: ${SIGNATORY.phone}`, 'Times-Roman'],
   ];
-  const widest = Math.max(...signLines
-    .filter(([t]) => t)
-    .map(([t, f]) => doc.font(f).fontSize(SIZE).widthOfString(t)));
-  // A couple of points of slack, or a line exactly as wide as its box wraps.
-  const signW = Math.min(widest + 3, W);
-  const signX = doc.page.margins.left + W - signW;
+  const signX = doc.page.margins.left;
+  const signW = W;
 
   for (const [text, font] of signLines) {
     if (!text) { doc.moveDown(2.4); continue; }
