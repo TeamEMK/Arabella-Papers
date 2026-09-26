@@ -1,6 +1,6 @@
 const { sendMail } = require('./mailer');
 const { buildOfferLetter } = require('./offerLetter');
-const { OFFICE } = require('./office');
+const { OFFICE, officeLines } = require('./office');
 
 // ══════════════════════════════════════════════════════
 // RECRUITMENT LETTERS
@@ -143,6 +143,12 @@ function shell({ head, eyebrow, body, footer }) {
       <div style="padding:24px;">${body}</div>
       <div style="background:#f8f9fa;padding:14px 24px;border-top:1px solid #e9ecef;">
         <p style="margin:0;font-size:11px;color:#adb5bd;line-height:1.5;">${esc(footer)}</p>
+        <!-- The address on every letter, rejection included: it is where the
+             company is, and any letter from a company should say so. The
+             "Where to come" block above is a different thing - an instruction
+             for a particular visit - which is why it is only on the two
+             letters that are asking somebody to come. -->
+        <p style="margin:7px 0 0;font-size:11px;color:#c3c8cd;line-height:1.5;">${officeLines().map(esc).join(' &middot; ')}</p>
       </div>
     </div>
   </div>`;
