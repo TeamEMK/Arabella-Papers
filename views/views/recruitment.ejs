@@ -388,6 +388,18 @@ function rec_actions(c) {
       // one click, and two ways to open the same form is just noise on a row.
       + '</ul>'
     + '</div>'
+    // What the candidate sent back, one click away. It is reachable from the
+    // Onboarding cell and from the menu as well, but this is the row's "look
+    // at this person" button and it is worth being obvious. Its colour says
+    // whether there is anything to look at, so the row answers that before
+    // anybody clicks.
+    + '<button class="btn btn-sm ' + (c.joining_submitted_at ? 'btn-success' : 'btn-outline-secondary') + ' me-1"'
+      + ' onclick="rec_openJoin(' + c.id + ')"'
+      + ' title="' + (c.joining_submitted_at
+        ? 'See the details they sent'
+        : c.joining_form_sent_at ? 'The form has gone — nothing back yet'
+        : 'Their details have not been asked for yet')
+      + '"><i class="fas fa-eye"></i></button>'
     + '<button class="btn btn-sm btn-warning" onclick="rec_openEdit(' + c.id + ')" title="Open"><i class="fas fa-pen-to-square"></i></button>';
 }
 
