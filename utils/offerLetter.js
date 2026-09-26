@@ -89,7 +89,7 @@ function buildOfferLetter(c, joining) {
   const body = () => doc.font('Times-Roman').fontSize(SIZE).fillColor(INK);
   const bold = () => doc.font('Times-Bold').fontSize(SIZE).fillColor(INK);
   const para = (text, gap) => {
-    body().text(text, { align: 'justify', lineGap: (LEAD - 1) * SIZE });
+    body().text(text, { align: 'left', lineGap: (LEAD - 1) * SIZE });
     doc.moveDown(gap === undefined ? 0.7 : gap);
   };
 
@@ -181,7 +181,7 @@ function buildOfferLetter(c, joining) {
   body().text(',');
   doc.moveDown(0.7);
 
-  body().text('With reference to your application and subsequent interview you had with us, we are pleased to offer you a position of ', { continued: true, align: 'justify' });
+  body().text('With reference to your application and subsequent interview you had with us, we are pleased to offer you a position of ', { continued: true, align: 'left' });
   bold().text(String(c.profile_position || ''), { continued: true });
   body().text(' in ', { continued: true });
   bold().text(String(c.department || ''), { continued: true });
@@ -190,7 +190,7 @@ function buildOfferLetter(c, joining) {
   body().text(` Office of the ${COMPANY}, (hereinafter referred to as the “Entity”) on the terms and conditions as mutually discussed and agreed with you.`);
   doc.moveDown(0.7);
 
-  body().text('Your employment with the Entity is scheduled to commence on ', { continued: true, align: 'justify' });
+  body().text('Your employment with the Entity is scheduled to commence on ', { continued: true, align: 'left' });
   bold().text(dmy(c.joining_date), { continued: true });
   body().text(' (the “Joining Date”), subject to your acceptance of this Offer letter and completion of joining formalities.');
   doc.moveDown(0.7);
@@ -198,7 +198,7 @@ function buildOfferLetter(c, joining) {
   para('The Entity may also, at its discretion, carry out background verification and has the right to withdraw the Offer if the results of such verification are not satisfactory.');
   para('An Appointment Letter detailing the comprehensive terms and conditions of your Employment shall be issued to you upon your joining the aforesaid position and after a satisfactory background verification check.');
 
-  body().text('Further, this Offer is valid only till ', { continued: true, align: 'justify' });
+  body().text('Further, this Offer is valid only till ', { continued: true, align: 'left' });
   bold().text(dmy(c.offer_valid_till), { continued: true });
   body().text('. You are required to communicate your acceptance of the Offer on or before this date.');
   doc.moveDown(1);
@@ -268,7 +268,7 @@ function buildOfferLetter(c, joining) {
   doc.x = doc.page.margins.left;
   bold().text('Acknowledgement and Acceptance:');
   doc.moveDown(0.5);
-  body().text('I, the undersigned, have read and understood this Offer Letter and accept the Offer. I will join by ', { continued: true, align: 'justify' });
+  body().text('I, the undersigned, have read and understood this Offer Letter and accept the Offer. I will join by ', { continued: true, align: 'left' });
   bold().text(dmy(c.joining_date), { continued: true });
   body().text(' failing which the Offer shall stand withdrawn.');
   doc.moveDown(2.6);
