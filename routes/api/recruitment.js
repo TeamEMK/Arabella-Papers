@@ -1,10 +1,11 @@
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
 const db = require('../../config/db');
 const { requireLogin } = require('../../middleware/auth');
 const { canSee } = require('../../utils/access');
 const recruitEmail = require('../../utils/recruitEmail');
-const { FILE_FIELDS, formUrl, mailForm, logMessage } = require('../../utils/joiningForm');
+const { FILE_FIELDS, ALLOWED_TYPES, formUrl, mailForm, logMessage, saveFile } = require('../../utils/joiningForm');
 const { buildOfferLetter } = require('../../utils/offerLetter');
 
 // ══════════════════════════════════════════════════════
@@ -45,7 +46,18 @@ const STATUSES = ['Scheduled', 'Rescheduled', 'Selected', 'Onboarding', 'Offer S
 // part of this section yet.
 const LETTER_FOR_STATUS = { Rescheduled: 'rescheduled', Selected: 'selected', Rejected: 'rejected' };
 
+// The candidate's CV, handed in when the interview is booked so it can travel
+// with the interviewer's letter. Held in memory and written to the database
+// only once the candidate row exists — the same 4MB cap as the onboarding
+// form, for the same reason: the host refuses a bigger request body before
+// any of this code runs.
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } });
+
 const clean = (v, max = 255) => String(v === null || v === undefined ? '' : v).trim().slice(0, max);
+// A tick box arrives as a real boolean over JSON and as the string "false"
+// over a multipart form. Both mean the same thing and neither should quietly
+// send a letter somebody unticked.
+const wantsMail = (v) => v !== false && v !== 'false' && v !== '0';
 const dateOrNull = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '').trim()) ? String(v).trim() : null);
 // Deliberately forgiving: this only stops obvious typos. A real address that
 // trips a stricter pattern would block a hire for no good reason.
@@ -154,7 +166,7 @@ router.get('/candidates', requireLogin, async (req, res) => {
 });
 
 // ── Create ────────────────────────────────────────────
-router.post('/candidates', requireLogin, async (req, res) => {
+router.post('/candidates', requireLogin, upload.single('resume_file'), async (req, res) => {
   try {
     if (!(await guard(req, res))) return;
     const b = req.body || {};
@@ -204,7 +216,7 @@ router.post('/candidates', requireLogin, async (req, res) => {
     // The invitation goes only when there is a time to invite them to: a
     // record created to be filled in later should not email somebody an empty
     // date.
-    const invite = b.sendEmail !== false && !!candidate.interview_date;
+    const invite = wantsMail(b.sendEmail) && !!candidate.interview_date;
     // The interviewer is told separately. Their letter is not the candidate's
     // — it carries the phone number, which the candidate should not be sent
     // back — and it is worth sending even when the candidate's fails.
@@ -219,11 +231,26 @@ router.post('/candidates', requireLogin, async (req, res) => {
     // at that point is simply never sent. So the wait is on the dialog, which
     // says "Sending…" and refuses a second click, and the reply can report
     // truthfully what actually happened rather than what was started.
+    // The CV, if one was handed in with the booking. Stored against the
+    // candidate the same way the onboarding form's documents are, so the
+    // office has it from the start - and so the form does not ask them for a
+    // CV we already hold.
+    let resume = null;
+    if (req.file) {
+      if (!ALLOWED_TYPES.has(req.file.mimetype)) {
+        return res.status(400).json({ success: false, error: `${req.file.originalname}: a CV has to be a PDF, a Word file or a photo.` });
+      }
+      await saveFile(candidate.id, 'resume_file', req.file);
+      resume = { filename: req.file.originalname, content: req.file.buffer, contentType: req.file.mimetype };
+    }
+
     const letters = [];
     if (invite) {
       letters.push(await sendAndLog(candidate, 'interview', 'Interview invitation'));
       if (tellInterviewer) {
-        const toInterviewer = await recruitEmail.sendToInterviewer(candidate)
+        // The CV goes with the interviewer's letter and not the candidate's:
+        // they sent it to us, and posting it back would be odd.
+        const toInterviewer = await recruitEmail.sendToInterviewer(candidate, resume)
           .catch(err => ({ ok: false, reason: err.message }));
         await logMessage(
           { ...candidate, name: 'Interviewer', email: candidate.interviewer_email },
@@ -359,7 +386,7 @@ router.put('/candidates/:id/status', requireLogin, async (req, res) => {
 
     const kind = LETTER_FOR_STATUS[status];
     const letters = [];
-    if (kind && b.sendEmail !== false && !justSent) {
+    if (kind && wantsMail(b.sendEmail) && !justSent) {
       letters.push(await sendAndLog(updated, kind, action));
     }
 
@@ -367,7 +394,7 @@ router.put('/candidates/:id/status', requireLogin, async (req, res) => {
     // address, which lives on the onboarding form if that has come back yet.
     // offer_sent_at is stamped only when the letter actually went, so the row
     // never claims to have sent something that bounced.
-    if (status === 'Offer Sent' && b.sendEmail !== false && !justSent) {
+    if (status === 'Offer Sent' && wantsMail(b.sendEmail) && !justSent) {
       const [[joining]] = await db.query(
         'SELECT street, city, state, pincode FROM recruit_joining WHERE candidate_id = ?', [id]);
       const offer = await recruitEmail.sendOffer(updated, joining || null)
@@ -385,7 +412,7 @@ router.put('/candidates/:id/status', requireLogin, async (req, res) => {
     // Not sent twice on its own: once it has gone, or they have already
     // filled it in, the Actions menu sends it again deliberately.
     let formSent = null;
-    if (status === 'Onboarding' && b.sendEmail !== false) {
+    if (status === 'Onboarding' && wantsMail(b.sendEmail)) {
       const [[done]] = await db.query('SELECT id FROM recruit_joining WHERE candidate_id = ?', [id]);
       if (done) formSent = null;                       // already back; nothing to ask for
       else if (!c.joining_form_sent_at) formSent = await mailForm({ ...c, ...fields, id });
@@ -462,6 +489,17 @@ router.post('/messages/:id/retry', requireLogin, async (req, res) => {
       result = await recruitEmail.sendOffer(c, joining || null)
         .catch(err => ({ ok: false, reason: err.message }));
       if (result.ok) await db.query('UPDATE recruit_candidates SET offer_sent_at = NOW() WHERE id = ?', [c.id]);
+    } else if (/interviewer/i.test(log.action)) {
+      // This one goes to the interviewer, not the candidate. Without this
+      // branch it fell through to the bottom and re-sent the invitation to
+      // the candidate instead — the wrong letter, to the wrong person, from a
+      // button labelled "Send again".
+      const [[cv]] = await db.query(
+        "SELECT file_name, mime_type, bytes FROM recruit_files WHERE candidate_id = ? AND field = 'resume_file'",
+        [c.id]);
+      result = await recruitEmail.sendToInterviewer(c, cv
+        ? { filename: cv.file_name, content: cv.bytes, contentType: cv.mime_type }
+        : null).catch(err => ({ ok: false, reason: err.message }));
     } else {
       const kind = /reschedul/i.test(log.action) ? 'rescheduled'
         : /select/i.test(log.action) ? 'selected'

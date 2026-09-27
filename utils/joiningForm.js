@@ -85,4 +85,36 @@ async function mailForm(candidate) {
   return result;
 }
 
-module.exports = { FILE_FIELDS, formUrl, ensureToken, logMessage, mailForm };
+// A CV is a document; an ID card is usually a photograph of one. Anything
+// else is refused rather than stored — these are opened by people, not by a
+// sandbox.
+const ALLOWED_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg', 'image/png', 'image/heic', 'image/webp',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
+/**
+ * Put one document on a candidate's record.
+ *
+ * One row per candidate per field, so a clearer photograph of an Aadhaar - or
+ * a CV the candidate sends later than the one the office already had -
+ * overwrites what was there rather than leaving both and no way to tell which
+ * is current.
+ *
+ * Its own statement per file, never five in one: MySQL refuses a packet
+ * larger than max_allowed_packet, and one statement carrying every document
+ * is the one most likely to hit it.
+ */
+async function saveFile(candidateId, field, file) {
+  await db.query(
+    `INSERT INTO recruit_files (candidate_id, field, file_name, mime_type, size_bytes, bytes)
+     VALUES (?,?,?,?,?,?)
+     ON DUPLICATE KEY UPDATE file_name = VALUES(file_name), mime_type = VALUES(mime_type),
+                             size_bytes = VALUES(size_bytes), bytes = VALUES(bytes),
+                             uploaded_at = NOW()`,
+    [candidateId, field, clean(file.originalname), clean(file.mimetype, 120), file.size, file.buffer]);
+}
+
+module.exports = { FILE_FIELDS, ALLOWED_TYPES, formUrl, ensureToken, logMessage, mailForm, saveFile };

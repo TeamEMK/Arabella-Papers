@@ -305,7 +305,7 @@ function buildRejectedEmail(c) {
 // The notes box is deliberately absent. What gets typed there is written for
 // the candidate — which floor, what to bring — so it belongs in their letter,
 // and repeating it here only pads a page somebody is skimming for a number.
-function buildInterviewerEmail(c) {
+function buildInterviewerEmail(c, hasResume) {
   const when = [longDate(c.reschedule_date || c.interview_date),
                 niceTime(c.reschedule_time || c.interview_time)].filter(Boolean).join(', ');
   const body = para('Hello,')
@@ -317,6 +317,11 @@ function buildInterviewerEmail(c) {
         ['Candidate phone', esc(c.phone)],
         ['Candidate email', esc(c.email)],
       ])
+    // Said plainly, because an attachment nobody is told about is one nobody
+    // opens until after the interview.
+    + (hasResume
+      ? para('Their CV is attached. Worth a look before they arrive — it is where the questions come from.')
+      : '')
     + para('The candidate has been sent the date and time separately.');
   return {
     subject: `Interview scheduled — ${c.name}${c.profile_position ? ` (${c.profile_position})` : ''}`,
@@ -435,10 +440,20 @@ async function sendToCandidate(kind, candidate) {
 
 // Its own path rather than a `kind`, because the address it goes to is a
 // different one.
-async function sendToInterviewer(candidate) {
-  const { subject, html, text } = buildInterviewerEmail(candidate);
+/**
+ * @param {object} candidate
+ * @param {{filename: string, content: Buffer, contentType: string}} [resume]
+ *        the candidate's CV, when the office had one to hand in. It travels
+ *        with this letter and not the candidate's: they sent it to us, and
+ *        posting it back to them would be odd.
+ */
+async function sendToInterviewer(candidate, resume) {
+  const { subject, html, text } = buildInterviewerEmail(candidate, !!resume);
   if (!candidate.interviewer_email) return { ok: false, reason: 'no interviewer email', subject };
-  return report(await sendMail({ to: candidate.interviewer_email, subject, html, text, attachments: withLogo(html) }), subject);
+  return report(await sendMail({
+    to: candidate.interviewer_email, subject, html, text,
+    attachments: withLogo(html, resume ? [resume] : []),
+  }), subject);
 }
 
 // Its own path again: this one needs the form's address, and the four

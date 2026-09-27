@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const router = express.Router();
 const db = require('../../config/db');
-const { FILE_FIELDS } = require('../../utils/joiningForm');
+const { FILE_FIELDS, ALLOWED_TYPES, saveFile } = require('../../utils/joiningForm');
 
 // ══════════════════════════════════════════════════════
 // THE ONBOARDING FORM (/api/joining/*) — no login
@@ -46,15 +46,6 @@ function receive(req, res, next) {
     return res.status(400).json({ success: false, error: 'Those files could not be read. Please try again.' });
   });
 }
-
-// A CV is a document; an ID card is usually a photograph of one. Anything else
-// is refused rather than stored — these are opened by people, not a sandbox.
-const ALLOWED = new Set([
-  'application/pdf',
-  'image/jpeg', 'image/png', 'image/heic', 'image/webp',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-]);
 
 const clean = (v, max = 255) => String(v === null || v === undefined ? '' : v).trim().slice(0, max);
 const digits = (v, max = 20) => String(v === null || v === undefined ? '' : v).replace(/\D/g, '').slice(0, max);
@@ -165,7 +156,7 @@ router.post('/:token', receive, async (req, res) => {
 
     for (const field of FILE_FIELDS) {
       const f = files[field] && files[field][0];
-      if (f && !ALLOWED.has(f.mimetype)) {
+      if (f && !ALLOWED_TYPES.has(f.mimetype)) {
         return res.status(400).json({ success: false, error: `${f.originalname}: only a PDF, a Word file or a photo (JPG, PNG, HEIC).` });
       }
     }
@@ -181,14 +172,7 @@ router.post('/:token', receive, async (req, res) => {
     // it.
     for (const field of FILE_FIELDS) {
       const f = files[field] && files[field][0];
-      if (!f) continue;
-      await db.query(
-        `INSERT INTO recruit_files (candidate_id, field, file_name, mime_type, size_bytes, bytes)
-         VALUES (?,?,?,?,?,?)
-         ON DUPLICATE KEY UPDATE file_name = VALUES(file_name), mime_type = VALUES(mime_type),
-                                 size_bytes = VALUES(size_bytes), bytes = VALUES(bytes),
-                                 uploaded_at = NOW()`,
-        [c.id, field, clean(f.originalname), clean(f.mimetype, 120), f.size, f.buffer]);
+      if (f) await saveFile(c.id, field, f);
     }
 
     // The answers last, because submitted_at is what the portal reads as

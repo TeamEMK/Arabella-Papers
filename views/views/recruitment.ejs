@@ -85,6 +85,14 @@
         <div class="col-md-4"><label class="form-label fw-bold text-dark small">Date</label><input class="form-control" type="date" id="rec_f_interview_date"></div>
         <div class="col-md-4"><label class="form-label fw-bold text-dark small">Time</label><input class="form-control" type="time" step="300" id="rec_f_interview_time"></div>
         <div class="col-md-4"><label class="form-label fw-bold text-dark small">Interviewer email</label><input class="form-control" type="email" id="rec_f_interviewer_email" placeholder="Leave blank to tell nobody"></div>
+        <%# Handed in with the booking so it can travel with the interviewer's
+            letter. It is also the CV the onboarding form would otherwise ask
+            the candidate for all over again. %>
+        <div class="col-12" id="rec_resumeWrap">
+          <label class="form-label fw-bold text-dark small">Candidate's CV <span class="text-muted fw-normal">(optional)</span></label>
+          <input class="form-control" type="file" id="rec_f_resume" accept=".pdf,.doc,.docx,image/*">
+          <div class="form-text">Goes to the interviewer with their letter, so they can read it before the candidate arrives. Kept on the candidate's record too, so the onboarding form will not ask for it again. Up to 4 MB.</div>
+        </div>
         <div class="col-12"><div class="form-text mt-0">The interviewer gets their own letter, carrying the candidate's phone and email. The note below is not in it — that is written for the candidate.</div></div>
         <div class="col-12"><label class="form-label fw-bold text-dark small">Note to the candidate <span class="text-muted fw-normal">(optional)</span></label><textarea class="form-control" id="rec_f_notes" rows="2" placeholder="Only if there is something extra — e.g. bring a portfolio"></textarea>
           <%# The address is standing text in the letter itself, so nobody has
@@ -463,6 +471,8 @@ function rec_openAdd() {
   REC_FIELDS.forEach(f => { const el = document.getElementById('rec_f_' + f); if (el) el.value = ''; });
   document.getElementById('rec_f_sendEmail').checked = true;
   document.getElementById('rec_sendWrap').style.display = '';
+  document.getElementById('rec_f_resume').value = '';
+  document.getElementById('rec_resumeWrap').style.display = '';
   // Salary and joining date have no answer yet when a first interview is being
   // booked — asking for them there is asking somebody to guess.
   document.getElementById('rec_laterFields').style.display = 'none';
@@ -479,6 +489,9 @@ function rec_openEdit(id) {
   // Editing never emails — only adding does, and only then because an
   // invitation is the point of adding somebody.
   document.getElementById('rec_sendWrap').style.display = 'none';
+  // A CV is only taken with the booking. Editing a name should not be
+  // a place a document can be quietly swapped.
+  document.getElementById('rec_resumeWrap').style.display = 'none';
   document.getElementById('rec_laterFields').style.display = '';
   document.getElementById('rec_deleteBtn').style.display = '';
   new bootstrap.Modal(document.getElementById('rec_modal')).show();
@@ -507,16 +520,38 @@ async function rec_save(btn) {
   const body = {};
   REC_FIELDS.forEach(f => { const el = document.getElementById('rec_f_' + f); if (el) body[f] = el.value; });
   if (!body.name.trim()) { showToast('warning', 'Name is required.'); return; }
-  if (!rec_editId) body.sendEmail = document.getElementById('rec_f_sendEmail').checked;
+
+  let cv = null;
+  if (!rec_editId) {
+    body.sendEmail = document.getElementById('rec_f_sendEmail').checked;
+    cv = document.getElementById('rec_f_resume').files[0] || null;
+    // Caught here, because the host refuses a bigger body before any of our
+    // code runs and the browser is given no reason why.
+    if (cv && cv.size > 4 * 1024 * 1024) {
+      showToast('warning', 'That CV is ' + Math.round(cv.size / 1024 / 1024 * 10) / 10 + ' MB — the limit is 4 MB.');
+      return;
+    }
+  }
 
   rec_busy = true;
   const release = rec_hold(btn, rec_editId ? 'Saving...' : 'Sending...');
   try {
-    const res = await fetch(rec_editId ? '/api/recruitment/candidates/' + rec_editId : '/api/recruitment/candidates', {
-      method: rec_editId ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    let res;
+    if (rec_editId) {
+      res = await fetch('/api/recruitment/candidates/' + rec_editId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } else {
+      // Multipart, because a CV may be coming with it. FormData writes its own
+      // Content-Type with the boundary in it — setting that header by hand is
+      // what breaks the parse at the other end.
+      const fd = new FormData();
+      Object.keys(body).forEach(k => fd.append(k, body[k]));
+      if (cv) fd.append('resume_file', cv, cv.name);
+      res = await fetch('/api/recruitment/candidates', { method: 'POST', body: fd });
+    }
     const json = await res.json();
     if (!json.success) { showToast('error', json.error || 'Could not save.'); return; }
     bootstrap.Modal.getInstance(document.getElementById('rec_modal')).hide();
