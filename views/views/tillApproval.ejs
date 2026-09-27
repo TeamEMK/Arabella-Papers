@@ -121,13 +121,13 @@ function ta_rangePicked() { applyDateRange('ta_range', 'ta_startDate', 'ta_endDa
 // ta_filtered is every row that survived the filters, not the batch rendered so
 // far, so the file carries the whole answer rather than what has been scrolled to.
 function ta_download(btn) {
-  const cols = ['Time Stamp', 'Design Done', 'Order ID', 'Designer', 'Dealer', 'Client',
-    'Client Approval', 'Where it is'];
+  // Where it is stays on screen - the approval box needs to warn about it
+  // before saving - but the office does not want it in the file.
+  const cols = ['Time Stamp', 'Actual Date', 'Order ID', 'Designer', 'Dealer', 'Client',
+    'Client Approval'];
   const rows = (ta_filtered || []).map(o => [
     o.Timestamp || '', o.Actual_1 || '', o.ID || '', o.Designer || '',
     o.Dealer_name || '', o.Client_name || '', o.Design_Approval_Status_From_Client || '',
-    o.Dispatched ? ('Dispatched' + (o.Dispatch_Date ? ' ' + o.Dispatch_Date : ''))
-      : (o.On_Backup_Production ? 'Backup Production' : 'In progress'),
   ]);
   downloadXlsx('Till Approval', cols, rows, btn);
 }
