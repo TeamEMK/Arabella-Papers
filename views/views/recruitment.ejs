@@ -91,7 +91,14 @@
         <div class="col-12" id="rec_resumeWrap">
           <label class="form-label fw-bold text-dark small">Candidate's CV <span class="text-muted fw-normal">(optional)</span></label>
           <input class="form-control" type="file" id="rec_f_resume" accept=".pdf,.doc,.docx,image/*">
-          <div class="form-text">Goes to the interviewer with their letter, so they can read it before the candidate arrives. Kept on the candidate's record too, so the onboarding form will not ask for it again. Up to 4 MB.</div>
+          <div class="form-text" id="rec_resumeHelp"></div>
+          <%# Only when editing. On a new booking the CV goes with the
+              interviewer's letter anyway, so there is nothing to ask. %>
+          <div class="form-check mt-2 d-none" id="rec_cvNotifyWrap">
+            <input class="form-check-input" type="checkbox" id="rec_f_cvNotify">
+            <label class="form-check-label fw-bold text-dark small" for="rec_f_cvNotify">Send it to the interviewer now</label>
+            <div class="form-text">Their letter has already gone, so this sends a second one with the CV attached.</div>
+          </div>
         </div>
         <div class="col-12"><div class="form-text mt-0">The interviewer gets their own letter, carrying the candidate's phone and email. The note below is not in it — that is written for the candidate.</div></div>
         <div class="col-12"><label class="form-label fw-bold text-dark small">Note to the candidate <span class="text-muted fw-normal">(optional)</span></label><textarea class="form-control" id="rec_f_notes" rows="2" placeholder="Only if there is something extra — e.g. bring a portfolio"></textarea>
@@ -473,6 +480,10 @@ function rec_openAdd() {
   document.getElementById('rec_sendWrap').style.display = '';
   document.getElementById('rec_f_resume').value = '';
   document.getElementById('rec_resumeWrap').style.display = '';
+  document.getElementById('rec_cvNotifyWrap').classList.add('d-none');
+  document.getElementById('rec_resumeHelp').textContent =
+    'Goes to the interviewer with their letter, so they can read it before the candidate arrives. '
+    + 'Kept on the candidate’s record too, so the onboarding form will not ask for it again. Up to 4 MB.';
   // Salary and joining date have no answer yet when a first interview is being
   // booked — asking for them there is asking somebody to guess.
   document.getElementById('rec_laterFields').style.display = 'none';
@@ -489,9 +500,14 @@ function rec_openEdit(id) {
   // Editing never emails — only adding does, and only then because an
   // invitation is the point of adding somebody.
   document.getElementById('rec_sendWrap').style.display = 'none';
-  // A CV is only taken with the booking. Editing a name should not be
-  // a place a document can be quietly swapped.
-  document.getElementById('rec_resumeWrap').style.display = 'none';
+  // A CV that turned up after the booking goes on here. Nothing is sent
+  // unless the tick box below it is ticked on purpose.
+  document.getElementById('rec_f_resume').value = '';
+  document.getElementById('rec_f_cvNotify').checked = false;
+  document.getElementById('rec_resumeWrap').style.display = '';
+  document.getElementById('rec_cvNotifyWrap').classList.remove('d-none');
+  document.getElementById('rec_resumeHelp').textContent =
+    'Replaces whatever CV is on file. Saved quietly unless you tick the box below. Up to 4 MB.';
   document.getElementById('rec_laterFields').style.display = '';
   document.getElementById('rec_deleteBtn').style.display = '';
   new bootstrap.Modal(document.getElementById('rec_modal')).show();
@@ -521,17 +537,14 @@ async function rec_save(btn) {
   REC_FIELDS.forEach(f => { const el = document.getElementById('rec_f_' + f); if (el) body[f] = el.value; });
   if (!body.name.trim()) { showToast('warning', 'Name is required.'); return; }
 
-  let cv = null;
-  if (!rec_editId) {
-    body.sendEmail = document.getElementById('rec_f_sendEmail').checked;
-    cv = document.getElementById('rec_f_resume').files[0] || null;
-    // Caught here, because the host refuses a bigger body before any of our
-    // code runs and the browser is given no reason why.
-    if (cv && cv.size > 4 * 1024 * 1024) {
-      showToast('warning', 'That CV is ' + Math.round(cv.size / 1024 / 1024 * 10) / 10 + ' MB — the limit is 4 MB.');
-      return;
-    }
+  const cv = document.getElementById('rec_f_resume').files[0] || null;
+  // Caught here, because the host refuses a bigger body before any of our
+  // code runs and the browser is given no reason why.
+  if (cv && cv.size > 4 * 1024 * 1024) {
+    showToast('warning', 'That CV is ' + Math.round(cv.size / 1024 / 1024 * 10) / 10 + ' MB — the limit is 4 MB.');
+    return;
   }
+  if (!rec_editId) body.sendEmail = document.getElementById('rec_f_sendEmail').checked;
 
   rec_busy = true;
   const release = rec_hold(btn, rec_editId ? 'Saving...' : 'Sending...');
@@ -562,7 +575,18 @@ async function rec_save(btn) {
       // than reporting a send that never happened.
       showToast('success', 'Already saved a moment ago — nothing was sent twice.');
     } else if (rec_editId) {
-      showToast('success', 'Candidate updated.');
+      // A CV picked while editing goes up on its own, after the row has
+      // saved: the edit is JSON and this is a file, and keeping them apart
+      // means the same upload path serves the onboarding panel too.
+      let says = 'Candidate updated.';
+      if (cv) {
+        const up = await rec_postCv(rec_editId, cv, document.getElementById('rec_f_cvNotify').checked);
+        says = up.ok
+          ? 'Candidate updated, CV saved' + (up.sent === true ? ' and sent to the interviewer' : '') + '.'
+          : 'Candidate updated, but the CV did not save — ' + up.error;
+        if (up.ok && up.sent === false) says = 'Candidate updated, CV saved — but it was not sent: ' + up.error;
+      }
+      showToast(says.includes('not') ? 'warning' : 'success', says);
     } else {
       const m = d.mail || {};
       showToast(m.failed ? 'warning' : 'success', 'Candidate added' + rec_mailSays(m) + '.');
@@ -774,8 +798,29 @@ function rec_renderJoin() {
       + '<button class="btn btn-sm btn-primary" onclick="rec_sendJoinForm(this)">'
         + (r.sent_at ? 'Send again' : 'Send the form') + '</button>'
     + '</div>'
+    // A CV often arrives by email the morning after the interview is booked.
+    // This is where it goes on, and it sits above the answers because it can
+    // be used long before any of them exist.
+    + '<div class="border rounded p-3 mb-3 bg-light">'
+      + '<label class="form-label fw-bold text-dark small mb-1" for="rec_panelCv">Add the candidate’s CV</label>'
+      + '<div class="d-flex gap-2 align-items-center flex-wrap">'
+        + '<input class="form-control form-control-sm" type="file" id="rec_panelCv"'
+          + ' accept=".pdf,.doc,.docx,image/*" style="max-width:250px">'
+        + '<button class="btn btn-sm btn-dark" onclick="rec_uploadCv(this)">Attach</button>'
+      + '</div>'
+      + '<div class="form-check mt-2">'
+        + '<input class="form-check-input" type="checkbox" id="rec_panelCvNotify">'
+        + '<label class="form-check-label small text-dark" for="rec_panelCvNotify">Send it to the interviewer</label>'
+      + '</div>'
+      + '<div class="form-text">Replaces whatever CV is on file. Up to 4 MB.</div>'
+    + '</div>'
+    // Out of the answers block, because a CV can be on file before the form
+    // has come back and a document nobody can see is a document nobody has.
+    + (r.files && r.files.length
+      ? '<h6 class="fw-bold text-dark small text-uppercase">Documents</h6>' + docs
+      : '')
     + (d
-      ? '<table class="table table-sm mb-3">'
+      ? '<table class="table table-sm mb-0">'
           + line('Name', d.full_name)
           + line('Mobile', d.emp_mobile)
           + line('Email', d.email)
@@ -786,13 +831,57 @@ function rec_renderJoin() {
           + line('Aadhaar no.', d.aadhaar_no)
           + line('PAN', d.pan_no)
         + '</table>'
-        + '<h6 class="fw-bold text-dark small text-uppercase">Documents</h6>'
-        + (docs || '<span class="text-muted small">None uploaded.</span>')
-      : '<p class="text-muted mb-0">Nothing has come back yet. '
+      : '<p class="text-muted mb-0">Nothing has come back from them yet. '
         + (r.sent_at
           ? 'The candidate has the link — send it again if they have lost it.'
           : 'Send the form and this panel fills in as soon as they submit it.')
         + '</p>');
+}
+
+/**
+ * Put a CV on a candidate's record.
+ *
+ * The one path both the edit dialog and the panel above use, so what a CV may
+ * be — and what happens after it lands — is decided once, on the server.
+ *
+ * Comes back `{ok, sent, error}`: `sent` is null when nobody was to be told,
+ * true when the interviewer got it, false when that letter failed.
+ */
+async function rec_postCv(id, file, notify) {
+  try {
+    const fd = new FormData();
+    fd.append('resume_file', file, file.name);
+    if (notify) fd.append('notifyInterviewer', 'true');
+    const json = await fetch('/api/recruitment/candidates/' + id + '/cv', { method: 'POST', body: fd })
+      .then(r => r.json());
+    if (!json.success) return { ok: false, error: json.error || 'it could not be saved' };
+    const d = json.data || {};
+    return { ok: true, sent: d.sent, error: d.reason || '' };
+  } catch (e) {
+    return { ok: false, error: 'server error' };
+  }
+}
+
+async function rec_uploadCv(btn) {
+  const file = document.getElementById('rec_panelCv').files[0];
+  if (!file) { showToast('warning', 'Choose a file first.'); return; }
+  if (file.size > 4 * 1024 * 1024) {
+    showToast('warning', 'That CV is ' + Math.round(file.size / 1024 / 1024 * 10) / 10 + ' MB — the limit is 4 MB.');
+    return;
+  }
+  const id = rec_join.id;                       // the panel is redrawn below
+  const notify = document.getElementById('rec_panelCvNotify').checked;
+  const release = rec_hold(btn, 'Attaching...');
+  try {
+    const up = await rec_postCv(id, file, notify);
+    if (!up.ok) { showToast('error', 'Could not save the CV — ' + up.error); return; }
+    showToast(up.sent === false ? 'warning'
+      : 'success', up.sent === true ? 'CV saved and sent to the interviewer.'
+      : up.sent === false ? 'CV saved, but it was not sent: ' + up.error
+      : 'CV saved.');
+    await rec_openJoin(id);
+    rec_fetch();
+  } finally { release(); }
 }
 
 // Worth having by hand: a candidate who cannot find the email can be sent the

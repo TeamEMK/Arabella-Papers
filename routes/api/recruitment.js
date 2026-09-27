@@ -58,6 +58,10 @@ const clean = (v, max = 255) => String(v === null || v === undefined ? '' : v).t
 // over a multipart form. Both mean the same thing and neither should quietly
 // send a letter somebody unticked.
 const wantsMail = (v) => v !== false && v !== 'false' && v !== '0';
+// The other way round: a box that has to be ticked on purpose. wantsMail
+// defaults to yes because a letter left unticked is the exception; this one
+// defaults to no, because nothing should reach an interviewer unasked.
+const isOn = (v) => v === true || v === 'true' || v === '1' || v === 'on';
 const dateOrNull = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '').trim()) ? String(v).trim() : null);
 // Deliberately forgiving: this only stops obvious typos. A real address that
 // trips a stricter pattern would block a hire for no good reason.
@@ -295,6 +299,53 @@ router.put('/candidates/:id', requireLogin, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('Recruitment update failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── The candidate's CV, after the booking ─────────────
+//
+// A CV handed in with the booking travels with the interviewer's letter, but
+// they often arrive the next morning instead — and until this existed there
+// was no way to put one on the record afterwards except to forward it by hand
+// out of somebody's inbox.
+//
+// One endpoint, used by the edit dialog and the onboarding panel both, so the
+// rules about what a CV may be and what happens after it lands are written
+// once. Telling the interviewer is a tick box and defaults to off: the letter
+// has usually gone already, and a second one should be asked for.
+router.post('/candidates/:id/cv', requireLogin, upload.single('resume_file'), async (req, res) => {
+  try {
+    if (!(await guard(req, res))) return;
+    const id = parseInt(req.params.id, 10);
+    const [[c]] = await db.query('SELECT * FROM recruit_candidates WHERE id = ? AND is_deleted = 0', [id]);
+    if (!c) return res.status(404).json({ success: false, error: 'Candidate not found.' });
+    if (!req.file) return res.status(400).json({ success: false, error: 'No file came through.' });
+    if (!ALLOWED_TYPES.has(req.file.mimetype)) {
+      return res.status(400).json({ success: false, error: `${req.file.originalname}: a CV has to be a PDF, a Word file or a photo.` });
+    }
+
+    await saveFile(id, 'resume_file', req.file);
+
+    // Only if asked, and only if there is somebody to send it to.
+    let sent = null;
+    if (isOn(req.body && req.body.notifyInterviewer)) {
+      if (!looksLikeEmail(c.interviewer_email)) {
+        return res.json({ success: true, data: { sent: false, reason: 'There is no interviewer address on this candidate, so the CV was saved but not sent.' } });
+      }
+      const result = await recruitEmail.sendToInterviewer(c, {
+        filename: req.file.originalname, content: req.file.buffer, contentType: req.file.mimetype,
+      }).catch(err => ({ ok: false, reason: err.message }));
+      await logMessage({ ...c, name: 'Interviewer', email: c.interviewer_email }, 'Interviewer notified', result);
+      sent = !!result.ok;
+      if (!result.ok) {
+        return res.json({ success: true, data: { sent: false, reason: result.reason || 'The letter failed — see Sent mail.' } });
+      }
+    }
+
+    res.json({ success: true, data: { sent, name: req.file.originalname } });
+  } catch (err) {
+    console.error('CV upload failed:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
