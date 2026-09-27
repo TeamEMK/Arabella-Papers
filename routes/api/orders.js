@@ -562,3 +562,5 @@ function buildRowData(r, isAdmin) {
 }
 
 module.exports = router;
+// The Report tab names an order's stage the same way this list does.
+module.exports.currentStage = currentStage;

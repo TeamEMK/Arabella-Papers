@@ -15,6 +15,7 @@ const { requireLogin } = require('../../middleware/auth');
 // page. Asking the role string here instead is what made a granted tab open
 // onto an empty board.
 const { canSee } = require('../../utils/access');
+const { currentStage } = require('./orders');
 // Dates are stored as IST wall-clock and read back through a +05:30
 // connection. Vercel runs the server in UTC, so without naming the zone here
 // every timestamp rendered 5:30 earlier than the sheet said.
@@ -1706,5 +1707,139 @@ function buildFullRowData(r) {
     'Volumetric Weigh': r.volumetric_weight,
   };
 }
+
+// ═══════════════════════════════════════════════
+// REPORT
+// ═══════════════════════════════════════════════
+
+// The production stages in the order the floor works them, and which values
+// mean the stage is behind the order. "No" counts: an order with no laser
+// cutting has nothing left to do at that stage. DIE SENT and BLOCK SENT do not
+// - the die or block has gone out to be made and is not back yet.
+const REPORT_PRODUCTION_STAGES = [
+  { key: 'guest_name',    name: 'GNA',           done: ['no', 'printed'] },
+  { key: 'paper_cutting', name: 'Paper Cutting', done: ['done'] },
+  { key: 'dye_status',    name: 'Dye',           done: ['no die', 'die cutting done'] },
+  { key: 'block_status',  name: 'Block',         done: ['no block', 'block printed'] },
+  { key: 'printing',      name: 'Printing',      done: ['done'] },
+  { key: 'edges',         name: 'Edges',         done: ['no', 'done'] },
+  { key: 'laser_cutting', name: 'Laser Cutting', done: ['no', 'done'] },
+  { key: 'output',        name: 'Output',        done: ['no', 'done'] },
+  { key: 'card_assembly', name: 'Card Assembly', done: ['done'] },
+];
+
+const reportDay = (d) => (d ? new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) : '');
+const reportShow = (d) => (d ? new Date(d).toLocaleDateString('en-GB', IST) : '');
+
+/**
+ * One row shape for every source, so the page filters and downloads them all
+ * the same way. `Day` is YYYY-MM-DD for the date range; `Stage` is where the
+ * order is now; `Done` is every stage already behind it.
+ */
+function reportRow(r, date, stage, done, extra) {
+  return {
+    ID: rootOrderId(r.order_id),
+    Remake_Of: r.remake_of || '',
+    Day: reportDay(date),
+    Date: reportShow(date),
+    Dealer: r.dealer_name || '',
+    Client: r.client_name || '',
+    Designer: r.india_designer || r.overseas_designer || '',
+    Stage: stage,
+    Done: done,
+    ...extra,
+  };
+}
+
+const REPORT_SOURCES = {
+  // Everything that reached the floor, live board and backup alike, and the
+  // ones already handed to Dispatch - a report is the whole record.
+  production: {
+    stages: [...REPORT_PRODUCTION_STAGES.map(s => s.name), 'Sent to Dispatch'],
+    sql: `SELECT * FROM orders WHERE ${PRODUCTION_QUEUE_WHERE}
+          ORDER BY COALESCE(actual_2, timestamp) DESC, id DESC`,
+    row(r) {
+      const done = [];
+      let stage = '';
+      for (const s of REPORT_PRODUCTION_STAGES) {
+        const v = String(r[s.key] || '').trim().toLowerCase();
+        if (s.done.includes(v)) done.push(s.name);
+        else if (!stage) stage = s.name;
+      }
+      const sent = !!(r.status_4 || r.actual_4);
+      if (sent) { done.push('Sent to Dispatch'); stage = 'Sent to Dispatch'; }
+      else if (!stage) stage = 'Sent to Dispatch';
+      const extra = {};
+      for (const s of REPORT_PRODUCTION_STAGES) extra[s.name] = r[s.key] || '';
+      extra['Printing Type'] = r.printing_type || '';
+      extra.Remark = r.remark || '';
+      return reportRow(r, r.actual_2 || r.timestamp, stage, done, extra);
+    },
+  },
+  dispatch: {
+    stages: ['Ready', 'Dispatched'],
+    sql: `SELECT * FROM orders WHERE is_deleted = 0 AND ${LOCAL_ORDER_OFF_BOARDS} AND ${LEFT_FOR_DISPATCH}
+          ORDER BY COALESCE(actual_4, dispatch_ready_at, timestamp) DESC, id DESC`,
+    row(r) {
+      const waiting = /ready/i.test(r.status_4 || '') || (!r.status_4 && !r.actual_4);
+      const stage = waiting ? 'Ready' : 'Dispatched';
+      return reportRow(r, r.actual_4 || r.dispatch_ready_at || r.timestamp, stage,
+        waiting ? [] : ['Ready', 'Dispatched'], {
+          Courier: r.courier || '',
+          'Docket No': r.ups_dhl_fedex_tracking_number || '',
+          'Invoice No': r.invoice_number || '',
+          'Invoice Amount': r.invoice_amount == null ? '' : r.invoice_amount,
+        });
+    },
+  },
+  // The Orders Dashboard: every order punched, repeats left out as it does.
+  orders: {
+    sql: `SELECT * FROM orders WHERE is_deleted = 0 AND remake_of IS NULL ORDER BY id DESC`,
+    row(r) {
+      const stage = currentStage(r);
+      return reportRow(r, r.timestamp, stage, [], {
+        'Punched By': r.order_punched_by || '',
+        'Design Status': r.design_status || '',
+      });
+    },
+  },
+  tillApproval: {
+    sql: `SELECT * FROM orders
+          WHERE is_deleted = 0 AND ${LOCAL_ORDER_OFF_BOARDS}
+            AND no_of_design_revision IS NOT NULL AND no_of_design_revision > 0
+            AND (LOWER(design_status) LIKE '%proofing%' OR LOWER(design_status) LIKE '%approved%'
+                 OR (design_approval_status_from_client IS NOT NULL AND design_approval_status_from_client != ''))
+          ORDER BY id DESC`,
+    row(r) {
+      const stage = (r.design_approval_status_from_client || '').trim() || 'Awaiting Client';
+      return reportRow(r, r.actual_2 || r.actual_1 || r.timestamp, stage, [], {
+        Revisions: r.no_of_design_revision || '',
+        Remarks: r.remarks || '',
+      });
+    },
+  },
+};
+
+// GET /api/dashboards/report?source=production|dispatch|orders|tillApproval
+router.get('/report', requireLogin, async (req, res) => {
+  try {
+    if (!(await canSee(req.session.user, 'report'))) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    const src = REPORT_SOURCES[req.query.source];
+    if (!src) return res.status(400).json({ success: false, error: 'Unknown report.' });
+
+    const [rows] = await db.query(src.sql);
+    const data = rows.map(r => src.row(r));
+
+    // Production and Dispatch have a fixed order of stages; the other two are
+    // whatever status the orders actually carry.
+    const stages = src.stages || [...new Set(data.map(d => d.Stage).filter(Boolean))].sort();
+    res.json({ success: true, data, stages, ordered: !!src.stages });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 module.exports = router;

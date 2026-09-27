@@ -1,0 +1,182 @@
+<%# Report: any board's orders, narrowed by designer, date and stage, and taken
+    away in Excel. The rows come from /api/dashboards/report in one shape for
+    every board, so the filtering below does not care which one was picked. %>
+<div class="container-fluid py-4">
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <h4 class="mb-0 text-dark fw-bold"><i class="fas fa-file-lines me-2"></i>Report</h4>
+    <div class="ms-auto d-flex gap-2">
+      <button class="btn btn-outline-success smooth-ui" onclick="rep_download(this)"><i class="fas fa-file-excel me-1"></i> Excel</button>
+      <button class="btn btn-outline-dark smooth-ui text-dark" onclick="refreshBoard(this, rep_load, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
+  </div>
+
+  <div class="card bg-light-glass mb-3 shadow-sm">
+    <div class="card-body p-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Report of</label>
+          <select id="rep_source" class="form-select form-select-sm" onchange="rep_load()">
+            <option value="production">Production</option>
+            <option value="dispatch">Dispatch</option>
+            <option value="orders">O2D (Orders)</option>
+            <option value="tillApproval">Till Approval</option>
+          </select></div>
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Designer</label>
+          <select id="rep_designer" class="form-select form-select-sm" onchange="rep_apply()"><option value="">All Designers</option></select></div>
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Range</label>
+          <select id="rep_range" class="form-select form-select-sm" onchange="rep_rangePicked()"></select></div>
+        <div class="col-6 col-md-1"><label class="form-label text-dark fw-bold small mb-0">Start</label>
+          <input type="date" id="rep_start" class="form-control form-control-sm" onchange="rep_apply()"></div>
+        <div class="col-6 col-md-1"><label class="form-label text-dark fw-bold small mb-0">End</label>
+          <input type="date" id="rep_end" class="form-control form-control-sm" onchange="rep_apply()"></div>
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Stage</label>
+          <select id="rep_stage" class="form-select form-select-sm" onchange="rep_apply()"><option value="">All Stages</option></select></div>
+        <div class="col-6 col-md-2" id="rep_modeBox"><label class="form-label text-dark fw-bold small mb-0">Stage means</label>
+          <select id="rep_mode" class="form-select form-select-sm" onchange="rep_apply()">
+            <option value="current">Abhi is stage pe</option>
+            <option value="done">Ye stage complete</option>
+          </select></div>
+        <div class="col-12 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Search</label>
+          <input type="text" id="rep_search" class="form-control form-control-sm" placeholder="ID, Dealer, Client..." onkeyup="rep_apply()"></div>
+        <div class="col-6 col-md-1"><button class="btn btn-secondary btn-sm w-100" onclick="rep_clear()">Clear</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card bg-light-glass shadow-lg">
+    <div class="card-header bg-transparent border-0 d-flex align-items-center">
+      <h5 class="mb-0 text-dark fw-bold" id="rep_title">Report</h5>
+      <span class="badge bg-primary ms-2" id="rep_count">--</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive" data-fill-height style="overflow-y:auto;">
+        <table class="table table-hover table-striped mb-0 text-nowrap">
+          <thead class="table-dark" id="rep_head" style="position:sticky;top:0;z-index:2;"></thead>
+          <tbody id="rep_body"><tr><td class="text-center p-4">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var rep_data = [], rep_filtered = [], rep_ordered = false;
+// Drawing thousands of rows at once freezes the tab; the Excel file still
+// carries every filtered row.
+var REP_SHOW = 500;
+var REP_BASE = ['Date', 'ID', 'Repeat of', 'Dealer', 'Client', 'Designer', 'Stage'];
+
+function rep_esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+}
+
+// The extra columns a board brings along, read off its first row.
+function rep_extraCols() {
+  if (!rep_data.length) return [];
+  var skip = ['ID', 'Remake_Of', 'Day', 'Date', 'Dealer', 'Client', 'Designer', 'Stage', 'Done'];
+  return Object.keys(rep_data[0]).filter(function (k) { return skip.indexOf(k) < 0; });
+}
+
+function rep_cells(o) {
+  return [o.Date, o.ID, o.Remake_Of, o.Dealer, o.Client, o.Designer, o.Stage]
+    .concat(rep_extraCols().map(function (k) { return o[k]; }));
+}
+
+async function rep_load() {
+  var source = document.getElementById('rep_source').value;
+  document.getElementById('rep_body').innerHTML = '<tr><td class="text-center p-4">Loading...</td></tr>';
+  var res = await fetch('/api/dashboards/report?source=' + encodeURIComponent(source));
+  var json = await res.json();
+  if (!json.success) {
+    document.getElementById('rep_body').innerHTML =
+      '<tr><td class="text-center p-4 text-danger">' + rep_esc(json.error || 'Could not load.') + '</td></tr>';
+    return 0;
+  }
+  rep_data = json.data || [];
+  rep_ordered = !!json.ordered;
+
+  // "Complete" only means something where the stages run in a fixed order.
+  document.getElementById('rep_modeBox').style.display = rep_ordered ? '' : 'none';
+  if (!rep_ordered) document.getElementById('rep_mode').value = 'current';
+
+  rep_fill('rep_stage', 'All Stages', json.stages || []);
+  var designers = {};
+  rep_data.forEach(function (o) { if (o.Designer) designers[o.Designer] = 1; });
+  rep_fill('rep_designer', 'All Designers', Object.keys(designers).sort());
+
+  document.getElementById('rep_head').innerHTML = '<tr><th>#</th>'
+    + REP_BASE.concat(rep_extraCols()).map(function (c) { return '<th>' + rep_esc(c) + '</th>'; }).join('')
+    + '</tr>';
+  var sel = document.getElementById('rep_source');
+  document.getElementById('rep_title').textContent = sel.options[sel.selectedIndex].text + ' Report';
+  rep_apply();
+  return rep_data.length;
+}
+
+// Keeps the pick when the list is refilled, if it is still on offer.
+function rep_fill(id, allLabel, values) {
+  var s = document.getElementById(id), cur = s.value;
+  s.innerHTML = '<option value="">' + allLabel + '</option>'
+    + values.map(function (v) { return '<option value="' + rep_esc(v) + '">' + rep_esc(v) + '</option>'; }).join('');
+  s.value = values.indexOf(cur) >= 0 ? cur : '';
+}
+
+function rep_apply() {
+  var designer = document.getElementById('rep_designer').value.toLowerCase();
+  var start = document.getElementById('rep_start').value;
+  var end = document.getElementById('rep_end').value;
+  var stage = document.getElementById('rep_stage').value;
+  var mode = document.getElementById('rep_mode').value;
+  var search = document.getElementById('rep_search').value.toLowerCase();
+
+  rep_filtered = rep_data.filter(function (o) {
+    if (designer && (o.Designer || '').toLowerCase() !== designer) return false;
+    // Day is YYYY-MM-DD, so it compares with the date boxes as text.
+    if (start && (!o.Day || o.Day < start)) return false;
+    if (end && (!o.Day || o.Day > end)) return false;
+    if (stage) {
+      if (mode === 'done' ? (o.Done || []).indexOf(stage) < 0 : o.Stage !== stage) return false;
+    }
+    if (search && JSON.stringify(o).toLowerCase().indexOf(search) < 0) return false;
+    return true;
+  });
+  rep_render();
+}
+
+function rep_render() {
+  document.getElementById('rep_count').textContent = rep_filtered.length;
+  var body = document.getElementById('rep_body');
+  if (!rep_filtered.length) {
+    body.innerHTML = '<tr><td colspan="30" class="text-center p-4 text-muted">No orders match.</td></tr>';
+    return;
+  }
+  var html = rep_filtered.slice(0, REP_SHOW).map(function (o, i) {
+    return '<tr><td>' + (i + 1) + '</td>'
+      + rep_cells(o).map(function (v) { return '<td>' + rep_esc(v) + '</td>'; }).join('') + '</tr>';
+  }).join('');
+  if (rep_filtered.length > REP_SHOW) {
+    html += '<tr><td colspan="30" class="text-center p-3 text-muted small">Showing the first ' + REP_SHOW
+      + ' of ' + rep_filtered.length + '. Excel has all of them.</td></tr>';
+  }
+  body.innerHTML = html;
+}
+
+function rep_rangePicked() { applyDateRange('rep_range', 'rep_start', 'rep_end', rep_apply); }
+
+function rep_clear() {
+  document.getElementById('rep_range').value = '';
+  ['rep_designer', 'rep_stage', 'rep_search'].forEach(function (id) { document.getElementById(id).value = ''; });
+  document.getElementById('rep_mode').value = 'current';
+  rep_rangePicked();
+}
+
+function rep_download(btn) {
+  var sel = document.getElementById('rep_source');
+  downloadXlsx(sel.options[sel.selectedIndex].text + ' Report',
+    REP_BASE.concat(rep_extraCols()), rep_filtered.map(rep_cells), btn);
+}
+
+document.getElementById('rep_range').innerHTML = dateRangeOptions();
+rep_load().catch(function (e) { console.error(e); });
+</script>

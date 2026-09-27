@@ -101,6 +101,12 @@ const SECTIONS = [
     id: 'o2dsummary', group: 'Admin', name: 'Analytics', icon: 'fa-chart-line',
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
   },
+  // One place to pull any board's orders by designer, date and stage, and take
+  // them away in Excel. It reads every board, so it is an admin's tab.
+  {
+    id: 'report', group: 'Admin', name: 'Report', icon: 'fa-file-lines',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
+  },
   {
     id: 'logs', group: 'Admin', name: 'Logs', icon: 'fa-clock-rotate-left',
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
