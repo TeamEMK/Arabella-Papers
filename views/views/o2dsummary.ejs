@@ -214,14 +214,18 @@ function an_isDelayed(order) {
   return an_daysInProduction(order) > AN_DELAY_DAYS || !!(order.ReasonForDelay || '').trim();
 }
 
-// Still to make. What has gone out is not outstanding work, so it is off
-// these three counts for the same reason it is off the Production chart - and
-// they have to agree, or a button reading 22 sits above a slice reading 11 and
-// somebody has to explain which is wrong. Delay already asks the board, which
-// carries nothing that has been dispatched.
+// Still to make, and still on the live production board.
+//
+// All four ask the board now. Without it these three counted the Backup
+// Production work as well and read 13, 3 and 26 against the board's 3, 1 and
+// 4 - the twenty-two extra samples were old rows nobody is going to finish.
+// A button has to hand over the list the board would show for the same filter,
+// or the number is answering a question nobody asked.
+//
+// OnBoard already excludes anything dispatched, so that is not tested twice.
 function an_inList(order, key) {
   if (key === 'Delay') return an_isDelayed(order);
-  if (order.Stage === 'dispatched') return false;
+  if (!order.OnBoard) return false;
   return (order.ClientStatus || '').trim().toLowerCase() === key.toLowerCase();
 }
 
