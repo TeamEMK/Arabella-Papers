@@ -378,14 +378,9 @@ function rec_actions(c) {
         + '<li><button type="button" class="dropdown-item d-flex align-items-center gap-2" onclick="rec_openJoin(' + c.id + ')">'
           + '<i class="fas fa-clipboard-list text-secondary" style="width:16px"></i>'
           + '<span class="flex-grow-1">Onboarding form</span></button></li>'
-        + (canRead
-          ? '<li><a class="dropdown-item d-flex align-items-center gap-2" target="_blank" rel="noopener"'
-            + ' href="/api/recruitment/candidates/' + c.id + '/offer-letter">'
-            + '<i class="fas fa-file-pdf text-danger" style="width:16px"></i>'
-            + '<span class="flex-grow-1">Read the offer letter</span></a></li>'
-          : '')
-      // Editing is not in here: the pencil beside this menu already does it in
-      // one click, and two ways to open the same form is just noise on a row.
+      // Neither the offer letter nor editing is in here: both have their own
+      // button beside this menu, and two ways to open the same thing is just
+      // noise on a row.
       + '</ul>'
     + '</div>'
     // What the candidate sent back, one click away. It is reachable from the
@@ -400,6 +395,20 @@ function rec_actions(c) {
         : c.joining_form_sent_at ? 'The form has gone — nothing back yet'
         : 'Their details have not been asked for yet')
       + '"><i class="fas fa-eye"></i></button>'
+    // The offer letter, drawn fresh from what is on the row. Solid once it has
+    // actually gone - that is the copy the candidate is holding - and outlined
+    // before, when it is still only a draft to read before sending. Absent
+    // entirely until there is something to draw, because a button that opens
+    // onto an error is worse than no button.
+    + (canRead
+      ? '<a class="btn btn-sm ' + (c.offer_sent_at ? 'btn-danger' : 'btn-outline-danger') + ' me-1"'
+        + ' target="_blank" rel="noopener"'
+        + ' href="/api/recruitment/candidates/' + c.id + '/offer-letter"'
+        + ' title="' + (c.offer_sent_at
+          ? 'The offer letter sent on ' + rec_esc(String(c.offer_sent_at).slice(0, 16))
+          : 'Read the offer letter before it goes')
+        + '"><i class="fas fa-file-pdf"></i></a>'
+      : '')
     + '<button class="btn btn-sm btn-warning" onclick="rec_openEdit(' + c.id + ')" title="Open"><i class="fas fa-pen-to-square"></i></button>';
 }
 
