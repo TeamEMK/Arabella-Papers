@@ -9,6 +9,7 @@ document.getElementById('dispRoot').innerHTML = `
     <h3 class="mb-0 text-dark fw-bold">${DSP_ARCHIVE ? '<i class="fas fa-box-archive me-2"></i>Backup Dispatch' : 'Dispatch Dashboard'}</h3>
     <div class="d-flex gap-2">
       <button class="btn ${DSP_ARCHIVE ? 'btn-outline-primary' : 'btn-outline-warning'} smooth-ui fw-bold" onclick="dsp_moveBoards()"><i class="fas ${DSP_ARCHIVE ? 'fa-rotate-left' : 'fa-box-archive'} me-1"></i> ${DSP_ARCHIVE ? 'Move back to Dispatch' : 'Move to Backup Dispatch'}</button>
+      <button class="btn btn-outline-success smooth-ui fw-bold" onclick="dsp_download(this)"><i class="fas fa-file-excel me-1"></i> Excel</button>
       <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, fetchDispatchData, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
     </div>
   </div>
@@ -33,6 +34,7 @@ document.getElementById('dispRoot').innerHTML = `
     <div id="dspFilterContent" class="collapse">
       <div class="card-body p-2">
         <div class="row g-2 align-items-end text-dark">
+          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Range</label><select id="dsp_range" class="form-select form-select-sm" onchange="dsp_rangePicked()"></select></div>
           <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Start</label><input type="date" id="dsp_startDate" class="form-control form-control-sm" onchange="dspApplyFilters()"></div>
           <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">End</label><input type="date" id="dsp_endDate" class="form-control form-control-sm" onchange="dspApplyFilters()"></div>
           <div class="col-12 col-md-4"><label class="form-label fw-bold small mb-0">Search</label><input type="text" id="dsp_search" class="form-control form-control-sm" placeholder="Search by ID, Courier, Docket..." onkeyup="dspApplyFilters()"></div>
@@ -121,6 +123,24 @@ document.getElementById('dispRoot').innerHTML = `
 `;
 
 var dsp_data = [], dsp_editId = null;
+// What survived the filters, kept so the Excel button can hand over the same
+// rows the table is showing rather than filtering a second time.
+var dsp_filtered = [];
+
+function dsp_rangePicked() { applyDateRange('dsp_range', 'dsp_startDate', 'dsp_endDate', dspApplyFilters); }
+
+function dsp_download(btn) {
+  const cols = ['Sent to Dispatch', 'Dispatch Date', 'Order ID', 'Repeat of', 'Dealer',
+    'Client', 'Courier', 'Docket No', 'Invoice No', 'Inv. Amount', 'Boxes', 'Weight',
+    'Vol. Weight', 'Status', 'Client Email', 'Sample Details'];
+  const rows = (dsp_filtered || []).map(o => [
+    o.Ready_Date || '', o.Dispatch_Date || '', o.Display_ID || o.ID || '', o.Remake_Of || '',
+    o.Dealer_name || '', o.Client_name || '', o.Dispatch_Courier_Name || '', o.Docket_No || '',
+    o.Invoice_Number || '', o.Invoice_Amount || '', o.Number_of_Boxes || '', o.Weight || '',
+    o.Volumetric_Weight || '', o.Dispatch_Status || '', o.Client_Email || '', o.Sample_Details || '',
+  ]);
+  downloadXlsx(DSP_ARCHIVE ? 'Backup Dispatch' : 'Dispatch', cols, rows, btn);
+}
 var dsp_selected = new Set();
 // The row last clicked, so shift-click can fill in everything between. Picking
 // 1,700 rows one at a time is not a thing anyone is going to do.
@@ -140,6 +160,7 @@ async function fetchDispatchData() {
     return dsp_data.length;
   } catch(e) { console.error(e); throw e; }
 }
+document.getElementById('dsp_range').innerHTML = dateRangeOptions();
 fetchDispatchData().catch(() => {});
 
 // The couriers this office uses, whether or not a parcel has gone out with
@@ -195,6 +216,7 @@ function dspApplyFilters() {
       (!dealer || (o.Dealer_name||'').toLowerCase()===dealer.toLowerCase()) &&
       (!search || JSON.stringify(o).toLowerCase().includes(search.toLowerCase()));
   });
+  dsp_filtered = filtered;
   dsp_renderTable(filtered);
 }
 // Say it in words at the top of the board, not as a badge halfway down a row.
@@ -222,6 +244,8 @@ function dsp_showWaitingBanner() {
 function dsp_showWaiting() {
   const sel = document.getElementById('dsp_filterStatus');
   if(sel) sel.value = 'Ready';
+  document.getElementById('dsp_range').value = '';
+  dsp_rangePicked();
   ['dsp_startDate','dsp_endDate','dsp_search'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   dspApplyFilters();
 }

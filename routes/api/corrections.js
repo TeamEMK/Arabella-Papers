@@ -43,6 +43,9 @@ function shape(r) {
     clientNote: r.client_note || '',
     raisedBy: r.raised_by || '',
     raisedAt: stamp(r.created_at),
+    // The same moment unformatted, because the date filter has to compare
+    // it and "18/09/2026, 3:41:14 pm" is not a date to anything but a reader.
+    raisedRaw: r.created_at,
     status: r.status,
     workNote: r.work_note || '',
     delayReason: r.delay_reason || '',

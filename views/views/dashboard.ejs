@@ -18,6 +18,9 @@
       <button class="btn btn-success btn-sm" onclick="openBulkUpdateModal()">
         <i class="fas fa-layer-group"></i> Bulk Update
       </button>
+      <button class="btn btn-outline-success btn-sm smooth-ui" onclick="db_download(this)">
+        <i class="fas fa-file-excel me-1"></i> Excel
+      </button>
       <button class="btn btn-outline-dark btn-sm smooth-ui" onclick="refreshBoard(this, refreshDashboard, 'orders')">
         <i class="fas fa-sync-alt me-1"></i> Refresh
       </button>
@@ -34,6 +37,10 @@
     <div id="filterContent" class="collapse">
       <div class="card-body p-2">
         <div class="row g-2 align-items-end">
+          <div class="col-6 col-md-2">
+            <label class="form-label fw-bold small mb-0">Range</label>
+            <select id="db_range" class="form-select form-select-sm" onchange="db_rangePicked()"></select>
+          </div>
           <div class="col-6 col-md-2">
             <label class="form-label fw-bold small mb-0">Start</label>
             <input type="date" id="startDate" class="form-control form-control-sm" onchange="applyFilters()"/>
@@ -530,6 +537,7 @@ var currentEditOrderId = null;
 // ═══ INIT ═══
 (function() {
   applyPermissions();
+  document.getElementById('db_range').innerHTML = dateRangeOptions();
   fetchOrdersData().catch(() => {});
   fetchFormOptions();
   setupInfiniteScroll();
@@ -591,6 +599,23 @@ function getUniqueClients() {
   const clients = new Set();
   ordersData.forEach(o => { if(o.Client_name) clients.add(o.Client_name.trim()); });
   return Array.from(clients).sort();
+}
+
+// ═══ RANGE + DOWNLOAD ═══
+function db_rangePicked() { applyDateRange('db_range', 'startDate', 'endDate', applyFilters); }
+
+// What the table is showing, in the order the columns sit in it. currentDisplaySet
+// is every row that survived the filters, not the fifty rendered so far, so the
+// file carries the whole answer rather than what has been scrolled to.
+function db_download(btn) {
+  const cols = ['Date', 'Order ID', 'Email', 'Punch By', 'Dealer Name', 'Client Name',
+    'Design Time', 'Designer', 'Status', 'Remarks'];
+  const rows = (currentDisplaySet || []).map(o => [
+    o.Timestamp || '', o.ID || '', o.Email || '', o.Order_punch_by || '',
+    o.Dealer_name || '', o.Client_name || '', o.Possible_design_time || '',
+    o.Designer || '', o.Status || '', o.Remarks || '',
+  ]);
+  downloadXlsx('Orders', cols, rows, btn);
 }
 
 // ═══ FILTERS ═══
@@ -661,6 +686,8 @@ function applyFilters() {
 }
 
 function clearFilters() {
+  const rangeBox = document.getElementById('db_range');
+  if (rangeBox) { rangeBox.value = ''; db_rangePicked(); }
   ['universalSearch','filterStatus','filterDesigner','filterPunchBy','filterDealer','startDate','endDate','filterClient']
     .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   applyFilters();

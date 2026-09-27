@@ -8,6 +8,7 @@ document.getElementById('tillApprovalRoot').innerHTML = `
     <h3 class="mb-0 text-dark fw-bold">Client Approval Dashboard</h3>
     <div class="d-flex gap-2">
       <button class="btn btn-success smooth-ui" onclick="openBulkApprovalModal()"><i class="fas fa-layer-group me-1"></i> Bulk Client Update</button>
+      <button class="btn btn-outline-success smooth-ui" onclick="ta_download(this)"><i class="fas fa-file-excel me-1"></i> Excel</button>
       <button class="btn btn-outline-dark smooth-ui" onclick="refreshBoard(this, fetchApprovalData, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
     </div>
   </div>
@@ -19,6 +20,7 @@ document.getElementById('tillApprovalRoot').innerHTML = `
     <div id="taFilterContent" class="collapse">
       <div class="card-body p-2">
         <div class="row g-2 align-items-end">
+          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Range</label><select id="ta_range" class="form-select form-select-sm" onchange="ta_rangePicked()"></select></div>
           <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Start</label><input type="date" id="ta_startDate" class="form-control form-control-sm" onchange="taApplyFilters()"></div>
           <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">End</label><input type="date" id="ta_endDate" class="form-control form-control-sm" onchange="taApplyFilters()"></div>
           <div class="col-12 col-md-3"><label class="form-label fw-bold small mb-0">Search</label><input type="text" id="ta_search" class="form-control form-control-sm" placeholder="ID, Dealer..." onkeyup="taApplyFilters()"></div>
@@ -111,7 +113,24 @@ async function fetchApprovalData() {
   } catch(e) { console.error(e); throw e; }
 }
 
+document.getElementById('ta_range').innerHTML = dateRangeOptions();
 fetchApprovalData().catch(() => {});
+
+function ta_rangePicked() { applyDateRange('ta_range', 'ta_startDate', 'ta_endDate', taApplyFilters); }
+
+// ta_filtered is every row that survived the filters, not the batch rendered so
+// far, so the file carries the whole answer rather than what has been scrolled to.
+function ta_download(btn) {
+  const cols = ['Time Stamp', 'Design Done', 'Order ID', 'Designer', 'Dealer', 'Client',
+    'Client Approval', 'Where it is'];
+  const rows = (ta_filtered || []).map(o => [
+    o.Timestamp || '', o.Actual_1 || '', o.ID || '', o.Designer || '',
+    o.Dealer_name || '', o.Client_name || '', o.Design_Approval_Status_From_Client || '',
+    o.Dispatched ? ('Dispatched' + (o.Dispatch_Date ? ' ' + o.Dispatch_Date : ''))
+      : (o.On_Backup_Production ? 'Backup Production' : 'In progress'),
+  ]);
+  downloadXlsx('Till Approval', cols, rows, btn);
+}
 
 function ta_populateFilters(data) {
   const designers = new Set(), statuses = new Set();
@@ -151,6 +170,8 @@ function taApplyFilters() {
   ta_renderTable(ta_filtered);
 }
 function taClearFilters() {
+  document.getElementById('ta_range').value = '';
+  ta_rangePicked();
   ['ta_filterStatus','ta_filterDesigner','ta_search','ta_startDate','ta_endDate'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   taApplyFilters();
 }

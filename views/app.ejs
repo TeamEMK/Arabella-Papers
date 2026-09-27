@@ -334,6 +334,124 @@
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape') sideCloseDrawer(); });
 
+  // ── DATE RANGE ──
+  // Every board already had a Start and an End box, and every board was being
+  // asked the same three questions of them - the last ten days, the last
+  // month, the last forty-five. Typing two dates to ask that is a chore that
+  // gets it wrong, so the chore is a dropdown now. It fills the two boxes the
+  // board already has rather than replacing them: Custom simply hands them
+  // back, and every filter the board runs stays exactly as it was.
+  //
+  // Each board still filters on its own date - punched, designed, approved,
+  // dispatched, raised - so "last 10 days" means that board's last ten days.
+  var DATE_RANGES = {
+    today:  { label: 'Today',         days: 0 },
+    d7:     { label: 'Last 7 days',   days: 7 },
+    d10:    { label: 'Last 10 days',  days: 10 },
+    d30:    { label: 'Last 30 days',  days: 30 },
+    d45:    { label: 'Last 45 days',  days: 45 },
+    month:  { label: 'This month',    month: true },
+  };
+
+  function dateRangeOptions() {
+    return '<option value="">All dates</option>'
+      + Object.keys(DATE_RANGES).map(function (k) {
+          return '<option value="' + k + '">' + DATE_RANGES[k].label + '</option>';
+        }).join('')
+      + '<option value="custom">Custom...</option>';
+  }
+
+  // Today according to the office. The boards read IST wall-clock dates, and
+  // between midnight and half past five the browser's UTC day is yesterday.
+  function officeToday() {
+    return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  }
+
+  function ymd(d) {
+    return d.getFullYear() + '-'
+      + String(d.getMonth() + 1).padStart(2, '0') + '-'
+      + String(d.getDate()).padStart(2, '0');
+  }
+
+  /**
+   * Fill a board's Start and End boxes from the dropdown, then re-filter.
+   *
+   * "Last 10 days" counts today as one of them - a range that ends yesterday
+   * is not what anybody means by it - so ten days is today and the nine before.
+   */
+  function applyDateRange(selectId, startId, endId, onChange) {
+    var pick = document.getElementById(selectId);
+    var start = document.getElementById(startId);
+    var end = document.getElementById(endId);
+    if (!pick || !start || !end) return;
+
+    var key = pick.value;
+    var editable = (key === 'custom' || key === '');
+
+    if (key === '' || key === 'custom') {
+      start.value = '';
+      end.value = '';
+    } else {
+      var range = DATE_RANGES[key];
+      var today = officeToday();
+      var from = officeToday();
+      if (range.month) from.setDate(1);
+      else if (range.days > 0) from.setDate(from.getDate() - (range.days - 1));
+      start.value = ymd(from);
+      end.value = ymd(today);
+    }
+
+    // A preset owns the two boxes while it is chosen. Typing over one of them
+    // would leave the dropdown claiming something the boxes no longer say.
+    start.readOnly = end.readOnly = !editable;
+    start.classList.toggle('bg-light', !editable);
+    end.classList.toggle('bg-light', !editable);
+
+    if (typeof onChange === 'function') onChange();
+  }
+
+  // ── EXCEL DOWNLOAD ──
+  /**
+   * Hand the rows on screen to the server and save what comes back.
+   *
+   * The rows are sent rather than re-queried: the page has already applied
+   * every filter the person set, and asking the server to work them out again
+   * would mean two copies of the same rules going out of step. It also means
+   * a download can never carry a row the page was not allowed to show.
+   */
+  async function downloadXlsx(title, columns, rows, btn) {
+    if (!rows.length) { showToast('warning', 'Nothing to download.'); return; }
+    var original = btn && btn.innerHTML;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Preparing...'; }
+    try {
+      var res = await fetch('/api/export/xlsx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title, columns: columns, rows: rows }),
+      });
+      if (!res.ok) {
+        var err = await res.json().catch(function () { return {}; });
+        showToast('error', err.error || 'Could not build the file.');
+        return;
+      }
+      var blob = await res.blob();
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = (res.headers.get('Content-Disposition') || '')
+        .split('filename=')[1]?.replace(/"/g, '') || (title + '.xlsx');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast('success', rows.length + ' rows downloaded');
+    } catch (e) {
+      showToast('error', 'Server error.');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = original; }
+    }
+  }
+
   // ── REFRESH BUTTONS ──
   // A refresh that fetches the same rows and redraws them looks like nothing
   // happened - the Dispatch queue has one order in it, so there was no visible

@@ -16,6 +16,7 @@ document.getElementById('prodRoot').innerHTML = `
   <div class="d-flex gap-2 mb-3">
     <button class="btn btn-primary smooth-ui" onclick="prod_openBulkModal()"><i class="fas fa-industry me-1"></i> Bulk Stage Update</button>
     <button class="btn ${PROD_ARCHIVE ? 'btn-outline-primary' : 'btn-outline-warning'} smooth-ui" onclick="prod_moveBoards()"><i class="fas ${PROD_ARCHIVE ? 'fa-rotate-left' : 'fa-box-archive'} me-1"></i> ${PROD_ARCHIVE ? 'Move back to Production' : 'Move to Backup Production'}</button>
+    <button class="btn btn-outline-success smooth-ui" onclick="prod_download(this)"><i class="fas fa-file-excel me-1"></i> Excel</button>
     <button class="btn btn-outline-dark smooth-ui text-dark" onclick="refreshBoard(this, fetchProductionData, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
   </div>
   <div class="row g-3 mb-3">
@@ -33,6 +34,7 @@ document.getElementById('prodRoot').innerHTML = `
     <div id="prodFilterContent" class="collapse">
       <div class="card-body p-2">
         <div class="row g-2 align-items-end">
+          <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Range</label><select id="prod_range" class="form-select form-select-sm" onchange="prod_rangePicked()"></select></div>
           <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Start</label><input type="date" id="prod_startDate" class="form-control form-control-sm" onchange="prodApplyFilters()"></div>
           <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">End</label><input type="date" id="prod_endDate" class="form-control form-control-sm" onchange="prodApplyFilters()"></div>
           <div class="col-12 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Search</label><input type="text" id="prod_search" class="form-control form-control-sm" placeholder="ID, Dealer, Designer..." onkeyup="prodApplyFilters()"></div>
@@ -146,7 +148,28 @@ async function fetchProductionData() {
     return prod_data.length;
   } catch(e) { console.error(e); throw e; }
 }
+document.getElementById('prod_range').innerHTML = dateRangeOptions();
 fetchProductionData().catch(() => {});
+
+function prod_rangePicked() { applyDateRange('prod_range', 'prod_startDate', 'prod_endDate', prodApplyFilters); }
+
+// Every stage goes in, because the point of taking the board away in a file is
+// to see where each job actually stands.
+function prod_download(btn) {
+  const cols = ['Production Date', 'Order ID', 'Repeat of', 'Dealer', 'Client', 'Designer',
+    'Client Approval', 'Guest Name', 'Paper Cutting', 'Dye Status', 'Block Status',
+    'Printing', 'Printing Type', 'Edges', 'Laser Cutting', 'Output', 'Card Assembly',
+    'Dispatch', 'Remark', 'Reason For Delay'];
+  const rows = (prod_filtered || []).map(o => [
+    o.Production_Date || '', o.Display_ID || o.ID || '', o.Remake_Of || '',
+    o.Dealer_name || '', o.Client_name || '', o.Designer || '',
+    o.Design_Approval_Status_From_Client || '', o.Guest_Name || '', o.Paper_Cutting || '',
+    o.Dye_Status || '', o.Block_Status || '', o.Printing || '', o.Printing_Type || '',
+    o.Edges || '', o.Laser_Cutting || '', o.Output || '', o.Card_Assembly || '',
+    o.Dispatch_Status || '', o.Remark || '', o.Reason_For_Delay || '',
+  ]);
+  downloadXlsx(PROD_ARCHIVE ? 'Backup Production' : 'Production', cols, rows, btn);
+}
 
 function prod_populateFilters(data) {
   const designers = new Set(), clients = new Set();
@@ -263,6 +286,8 @@ function prodApplyFilters() {
   prod_renderTable(prod_filtered);
 }
 function prodClearFilters() {
+  document.getElementById('prod_range').value = '';
+  prod_rangePicked();
   ['prod_filterStatus','prod_filterDesigner','prod_filterClient','prod_search','prod_startDate','prod_endDate'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   prodApplyFilters();
 }
