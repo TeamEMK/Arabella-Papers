@@ -582,7 +582,7 @@ CREATE TABLE IF NOT EXISTS user_sections (
 -- before: somebody being interviewed, what came of it, and — once they are
 -- selected — the details they send back before their first day.
 --
--- Three tables rather than one, because they answer three different questions
+-- Four tables rather than one, because they answer four different questions
 -- and only the first of them is ever edited by hand.
 -- =============================================
 CREATE TABLE IF NOT EXISTS recruit_candidates (
