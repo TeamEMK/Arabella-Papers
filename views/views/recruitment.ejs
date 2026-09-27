@@ -798,22 +798,6 @@ function rec_renderJoin() {
       + '<button class="btn btn-sm btn-primary" onclick="rec_sendJoinForm(this)">'
         + (r.sent_at ? 'Send again' : 'Send the form') + '</button>'
     + '</div>'
-    // A CV often arrives by email the morning after the interview is booked.
-    // This is where it goes on, and it sits above the answers because it can
-    // be used long before any of them exist.
-    + '<div class="border rounded p-3 mb-3 bg-light">'
-      + '<label class="form-label fw-bold text-dark small mb-1" for="rec_panelCv">Add the candidate’s CV</label>'
-      + '<div class="d-flex gap-2 align-items-center flex-wrap">'
-        + '<input class="form-control form-control-sm" type="file" id="rec_panelCv"'
-          + ' accept=".pdf,.doc,.docx,image/*" style="max-width:250px">'
-        + '<button class="btn btn-sm btn-dark" onclick="rec_uploadCv(this)">Attach</button>'
-      + '</div>'
-      + '<div class="form-check mt-2">'
-        + '<input class="form-check-input" type="checkbox" id="rec_panelCvNotify">'
-        + '<label class="form-check-label small text-dark" for="rec_panelCvNotify">Send it to the interviewer</label>'
-      + '</div>'
-      + '<div class="form-text">Replaces whatever CV is on file. Up to 4 MB.</div>'
-    + '</div>'
     // Out of the answers block, because a CV can be on file before the form
     // has come back and a document nobody can see is a document nobody has.
     + (r.files && r.files.length
@@ -839,10 +823,12 @@ function rec_renderJoin() {
 }
 
 /**
- * Put a CV on a candidate's record.
+ * Put a CV on a candidate's record, from the edit dialog.
  *
- * The one path both the edit dialog and the panel above use, so what a CV may
- * be — and what happens after it lands — is decided once, on the server.
+ * Its own call rather than part of the save, because the edit is JSON and
+ * this is a file — and because the rules about what a CV may be, and what
+ * happens after it lands, then live in one endpoint on the server instead of
+ * being spread across whichever form happens to carry it.
  *
  * Comes back `{ok, sent, error}`: `sent` is null when nobody was to be told,
  * true when the interviewer got it, false when that letter failed.
@@ -862,27 +848,6 @@ async function rec_postCv(id, file, notify) {
   }
 }
 
-async function rec_uploadCv(btn) {
-  const file = document.getElementById('rec_panelCv').files[0];
-  if (!file) { showToast('warning', 'Choose a file first.'); return; }
-  if (file.size > 4 * 1024 * 1024) {
-    showToast('warning', 'That CV is ' + Math.round(file.size / 1024 / 1024 * 10) / 10 + ' MB — the limit is 4 MB.');
-    return;
-  }
-  const id = rec_join.id;                       // the panel is redrawn below
-  const notify = document.getElementById('rec_panelCvNotify').checked;
-  const release = rec_hold(btn, 'Attaching...');
-  try {
-    const up = await rec_postCv(id, file, notify);
-    if (!up.ok) { showToast('error', 'Could not save the CV — ' + up.error); return; }
-    showToast(up.sent === false ? 'warning'
-      : 'success', up.sent === true ? 'CV saved and sent to the interviewer.'
-      : up.sent === false ? 'CV saved, but it was not sent: ' + up.error
-      : 'CV saved.');
-    await rec_openJoin(id);
-    rec_fetch();
-  } finally { release(); }
-}
 
 // Worth having by hand: a candidate who cannot find the email can be sent the
 // link on whatever channel the office already uses.
