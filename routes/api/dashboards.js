@@ -290,8 +290,16 @@ router.get('/till-approval', requireLogin, async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
+    // Named rather than SELECT *: the table has 83 columns and this board maps
+    // thirteen. production_board is one of them and is easy to miss - it is
+    // read once, at the bottom, to say whether the order is parked on Backup
+    // Production, and nothing above hints that the query needs it.
     const [rows] = await db.query(`
-      SELECT * FROM orders
+      SELECT order_id, timestamp, actual_1, actual_4,
+             india_designer, overseas_designer, dealer_name, client_name,
+             design_approval_status_from_client, remarks, remake_of,
+             status_4, production_board
+      FROM orders
       WHERE is_deleted = 0
         AND ${LOCAL_ORDER_OFF_BOARDS}
         AND no_of_design_revision IS NOT NULL
@@ -515,7 +523,13 @@ router.get('/production', requireLogin, async (req, res) => {
     const archive = req.query.scope === 'old';
 
     const [rows] = await db.query(`
-      SELECT * FROM orders
+      SELECT order_id, timestamp, actual_2, remake_of,
+             dealer_name, client_name, india_designer, overseas_designer,
+             design_approval_status_from_client, status_4,
+             guest_name, paper_cutting, dye_status, block_status,
+             printing, printing_type, edges, laser_cutting, output,
+             card_assembly, remark, reason_for_delay
+      FROM orders
       WHERE ${PRODUCTION_QUEUE_WHERE}
         ${archive ? '' : `AND NOT ${LEFT_FOR_DISPATCH}`}
         AND ${ON_PRODUCTION_BOARD(archive)}
@@ -848,7 +862,14 @@ router.get('/dispatch', requireLogin, async (req, res) => {
     // recorded as dispatched before that. A dispatch date is the same fact
     // written down differently, so an order carrying one belongs here too.
     const [rows] = await db.query(`
-      SELECT * FROM orders
+      SELECT order_id, timestamp, remake_of,
+             dealer_name, client_name,
+             courier, ups_dhl_fedex_tracking_number,
+             dispatch_ready_at, actual_4, status_4,
+             invoice_number, invoice_amount, number_of_boxes,
+             weight, volumetric_weight,
+             dispatch_email, dispatch_mail_sent_at, sample_details
+      FROM orders
       WHERE is_deleted = 0
         AND ${LOCAL_ORDER_OFF_BOARDS}
         AND ${LEFT_FOR_DISPATCH}
@@ -1339,8 +1360,18 @@ router.get('/analytics', requireLogin, async (req, res) => {
     // The stage tests come back from the database rather than being worked out
     // again here, so the page and the production board can never disagree about
     // whether an order has reached the floor.
+    // Named rather than SELECT *. The four computed flags below stay as they
+    // are - they are worked out in the database on purpose, so this page and
+    // the production board cannot disagree about where an order stands - and
+    // the expressions behind them read columns this list does not carry. That
+    // is fine: a WHERE or a CASE can test a column the SELECT does not return.
     let query = `
-      SELECT *,
+      SELECT order_id, timestamp, order_punched_by,
+             dealer_name, client_name, india_designer, overseas_designer,
+             design_status, actual_1,
+             design_approval_status_from_client, actual_2,
+             card_assembly, reason_for_delay, remake_of,
+             status_4, actual_4, courier, ups_dhl_fedex_tracking_number,
         ${DEAD_ORDER} AS is_dead,
         ${LEFT_FOR_DISPATCH} AS has_left,
         ${REACHED_PRODUCTION} AS reached,
