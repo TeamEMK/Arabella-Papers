@@ -21,11 +21,12 @@ document.getElementById('tillApprovalRoot').innerHTML = `
       <div class="card-body p-2">
         <div class="row g-2 align-items-end">
           <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Range</label><select id="ta_range" class="form-select form-select-sm" onchange="ta_rangePicked()"></select></div>
-          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Start</label><input type="date" id="ta_startDate" class="form-control form-control-sm" onchange="taApplyFilters()"></div>
-          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">End</label><input type="date" id="ta_endDate" class="form-control form-control-sm" onchange="taApplyFilters()"></div>
-          <div class="col-12 col-md-3"><label class="form-label fw-bold small mb-0">Search</label><input type="text" id="ta_search" class="form-control form-control-sm" placeholder="ID, Dealer..." onkeyup="taApplyFilters()"></div>
+          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Start</label><input type="date" id="ta_startDate" class="form-control form-control-sm" onchange="ta_dateTyped()"></div>
+          <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">End</label><input type="date" id="ta_endDate" class="form-control form-control-sm" onchange="ta_dateTyped()"></div>
+          <div class="col-12 col-md-3"><label class="form-label fw-bold small mb-0">Search</label><input type="text" id="ta_search" class="form-control form-control-sm" placeholder="ID, Dealer..." onkeyup="ta_searchTyped()"></div>
           <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Client Status</label><select id="ta_filterStatus" class="form-select form-select-sm" onchange="taApplyFilters()"><option value="">All Statuses</option></select></div>
           <div class="col-6 col-md-2"><label class="form-label fw-bold small mb-0">Designer</label><select id="ta_filterDesigner" class="form-select form-select-sm" onchange="taApplyFilters()"><option value="">All</option></select></div>
+          <div class="col-12 small mt-1" id="ta_window"></div>
           <div class="col-12 text-end mt-2"><button class="btn btn-secondary btn-sm" onclick="taClearFilters()">Clear Filters</button></div>
         </div>
       </div>
@@ -101,22 +102,81 @@ document.getElementById('tillApprovalRoot').innerHTML = `
 // ── DATA ──
 var ta_data = [], ta_filtered = [], ta_selected = new Set(), ta_editId = null;
 
-async function fetchApprovalData() {
+// Which window the board is holding: a date, or 'all'. Six months by default,
+// the same as the Orders list - this board carried 5318 rows back to 2024 and
+// fetched every one of them on every open. Nothing is hidden: an older range,
+// or a search that finds nothing, goes back for the rest.
+var ta_from = null;
+
+async function fetchApprovalData(from) {
   try {
-    const res = await fetch('/api/dashboards/till-approval');
+    const res = await fetch('/api/dashboards/till-approval'
+      + (from ? '?from=' + encodeURIComponent(from) : ''));
     const json = await res.json();
     ta_data = json.data || [];
+    ta_from = json.from || null;
     ta_populateFilters(ta_data);
     taApplyFilters();
     ta_attachScroll();
+    ta_showWindow();
     return ta_data.length;
   } catch(e) { console.error(e); throw e; }
+}
+
+function ta_showWindow() {
+  const box = document.getElementById('ta_window');
+  if (!box) return;
+  if (!ta_from || ta_from === 'all') {
+    box.innerHTML = '<span class="text-muted">Showing every order.</span>';
+    return;
+  }
+  box.innerHTML = '<span class="text-muted">Showing orders since <b>'
+    + new Date(ta_from).toLocaleDateString('en-GB') + '</b>.</span> '
+    + '<a href="#" class="fw-bold" onclick="ta_loadAll(event)">Load all orders</a>';
+}
+
+async function ta_loadAll(e) {
+  if (e) e.preventDefault();
+  if (ta_from === 'all') return;
+  showLoading(true);
+  try { await fetchApprovalData('all'); } finally { showLoading(false); }
+}
+
+// A date typed by hand can reach further back than the board is holding, so
+// both boxes come through here rather than straight to the filter.
+async function ta_dateTyped() {
+  const start = (document.getElementById('ta_startDate') || {}).value || '';
+  if (start && ta_from && ta_from !== 'all' && start < ta_from) { await ta_loadAll(); return; }
+  taApplyFilters();
+}
+
+/**
+ * A search that finds nothing here may still find something in the database.
+ * Rather than making the person work that out, the board goes and gets the
+ * rest - once, quietly - and filters again.
+ */
+var ta_searchTimer = null;
+function ta_searchTyped() {
+  taApplyFilters();
+  clearTimeout(ta_searchTimer);
+  const q = ((document.getElementById('ta_search') || {}).value || '').trim();
+  if (q.length < 3 || ta_filtered.length || !ta_from || ta_from === 'all') return;
+  ta_searchTimer = setTimeout(async function () {
+    if (((document.getElementById('ta_search') || {}).value || '').trim() !== q) return;
+    await ta_loadAll();
+    showToast('info', ta_filtered.length
+      ? 'Found in the older orders.'
+      : 'Searched every order - nothing matches.');
+  }, 600);
 }
 
 document.getElementById('ta_range').innerHTML = dateRangeOptions();
 fetchApprovalData().catch(() => {});
 
-function ta_rangePicked() { applyDateRange('ta_range', 'ta_startDate', 'ta_endDate', taApplyFilters); }
+async function ta_rangePicked() {
+  applyDateRange('ta_range', 'ta_startDate', 'ta_endDate', function () {});
+  await ta_dateTyped();
+}
 
 // ta_filtered is every row that survived the filters, not the batch rendered so
 // far, so the file carries the whole answer rather than what has been scrolled to.

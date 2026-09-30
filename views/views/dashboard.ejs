@@ -43,15 +43,15 @@
           </div>
           <div class="col-6 col-md-2">
             <label class="form-label fw-bold small mb-0">Start</label>
-            <input type="date" id="startDate" class="form-control form-control-sm" onchange="applyFilters()"/>
+            <input type="date" id="startDate" class="form-control form-control-sm" onchange="db_dateTyped()"/>
           </div>
           <div class="col-6 col-md-2">
             <label class="form-label fw-bold small mb-0">End</label>
-            <input type="date" id="endDate" class="form-control form-control-sm" onchange="applyFilters()"/>
+            <input type="date" id="endDate" class="form-control form-control-sm" onchange="db_dateTyped()"/>
           </div>
           <div class="col-12 col-md-2">
             <label class="form-label fw-bold small mb-0">Search</label>
-            <input type="text" id="universalSearch" class="form-control form-control-sm" placeholder="ID, Client..." onkeyup="applyFilters()"/>
+            <input type="text" id="universalSearch" class="form-control form-control-sm" placeholder="ID, Client..." onkeyup="db_searchTyped()"/>
           </div>
           <div class="col-6 col-md-2">
             <label class="form-label fw-bold small mb-0">Status</label>
@@ -86,6 +86,7 @@
           <div class="col-6 col-md-2">
             <button class="btn btn-secondary btn-sm w-100 mt-3" onclick="clearFilters()">Clear</button>
           </div>
+          <div class="col-12 small mt-1" id="db_window"></div>
         </div>
       </div>
     </div>
@@ -560,13 +561,21 @@ function setupInfiniteScroll() {
 }
 
 // ═══ DATA FETCH ═══
-async function fetchOrdersData() {
+// Which window the page is holding: a date, or 'all'. The list opens on the
+// last six months because that is the work the office is doing - all 9049
+// orders back to 2024 came across on every screen-open before this. Nothing
+// is hidden: an older range, or a search that finds nothing, fetches the rest.
+var ordersFrom = null;
+
+async function fetchOrdersData(from) {
   showTableLoading(true);
   try {
-    const res = await fetch('/api/orders');
+    const res = await fetch('/api/orders' + (from ? '?from=' + encodeURIComponent(from) : ''));
     const json = await res.json();
     ordersData = json.data || [];
+    ordersFrom = json.from || null;
     renderAll(ordersData);
+    db_showWindow();
     return ordersData.length;
   } catch(e) {
     console.error(e);
@@ -602,7 +611,60 @@ function getUniqueClients() {
 }
 
 // ═══ RANGE + DOWNLOAD ═══
-function db_rangePicked() { applyDateRange('db_range', 'startDate', 'endDate', applyFilters); }
+/**
+ * Say which window the list is holding, with a way to load the rest.
+ *
+ * Without this the count at the top is a half-truth - somebody would read
+ * 1975 orders and think that is all there has ever been.
+ */
+function db_showWindow() {
+  const box = document.getElementById('db_window');
+  if (!box) return;
+  if (!ordersFrom || ordersFrom === 'all') {
+    box.innerHTML = '<span class="text-muted">Showing every order.</span>';
+    return;
+  }
+  const d = new Date(ordersFrom);
+  box.innerHTML = '<span class="text-muted">Showing orders since <b>'
+    + d.toLocaleDateString('en-GB') + '</b>.</span> '
+    + '<a href="#" class="fw-bold" onclick="db_loadAll(event)">Load all orders</a>';
+}
+
+async function db_loadAll(e) {
+  if (e) e.preventDefault();
+  if (ordersFrom === 'all') return;
+  showLoading(true);
+  try { await fetchOrdersData('all'); applyFilters(); }
+  finally { showLoading(false); }
+}
+
+/**
+ * The range dropdown, which may ask for a window the page does not hold.
+ *
+ * Picking "last 45 days" needs nothing new; picking a custom range that starts
+ * before the loaded window does, and going back for it is better than quietly
+ * showing an empty table.
+ */
+async function db_rangePicked() {
+  applyDateRange('db_range', 'startDate', 'endDate', function () {});
+  await db_dateTyped();
+}
+
+/**
+ * A date typed by hand can ask for further back than the page is holding.
+ *
+ * Both date boxes come through here rather than straight to applyFilters, or
+ * asking for January 2024 would filter six months of orders down to none and
+ * look like the year had no work in it.
+ */
+async function db_dateTyped() {
+  const start = document.getElementById('startDate').value;
+  if (start && ordersFrom && ordersFrom !== 'all' && start < ordersFrom) {
+    await db_loadAll();
+    return;                       // db_loadAll filters on its way out
+  }
+  applyFilters();
+}
 
 // What the table is showing, in the order the columns sit in it. currentDisplaySet
 // is every row that survived the filters, not the fifty rendered so far, so the
@@ -646,6 +708,31 @@ function fillSelect(id, set, label) {
   select.value = cur;
 }
 
+/**
+ * A search that finds nothing here may still find something in the database.
+ *
+ * The list only holds six months, so typing an order number from last year
+ * would come up empty while the order sits in the table perfectly intact.
+ * Rather than making the person work that out and press something, the page
+ * goes and gets the rest - once, quietly - and filters again.
+ */
+var db_searchTimer = null;
+function db_searchTyped() {
+  applyFilters();
+  clearTimeout(db_searchTimer);
+  const q = (document.getElementById('universalSearch').value || '').trim();
+  // Only when it came up empty, only for something long enough to be a real
+  // search, and only while the page is still holding a partial window.
+  if (q.length < 3 || currentDisplaySet.length || !ordersFrom || ordersFrom === 'all') return;
+  db_searchTimer = setTimeout(async function () {
+    if ((document.getElementById('universalSearch').value || '').trim() !== q) return;
+    await db_loadAll();
+    showToast('info', currentDisplaySet.length
+      ? 'Found in the older orders.'
+      : 'Searched every order - nothing matches.');
+  }, 600);
+}
+
 function applyFilters() {
   if(!Array.isArray(ordersData)) return;
   const status = document.getElementById('filterStatus').value.toLowerCase();
@@ -687,7 +774,8 @@ function applyFilters() {
 
 function clearFilters() {
   const rangeBox = document.getElementById('db_range');
-  if (rangeBox) { rangeBox.value = ''; db_rangePicked(); }
+  if (rangeBox) rangeBox.value = '';
+  applyDateRange('db_range', 'startDate', 'endDate', function () {});
   ['universalSearch','filterStatus','filterDesigner','filterPunchBy','filterDealer','startDate','endDate','filterClient']
     .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   applyFilters();

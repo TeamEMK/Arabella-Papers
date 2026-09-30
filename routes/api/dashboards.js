@@ -290,6 +290,21 @@ router.get('/till-approval', requireLogin, async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
+    // Six months by default, the same window the Orders list opens on and for
+    // the same reason. `from=all` returns everything, which the screen asks
+    // for when somebody picks an older range or searches past the window.
+    const fromQ = String(req.query.from || '').trim();
+    let since = null;
+    if (fromQ !== 'all') {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(fromQ)) {
+        since = fromQ;
+      } else {
+        const d = new Date();
+        d.setMonth(d.getMonth() - 6);
+        since = d.toISOString().slice(0, 10);
+      }
+    }
+
     // Named rather than SELECT *: the table has 83 columns and this board maps
     // thirteen. production_board is one of them and is easy to miss - it is
     // read once, at the bottom, to say whether the order is parked on Backup
@@ -309,8 +324,9 @@ router.get('/till-approval', requireLogin, async (req, res) => {
           LOWER(design_status) LIKE '%approved%' OR
           (design_approval_status_from_client IS NOT NULL AND design_approval_status_from_client != '')
         )
+        ${since ? 'AND DATE(timestamp) >= ?' : ''}
       ORDER BY id DESC
-    `);
+    `, since ? [since] : []);
 
     const data = rows.map(r => ({
       ID: r.order_id,
@@ -336,7 +352,7 @@ router.get('/till-approval', requireLogin, async (req, res) => {
       // rowData ab on-demand aata hai (GET /api/dashboards/order-details/:id)
     }));
 
-    res.json({ success: true, data });
+    res.json({ success: true, data, from: since || 'all' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });

@@ -74,6 +74,26 @@ router.get('/', requireLogin, async (req, res) => {
     // page feeds. Asked for by name: "it should appear with the same old
     // number in production not order dashboard". Production is where the work
     // is; the repeat is there.
+    // How far back to go. Six months by default, because that is the work the
+    // office is doing - the list held 9049 orders back to 2024 and every
+    // screen-open dragged all of them across. Six months is 1975 of them.
+    //
+    // Nothing is hidden and nothing is deleted: `from=all` returns the lot,
+    // and the screen asks for that whenever somebody picks an older range or
+    // searches for something the six months do not hold.
+    const from = String(req.query.from || '').trim();
+    const wantsAll = from === 'all';
+    let since = null;
+    if (!wantsAll) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+        since = from;
+      } else {
+        const d = new Date();
+        d.setMonth(d.getMonth() - 6);
+        since = d.toISOString().slice(0, 10);
+      }
+    }
+
     // Named rather than SELECT *. The table carries 83 columns and this list
     // shows fourteen of them; the rest were being dragged out of the database
     // and thrown away in the mapping below - 19.9MB a screen-open where 3.6MB
@@ -92,6 +112,11 @@ router.get('/', requireLogin, async (req, res) => {
          AND remake_of IS NULL
     `;
     const params = [];
+
+    if (since) {
+      query += ' AND DATE(timestamp) >= ?';
+      params.push(since);
+    }
 
     query += mine.where;
     params.push(...mine.params);
@@ -122,7 +147,9 @@ router.get('/', requireLogin, async (req, res) => {
       Remarks: r.remarks,
     }));
 
-    res.json({ success: true, data });
+    // The screen needs to know what it is holding, so it can tell the person
+    // and go back for more when a search comes up empty.
+    res.json({ success: true, data, from: since || 'all' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
