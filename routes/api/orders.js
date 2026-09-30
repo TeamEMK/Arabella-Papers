@@ -74,10 +74,22 @@ router.get('/', requireLogin, async (req, res) => {
     // page feeds. Asked for by name: "it should appear with the same old
     // number in production not order dashboard". Production is where the work
     // is; the repeat is there.
+    // Named rather than SELECT *. The table carries 83 columns and this list
+    // shows fourteen of them; the rest were being dragged out of the database
+    // and thrown away in the mapping below - 19.9MB a screen-open where 3.6MB
+    // would do, which is most of what the office pays Railway for.
+    //
+    // The last four are not printed. currentStage() reads them to work out the
+    // Status column, and leaving them off is exactly how that column goes
+    // blank: it is the one thing the mapping does not make obvious.
     let query = `
-      SELECT * FROM orders
-      WHERE is_deleted = 0
-        AND remake_of IS NULL
+      SELECT order_id, timestamp, email_address, order_punched_by,
+             dealer_name, client_name, possible_design_time,
+             india_designer, overseas_designer, design_status, remarks,
+             design_approval_status_from_client, status_4, actual_4
+        FROM orders
+       WHERE is_deleted = 0
+         AND remake_of IS NULL
     `;
     const params = [];
 
