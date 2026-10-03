@@ -108,6 +108,10 @@ const COLUMN_MIGRATIONS = [
   // the repeat is itself being repeated, so every run of a job points at the
   // one number the office, the dealer and the invoice all use.
   { table: 'orders', column: 'remake_of', type: 'VARCHAR(20) NULL' },
+  // Whose doing a correction is. Blank on the ones raised before this existed -
+  // nobody wrote it down at the time, and filling it in now would be inventing
+  // it, so the screen shows those as "not recorded" rather than guessing.
+  { table: 'corrections', column: 'fault', type: 'VARCHAR(20) NULL' },
   // What the offer letter needs. recruit_candidates went in three days before
   // these did, so schema.sql cannot deliver them - every CREATE in it is
   // IF NOT EXISTS, and the table already exists.

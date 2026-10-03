@@ -20,6 +20,21 @@ const { liveRunFor, rootOrderId } = require('../../utils/remake');
 const IST = { timeZone: 'Asia/Kolkata', hour12: true };
 const stamp = d => (d ? new Date(d).toLocaleString('en-GB', IST) : '');
 
+/**
+ * Whose doing a correction is.
+ *
+ * Three answers, because the office wants to count two of them and not the
+ * third: a designer's mistake and a client's mistake are both somebody getting
+ * it wrong, and a change the client has asked for is neither - it is new work.
+ * Lumping the third in with the other two would make the design team look
+ * worse every time a client changed their mind.
+ */
+const FAULTS = {
+  designer: "Designer's mistake",
+  client: "Client's mistake",
+  change: 'Client asked for a change',
+};
+
 // Who may raise one and see everybody's. Doing one needs only to be the
 // designer it landed on.
 function canRaise(user) {
@@ -41,6 +56,10 @@ function shape(r) {
     orderNo: rootOrderId(r.order_id),
     designer: r.designer,
     clientNote: r.client_note || '',
+    // Blank on everything raised before this field existed. The screen says so
+    // rather than picking one, which would be inventing the answer.
+    fault: r.fault || '',
+    faultLabel: FAULTS[r.fault] || '',
     raisedBy: r.raised_by || '',
     raisedAt: stamp(r.created_at),
     // The same moment unformatted, because the date filter has to compare
@@ -343,6 +362,14 @@ router.post('/', requireLogin, async (req, res) => {
     // not move a correction somebody has already answered.
     const chosen = String(req.body.designer || '').trim();
     const clientNote = String(req.body.clientNote || '').trim() || null;
+
+    // Only the three this app knows. Anything else is a caller sending
+    // something the screen cannot have produced, and storing it would put a
+    // value in the column that nothing can count.
+    const fault = String(req.body.fault || '').trim();
+    if (!fault || !FAULTS[fault]) {
+      return res.status(400).json({ success: false, error: 'Say whose correction this is.' });
+    }
     const raisedBy = user.username || user.email || '';
 
     // Each order is judged on its own. One bad number in a paste of fifty must
@@ -362,11 +389,12 @@ router.post('/', requireLogin, async (req, res) => {
 
       try {
         await db.query(
-          `INSERT INTO corrections (order_id, designer, client_note, raised_by)
-           VALUES (?, ?, ?, ?)`,
-          [order.order_id, designer, clientNote, raisedBy],
+          `INSERT INTO corrections (order_id, designer, fault, client_note, raised_by)
+           VALUES (?, ?, ?, ?, ?)`,
+          [order.order_id, designer, fault, clientNote, raisedBy],
         );
-        await logOrderEvent(order.order_id, 'Correction raised', 'for ' + designer, user);
+        await logOrderEvent(order.order_id, 'Correction raised',
+          `for ${designer} - ${FAULTS[fault]}`, user);
         results.push({
           typed, ok: true, orderId: order.order_id,
           orderNo: rootOrderId(order.order_id), designer,

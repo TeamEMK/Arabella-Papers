@@ -429,6 +429,12 @@ CREATE TABLE IF NOT EXISTS corrections (
   -- one. Copied at the time it was raised: reassigning the order later must not
   -- silently move a correction somebody has already done.
   designer VARCHAR(200) NOT NULL,
+  -- Whose doing this correction is: 'designer', 'client', or 'change' for a
+  -- change the client has asked for, which is nobody's mistake. Kept apart
+  -- from client_note because that is what was asked for and this is why there
+  -- was anything to ask - the office wants to count the first two and not the
+  -- third, and reading that out of free text is guesswork.
+  fault VARCHAR(20),
   -- What the client asked for. Optional - whoever raises it may only have the
   -- order number to hand, and the designer has the mail anyway.
   client_note TEXT,

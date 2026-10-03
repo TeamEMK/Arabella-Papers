@@ -98,6 +98,7 @@
               <th style="position:sticky;top:0;background:#212529;color:white;">Dealer</th>
               <th style="position:sticky;top:0;background:#212529;color:white;">Client</th>
               <th style="position:sticky;top:0;background:#212529;color:white;">Designer</th>
+              <th style="position:sticky;top:0;background:#212529;color:white;">Whose</th>
               <th style="position:sticky;top:0;background:#212529;color:white;">Raised</th>
               <th style="position:sticky;top:0;background:#212529;color:white;">What the client asked</th>
               <th style="position:sticky;top:0;background:#212529;color:white;">Status</th>
@@ -150,6 +151,24 @@
           <span class="fw-normal text-muted">— hand them all to one of these</span></label>
         <select id="cr_gna" class="form-select" onchange="cr_gnaPicked()"></select>
         <div class="form-text" id="cr_gnaHint">Leave it to send each correction to the order's own designer.</div>
+      </div>
+
+      <!-- Whose doing this is. Three buttons rather than a dropdown: there are
+           only three, and the office wants it answered every time - a dropdown
+           sitting on its first option gets left there. -->
+      <div class="mb-3">
+        <label class="form-label fw-bold text-dark">Whose correction is this?</label>
+        <div class="d-flex flex-wrap gap-2" id="cr_faultWrap">
+          <input type="radio" class="btn-check" name="cr_fault" id="cr_fault_designer" value="designer" onchange="cr_faultPicked()">
+          <label class="btn btn-outline-danger fw-bold" for="cr_fault_designer">Designer's mistake</label>
+
+          <input type="radio" class="btn-check" name="cr_fault" id="cr_fault_client" value="client" onchange="cr_faultPicked()">
+          <label class="btn btn-outline-warning text-dark fw-bold" for="cr_fault_client">Client's mistake</label>
+
+          <input type="radio" class="btn-check" name="cr_fault" id="cr_fault_change" value="change" onchange="cr_faultPicked()">
+          <label class="btn btn-outline-primary fw-bold" for="cr_fault_change">Client asked for a change</label>
+        </div>
+        <div class="form-text">A change the client asked for is nobody's mistake — it is new work, and it is counted apart from the other two.</div>
       </div>
 
       <div class="mb-2">
@@ -265,6 +284,33 @@ function cr_show(status) {
 // rather than running every filter a second time.
 var cr_shownRows = [];
 
+// Whose doing a correction is, and how it reads on the list. The third is
+// deliberately not red: a change the client asked for is new work, not a
+// mistake, and colouring it like one would make the design team look worse
+// every time a client changed their mind.
+var CR_FAULTS = {
+  designer: { label: "Designer's mistake", css: 'bg-danger' },
+  client:   { label: "Client's mistake",   css: 'bg-warning text-dark' },
+  change:   { label: 'Client asked for a change', css: 'bg-primary' },
+};
+
+function cr_faultBadge(c) {
+  const f = CR_FAULTS[c.fault];
+  // Blank on everything raised before this field existed. Saying so is the
+  // honest answer; picking one of the three would be inventing it.
+  if (!f) return '<span class="text-muted small fst-italic">not recorded</span>';
+  return '<span class="badge ' + f.css + '">' + crEsc(f.label) + '</span>';
+}
+
+// The Send button waits for this as well as for an order, so the answer cannot
+// be skipped by not looking at it.
+function cr_faultPicked() { cr_drawFound(); }
+
+function cr_fault() {
+  const picked = document.querySelector('input[name="cr_fault"]:checked');
+  return picked ? picked.value : '';
+}
+
 function cr_rangePicked() { applyDateRange('cr_range', 'cr_startDate', 'cr_endDate', cr_render); }
 
 function cr_inRange(c) {
@@ -279,11 +325,11 @@ function cr_inRange(c) {
 }
 
 function cr_download(btn) {
-  const cols = ['Raised', 'Order', 'Designer', 'Dealer', 'Client', 'Status',
+  const cols = ['Raised', 'Order', 'Designer', 'Dealer', 'Client', 'Whose', 'Status',
     'What the client asked', 'What was corrected', 'Reason for delay', 'Raised by', 'Closed'];
   const rows = (cr_shownRows || []).map(c => [
     c.raisedAt || '', c.orderNo || c.orderId || '', c.designer || '', c.dealer || '',
-    c.client || '', c.status || '', c.clientNote || '', c.workNote || '',
+    c.client || '', c.faultLabel || '', c.status || '', c.clientNote || '', c.workNote || '',
     c.delayReason || '', c.raisedBy || '', c.closedAt || '',
   ]);
   downloadXlsx('Corrections', cols, rows, btn);
@@ -331,7 +377,7 @@ function cr_render() {
 
   const body = document.getElementById('cr_tbody');
   if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">'
+    body.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">'
       + (cr_filter === 'mine' ? 'Nothing waiting on you.'
          : cr_filter === 'pending' ? 'Nothing waiting.' : 'Nothing here.') + '</td></tr>';
     return;
@@ -357,6 +403,7 @@ function cr_render() {
       + '<td>' + (crEsc(c.dealer) || '-') + '</td>'
       + '<td>' + (crEsc(c.client) || '-') + '</td>'
       + '<td>' + crEsc(c.designer) + '</td>'
+      + '<td class="text-nowrap">' + cr_faultBadge(c) + '</td>'
       + '<td class="text-nowrap small">' + crEsc((c.raisedAt || '').split(',')[0]) + '</td>'
       + '<td class="text-wrap" style="max-width:280px;">'
       +   (c.clientNote ? crEsc(c.clientNote) : '<span class="text-muted fst-italic">in the designer\'s mail</span>')
@@ -466,6 +513,7 @@ function cr_openRaise() {
   cr_found = null;
   document.getElementById('cr_orderId').value = '';
   document.getElementById('cr_clientNote').value = '';
+  document.querySelectorAll('input[name="cr_fault"]').forEach(r => { r.checked = false; });
   cr_drawGna();
   document.getElementById('cr_gnaHint').textContent =
     "Leave it to send each correction to the order's own designer.";
@@ -568,7 +616,7 @@ function cr_drawFound() {
   if (unset) bits.push(unset + ' still need a designer');
   document.getElementById('cr_summary').textContent = bits.join(' · ');
 
-  document.getElementById('cr_saveBtn').disabled = !ok.length || unset > 0;
+  document.getElementById('cr_saveBtn').disabled = !ok.length || unset > 0 || !cr_fault();
   document.getElementById('cr_saveBtn').textContent = ok.length > 1
     ? 'Send all ' + ok.length + ' to the designers'
     : 'Send to the designer';
@@ -613,7 +661,7 @@ function cr_setDesigner(i, name) {
   if (missing) bits.push(missing + ' not found');
   if (unset) bits.push(unset + ' still need a designer');
   document.getElementById('cr_summary').textContent = bits.join(' · ');
-  document.getElementById('cr_saveBtn').disabled = !ok.length || unset > 0;
+  document.getElementById('cr_saveBtn').disabled = !ok.length || unset > 0 || !cr_fault();
 
   // The box above no longer describes what is on screen once a row is changed
   // by hand, so it stops claiming to.
@@ -653,7 +701,7 @@ async function cr_save() {
     for (const [designer, orderIds] of byDesigner) {
       const res = await fetch('/api/corrections', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderIds, designer, clientNote }),
+        body: JSON.stringify({ orderIds, designer, clientNote, fault: cr_fault() }),
       });
       const j = await res.json();
       created += j.created || 0;
