@@ -268,6 +268,36 @@ router.post('/lookup', requireLogin, async (req, res) => {
 });
 
 /**
+ * GET /api/corrections/pending-count
+ *
+ * Just the number waiting, for the badge on the side panel.
+ *
+ * Its own route rather than reading it off the list below: this is asked for
+ * from every page in the app, and the list carries a thousand shaped rows and
+ * the joins behind them - a lot of database to pay for one integer. A COUNT
+ * over idx_corr_status costs nothing by comparison.
+ *
+ * Same scope as the list: whoever raises corrections is told how many are
+ * outstanding anywhere, everybody else how many are sitting on their own name.
+ */
+router.get('/pending-count', requireLogin, async (req, res) => {
+  try {
+    const user = req.session.user;
+    const all = canRaise(user);
+    const [[row]] = await db.query(
+      `SELECT COUNT(*) AS n FROM corrections
+        WHERE status = 'pending'
+          ${all ? '' : 'AND LOWER(TRIM(designer)) = LOWER(TRIM(?))'}`,
+      all ? [] : [user.username || '']
+    );
+    res.json({ success: true, pending: Number(row.n || 0) });
+  } catch (err) {
+    console.error('Correction count failed:', err);
+    res.status(500).json({ success: false, error: 'Server error.' });
+  }
+});
+
+/**
  * GET /api/corrections?status=pending|done|delayed
  *
  * Whoever raises them sees every correction; everybody else sees the ones on

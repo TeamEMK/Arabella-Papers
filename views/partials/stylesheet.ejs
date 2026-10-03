@@ -83,6 +83,15 @@
   .side-icon { flex: 0 0 20px; width: 20px; text-align: center; font-size: 16px; }
   .side-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+  /* How much work is waiting on a tab, so nobody opens the page to find out
+     there is none. Red because it is a queue somebody is holding up, and it
+     has to carry at a glance past the yellow the panel is already using for
+     "you are here". */
+  .side-count { margin-left: auto; flex: 0 0 auto; min-width: 20px; padding: 0 6px;
+    border-radius: 10px; background: #e74c3c; color: #fff;
+    font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+  .side-count[hidden] { display: none; }
+
   /* ── FMS step train ──────────────────────────────────────────────
      One coach per step, running along a track. A process is a line of
      things in order, and this reads as one; a grid of cards does not.
@@ -198,6 +207,9 @@
        rows already start 10px in from the panel edge. */
     .side-link, .side-user, .side-logout { overflow: hidden; padding-left: 18px; padding-right: 0; }
     .side-label { opacity: 0; }
+    .side-link { position: relative; }
+    .side-count { position: absolute; left: 28px; top: 3px; margin-left: 0;
+      min-width: 16px; padding: 0 4px; font-size: 10px; line-height: 16px; }
     .side-group { padding: 8px 14px 6px; }
     .side-group-label { opacity: 0; }
     .side-group::after { display: block; height: 1px; background: rgba(255,255,255,0.12); }
@@ -210,6 +222,8 @@
     body.side-expanded .side-user,
     body.side-expanded .side-logout { padding-left: 12px; padding-right: 12px; }
     body.side-expanded .side-label { opacity: 1; }
+    body.side-expanded .side-count { position: static; margin-left: auto;
+      min-width: 20px; padding: 0 6px; font-size: 11px; line-height: 18px; }
     body.side-expanded .side-group-label { opacity: 1; }
     body.side-expanded .side-group::after { display: none; }
     body.side-expanded .side-logo { display: block; }

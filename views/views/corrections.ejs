@@ -264,6 +264,9 @@ async function cr_load() {
   document.getElementById('cr_cards').classList.toggle('row-cols-md-4', !(cr_canRaise && !!mineRows.length));
 
   document.getElementById('cr_n_pending').textContent = j.counts.pending;
+  // The tab badge, free: this list already asked the database for the number,
+  // so the side panel need not ask a second time.
+  if (window.setTabCount) setTabCount('corrections', j.counts.pending);
   document.getElementById('cr_n_done').textContent = j.counts.done;
   document.getElementById('cr_n_delayed').textContent = j.counts.delayed;
   document.getElementById('cr_n_all').textContent =

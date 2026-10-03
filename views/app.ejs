@@ -56,7 +56,7 @@
         <div class="side-group"><span class="side-group-label"><%= tab.group %></span></div>
       <% } %>
       <button type="button" class="side-link" id="<%= tab.id %>Tab" onclick="loadPage('<%= tab.id %>')" title="<%= tab.name %>">
-        <i class="fas <%= tab.icon %> side-icon"></i><span class="side-label"><%= tab.name %></span>
+        <i class="fas <%= tab.icon %> side-icon"></i><span class="side-label"><%= tab.name %></span><span class="side-count" id="<%= tab.id %>Count" hidden></span>
       </button>
     <% }); %>
   </nav>
@@ -561,6 +561,52 @@
           '<div class="alert alert-danger m-3">Error loading page. Please refresh.</div>';
       });
   }
+
+  // ── WORK WAITING ON A TAB ──
+  // How many corrections are sitting on this person. Shown on the tab so a
+  // designer can see there is something for them without opening the page -
+  // which is what they were doing, several times a day, to find nothing.
+  //
+  // Polled rarely on purpose. A correction is raised by hand a few times a
+  // day, so a minute's lag costs nobody anything, and this runs in every
+  // browser that has the app open all day. The cheap moments carry it
+  // instead: coming back to the tab, and the Corrections page itself, which
+  // already gets the number with its list and hands it over for free.
+  var CORR_POLL_MS = 5 * 60 * 1000;
+
+  function setTabCount(tabId, n) {
+    const el = document.getElementById(tabId + 'Count');
+    if (!el) return;
+    // Hidden at zero rather than showing a 0: an empty queue should look like
+    // nothing to do, not like a number worth reading.
+    el.hidden = !n;
+    el.textContent = n > 99 ? '99+' : String(n);
+    const tab = document.getElementById(tabId + 'Tab');
+    if (tab) {
+      tab.title = n
+        ? tab.title.split(' — ')[0] + ' — ' + n + ' waiting'
+        : tab.title.split(' — ')[0];
+    }
+  }
+
+  async function refreshCorrectionCount() {
+    if (!NAV_MENU.some(t => t.id === 'corrections')) return;
+    try {
+      const r = await fetch('/api/corrections/pending-count');
+      const j = await r.json();
+      if (j.success) setTabCount('corrections', j.pending);
+    } catch (e) { /* offline or signed out - leave the badge as it was */ }
+  }
+  window.setTabCount = setTabCount;
+  window.refreshCorrectionCount = refreshCorrectionCount;
+
+  refreshCorrectionCount();
+  setInterval(refreshCorrectionCount, CORR_POLL_MS);
+  // Coming back to the tab is when somebody is about to look at it, and it
+  // costs one query against a browser that was doing nothing.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) refreshCorrectionCount();
+  });
 
   // ── INIT: Load first allowed tab ──
   (function() {
