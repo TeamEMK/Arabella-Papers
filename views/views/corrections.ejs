@@ -100,7 +100,7 @@
               <th style="position:sticky;top:0;background:#212529;color:white;">Designer</th>
               <th style="position:sticky;top:0;background:#212529;color:white;">Whose</th>
               <th style="position:sticky;top:0;background:#212529;color:white;">Raised</th>
-              <th style="position:sticky;top:0;background:#212529;color:white;">What the client asked</th>
+              <th style="position:sticky;top:0;background:#212529;color:white;">What it was</th>
               <th style="position:sticky;top:0;background:#212529;color:white;">Status</th>
               <th style="position:sticky;top:0;background:#212529;color:white;">Action</th>
             </tr>
@@ -171,9 +171,15 @@
         <div class="form-text">A change the client asked for is nobody's mistake — it is new work, and it is counted apart from the other two.</div>
       </div>
 
+      <!-- One box, asked differently depending on the answer above: a mistake
+           needs saying what went wrong, a change needs saying what changed.
+           Kept optional on the office's instruction - whoever raises it often
+           has only the order number, and the designer has the mail. -->
       <div class="mb-2">
-        <label class="form-label fw-bold text-dark">What the client asked for <span class="fw-normal text-muted">(optional)</span></label>
-        <textarea id="cr_clientNote" class="form-control" rows="3" placeholder="Paste or summarise the client's mail — or leave it, the designer has the mail."></textarea>
+        <label class="form-label fw-bold text-dark" id="cr_noteLabel">What the client asked for
+          <span class="fw-normal text-muted">(optional)</span></label>
+        <textarea id="cr_clientNote" class="form-control" rows="3"
+          placeholder="Paste or summarise the client's mail — or leave it, the designer has the mail."></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -302,9 +308,45 @@ function cr_faultBadge(c) {
   return '<span class="badge ' + f.css + '">' + crEsc(f.label) + '</span>';
 }
 
+// What the note box asks for, which depends on the answer above it. "What the
+// client asked for" is the wrong question for a designer's mistake, and
+// leaving it there is how the box ends up holding three different things with
+// nobody able to tell which.
+var CR_NOTE_ASKS = {
+  designer: {
+    label: 'What was the mistake?',
+    hint: 'What went wrong in the design — so it reads later as more than "a correction".',
+  },
+  client: {
+    label: 'What was the mistake?',
+    hint: 'What the client had wrong — the brief, the spelling, the list.',
+  },
+  change: {
+    label: 'What changes did the client ask for?',
+    hint: "Paste or summarise the client's mail — or leave it, the designer has the mail.",
+  },
+};
+
+// The same question on the box the designer opens, so they are told whether
+// they are reading a mistake or a change before they read it.
+function cr_doAsk() {
+  const ask = CR_NOTE_ASKS[cr_doing && cr_doing.fault];
+  return ask ? crEsc(ask.label) : 'What the client asked';
+}
+
+function cr_noteAsk() {
+  const ask = CR_NOTE_ASKS[cr_fault()];
+  const label = document.getElementById('cr_noteLabel');
+  const box = document.getElementById('cr_clientNote');
+  if (!label || !box) return;
+  label.innerHTML = (ask ? crEsc(ask.label) : 'What the client asked for')
+    + ' <span class="fw-normal text-muted">(optional)</span>';
+  box.placeholder = ask ? ask.hint : CR_NOTE_ASKS.change.hint;
+}
+
 // The Send button waits for this as well as for an order, so the answer cannot
 // be skipped by not looking at it.
-function cr_faultPicked() { cr_drawFound(); }
+function cr_faultPicked() { cr_noteAsk(); cr_drawFound(); }
 
 function cr_fault() {
   const picked = document.querySelector('input[name="cr_fault"]:checked');
@@ -326,7 +368,7 @@ function cr_inRange(c) {
 
 function cr_download(btn) {
   const cols = ['Raised', 'Order', 'Designer', 'Dealer', 'Client', 'Whose', 'Status',
-    'What the client asked', 'What was corrected', 'Reason for delay', 'Raised by', 'Closed'];
+    'What it was', 'What was corrected', 'Reason for delay', 'Raised by', 'Closed'];
   const rows = (cr_shownRows || []).map(c => [
     c.raisedAt || '', c.orderNo || c.orderId || '', c.designer || '', c.dealer || '',
     c.client || '', c.faultLabel || '', c.status || '', c.clientNote || '', c.workNote || '',
@@ -514,6 +556,7 @@ function cr_openRaise() {
   document.getElementById('cr_orderId').value = '';
   document.getElementById('cr_clientNote').value = '';
   document.querySelectorAll('input[name="cr_fault"]').forEach(r => { r.checked = false; });
+  cr_noteAsk();
   cr_drawGna();
   document.getElementById('cr_gnaHint').textContent =
     "Leave it to send each correction to the order's own designer.";
@@ -733,7 +776,10 @@ function cr_openDo(id) {
   if (!cr_doing) return;
   document.getElementById('cr_doOrder').textContent = cr_doing.orderNo || cr_doing.orderId;
   document.getElementById('cr_doWhat').innerHTML =
-    '<div class="small text-muted">What the client asked</div>'
+    // Whose it is, first: a designer reads their own mistake differently from
+    // a change the client asked for, and it costs nothing to say which.
+    '<div class="mb-2">' + cr_faultBadge(cr_doing) + '</div>'
+    + '<div class="small text-muted">' + cr_doAsk() + '</div>'
     + (cr_doing.clientNote
       ? '<div class="fw-bold text-dark">' + crEsc(cr_doing.clientNote) + '</div>'
       : '<div class="fst-italic text-muted">Nothing written here — check your mail for this order.</div>')
