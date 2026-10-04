@@ -1440,7 +1440,7 @@ router.get('/analytics', requireLogin, async (req, res) => {
     let query = `
       SELECT order_id, timestamp, order_punched_by,
              dealer_name, client_name, india_designer, overseas_designer,
-             design_status, actual_1,
+             design_status,
              design_approval_status_from_client, actual_2,
              card_assembly, reason_for_delay, remake_of,
              status_4, actual_4, courier, ups_dhl_fedex_tracking_number,
@@ -1504,9 +1504,6 @@ router.get('/analytics', requireLogin, async (req, res) => {
           Designer: designer,
           Team: team,
           DesignStatus: r.design_status || '',
-          // When the designer finished, not when the order arrived - the
-          // designer chart counts the month the work was done in.
-          DesignDone: r.actual_1,
           ClientStatus: r.design_approval_status_from_client || '',
           ProductionStatus: r.card_assembly || '',
           // Why an order is late. Set on the production board, read on the
