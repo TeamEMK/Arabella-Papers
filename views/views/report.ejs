@@ -6,7 +6,12 @@
     <h4 class="mb-0 text-dark fw-bold"><i class="fas fa-file-lines me-2"></i>Report</h4>
     <div class="ms-auto d-flex gap-2">
       <button class="btn btn-outline-success smooth-ui" onclick="rep_download(this)"><i class="fas fa-file-excel me-1"></i> Excel</button>
-      <button class="btn btn-outline-primary smooth-ui" onclick="rep_toSheet(this)" title="Make a new Google Sheet of what is on screen"><i class="fas fa-table me-1"></i> Google Sheet</button>
+      <!-- Put away until the office finishes setting up the Drive folder the
+           sheets have to be made in. Everything behind it works; without that
+           folder the button can only ever report the same error, which is not
+           a button worth showing anybody. REP_SHEET_BUTTON below brings it
+           back - one word, no other change. -->
+      <button id="rep_sheetBtn" class="btn btn-outline-primary smooth-ui d-none" onclick="rep_toSheet(this)" title="Make a new Google Sheet of what is on screen"><i class="fas fa-table me-1"></i> Google Sheet</button>
       <button class="btn btn-outline-dark smooth-ui text-dark" onclick="refreshBoard(this, rep_load, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
     </div>
   </div>
@@ -193,6 +198,11 @@ function rep_toSheet(btn) {
   var p = rep_payload();
   exportToSheet(p.title, p.columns, p.rows, btn);
 }
+
+// Set to true once DRIVE_SHEETS_FOLDER_ID is in place and the folder is
+// shared with the service account as an Editor. Nothing else to change.
+var REP_SHEET_BUTTON = false;
+if (REP_SHEET_BUTTON) document.getElementById('rep_sheetBtn').classList.remove('d-none');
 
 document.getElementById('rep_range').innerHTML = dateRangeOptions();
 rep_load().catch(function (e) { console.error(e); });
