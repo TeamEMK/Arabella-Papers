@@ -7,6 +7,7 @@
     </div>
     <div class="d-flex gap-2">
       <button class="btn btn-primary smooth-ui fw-bold" onclick="st_openAdd()"><i class="fas fa-plus me-1"></i> Add Item</button>
+      <button class="btn btn-outline-success smooth-ui fw-bold" onclick="st_download(this)"><i class="fas fa-file-excel me-1"></i> Excel</button>
       <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, st_fetch, 'items')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
     </div>
   </div>
@@ -140,6 +141,25 @@ function st_fillFilters() {
   };
   dl('st_categories', st_data.map(i => i.category));
   dl('st_statuses', ST_STATES.concat(st_data.map(i => i.status)));
+}
+
+/**
+ * The list as it stands, as a file.
+ *
+ * What is on screen, not the whole table: somebody who has filtered to one
+ * series and asked for a file wants that series. st_shown is what the list
+ * drew, so the two can never disagree - and it is the full filtered set, not
+ * the 200 rows actually painted, which is what a file is for.
+ *
+ * Action is left out. It is a column of buttons, and a button does not travel.
+ */
+function st_download(btn) {
+  const cols = ['Code', 'Name', 'Series', 'Thickness', 'Status', 'Note'];
+  const rows = (st_shown || []).map(i => [
+    i.code || '', i.name || '', i.category || '',
+    i.thickness || '', i.status || '', i.note || '',
+  ]);
+  downloadXlsx('Stock', cols, rows, btn);
 }
 
 function st_render() {
