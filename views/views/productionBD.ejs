@@ -68,10 +68,12 @@ document.getElementById('prodRoot').innerHTML = `
               <th style="position:sticky;top:0;z-index:1020;background:#212529;">Laser</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;">Output</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Production Stages</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Type of Order</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Days for Dispatch</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Remark</th>
             </tr>
           </thead>
-          <tbody id="prod_tbody"><tr><td colspan="16" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="prod_tbody"><tr><td colspan="18" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -97,6 +99,10 @@ document.getElementById('prodRoot').innerHTML = `
         <div class="col-md-4"><label class="small fw-bold">Output</label><select class="form-select" name="Output"><option value="Pending">Pending</option><option value="Done">Done</option><option value="No">No</option></select></div>
         <div class="col-md-12"><label class="small fw-bold text-success">Card Assembly (Final)</label><select class="form-select border-success" name="Card_Assembly"><option value="Pending">Pending</option><option value="Done">Done</option></select></div>
       </div>
+      <div class="row g-3 mb-3">
+        <div class="col-md-6"><label class="small fw-bold">Type of Order</label><select class="form-select" name="Order_Type"><option value="">Not set</option><option value="RUSH Order">RUSH Order</option><option value="Normal Order">Normal Order</option></select></div>
+        <div class="col-md-6"><label class="small fw-bold">Days for Dispatch</label><input type="number" class="form-control" name="Dispatch_Days" min="0" max="365" step="1" placeholder="not set"></div>
+      </div>
       <div class="mb-3"><label class="form-label fw-bold">Remark</label><textarea class="form-control" name="Remark" rows="2"></textarea></div>
       <div class="mb-3"><label class="form-label fw-bold">Reason For Delay</label><textarea class="form-control" name="Reason_For_Delay" rows="2"></textarea></div>
     </div>
@@ -118,7 +124,7 @@ var prod_data = [], prod_filtered = [], prod_selected = new Set(), prod_editId =
 // var, not const: loadPage() re-runs this whole block every time the tab is
 // opened, and a repeat `const` is a parse error that kills the script before it
 // can fill #prodRoot — leaving the page blank until a full reload.
-var PROD_COLS = ['Guest_Name','Paper_Cutting','Dye_Status','Block_Status','Printing','Printing_Type','Edges','Laser_Cutting','Output','Card_Assembly','Remark','Reason_For_Delay'];
+var PROD_COLS = ['Guest_Name','Paper_Cutting','Dye_Status','Block_Status','Printing','Printing_Type','Edges','Laser_Cutting','Output','Card_Assembly','Order_Type','Dispatch_Days','Remark','Reason_For_Delay'];
 
 async function fetchProductionData() {
   try {
@@ -166,13 +172,14 @@ function prod_download(btn) {
   const cols = ['Production Date', 'Order ID', 'Repeat of', 'Dealer', 'Client', 'Designer',
     'GNA', 'Paper Cutting', 'Dye Status', 'Block Status',
     'Printing', 'Printing Type', 'Edges', 'Laser Cutting', 'Output', 'Card Assembly',
-    'Remark', 'Reason For Delay'];
+    'Type of Order', 'Days for Dispatch', 'Remark', 'Reason For Delay'];
   const rows = (prod_filtered || []).map(o => [
     o.Production_Date || '', o.Display_ID || o.ID || '', o.Remake_Of || '',
     o.Dealer_name || '', o.Client_name || '', o.Designer || '',
     o.Guest_Name || '', o.Paper_Cutting || '',
     o.Dye_Status || '', o.Block_Status || '', o.Printing || '', o.Printing_Type || '',
     o.Edges || '', o.Laser_Cutting || '', o.Output || '', o.Card_Assembly || '',
+    o.Order_Type || '', o.Dispatch_Days === '' || o.Dispatch_Days === null || o.Dispatch_Days === undefined ? '' : o.Dispatch_Days,
     o.Remark || '', o.Reason_For_Delay || '',
   ]);
   downloadXlsx(PROD_ARCHIVE ? 'Backup Production' : 'Production', cols, rows, btn);
@@ -345,6 +352,20 @@ function prod_remarkCell(o) {
     + prodEsc(text) + '</small>';
 }
 
+/**
+ * RUSH or Normal, as a badge.
+ *
+ * Only the rush one is coloured. Everything on this board is a normal order
+ * until somebody says otherwise, so painting those red too would leave the
+ * floor scanning a wall of badges for the few that matter.
+ */
+function prod_typeCell(o) {
+  const t = String((o && o.Order_Type) || '').trim();
+  if (!t) return '<span class="text-muted">-</span>';
+  if (t === 'RUSH Order') return '<span class="badge bg-danger">RUSH</span>';
+  return '<span class="badge bg-light text-dark border">Normal</span>';
+}
+
 function prod_rowHtml(o, sr) {
   {
     const isChecked = prod_selected.has(o.ID.toString()) ? 'checked' : '';
@@ -368,6 +389,10 @@ function prod_rowHtml(o, sr) {
       <td>${o.Laser_Cutting||'-'}</td>
       <td>${o.Output||'-'}</td>
       <td>${badges}</td>
+      <td class="text-center">${prod_typeCell(o)}</td>
+      <td class="text-center">${o.Dispatch_Days === '' || o.Dispatch_Days === null || o.Dispatch_Days === undefined
+        ? '<span class="text-muted">-</span>'
+        : '<span class="fw-bold">' + o.Dispatch_Days + '</span><small class="text-muted"> d</small>'}</td>
       <td style="min-width:160px;max-width:260px;">${prod_remarkCell(o)}</td>
     </tr>`;
   }
@@ -478,7 +503,9 @@ function prod_stageValue(raw) {
 // Printing Type is not a stage: an empty one means nobody has said which
 // press was used, not that the work is Pending. Everything else keeps the
 // stage reading.
-var PROD_NOT_A_STAGE = ['Printing_Type'];
+// Not steps of making the order, so they are never stamped with a time and
+// never read as 'Pending' - they are two facts about the job.
+var PROD_NOT_A_STAGE = ['Printing_Type', 'Order_Type', 'Dispatch_Days'];
 
 function prod_setSelect(sel, raw, plain) {
   const v = plain ? String(raw || '').trim() : prod_stageValue(raw);
@@ -499,7 +526,10 @@ function prod_openEdit(id) {
     const input = modal.querySelector(`[name="${col}"]`);
     if(!input) return;
     if(input.tagName === 'SELECT') prod_setSelect(input, o && o[col], PROD_NOT_A_STAGE.indexOf(col) >= 0);
-    else input.value = (o && o[col]) || '';
+    // `|| ''` would have turned a real 0 into a blank, and the blank clears the
+    // column on save - so a job due in 0 days lost its answer the next time
+    // anybody opened the box.
+    else input.value = (o && o[col] !== undefined && o[col] !== null) ? o[col] : '';
   });
 
   // An order that has already gone has nowhere left to be sent.

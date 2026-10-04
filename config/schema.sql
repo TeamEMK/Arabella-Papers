@@ -113,6 +113,12 @@ CREATE TABLE IF NOT EXISTS orders (
   
   -- Client Approval Stage
   design_approval_status_from_client VARCHAR(100),
+  -- Answered beside a Final Approval For Production, and nowhere else: how
+  -- urgently this run has to go, and how many days it has been given. The
+  -- days are optional - the office often knows a job is a rush before it
+  -- knows the date - so a blank here means not settled, not zero.
+  order_type VARCHAR(20),
+  dispatch_days INT,
   actual_2 DATETIME,
   approval_updated_by VARCHAR(150),
   

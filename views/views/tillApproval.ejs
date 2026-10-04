@@ -88,6 +88,25 @@ document.getElementById('tillApprovalRoot').innerHTML = `
         <div class="form-check mb-1"><input class="form-check-input" type="radio" name="ta_approvalStatus" id="ta_st_sample" value="Sample"><label class="form-check-label text-secondary" for="ta_st_sample">Sample</label></div>
         <div class="form-check mb-1"><input class="form-check-input" type="radio" name="ta_approvalStatus" id="ta_st_cancel" value="Cancel Order"><label class="form-check-label text-danger" for="ta_st_cancel">Cancel Order</label></div>
       </div>
+      <!-- Only on a final approval. Every other answer is the client still
+           looking at the design: there is no run yet to be urgent about, and
+           asking would be asking about nothing. -->
+      <div class="mb-3 d-none" id="ta_typeWrap">
+        <label class="form-label text-dark fw-bold">Type of Order*</label>
+        <div class="d-flex flex-wrap gap-2">
+          <input type="radio" class="btn-check" name="ta_orderType" id="ta_ot_rush" value="RUSH Order" onchange="ta_syncOrderType()">
+          <label class="btn btn-outline-danger fw-bold" for="ta_ot_rush">RUSH Order</label>
+          <input type="radio" class="btn-check" name="ta_orderType" id="ta_ot_normal" value="Normal Order" onchange="ta_syncOrderType()">
+          <label class="btn btn-outline-secondary fw-bold" for="ta_ot_normal">Normal Order</label>
+        </div>
+      </div>
+      <!-- Waits for the type: it is the second half of one answer, and both
+           on screen at once reads as a form rather than a question. -->
+      <div class="mb-3 d-none" id="ta_daysWrap">
+        <label class="form-label text-dark fw-bold">Number of days for dispatch</label>
+        <input type="number" class="form-control" id="ta_dispatchDays" min="0" max="365" step="1" placeholder="e.g. 7">
+        <div class="form-text">Optional — leave it blank if the date is not settled yet. Production can fill it in later.</div>
+      </div>
       <div class="mb-3"><label class="form-label text-dark fw-bold">Final Approval Upload</label><input class="form-control" type="file" id="ta_fileUpload" accept="image/*,application/pdf"></div>
       <div class="mb-3"><label class="form-label text-dark fw-bold">Remark</label><textarea class="form-control" id="ta_remark" rows="2" placeholder="Enter remark..."></textarea></div>
     </div>
@@ -444,10 +463,33 @@ function ta_openEdit(id) {
   // stops the next one being lost.
   document.getElementById('ta_remark').value = (o && o.Remarks) || '';
   document.getElementById('ta_fileUpload').value = '';
-  document.querySelectorAll('input[name="ta_approvalStatus"]').forEach(r => { r.onchange = ta_syncDispatchNotice; });
+  // Same reasoning as the remark above: opened showing what the order already
+  // carries, so changing the status does not quietly blank an answer somebody
+  // gave last week.
+  document.querySelectorAll('input[name="ta_orderType"]').forEach(r => {
+    r.checked = String((o && o.Order_Type) || '') === r.value;
+  });
+  document.getElementById('ta_dispatchDays').value =
+    (o && o.Dispatch_Days !== null && o.Dispatch_Days !== undefined && o.Dispatch_Days !== '') ? o.Dispatch_Days : '';
+  document.querySelectorAll('input[name="ta_approvalStatus"]').forEach(r => {
+    r.onchange = function () { ta_syncDispatchNotice(); ta_syncOrderType(); };
+  });
   ta_syncDispatchNotice();
+  ta_syncOrderType();
   new bootstrap.Modal(document.getElementById('ta_editModal')).show();
 }
+function ta_orderType() {
+  return document.querySelector('input[name="ta_orderType"]:checked')?.value || '';
+}
+
+// Shows the pair, or hides them, for whatever status is ticked now.
+function ta_syncOrderType() {
+  const st = document.querySelector('input[name="ta_approvalStatus"]:checked')?.value || '';
+  const on = st === 'Final Approval For Production';
+  document.getElementById('ta_typeWrap').classList.toggle('d-none', !on);
+  document.getElementById('ta_daysWrap').classList.toggle('d-none', !on || !ta_orderType());
+}
+
 async function taHandleApprovalSubmit() {
   const approvalStatus = document.querySelector('input[name="ta_approvalStatus"]:checked')?.value;
   if(!approvalStatus) { showToast('warning','Select a status.'); return; }
@@ -456,6 +498,13 @@ async function taHandleApprovalSubmit() {
   const formData = new FormData();
   formData.append('approvalStatus', approvalStatus);
   formData.append('remark', remark);
+  if (approvalStatus === 'Final Approval For Production') {
+    if (!ta_orderType()) { showToast('warning', 'Say whether this is a RUSH or a Normal order.'); return; }
+    formData.append('orderType', ta_orderType());
+    // Sent even when empty, so clearing the days is possible once they have
+    // been set. The server reads a blank as "not settled", not as zero.
+    formData.append('dispatchDays', document.getElementById('ta_dispatchDays').value);
+  }
   formData.append('userEmail', APP_USER.email);
   if(file) formData.append('file', file);
   showLoading(true);

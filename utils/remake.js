@@ -121,7 +121,10 @@ async function raiseRemake(parentId, status, opts = {}) {
   );
   if (!parent || !LEFT_FOR_DISPATCH(parent)) return null;
 
-  const { remark, fileUrl, user, userEmail } = opts;
+  // Columns the caller wants on this run and nowhere else - how urgent it is
+  // and how many days it has. Passed rather than inherited: they were answered
+  // about THIS run a moment ago, and last time's answer is not this one's.
+  const { remark, fileUrl, user, userEmail, extra } = opts;
   const who = user || userEmail;
   const root = rootOrderId(parentId);
   const note = String(remark || '').trim();
@@ -134,6 +137,7 @@ async function raiseRemake(parentId, status, opts = {}) {
     const updates = {};
     if (note) updates.remarks = note;
     if (fileUrl) updates.approved_design = fileUrl;
+    if (extra) Object.assign(updates, extra);
     if (String(open.design_approval_status_from_client || '').trim() !== value) {
       updates.design_approval_status_from_client = value;
       updates.actual_2 = now;
@@ -177,6 +181,13 @@ async function raiseRemake(parentId, status, opts = {}) {
     note || parent.remarks || null,
   ];
   if (fileUrl) { fields.push('approved_design'); values.push(fileUrl); }
+  // Guarded against a name that is already in the insert: INHERITED grows, and
+  // the same column twice is an error MySQL throws at the user, not at a test.
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) {
+      if (!fields.includes(k)) { fields.push(k); values.push(v); }
+    }
+  }
 
   await db.query(
     `INSERT INTO orders (${fields.map(f => `\`${f}\``).join(', ')})

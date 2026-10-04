@@ -103,6 +103,11 @@ const COLUMN_MIGRATIONS = [
   // before this arrived carries NULL - the field became compulsory from the
   // day it went in, not retrospectively.
   { table: 'orders', column: 'order_quantity', type: 'INT NULL' },
+  // How urgent the run is and how long it has, taken with the final approval.
+  // Blank on everything approved before this existed, which is honest: nobody
+  // was asked.
+  { table: 'orders', column: 'order_type', type: 'VARCHAR(20) NULL' },
+  { table: 'orders', column: 'dispatch_days', type: 'INT NULL' },
   // The order this one is a repeat of. Set on the new entry a Re-print or a
   // Re-order opens, blank on everything else. Holds the plain number even when
   // the repeat is itself being repeated, so every run of a job points at the

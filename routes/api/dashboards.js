@@ -313,7 +313,7 @@ router.get('/till-approval', requireLogin, async (req, res) => {
       SELECT order_id, timestamp, actual_1, actual_4,
              india_designer, overseas_designer, dealer_name, client_name,
              design_approval_status_from_client, remarks, remake_of,
-             status_4, production_board
+             status_4, production_board, order_type, dispatch_days
       FROM orders
       WHERE is_deleted = 0
         AND ${LOCAL_ORDER_OFF_BOARDS}
@@ -343,6 +343,11 @@ router.get('/till-approval', requireLogin, async (req, res) => {
       // ta_openEdit for what happened when it did not.
       Remarks: r.remarks || '',
       Remake_Of: r.remake_of || '',
+      // Not drawn on this board - they are columns on Production. They come
+      // back so the approval box can open showing what was answered last time
+      // instead of asking again from blank.
+      Order_Type: r.order_type || '',
+      Dispatch_Days: r.dispatch_days === null || r.dispatch_days === undefined ? '' : r.dispatch_days,
       // Where this one is sitting now. The approval box uses both to say what
       // saving will do, since an approval here moves the order off whichever
       // board it is on and that is not visible from this screen.
@@ -359,6 +364,35 @@ router.get('/till-approval', requireLogin, async (req, res) => {
   }
 });
 
+// How urgent a run is. Two answers and no third: a free-text column would be
+// 'rush', 'RUSH', 'Rush order' and 'urgent' within a month, and nothing could
+// be counted off it afterwards.
+const ORDER_TYPES = ['RUSH Order', 'Normal Order'];
+
+/**
+ * What the approval box asks beside a final approval, as columns.
+ *
+ * Only on Final Approval For Production. The box asks on that status alone, so
+ * nothing else may write these - otherwise a Proofing Done saved later would
+ * come through with both blank and wipe what the final approval set.
+ *
+ * The days are optional and a blank is a real answer: 'not settled yet', which
+ * has to be writable once a number has been put in and taken back out. Zero is
+ * not that - a job due in no days is a job due today - so an empty box clears
+ * the column rather than storing 0.
+ */
+function orderTypeColumns(status, body) {
+  if (String(status || '').trim() !== 'Final Approval For Production') return null;
+  const cols = {};
+  const type = String(body.orderType || '').trim();
+  if (ORDER_TYPES.includes(type)) cols.order_type = type;
+  if (body.dispatchDays !== undefined) {
+    const n = parseInt(body.dispatchDays, 10);
+    cols.dispatch_days = Number.isInteger(n) && n >= 0 ? n : null;
+  }
+  return Object.keys(cols).length ? cols : null;
+}
+
 // PUT /api/dashboards/till-approval/:id
 router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req, res) => {
   try {
@@ -374,8 +408,11 @@ router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req
     // a new row. The order in front of us is left exactly as it was - its
     // dates, its stages, the parcel that went - and the reason typed in the
     // box belongs to the new entry, not over whatever the designer wrote here.
+    // The repeat gets them too: how urgent THIS run is was just answered, and
+    // the entry being opened is the run it was answered about.
+    const orderType = orderTypeColumns(approvalStatus, req.body);
     const remake = await raiseRemake(orderId, approvalStatus, {
-      remark, fileUrl, user: req.session.user, userEmail,
+      remark, fileUrl, user: req.session.user, userEmail, extra: orderType,
     });
     if (remake) return res.json({ success: true, remake });
 
@@ -390,6 +427,7 @@ router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req
     };
 
     if (fileUrl) updates.approved_design = fileUrl;
+    if (orderType) Object.assign(updates, orderType);
     if (approvalStatus === 'Rejected') updates.design_status = 'Rejected';
 
     // An approval on an order that has already gone out is a new job on an old
@@ -542,6 +580,7 @@ router.get('/production', requireLogin, async (req, res) => {
       SELECT order_id, timestamp, actual_2, remake_of,
              dealer_name, client_name, india_designer, overseas_designer,
              design_approval_status_from_client, status_4,
+             order_type, dispatch_days,
              guest_name, paper_cutting, dye_status, block_status,
              printing, printing_type, edges, laser_cutting, output,
              card_assembly, remark, reason_for_delay
@@ -636,6 +675,11 @@ router.get('/production', requireLogin, async (req, res) => {
       // formatted for every order and read by nothing. On 5000 orders that was
       // 80k Intl formats and most of an 8MB response.
       Card_Assembly: r.card_assembly || '',
+      // Answered at the final approval, changeable from this board: the floor
+      // is who finds out a job has become a rush, or that seven days are now
+      // ten.
+      Order_Type: r.order_type || '',
+      Dispatch_Days: r.dispatch_days === null || r.dispatch_days === undefined ? '' : r.dispatch_days,
       Remark: r.remark || '',
       Reason_For_Delay: r.reason_for_delay || '',
       Dispatch_Status: r.status_4 || '',
@@ -759,6 +803,18 @@ router.put('/production/:id', requireLogin, async (req, res) => {
         // Sent back to production: it is not waiting on Dispatch any more.
         if (col === 'status_4' && !u[key]) updates.dispatch_ready_at = null;
       }
+    }
+
+    // Set on the final approval and editable here. Read through the same
+    // whitelist and the same integer rule as the approval box, so the two
+    // cannot put different things in one column.
+    if (u.Order_Type !== undefined) {
+      const t = String(u.Order_Type || '').trim();
+      updates.order_type = ORDER_TYPES.includes(t) ? t : null;
+    }
+    if (u.Dispatch_Days !== undefined) {
+      const n = parseInt(u.Dispatch_Days, 10);
+      updates.dispatch_days = Number.isInteger(n) && n >= 0 ? n : null;
     }
 
     // Dye Status
