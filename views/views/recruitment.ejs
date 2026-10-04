@@ -85,6 +85,24 @@
         <div class="col-md-4"><label class="form-label fw-bold text-dark small">Date</label><input class="form-control" type="date" id="rec_f_interview_date"></div>
         <div class="col-md-4"><label class="form-label fw-bold text-dark small">Time</label><input class="form-control" type="time" step="300" id="rec_f_interview_time"></div>
         <div class="col-md-4"><label class="form-label fw-bold text-dark small">Interviewer email</label><input class="form-control" type="email" id="rec_f_interviewer_email" placeholder="Leave blank to tell nobody"></div>
+        <%# Offline or online. Two buttons rather than a dropdown: there are
+            only two, and it decides what both letters say - a dropdown left
+            sitting on its first option would send a candidate to an office
+            for a call. %>
+        <div class="col-md-5">
+          <label class="form-label fw-bold text-dark small">Where is it held</label>
+          <div class="d-flex gap-2">
+            <input type="radio" class="btn-check" name="rec_mode" id="rec_mode_offline" value="offline" onchange="rec_modePicked()">
+            <label class="btn btn-outline-secondary fw-bold flex-fill" for="rec_mode_offline"><i class="fas fa-building me-1"></i>Offline</label>
+            <input type="radio" class="btn-check" name="rec_mode" id="rec_mode_online" value="online" onchange="rec_modePicked()">
+            <label class="btn btn-outline-primary fw-bold flex-fill" for="rec_mode_online"><i class="fas fa-video me-1"></i>Online</label>
+          </div>
+        </div>
+        <div class="col-md-7 d-none" id="rec_linkWrap">
+          <label class="form-label fw-bold text-dark small">Interview link *</label>
+          <input class="form-control" type="url" id="rec_f_interview_link" maxlength="500" placeholder="https://meet.google.com/... or Zoom / Teams" oninput="this.classList.remove('is-invalid')">
+          <div class="form-text">Goes to the candidate and to the interviewer. Without it the candidate has a time and no way to attend.</div>
+        </div>
         <%# Handed in with the booking so it can travel with the interviewer's
             letter. It is also the CV the onboarding form would otherwise ask
             the candidate for all over again. %>
@@ -106,7 +124,7 @@
               to type it here. Said out loud, because typing it anyway is how a
               line about one person on one day ends up in the next candidate's
               letter. %>
-          <div class="form-text">The office address and map link are already in every invitation — no need to type them. Please don't put a colleague's name here either; it reaches the candidate.</div>
+          <div class="form-text" id="rec_noteHelp"></div>
         </div>
       </div>
 
@@ -238,7 +256,59 @@ var rec_data = [], rec_editId = null, rec_join = null, rec_busy = false;
 // Every field on the add/edit form, so loading and saving do not each carry
 // their own list that can drift apart.
 var REC_FIELDS = ['name', 'email', 'phone', 'profile_position', 'interviewer_email',
-  'interview_date', 'interview_time', 'salary', 'joining_date', 'notes'];
+  'interview_date', 'interview_time', 'interview_link', 'salary', 'joining_date', 'notes'];
+
+// ── OFFLINE OR ONLINE ──
+// Offline is the default and always has been: everything booked before this
+// existed was at the office, so a blank mode means offline rather than
+// unanswered.
+function rec_mode() {
+  const picked = document.querySelector('input[name="rec_mode"]:checked');
+  return picked ? picked.value : 'offline';
+}
+
+// The link box belongs to online and nothing else, so it goes away - and
+// empties - the moment the interview moves back to the office. A dead Meet
+// link left on the row is how somebody ends up sent both an address and a
+// call.
+var REC_NOTE_HELP = {
+  offline: 'The office address and map link are already in every invitation — no need to type them.',
+  online: 'The joining link is already in the invitation — no need to paste it here as well.',
+};
+
+function rec_modePicked() {
+  const online = rec_mode() === 'online';
+  const wrap = document.getElementById('rec_linkWrap');
+  wrap.classList.toggle('d-none', !online);
+  // The note's help used to promise the address was in the letter, which
+  // stopped being true for half of them the moment an interview could be held
+  // over a link.
+  document.getElementById('rec_noteHelp').textContent =
+    REC_NOTE_HELP[online ? 'online' : 'offline']
+    + " Please don't put a colleague's name here either; it reaches the candidate.";
+  if (!online) {
+    const box = document.getElementById('rec_f_interview_link');
+    box.value = '';
+    box.classList.remove('is-invalid');
+  }
+}
+
+function rec_setMode(value) {
+  const online = String(value || '').trim().toLowerCase() === 'online';
+  document.getElementById(online ? 'rec_mode_online' : 'rec_mode_offline').checked = true;
+  rec_modePicked();
+}
+
+// Online with nothing typed is the one case a plain required check misses: the
+// mode has been answered, so the form believes it knows where to send them.
+function rec_demandLink() {
+  if (rec_mode() !== 'online') return true;
+  const box = document.getElementById('rec_f_interview_link');
+  if ((box.value || '').trim()) return true;
+  box.classList.add('is-invalid');
+  box.focus();
+  return false;
+}
 
 // Which statuses write to the candidate, so the dialog can say so honestly
 // instead of offering a tick box that does nothing.
@@ -255,7 +325,12 @@ var REC_PILL = {
   'Onboarding': 'dark', 'Offer Sent': 'info', 'Rejected': 'secondary',
 };
 
-const rec_esc = v => String(v == null ? '' : v)
+// var, not const: loadPage() re-runs this whole block every time the tab is
+// opened, and a repeat `const` is a parse error that kills the script before
+// anything else in it runs - so opening Recruitment a second time in one
+// session left the page half drawn and every button dead. Same reason the
+// production board says so at the top of its own file.
+var rec_esc = v => String(v == null ? '' : v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 // "2026-10-02" → "02 Oct 2026". Empty stays a dash rather than "Invalid Date".
@@ -476,6 +551,7 @@ function rec_openAdd() {
   rec_editId = null;
   document.getElementById('rec_modalTitle').textContent = 'Schedule Interview';
   REC_FIELDS.forEach(f => { const el = document.getElementById('rec_f_' + f); if (el) el.value = ''; });
+  rec_setMode('offline');
   document.getElementById('rec_f_sendEmail').checked = true;
   document.getElementById('rec_sendWrap').style.display = '';
   document.getElementById('rec_f_resume').value = '';
@@ -497,6 +573,7 @@ function rec_openEdit(id) {
   rec_editId = id;
   document.getElementById('rec_modalTitle').textContent = c.name;
   REC_FIELDS.forEach(f => { const el = document.getElementById('rec_f_' + f); if (el) el.value = c[f] == null ? '' : c[f]; });
+  rec_setMode(c.interview_mode);
   // Editing never emails — only adding does, and only then because an
   // invitation is the point of adding somebody.
   document.getElementById('rec_sendWrap').style.display = 'none';
@@ -535,7 +612,9 @@ async function rec_save(btn) {
   if (rec_busy) return;
   const body = {};
   REC_FIELDS.forEach(f => { const el = document.getElementById('rec_f_' + f); if (el) body[f] = el.value; });
+  body.interview_mode = rec_mode();
   if (!body.name.trim()) { showToast('warning', 'Name is required.'); return; }
+  if (!rec_demandLink()) { showToast('warning', 'An online interview needs a meeting link.'); return; }
 
   const cv = document.getElementById('rec_f_resume').files[0] || null;
   // Caught here, because the host refuses a bigger body before any of our

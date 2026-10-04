@@ -608,6 +608,12 @@ CREATE TABLE IF NOT EXISTS recruit_candidates (
   interviewer_email VARCHAR(255) DEFAULT '',
   interview_date DATE DEFAULT NULL,
   interview_time VARCHAR(20) DEFAULT '',
+  -- Where it is held. 'offline' at the office, 'online' over a meeting link,
+  -- and the link itself when it is the second. Blank reads as offline: that is
+  -- what every interview booked before this was, and guessing otherwise would
+  -- send old candidates a letter with no address and no link.
+  interview_mode VARCHAR(10) DEFAULT '',
+  interview_link VARCHAR(500) DEFAULT '',
   status VARCHAR(20) NOT NULL DEFAULT 'Scheduled',
   reschedule_date DATE DEFAULT NULL,
   reschedule_time VARCHAR(20) DEFAULT '',

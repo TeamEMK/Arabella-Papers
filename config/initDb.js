@@ -106,6 +106,11 @@ const COLUMN_MIGRATIONS = [
   // How urgent the run is and how long it has, taken with the final approval.
   // Blank on everything approved before this existed, which is honest: nobody
   // was asked.
+  // Offline at the office or online over a link, and the link. Blank on
+  // everything booked before this, which is read as offline - that is what
+  // those were.
+  { table: 'recruit_candidates', column: 'interview_mode', type: "VARCHAR(10) DEFAULT ''" },
+  { table: 'recruit_candidates', column: 'interview_link', type: "VARCHAR(500) DEFAULT ''" },
   { table: 'orders', column: 'order_type', type: 'VARCHAR(20) NULL' },
   { table: 'orders', column: 'dispatch_days', type: 'INT NULL' },
   // The order this one is a repeat of. Set on the new entry a Re-print or a

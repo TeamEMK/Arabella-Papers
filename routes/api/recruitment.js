@@ -67,6 +67,36 @@ const dateOrNull = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '').trim()) ? 
 // trips a stricter pattern would block a hire for no good reason.
 const looksLikeEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
 
+/**
+ * Where the interview is held, and the link if it is held over one.
+ *
+ * Two values and no third, because the letters branch on this: free text would
+ * be 'Online', 'online', 'Zoom' and 'video call' within a month and every one
+ * of them would read as offline, sending a candidate an office address for a
+ * meeting nobody is going to.
+ *
+ * An offline interview throws the link away rather than keeping it. Switching
+ * a booking back to the office and leaving a dead Meet link on the row is how
+ * somebody ends up emailed both.
+ *
+ * Online demands a link: an online interview without one tells the candidate
+ * a time and gives them no way to attend, which is worse than not writing.
+ */
+const INTERVIEW_MODES = ['offline', 'online'];
+
+function interviewWhere(b) {
+  const mode = String(b.interview_mode || '').trim().toLowerCase();
+  if (!INTERVIEW_MODES.includes(mode)) return { interview_mode: '', interview_link: '' };
+  if (mode === 'offline') return { interview_mode: 'offline', interview_link: '' };
+  return { interview_mode: 'online', interview_link: clean(b.interview_link, 500) };
+}
+
+// Said once, used by both the create and the edit.
+const NEEDS_LINK = 'An online interview needs a meeting link — that is the only way the candidate can attend.';
+function linkMissing(where) {
+  return where.interview_mode === 'online' && !where.interview_link;
+}
+
 async function sendAndLog(candidate, kind, action) {
   const result = await recruitEmail.sendToCandidate(kind, candidate)
     .catch(err => ({ ok: false, reason: err.message }));
@@ -143,7 +173,8 @@ router.get('/candidates', requireLogin, async (req, res) => {
 
     const [rows] = await db.query(
       `SELECT c.id, c.name, c.email, c.phone, c.profile_position, c.interviewer_email,
-              c.interview_time, c.reschedule_time, c.reschedule_reason, c.status,
+              c.interview_time, c.interview_mode, c.interview_link,
+              c.reschedule_time, c.reschedule_reason, c.status,
               c.salary, c.notes, c.department, c.work_location,
               u.username AS created_by_name,
               DATE_FORMAT(c.interview_date,  '%Y-%m-%d') AS interview_date,
@@ -181,6 +212,9 @@ router.post('/candidates', requireLogin, upload.single('resume_file'), async (re
       return res.status(400).json({ success: false, error: 'A valid email address is required — the invitation is sent there.' });
     }
 
+    const where = interviewWhere(b);
+    if (linkMissing(where)) return res.status(400).json({ success: false, error: NEEDS_LINK });
+
     const candidate = {
       name,
       email,
@@ -191,6 +225,7 @@ router.post('/candidates', requireLogin, upload.single('resume_file'), async (re
       interview_time: clean(b.interview_time, 20),
       salary: clean(b.salary, 100),
       notes: clean(b.notes, 5000),
+      ...where,
     };
 
     // A second Save while the first is still sending arrives here as its own
@@ -210,10 +245,12 @@ router.post('/candidates', requireLogin, upload.single('resume_file'), async (re
     const [result] = await db.query(
       `INSERT INTO recruit_candidates
          (name, email, phone, profile_position, interviewer_email,
-          interview_date, interview_time, salary, notes, status, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?, 'Scheduled', ?)`,
+          interview_date, interview_time, interview_mode, interview_link,
+          salary, notes, status, created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?, 'Scheduled', ?)`,
       [candidate.name, candidate.email, candidate.phone, candidate.profile_position,
        candidate.interviewer_email, candidate.interview_date, candidate.interview_time,
+       candidate.interview_mode, candidate.interview_link,
        candidate.salary, candidate.notes, req.session.user.id]);
     candidate.id = result.insertId;
 
@@ -288,13 +325,18 @@ router.put('/candidates/:id', requireLogin, async (req, res) => {
       return res.status(400).json({ success: false, error: 'A valid email address is required.' });
     }
 
+    const editWhere = interviewWhere(b);
+    if (linkMissing(editWhere)) return res.status(400).json({ success: false, error: NEEDS_LINK });
+
     await db.query(
       `UPDATE recruit_candidates
           SET name = ?, email = ?, phone = ?, profile_position = ?, interviewer_email = ?,
-              interview_date = ?, interview_time = ?, salary = ?, notes = ?, joining_date = ?
+              interview_date = ?, interview_time = ?, interview_mode = ?, interview_link = ?,
+              salary = ?, notes = ?, joining_date = ?
         WHERE id = ?`,
       [name, email, clean(b.phone, 50), clean(b.profile_position), clean(b.interviewer_email),
-       dateOrNull(b.interview_date), clean(b.interview_time, 20), clean(b.salary, 100),
+       dateOrNull(b.interview_date), clean(b.interview_time, 20),
+       editWhere.interview_mode, editWhere.interview_link, clean(b.salary, 100),
        clean(b.notes, 5000), dateOrNull(b.joining_date), id]);
     res.json({ success: true });
   } catch (err) {

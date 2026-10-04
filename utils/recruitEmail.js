@@ -112,6 +112,51 @@ function note(text) {
 }
 
 /**
+ * Is this one over a link rather than at the office?
+ *
+ * Blank reads as offline. Every interview booked before the mode existed was
+ * at the office, and treating a blank as online would send those candidates a
+ * letter with no address and no link - nothing at all to go on.
+ */
+function isOnline(c) {
+  return String((c && c.interview_mode) || '').trim().toLowerCase() === 'online'
+    && !!String((c && c.interview_link) || '').trim();
+}
+
+/**
+ * The link block, for an interview held online.
+ *
+ * A button and the plain URL underneath it. The button is what somebody taps
+ * on a phone; the URL is for the ones whose mail client strips buttons, and
+ * for anybody who wants to paste it into a calendar.
+ */
+function joinLink(c) {
+  const url = String((c && c.interview_link) || '').trim();
+  if (!url) return '';
+  const safe = esc(url);
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+    <tr><td style="background:#f8f9fa;border-left:3px solid #ffa500;border-radius:0 6px 6px 0;padding:14px 16px;">
+      <div style="font-family:${FONT};font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:#6c757d;margin-bottom:9px;">How to join</div>
+      <a href="${safe}" target="_blank" style="display:inline-block;background:#0d6efd;color:#ffffff;
+         font-family:${FONT};font-size:14.5px;font-weight:600;text-decoration:none;
+         padding:11px 22px;border-radius:6px;">Join the interview</a>
+      <div style="font-family:${FONT};font-size:12.5px;line-height:1.6;color:#6c757d;margin-top:11px;word-break:break-all;">
+        Or paste this into your browser:<br>
+        <a href="${safe}" target="_blank" style="color:#0d6efd;text-decoration:underline;">${safe}</a>
+      </div>
+    </td></tr></table>`;
+}
+
+/**
+ * Whichever of the two the interview needs: the link, or the address.
+ *
+ * One function so no letter can end up carrying both, or neither.
+ */
+function howToAttend(c) {
+  return isOnline(c) ? joinLink(c) : whereToCome();
+}
+
+/**
  * Where the interview is held — the same block in every letter that needs it.
  *
  * Set apart from the paragraphs, because it is the one thing in the letter
@@ -235,18 +280,27 @@ function stripTags(html) {
 function buildInterviewEmail(c) {
   const when = [longDate(c.interview_date), niceTime(c.interview_time)].filter(Boolean).join(', ');
   const body = para(`Dear ${esc(c.name)},`)
-    + para(`Thank you for your interest in Arabella Papers. Your interview${c.profile_position ? ` for the role of <b>${esc(c.profile_position)}</b>` : ''} has been scheduled. The details are below.`)
-    + detail([['Date &amp; time', esc(when)], ['Position', esc(c.profile_position)]])
-    + whereToCome()
+    + para(`Thank you for your interest in Arabella Papers. Your ${isOnline(c) ? 'online ' : ''}interview${c.profile_position ? ` for the role of <b>${esc(c.profile_position)}</b>` : ''} has been scheduled. The details are below.`)
+    + detail([
+        ['Date &amp; time', esc(when)],
+        ['Position', esc(c.profile_position)],
+        // Said outright rather than left to be worked out from whether there
+        // is a link or an address below it.
+        ['Held', isOnline(c) ? 'Online' : (OFFICE.address ? 'At our office' : '')],
+      ])
+    + howToAttend(c)
     + note(c.notes)
-    + para(OFFICE.address
-      ? 'Please arrive a few minutes early.'
-      : 'The interview is held at our office. Please arrive a few minutes early.')
+    + para(isOnline(c)
+      ? 'Please join a couple of minutes early, and somewhere quiet with a steady connection. '
+        + 'If the link does not open, reply to this email and we will send another.'
+      : (OFFICE.address
+        ? 'Please arrive a few minutes early.'
+        : 'The interview is held at our office. Please arrive a few minutes early.'))
     + para('If you cannot make this time, reply to this email and we will arrange another.')
     + para('We look forward to meeting you.');
   return {
-    subject: `Interview scheduled${c.profile_position ? ` — ${c.profile_position}` : ''}`,
-    html: shell({ head: `Interview scheduled${when ? ' — ' + when : ''}`, eyebrow: 'INTERVIEW SCHEDULED', body, footer: FOOTER_CANDIDATE }),
+    subject: `${isOnline(c) ? 'Online interview' : 'Interview'} scheduled${c.profile_position ? ` — ${c.profile_position}` : ''}`,
+    html: shell({ head: `${isOnline(c) ? 'Online interview' : 'Interview'} scheduled${when ? ' — ' + when : ''}`, eyebrow: isOnline(c) ? 'ONLINE INTERVIEW' : 'INTERVIEW SCHEDULED', body, footer: FOOTER_CANDIDATE }),
     text: stripTags(body),
   };
 }
@@ -257,11 +311,12 @@ function buildRescheduleEmail(c) {
   const body = para(`Dear ${esc(c.name)},`)
     + para('Your interview has been moved. The new time is below; everything else is unchanged.')
     + detail([['New date &amp; time', esc(when)], ['Position', esc(c.profile_position)],
+              ['Held', isOnline(c) ? 'Online' : (OFFICE.address ? 'At our office' : '')],
               ['Reason', esc(c.reschedule_reason)]])
     // Repeated here rather than left to the first letter: somebody reading
     // "your interview has moved" on the day should not have to go hunting up
-    // the thread for the address.
-    + whereToCome()
+    // the thread for the address, or the link.
+    + howToAttend(c)
     + note(c.notes)
     + para('Apologies for the change, and thank you for your patience.');
   return {
@@ -309,23 +364,30 @@ function buildInterviewerEmail(c, hasResume) {
   const when = [longDate(c.reschedule_date || c.interview_date),
                 niceTime(c.reschedule_time || c.interview_time)].filter(Boolean).join(', ');
   const body = para('Hello,')
-    + para(`An interview has been scheduled with <b>${esc(c.name)}</b>${c.profile_position ? ` for the ${esc(c.profile_position)} role` : ''}.`)
+    + para(`An ${isOnline(c) ? 'online interview' : 'interview'} has been scheduled with <b>${esc(c.name)}</b>${c.profile_position ? ` for the ${esc(c.profile_position)} role` : ''}.`)
     + detail([
         ['Candidate', esc(c.name)],
         ['Position', esc(c.profile_position)],
         ['Date &amp; time', esc(when)],
+        ['Held', isOnline(c) ? 'Online' : 'At our office'],
         ['Candidate phone', esc(c.phone)],
         ['Candidate email', esc(c.email)],
       ])
+    // The same link the candidate has, because the two of them have to end up
+    // in the same room - and whoever is taking the interview is the one who
+    // will be sitting there wondering where the candidate is.
+    + (isOnline(c) ? joinLink(c) : '')
     // Said plainly, because an attachment nobody is told about is one nobody
     // opens until after the interview.
     + (hasResume
       ? para('Their CV is attached. Worth a look before they arrive — it is where the questions come from.')
       : '')
-    + para('The candidate has been sent the date and time separately.');
+    + para(isOnline(c)
+      ? 'The candidate has been sent the same date, time and link separately.'
+      : 'The candidate has been sent the date and time separately.');
   return {
-    subject: `Interview scheduled — ${c.name}${c.profile_position ? ` (${c.profile_position})` : ''}`,
-    html: shell({ head: `Interview with ${c.name}${when ? ' — ' + when : ''}`, eyebrow: 'INTERVIEW SCHEDULED', body, footer: FOOTER_INTERNAL }),
+    subject: `${isOnline(c) ? 'Online interview' : 'Interview'} scheduled — ${c.name}${c.profile_position ? ` (${c.profile_position})` : ''}`,
+    html: shell({ head: `${isOnline(c) ? 'Online interview' : 'Interview'} with ${c.name}${when ? ' — ' + when : ''}`, eyebrow: isOnline(c) ? 'ONLINE INTERVIEW' : 'INTERVIEW SCHEDULED', body, footer: FOOTER_INTERNAL }),
     text: stripTags(body),
   };
 }
