@@ -154,6 +154,10 @@ function serviceAccountEmail() {
 }
 
 module.exports = {
+  // Exported for utils/newSheet.js, which needs the same three fallbacks -
+  // credentials.json here, GOOGLE_CREDENTIALS on a deployment, or the email
+  // and key as a pair - and must not grow a fourth way of finding them.
+  loadCredentials,
   getReadClient, getWriteClient, READ_SCOPE, WRITE_SCOPE,
   readValues, invalidateSheet,
   listTabs, findTabByTitle, forgetTabs,

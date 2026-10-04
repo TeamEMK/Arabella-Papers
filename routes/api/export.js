@@ -14,6 +14,7 @@ const express = require('express');
 const router = express.Router();
 const ExcelJS = require('exceljs');
 const { requireLogin } = require('../../middleware/auth');
+const { createSheet } = require('../../utils/newSheet');
 
 // A board is a few thousand rows at the outside. The cap is here so a damaged
 // or crafted request cannot ask the server to build a workbook out of memory
@@ -88,6 +89,42 @@ router.post('/xlsx', requireLogin, async (req, res) => {
     // the browser gets a truncated file rather than this.
     if (!res.headersSent) res.status(500).json({ success: false, error: err.message });
     else res.end();
+  }
+});
+
+/**
+ * POST /api/export/gsheet
+ *
+ * The same body the .xlsx takes, come out as a Google Sheet instead. One
+ * endpoint for every board for the same reason: the page knows what it is
+ * showing, and a query on this side would have to be kept in step with the
+ * filtering on that side.
+ *
+ * Slower than the file - a create, a write, a format pass and a share, each a
+ * round trip to Google - so the button says so while it waits.
+ */
+router.post('/gsheet', requireLogin, async (req, res) => {
+  try {
+    const title = String(req.body.title || 'Export').slice(0, 80);
+    const columns = Array.isArray(req.body.columns) ? req.body.columns.slice(0, MAX_COLS) : [];
+    const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+
+    if (!columns.length) return res.status(400).json({ success: false, error: 'No columns given.' });
+    if (!rows.length) return res.status(400).json({ success: false, error: 'Nothing to put in it.' });
+    if (rows.length > MAX_ROWS) {
+      return res.status(400).json({ success: false, error: `Too many rows (${rows.length}).` });
+    }
+
+    const who = (req.session.user && (req.session.user.username || req.session.user.email)) || '';
+    const made = await createSheet(title, columns, rows, who);
+    res.json({ success: true, url: made.url, rows: made.rows });
+  } catch (err) {
+    console.error('Sheet export failed:', err);
+    // Google's own message is the useful one here - "The caller does not have
+    // permission", "Drive storage quota exceeded" - so it goes through rather
+    // than being flattened into "server error".
+    const detail = (err.errors && err.errors[0] && err.errors[0].message) || err.message;
+    res.status(500).json({ success: false, error: detail || 'Could not make the sheet.' });
   }
 });
 

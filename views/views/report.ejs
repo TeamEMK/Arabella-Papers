@@ -6,6 +6,7 @@
     <h4 class="mb-0 text-dark fw-bold"><i class="fas fa-file-lines me-2"></i>Report</h4>
     <div class="ms-auto d-flex gap-2">
       <button class="btn btn-outline-success smooth-ui" onclick="rep_download(this)"><i class="fas fa-file-excel me-1"></i> Excel</button>
+      <button class="btn btn-outline-primary smooth-ui" onclick="rep_toSheet(this)" title="Make a new Google Sheet of what is on screen"><i class="fas fa-table me-1"></i> Google Sheet</button>
       <button class="btn btn-outline-dark smooth-ui text-dark" onclick="refreshBoard(this, rep_load, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
     </div>
   </div>
@@ -171,10 +172,26 @@ function rep_clear() {
   rep_rangePicked();
 }
 
-function rep_download(btn) {
+// What the two buttons both send: the title the Report-of box is showing, and
+// whatever the filters have left on screen - not the whole table. Written once
+// so the file and the sheet cannot end up carrying different things.
+function rep_payload() {
   var sel = document.getElementById('rep_source');
-  downloadXlsx(sel.options[sel.selectedIndex].text + ' Report',
-    REP_BASE.concat(rep_extraCols()), rep_filtered.map(rep_cells), btn);
+  return {
+    title: sel.options[sel.selectedIndex].text + ' Report',
+    columns: REP_BASE.concat(rep_extraCols()),
+    rows: rep_filtered.map(rep_cells),
+  };
+}
+
+function rep_download(btn) {
+  var p = rep_payload();
+  downloadXlsx(p.title, p.columns, p.rows, btn);
+}
+
+function rep_toSheet(btn) {
+  var p = rep_payload();
+  exportToSheet(p.title, p.columns, p.rows, btn);
 }
 
 document.getElementById('rep_range').innerHTML = dateRangeOptions();

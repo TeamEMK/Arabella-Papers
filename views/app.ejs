@@ -452,6 +452,63 @@
     }
   }
 
+  /**
+   * The same table, as a Google Sheet.
+   *
+   * Takes what downloadXlsx takes, so a board that already has an Excel button
+   * gets this one for the cost of a line. A new sheet each time: overwriting
+   * one would rewrite a link somebody sent last week, and whoever opens it
+   * tomorrow would have no way of knowing the numbers had moved.
+   *
+   * The link is shown rather than followed. A window.open() here is eaten by
+   * the pop-up blocker - the click that started this finished several seconds
+   * and four Google round trips ago, so the browser no longer counts it as a
+   * user action - and the sheet would be made with nothing to show for it.
+   */
+  async function exportToSheet(title, columns, rows, btn) {
+    if (!rows.length) { showToast('warning', 'Nothing to put in a sheet.'); return; }
+    var original = btn && btn.innerHTML;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Making sheet...'; }
+    try {
+      var res = await fetch('/api/export/gsheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title, columns: columns, rows: rows }),
+      });
+      var json = await res.json().catch(function () { return {}; });
+      if (!res.ok || !json.success) {
+        showToast('error', json.error || 'Could not make the sheet.');
+        return;
+      }
+      await Swal.fire({
+        icon: 'success',
+        title: 'Sheet ready',
+        html: '<div class="mb-2 text-muted">' + json.rows + ' rows &middot; anyone with the link can read it</div>'
+          + '<input id="gs_link" class="form-control text-center" readonly value="' + json.url + '">',
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-up-right-from-square me-1"></i> Open',
+        cancelButtonText: '<i class="fas fa-copy me-1"></i> Copy link',
+        confirmButtonColor: '#198754',
+        cancelButtonColor: '#6c757d',
+        didOpen: function () {
+          var box = document.getElementById('gs_link');
+          box.focus(); box.select();
+        },
+      }).then(function (r) {
+        if (r.isConfirmed) window.open(json.url, '_blank', 'noopener');
+        else if (r.dismiss === Swal.DismissReason.cancel) {
+          navigator.clipboard.writeText(json.url)
+            .then(function () { showToast('success', 'Link copied'); })
+            .catch(function () { showToast('warning', 'Copy it from the box.'); });
+        }
+      });
+    } catch (e) {
+      showToast('error', 'Server error.');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = original; }
+    }
+  }
+
   // ── REFRESH BUTTONS ──
   // A refresh that fetches the same rows and redraws them looks like nothing
   // happened - the Dispatch queue has one order in it, so there was no visible
