@@ -283,13 +283,18 @@
           </div>
           <div class="col-md-6">
             <label class="form-label text-dark fw-bold">Possible Design Time</label>
-            <select id="punchDesignTime" class="form-select" required>
+            <select id="punchDesignTime" class="form-select" required onchange="dt_sync('punchDesignTime', true)">
               <option value="" disabled selected>Select...</option>
               <option value="10 Minutes">10 Minutes</option>
+              <option value="30 Minutes">30 Minutes</option>
+              <option value="1 Hour">1 Hour</option>
+              <option value="1.5 Hours">1.5 Hours</option>
               <option value="2 Hours">2 Hours</option>
               <option value="4 Hours">4 Hours</option>
               <option value="EOD">EOD</option>
+              <option value="__custom">Custom...</option>
             </select>
+            <input type="text" class="form-control mt-2 d-none" id="punchDesignTimeCustom" maxlength="40" placeholder="How long? e.g. 3 Hours, Tomorrow 11 am" oninput="dt_clearInvalid(this)">
           </div>
           <div class="col-12">
             <label class="form-label text-dark fw-bold">Upload Files</label>
@@ -422,10 +427,18 @@
           </div>
           <div class="col-md-6">
             <label class="form-label fw-bold">Possible Design Time</label>
-            <select id="ed_Time" class="form-select" required>
+            <select id="ed_Time" class="form-select" required onchange="dt_sync('ed_Time', true)">
               <option value="" disabled>Select...</option>
-              <option>10 Minutes</option><option>2 Hours</option><option>4 Hours</option><option>EOD</option>
+              <option value="10 Minutes">10 Minutes</option>
+              <option value="30 Minutes">30 Minutes</option>
+              <option value="1 Hour">1 Hour</option>
+              <option value="1.5 Hours">1.5 Hours</option>
+              <option value="2 Hours">2 Hours</option>
+              <option value="4 Hours">4 Hours</option>
+              <option value="EOD">EOD</option>
+              <option value="__custom">Custom...</option>
             </select>
+            <input type="text" class="form-control mt-2 d-none" id="ed_TimeCustom" maxlength="40" placeholder="How long? e.g. 3 Hours, Tomorrow 11 am" oninput="dt_clearInvalid(this)">
           </div>
           <div class="col-12">
             <label class="form-label fw-bold">Initial File (Replace)</label>
@@ -527,6 +540,66 @@
 
 <script>
 // ═══ GLOBAL STATE ═══
+// ── POSSIBLE DESIGN TIME ──
+// The usual answers in a list, with a way out at the end. The usual ones are
+// most of the traffic and picking one is a single click; Custom is for the
+// rest, because a dropdown that cannot say what the client actually asked for
+// gets filled with whichever option is nearest - and then the column reads
+// '4 Hours' about a job that was promised for Tuesday.
+//
+// Both boxes, the punch and the edit, go through these, so the two cannot
+// drift apart over what Custom means or what ends up saved.
+var DT_CUSTOM = '__custom';
+
+// What the pair is actually saying. Custom hands over what was typed; anything
+// else is the option itself.
+function dt_value(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return '';
+  if (sel.value !== DT_CUSTOM) return sel.value;
+  return (document.getElementById(selectId + 'Custom').value || '').trim();
+}
+
+// Shows or hides the box. Picking Custom is saying "none of these", so the
+// next thing wanted is to type - hence the focus.
+function dt_sync(selectId, focus) {
+  const sel = document.getElementById(selectId);
+  const box = document.getElementById(selectId + 'Custom');
+  if (!sel || !box) return;
+  const on = sel.value === DT_CUSTOM;
+  box.classList.toggle('d-none', !on);
+  if (!on) { box.value = ''; box.classList.remove('is-invalid'); }
+  else if (focus) box.focus();
+}
+
+// Fills the pair from a stored value. Anything the list does not carry is a
+// custom one: an order saved as 'Tuesday 4 pm' has to open showing that, not
+// snap to the first option and lose it the next time anybody saves.
+function dt_set(selectId, value) {
+  const sel = document.getElementById(selectId);
+  const box = document.getElementById(selectId + 'Custom');
+  if (!sel) return;
+  const v = String(value || '').trim();
+  const known = !!v && Array.prototype.some.call(sel.options, o => o.value === v);
+  sel.value = known ? v : (v ? DT_CUSTOM : '');
+  if (box) box.value = known ? '' : v;
+  dt_sync(selectId, false);
+}
+
+function dt_clearInvalid(el) { el.classList.remove('is-invalid'); }
+
+// Custom chosen and nothing typed is the one case the plain empty check
+// misses: the dropdown has been answered, so the form believes it has a time.
+function dt_demandCustom(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel || sel.value !== DT_CUSTOM) return true;
+  const box = document.getElementById(selectId + 'Custom');
+  if ((box.value || '').trim()) return true;
+  box.classList.add('is-invalid');
+  box.focus();
+  return false;
+}
+
 var ordersData = [];
 var currentDisplaySet = [];
 var renderedCount = 0;
@@ -988,7 +1061,7 @@ function openEditDetailsModal(ID) {
   document.getElementById('ed_Dealer').value = order.Dealer_name || '';
   document.getElementById('ed_Client').value = order.Client_name || '';
   document.getElementById('ed_Designer').value = order.Designer || '';
-  document.getElementById('ed_Time').value = order.Possible_design_time || '';
+  dt_set('ed_Time', order.Possible_design_time || '');
   document.getElementById('ed_Remark').value = order.Remarks || '';
   new bootstrap.Modal(document.getElementById('editDetailsModal')).show();
 }
@@ -1002,8 +1075,9 @@ async function handleFormSubmit() {
   const designer = document.getElementById('designerInput').value;
   const client = document.getElementById('punchClientInput').value;
   const remarks = document.getElementById('punchRemarks').value;
-  const designTime = document.getElementById('punchDesignTime').value;
+  const designTime = dt_value('punchDesignTime');
 
+  if(!dt_demandCustom('punchDesignTime')) { showToast('warning','Type how long the design will take.'); return; }
   if(!dealer || !designer || !client || !remarks || !designTime) { showToast('warning','Please fill all required fields.'); return; }
 
 
@@ -1081,7 +1155,8 @@ async function handleEditDetailsSubmit() {
   const dealer = document.getElementById('ed_Dealer').value;
   const client = document.getElementById('ed_Client').value;
   const designer = document.getElementById('ed_Designer').value;
-  const time = document.getElementById('ed_Time').value;
+  const time = dt_value('ed_Time');
+  if(!dt_demandCustom('ed_Time')) { showToast('warning','Type how long the design will take.'); return; }
   const remark = document.getElementById('ed_Remark').value;
   const file = document.getElementById('ed_File').files[0];
   const formData = new FormData();
@@ -1576,7 +1651,7 @@ function resetForm() {
   // India is the only team left, so there is nothing to pick before the
   // designer field means anything - it opens ready to use.
   updateDesigners('India');
-  document.getElementById('punchDesignTime').value = '';
+  dt_set('punchDesignTime', '');
   document.getElementById('fileInput').value = '';
   document.getElementById('fileText').textContent = 'Click or Drag files here';
   document.getElementById('fileText').style.color = '#6c757d';

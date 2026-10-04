@@ -22,7 +22,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Cassie stopped punching orders; the overseas name lives on the old rows
 // only. A bulk file naming it would create a new one.
 const PUNCHED_BY = ['India Team'];
-const DESIGN_TIMES = ['10 Minutes', '2 Hours', '4 Hours', 'EOD'];
+// The answers the punch box offers. Not a whitelist any more: that box also
+// takes a typed one, so a file carrying 'Tuesday 4 pm' is saying something the
+// office can say by hand, and refusing it here would only send them to the
+// single-order form to type the same thing. The list is still what the import
+// page shows as the usual answers, and a value that matches one is normalised
+// to its spelling so the column does not fill with 'eod' and 'EOD'.
+const DESIGN_TIMES = ['10 Minutes', '30 Minutes', '1 Hour', '1.5 Hours', '2 Hours', '4 Hours', 'EOD'];
 
 // Accepts whichever of these the user's header says, so a sheet exported from
 // the old system imports without being re-titled by hand.
@@ -163,11 +169,7 @@ function validate(type, data, context) {
     }
 
     const time = matchOne(DESIGN_TIMES, data.designTime);
-    if (data.designTime && !time) {
-      errors.push('Possible Design Time must be one of: ' + DESIGN_TIMES.join(', '));
-    } else if (time) {
-      data.designTime = time;
-    }
+    if (time) data.designTime = time;
 
     // Not an error: the single-order form also stores an unknown dealer and
     // simply leaves the dealer email blank.
@@ -313,11 +315,12 @@ router.get('/columns/:type', canImport, async (req, res) => {
       key: c.key,
       header: c.header,
       required: c.key === 'orderQuantity' ? qtyRequired : !!c.required,
-      allowed: c.key === 'punchedBy' ? PUNCHED_BY
-        : c.key === 'designTime' ? DESIGN_TIMES
+      // Only a genuinely closed set goes in `allowed` - the format line prints
+      // it as the values the column takes, and design time takes others now.
+      allowed: c.key === 'punchedBy' ? PUNCHED_BY : null,
+      hint: c.key === 'addOns' ? 'e.g. RSVP Card x 50; Menu Card x 250'
+        : c.key === 'designTime' ? 'e.g. ' + DESIGN_TIMES.slice(0, 3).join(', ') + ', or your own'
         : null,
-      // Nothing else in the file needs explaining; this one does.
-      hint: c.key === 'addOns' ? 'e.g. RSVP Card x 50; Menu Card x 250' : null,
     })),
   });
 });
