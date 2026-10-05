@@ -369,6 +369,54 @@ router.get('/till-approval', requireLogin, async (req, res) => {
 // be counted off it afterwards.
 const ORDER_TYPES = ['RUSH Order', 'Normal Order'];
 
+const DAY_MS = 86400000;
+
+/** The day something happened, in IST, as YYYY-MM-DD. */
+function istDay(when) {
+  return new Date(when).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
+function addDays(ymd, n) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) + n * DAY_MS).toISOString().slice(0, 10);
+}
+
+function daysBetween(from, to) {
+  return Math.round((Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / DAY_MS);
+}
+
+/**
+ * The day an order was promised for, and how far past it we are.
+ *
+ * Counted from the day it reached production - the approval date, which is the
+ * one the board prints - because that is when the clock the office set actually
+ * started. Older rows carry no approval date, so they fall back to the punch
+ * date the same way every other figure on the board does.
+ *
+ * Whole IST days, not hours. An approval at five in the afternoon plus three
+ * days is a date, not a time of day, and the floor should not find a job going
+ * red at teatime because of when somebody clicked Save.
+ *
+ * The promised day itself is not late: five days to dispatch means the fifth
+ * day is still theirs, so lateness begins the day after.
+ *
+ * null when no days were given. That is most of the board and always will be -
+ * the field is optional - and those orders are left to the rules that were
+ * there before this.
+ */
+function dispatchLine(row) {
+  const raw = row.dispatch_days;
+  if (raw === null || raw === undefined || raw === '') return null;
+  const days = Number(raw);
+  if (!Number.isInteger(days) || days < 0) return null;
+  const started = row.actual_2 || row.timestamp;
+  if (!started) return null;
+
+  const due = addDays(istDay(started), days);
+  const late = daysBetween(due, istDay(Date.now()));
+  return { due, days, late: late > 0 ? late : 0 };
+}
+
 /**
  * What the approval box asks beside a final approval, as columns.
  *
@@ -628,6 +676,7 @@ router.get('/production', requireLogin, async (req, res) => {
 
     const data = rows.map(r => {
       const prev = prevRuns.get(r.remake_of);
+      const line = dispatchLine(r);
       return {
       // The row's own key, which every button on the board sends back.
       ID: r.order_id,
@@ -680,6 +729,12 @@ router.get('/production', requireLogin, async (req, res) => {
       // ten.
       Order_Type: r.order_type || '',
       Dispatch_Days: r.dispatch_days === null || r.dispatch_days === undefined ? '' : r.dispatch_days,
+      // The day it was promised for and how far past it we are, worked out
+      // here rather than in the browser: the board prints its dates already
+      // formatted, and parsing '04/10/2026, 4:17:04 pm' back into a date to
+      // do arithmetic on it is how a board starts disagreeing with itself.
+      Dispatch_Due: line ? line.due.split('-').reverse().join('/') : '',
+      Days_Late: line ? line.late : 0,
       Remark: r.remark || '',
       Reason_For_Delay: r.reason_for_delay || '',
       Dispatch_Status: r.status_4 || '',
@@ -1442,6 +1497,7 @@ router.get('/analytics', requireLogin, async (req, res) => {
              dealer_name, client_name, india_designer, overseas_designer,
              design_status,
              design_approval_status_from_client, actual_2,
+             dispatch_days,
              card_assembly, reason_for_delay, remake_of,
              status_4, actual_4, courier, ups_dhl_fedex_tracking_number,
         ${DEAD_ORDER} AS is_dead,
@@ -1489,6 +1545,7 @@ router.get('/analytics', requireLogin, async (req, res) => {
           team = 'Cassie';
         }
 
+        const line = dispatchLine(r);
         return {
           ID: rootOrderId(r.order_id),
           // A repeat is a second run of an order that was taken once. It is
@@ -1515,6 +1572,12 @@ router.get('/analytics', requireLogin, async (req, res) => {
           // are always a subset of the In Production card above them.
           OnBoard: !!Number(r.on_board),
           ProductionStart: r.actual_2 || r.timestamp,
+          // How many days this one was given at approval, and how far past
+          // that it is now. Worked out by the same function the production
+          // board uses, so the red row there and the delayed count here can
+          // never disagree about which orders have run over.
+          DispatchDays: line ? line.days : null,
+          DaysLate: line ? line.late : 0,
           DispatchStatus: r.status_4 || '',
           // Where the order has got to, as one word. The four values are
           // exclusive and every order has one, so the cards built from them

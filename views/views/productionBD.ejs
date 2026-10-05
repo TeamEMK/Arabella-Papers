@@ -353,6 +353,41 @@ function prod_remarkCell(o) {
 }
 
 /**
+ * Has this one run past the days it was given?
+ *
+ * Days_Late is worked out on the server, by the same function the delayed
+ * count on Analytics uses, so the red rows here and that number there are
+ * always the same orders.
+ *
+ * An order that has gone is never red. The days were a promise about getting
+ * it out of the building, and once it is out the promise is finished - keeping
+ * it red would leave the board arguing with a parcel that has already shipped.
+ */
+function prod_isLate(o) {
+  if (o && o.Dispatch_Status && String(o.Dispatch_Status).trim()) return false;
+  return Number((o && o.Days_Late) || 0) > 0;
+}
+
+/**
+ * The days given, and when they ran out.
+ *
+ * Nothing set is a dash, not a zero: most of this board has no days on it and
+ * never will, and a column of zeroes would read as "due today" on every one of
+ * them.
+ */
+function prod_daysCell(o) {
+  const days = o && o.Dispatch_Days;
+  if (days === '' || days === null || days === undefined) return '<span class="text-muted">-</span>';
+  const due = o.Dispatch_Due ? '<div class="text-muted" style="font-size:.7rem;">due ' + prodEsc(o.Dispatch_Due) + '</div>' : '';
+  if (!prod_isLate(o)) {
+    return '<span class="fw-bold">' + prodEsc(days) + '</span><small class="text-muted"> d</small>' + due;
+  }
+  const late = Number(o.Days_Late);
+  return '<span class="badge bg-danger">' + prodEsc(days) + ' d · ' + late
+    + (late === 1 ? ' day' : ' days') + ' late</span>' + due;
+}
+
+/**
  * RUSH or Normal, as a badge.
  *
  * Only the rush one is coloured. Everything on this board is a normal order
@@ -372,7 +407,7 @@ function prod_rowHtml(o, sr) {
     const readyBtn = prod_readyCell(o);
     const badges = prod_getStageBadges(o);
     const clientBadge = prod_getClientBadge(o.Design_Approval_Status_From_Client);
-    return `<tr>
+    return `<tr${prod_isLate(o) ? ' class="prod-late"' : ''}>
       <td><input type="checkbox" class="prod_checkbox" value="${o.ID}" ${isChecked} onchange="prod_handleCheck('${o.ID}',this.checked)"></td>
       <td>${sr}</td>
       <td><div class="d-flex gap-1"><button class="btn btn-sm btn-info" onclick="prod_openView('${o.ID}')"><i class="fas fa-eye text-white"></i></button><button class="btn btn-sm btn-warning" onclick="prod_openEdit('${o.ID}')"><i class="fas fa-edit text-dark"></i></button></div></td>
@@ -390,9 +425,7 @@ function prod_rowHtml(o, sr) {
       <td>${o.Output||'-'}</td>
       <td>${badges}</td>
       <td class="text-center">${prod_typeCell(o)}</td>
-      <td class="text-center">${o.Dispatch_Days === '' || o.Dispatch_Days === null || o.Dispatch_Days === undefined
-        ? '<span class="text-muted">-</span>'
-        : '<span class="fw-bold">' + o.Dispatch_Days + '</span><small class="text-muted"> d</small>'}</td>
+      <td class="text-center">${prod_daysCell(o)}</td>
       <td style="min-width:160px;max-width:260px;">${prod_remarkCell(o)}</td>
     </tr>`;
   }

@@ -92,6 +92,15 @@
     font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
   .side-count[hidden] { display: none; }
 
+  /* A production row that has run past the days it was given.
+     A tint, not a block of red: whole rows in solid colour make the board
+     unreadable the moment more than a handful are late, and the hard red is
+     spent on the one cell that says how far past it is. The !important is for
+     table-striped, which paints every other row and would otherwise win on
+     half of them. */
+  tr.prod-late > td { background-color: #fdeced !important; }
+  tr.prod-late:hover > td { background-color: #fbdcdf !important; }
+
   /* ── FMS step train ──────────────────────────────────────────────
      One coach per step, running along a track. A process is a line of
      things in order, and this reads as one; a grid of cards does not.

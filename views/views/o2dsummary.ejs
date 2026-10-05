@@ -10,7 +10,7 @@ document.getElementById('analyticsRoot').innerHTML = `
       <button class="btn btn-primary smooth-ui" onclick="anOpenList('Reprint')"><i class="fas fa-print me-1"></i> Re-Print <span class="badge bg-light text-dark ms-1" id="an_cnt_Reprint">0</span></button>
       <button class="btn btn-info smooth-ui text-dark" onclick="anOpenList('Reorder')"><i class="fas fa-rotate-left me-1"></i> Re-Order <span class="badge bg-light text-dark ms-1" id="an_cnt_Reorder">0</span></button>
       <button class="btn btn-secondary smooth-ui" onclick="anOpenList('Sample')"><i class="fas fa-swatchbook me-1"></i> Printed Sample <span class="badge bg-light text-dark ms-1" id="an_cnt_Sample">0</span></button>
-      <button class="btn btn-warning smooth-ui text-dark" title="On the production board for more than 10 days" onclick="anOpenList('Delay')"><i class="fas fa-clock me-1"></i> Delay Order <span class="badge bg-dark text-white ms-1" id="an_cnt_Delay">0</span></button>
+      <button class="btn btn-warning smooth-ui text-dark" title="Past the days given for dispatch, or more than 10 days on the board where no days were set" onclick="anOpenList('Delay')"><i class="fas fa-clock me-1"></i> Delay Order <span class="badge bg-dark text-white ms-1" id="an_cnt_Delay">0</span></button>
       <button class="btn btn-outline-dark smooth-ui" onclick="refreshBoard(this, fetchAnalytics, 'orders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
     </div>
   </div>
@@ -205,13 +205,26 @@ function an_daysInProduction(order) {
   return Math.floor((Date.now() - started.getTime()) / 86400000);
 }
 
-// Late means still on the live production board and more than ten days in -
-// or somebody has written down why it is late, which says so outright however
-// long it has been. Only board orders count, so this list is always part of
-// the In Production card above and never larger than it.
+// Late means still on the live production board, and one of three things.
+//
+// Where the office gave the order a number of days at approval, that number is
+// the answer and the ten-day rule does not apply to it. It would have to
+// overrule the promise in both directions: a job given twenty days would go
+// red on the eleventh, and the office would rightly say they had asked for
+// twenty. Most of the board has no days on it and never will - the field is
+// optional - so for those nothing changes.
+//
+// A written Reason For Delay says so outright, whichever rule applies and
+// however long it has been: somebody has looked at the job and said it is
+// late, and that beats arithmetic.
+//
+// Only board orders count, so this list is always part of the In Production
+// card above and never larger than it.
 function an_isDelayed(order) {
   if (!order.OnBoard) return false;
-  return an_daysInProduction(order) > AN_DELAY_DAYS || !!(order.ReasonForDelay || '').trim();
+  if ((order.ReasonForDelay || '').trim()) return true;
+  if (order.DispatchDays !== null && order.DispatchDays !== undefined) return order.DaysLate > 0;
+  return an_daysInProduction(order) > AN_DELAY_DAYS;
 }
 
 // Still to make, and still on the live production board.
@@ -243,7 +256,8 @@ function anOpenList(key) {
   document.getElementById('an_listTitle').textContent = AN_LISTS[key].title;
   document.getElementById('an_listLastCol').textContent = AN_LISTS[key].last;
   document.getElementById('an_listNote').textContent = key === 'Delay'
-    ? 'On the production board for more than ' + AN_DELAY_DAYS + ' days, longest wait first. Click a row for the reason.'
+    ? 'Past the days it was given for dispatch, or — where no days were set — more than '
+      + AN_DELAY_DAYS + ' days on the production board. Longest wait first. Click a row for the reason.'
     : 'Still to make — what has already gone out is not counted. Not filtered by the dates above. Click a row for details.';
   document.getElementById('an_listSearch').value = '';
   anDrawList();
