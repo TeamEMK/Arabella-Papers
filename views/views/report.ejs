@@ -25,6 +25,7 @@
             <option value="dispatch">Dispatch</option>
             <option value="orders">Orders Dashboard</option>
             <option value="tillApproval">Till Approval</option>
+            <option value="history">Order History (who changed what)</option>
           </select></div>
         <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Designer</label>
           <select id="rep_designer" class="form-select form-select-sm" onchange="rep_apply()"><option value="">All Designers</option></select></div>
@@ -34,7 +35,13 @@
           <input type="date" id="rep_start" class="form-control form-control-sm" onchange="rep_apply()"></div>
         <div class="col-6 col-md-1"><label class="form-label text-dark fw-bold small mb-0">End</label>
           <input type="date" id="rep_end" class="form-control form-control-sm" onchange="rep_apply()"></div>
-        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Stage</label>
+        <%# Only on the history report. Everywhere else the question is where
+            an order has got to; there it is who moved it, and hunting for a
+            name through the search box is not the same as being handed the
+            list of people to choose from. %>
+        <div class="col-6 col-md-2 d-none" id="rep_byBox"><label class="form-label text-dark fw-bold small mb-0">Changed by</label>
+          <select id="rep_by" class="form-select form-select-sm" onchange="rep_apply()"><option value="">Everyone</option></select></div>
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0" id="rep_stageLabel">Stage</label>
           <select id="rep_stage" class="form-select form-select-sm" onchange="rep_apply()"><option value="">All Stages</option></select></div>
         <div class="col-6 col-md-2" id="rep_modeBox"><label class="form-label text-dark fw-bold small mb-0">Stage filter</label>
           <select id="rep_mode" class="form-select form-select-sm" onchange="rep_apply()">
@@ -71,6 +78,14 @@ var rep_data = [], rep_filtered = [], rep_ordered = false;
 var REP_SHOW = 500;
 var REP_BASE = ['Date', 'ID', 'Repeat of', 'Dealer', 'Client', 'Designer', 'Stage'];
 
+// The same column holds a different thing on the history report - the kind of
+// change rather than where the order has got to - so the heading follows it,
+// on screen and in the file. One function, so the two cannot disagree.
+function rep_baseCols() {
+  var isHistory = document.getElementById('rep_source').value === 'history';
+  return REP_BASE.map(function (c) { return c === 'Stage' && isHistory ? 'Change' : c; });
+}
+
 function rep_esc(v) {
   return String(v == null ? '' : v).replace(/[&<>"]/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
@@ -106,13 +121,27 @@ async function rep_load() {
   document.getElementById('rep_modeBox').style.display = rep_ordered ? '' : 'none';
   if (!rep_ordered) document.getElementById('rep_mode').value = 'current';
 
-  rep_fill('rep_stage', 'All Stages', json.stages || []);
+  // On the history report the "stage" is the kind of change - Updated,
+  // Created, Correction raised - so the label follows what the list holds.
+  var isHistory = source === 'history';
+  document.getElementById('rep_stageLabel').textContent = isHistory ? 'Change' : 'Stage';
+  rep_fill('rep_stage', isHistory ? 'All changes' : 'All Stages', json.stages || []);
+
+  document.getElementById('rep_byBox').classList.toggle('d-none', !isHistory);
+  if (isHistory) {
+    var people = {};
+    rep_data.forEach(function (o) { if (o['Changed By']) people[o['Changed By']] = 1; });
+    rep_fill('rep_by', 'Everyone', Object.keys(people).sort());
+  } else {
+    document.getElementById('rep_by').value = '';
+  }
+
   var designers = {};
   rep_data.forEach(function (o) { if (o.Designer) designers[o.Designer] = 1; });
   rep_fill('rep_designer', 'All Designers', Object.keys(designers).sort());
 
   document.getElementById('rep_head').innerHTML = '<tr><th>#</th>'
-    + REP_BASE.concat(rep_extraCols()).map(function (c) { return '<th>' + rep_esc(c) + '</th>'; }).join('')
+    + rep_baseCols().concat(rep_extraCols()).map(function (c) { return '<th>' + rep_esc(c) + '</th>'; }).join('')
     + '</tr>';
   var sel = document.getElementById('rep_source');
   document.getElementById('rep_title').textContent = sel.options[sel.selectedIndex].text + ' Report';
@@ -144,6 +173,8 @@ function rep_apply() {
     if (stage) {
       if (mode === 'done' ? (o.Done || []).indexOf(stage) < 0 : o.Stage !== stage) return false;
     }
+    var by = document.getElementById('rep_by').value;
+    if (by && (o['Changed By'] || '') !== by) return false;
     if (search && JSON.stringify(o).toLowerCase().indexOf(search) < 0) return false;
     return true;
   });
@@ -172,7 +203,7 @@ function rep_rangePicked() { applyDateRange('rep_range', 'rep_start', 'rep_end',
 
 function rep_clear() {
   document.getElementById('rep_range').value = '';
-  ['rep_designer', 'rep_stage', 'rep_search'].forEach(function (id) { document.getElementById(id).value = ''; });
+  ['rep_designer', 'rep_stage', 'rep_search', 'rep_by'].forEach(function (id) { document.getElementById(id).value = ''; });
   document.getElementById('rep_mode').value = 'current';
   rep_rangePicked();
 }
@@ -184,7 +215,7 @@ function rep_payload() {
   var sel = document.getElementById('rep_source');
   return {
     title: sel.options[sel.selectedIndex].text + ' Report',
-    columns: REP_BASE.concat(rep_extraCols()),
+    columns: rep_baseCols().concat(rep_extraCols()),
     rows: rep_filtered.map(rep_cells),
   };
 }

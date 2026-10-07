@@ -1894,6 +1894,15 @@ const REPORT_PRODUCTION_STAGES = [
 const reportDay = (d) => (d ? new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) : '');
 const reportShow = (d) => (d ? new Date(d).toLocaleDateString('en-GB', IST) : '');
 
+// The other four reports are about a day: the day an order was punched,
+// approved, sent. A history line is about a moment - the same order is changed
+// three times in an afternoon, and without the clock those read as three
+// identical rows in no particular order.
+const reportMoment = (d) => (d
+  ? new Date(d).toLocaleString('en-GB', { ...IST, hour12: true,
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  : '');
+
 /**
  * One row shape for every source, so the page filters and downloads them all
  * the same way. `Day` is YYYY-MM-DD for the date range; `Stage` is where the
@@ -1982,6 +1991,43 @@ const REPORT_SOURCES = {
       });
     },
   },
+  // Every change anybody has made to an order, one row per change.
+  //
+  // The other four reports answer "where is this order"; this one answers
+  // "what happened to it, and who did it" - which is the question asked when
+  // something has gone wrong, and the only one the boards cannot answer at
+  // all. The Order Logs page has had this since it was built, but with no way
+  // to take it away as a file and nothing on a line to say which dealer or
+  // client it belonged to. Here it gets both, plus the date range and the
+  // search the page already has.
+  //
+  // LEFT JOIN, not an inner one: an order that has been deleted still has a
+  // history, and that is exactly the history somebody will come looking for.
+  // Those lines come through with blank dealer and client rather than being
+  // dropped.
+  history: {
+    sql: `SELECT l.order_id, l.action, l.field, l.old_value, l.new_value,
+                 l.changed_by, l.changed_at,
+                 o.dealer_name, o.client_name, o.india_designer, o.overseas_designer,
+                 o.remake_of, o.is_deleted
+            FROM order_logs l
+            LEFT JOIN orders o ON o.order_id = l.order_id
+           ORDER BY l.changed_at DESC, l.id DESC
+           LIMIT 20000`,
+    row(r) {
+      const line = reportRow(r, r.changed_at, r.action || 'Changed', [], {
+        'Changed By': r.changed_by || '',
+        'What changed': r.field || '',
+        From: r.old_value || '',
+        To: r.new_value || '',
+        // Said on the line, because a deleted order's dealer and client come
+        // back blank and that would otherwise read as missing data.
+        Order: r.is_deleted ? 'deleted' : '',
+      });
+      line.Date = reportMoment(r.changed_at);
+      return line;
+    },
+  },
   tillApproval: {
     sql: `SELECT * FROM orders
           WHERE is_deleted = 0 AND ${LOCAL_ORDER_OFF_BOARDS}
@@ -1999,7 +2045,7 @@ const REPORT_SOURCES = {
   },
 };
 
-// GET /api/dashboards/report?source=production|dispatch|orders|tillApproval
+// GET /api/dashboards/report?source=production|dispatch|orders|tillApproval|history
 router.get('/report', requireLogin, async (req, res) => {
   try {
     if (!(await canSee(req.session.user, 'report'))) {
