@@ -1956,13 +1956,29 @@ const REPORT_SOURCES = {
     },
   },
   // The Orders Dashboard: every order punched, repeats left out as it does.
+  //
+  // This one carries the names. Asked for so that when something has gone
+  // wrong on an order, the report can answer who had it at each step rather
+  // than sending somebody to open the order and read its history.
+  //
+  // Each column is written by the box that owns that step - the punch form
+  // fills Punched By, the approval box fills Approval By, the production and
+  // dispatch boards fill their own - so a blank means nobody saved that step
+  // through the app, not that nobody did it. Orders imported from the old
+  // sheets carry none of them, and nothing can be invented for those.
   orders: {
     sql: `SELECT * FROM orders WHERE is_deleted = 0 AND remake_of IS NULL ORDER BY id DESC`,
     row(r) {
       const stage = currentStage(r);
       return reportRow(r, r.timestamp, stage, [], {
-        'Punched By': r.order_punched_by || '',
         'Design Status': r.design_status || '',
+        // The team is not a person. Both are kept: the team is what the old
+        // rows have, the address is who actually pressed the button.
+        'Punched By': r.email_address || '',
+        'Punched By Team': r.order_punched_by || '',
+        'Approval By': r.approval_updated_by || '',
+        'Production By': r.production_updated_by || '',
+        'Dispatch By': r.dispatch_updated_by || '',
       });
     },
   },
