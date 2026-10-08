@@ -287,7 +287,85 @@
   /* SWAL TOAST */
   .swal2-toast { background: rgba(255,255,255,0.9) !important; backdrop-filter: blur(4px); border: 1px solid #ddd; }
 
+  /* ════════════════════════════════════════════════════
+     MOBILE — BATCH 1, THE THINGS EVERY PAGE SHARES
+
+     Everything below is inside a media query, so a desktop never reads any of
+     it and nothing above this line has been touched. The widths follow what
+     the panel already uses: 991.98px is where it becomes a drawer, and 768px
+     is a phone.
+     ════════════════════════════════════════════════════ */
+
+  @media (max-width: 991.98px) {
+    /* The row of buttons at the top of every page is what pushed the whole
+       page sideways - 408px of buttons in a 390px screen on Analytics, and a
+       smaller overhang on five other boards. The table below it was never the
+       problem; that has always had its own scroller.
+
+       flex-wrap only does anything when the items do not fit, so on a screen
+       where they do - every desktop - this changes nothing at all. */
+    .container-fluid > .d-flex,
+    .container-fluid > .d-flex > .d-flex { flex-wrap: wrap; }
+  }
+
   @media (max-width: 768px) {
-    .btn-sm { padding: 0.25rem 0.4rem; font-size: 0.75rem; }
+    /* This used to make .btn-sm SMALLER on a phone, which is backwards: the
+       screen where a button is hit with a thumb is the one where it needs to
+       be bigger. */
+    .btn-sm { padding: 0.4rem 0.7rem; font-size: 0.8rem; }
+
+    /* 44px is the smallest thing a thumb hits reliably. Applied by min-height
+       rather than a fixed height, so a button with two lines of text still
+       grows instead of clipping. */
+    .btn, .form-control, .form-select, .input-group-text,
+    .side-link, .side-logout, .side-user, .page-link, .nav-link { min-height: 44px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; }
+
+    /* The X on a modal was 16px of actual target. */
+    .btn-close { width: 44px; height: 44px; background-size: 14px; margin: -0.5rem -0.5rem -0.5rem auto; }
+
+    /* A 13px checkbox is not a target either. Scaled rather than resized, so
+       the tick inside scales with it. */
+    .form-check-input, input[type="checkbox"], input[type="radio"] {
+      transform: scale(1.35); transform-origin: left center; margin-right: 4px;
+    }
+    td .form-check-input, td input[type="checkbox"] { transform: scale(1.25); }
+
+    /* 16px or iOS zooms the whole page in the moment the field is focused,
+       and leaves it zoomed. Every filter bar in this app uses the -sm
+       variants, which are 14px. */
+    .form-control, .form-select, .form-control-sm, .form-select-sm,
+    input, select, textarea { font-size: 16px; }
+
+    /* A phone's address bar makes 100vh taller than the screen, so a full
+       height layout ends up with its last rows under the bar. dvh is the
+       height actually on show. */
+    #mainContent { min-height: 100dvh; }
+    [data-fill-height] { max-height: calc(100dvh - 300px); }
+
+    /* Notched phones: the fixed bar and the drawer sit under the cutout
+       without this, and the page's last row under the home indicator. */
+    .mobile-topbar { padding-top: env(safe-area-inset-top);
+      height: calc(var(--topbar-h) + env(safe-area-inset-top)); }
+    #mainContent { padding-top: calc(var(--topbar-h) + env(safe-area-inset-top));
+      padding-bottom: env(safe-area-inset-bottom); }
+    .side-panel { padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom); }
+
+    /* An order number, an email or a client name with no spaces in it used to
+       push its own cell wider than the screen. */
+    body { overflow-wrap: break-word; }
+
+    /* Anything that draws itself at a fixed size - charts, logos, uploaded
+       photographs - stays inside its card. */
+    img, canvas, svg, video { max-width: 100%; }
+  }
+
+  @media (max-width: 480px) {
+    /* The tightest phones. Padding is the first thing to go: on a 320px screen
+       24px of it either side is 15% of the width. */
+    .container-fluid { padding-left: 12px; padding-right: 12px; }
+    .card-body { padding: 12px; }
+    .modal-body { padding: 14px; }
   }
 </style>
