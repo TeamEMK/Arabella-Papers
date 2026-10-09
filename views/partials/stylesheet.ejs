@@ -361,6 +361,96 @@
     img, canvas, svg, video { max-width: 100%; }
   }
 
+  @media (max-width: 768px) {
+    /* ── BATCH 2: THE BOARDS ── */
+
+    /* Dispatch board: the order number is the third cell with only a checkbox
+       and a row number in front of it, so it is the one board where pinning
+       is cheap - 110px held back out of 390. Everywhere else the number sits
+       behind 350px or more of cells and pinning it would eat the screen; see
+       the note in the batch report. */
+    #dispRoot table thead th:nth-child(1),
+    #dispRoot table tbody td:nth-child(1) {
+      position: sticky; left: 0; z-index: 3; width: 30px; min-width: 30px; padding-left: 6px; padding-right: 2px;
+    }
+    #dispRoot table thead th:nth-child(3),
+    #dispRoot table tbody td:nth-child(3) {
+      position: sticky; left: 30px; z-index: 3; min-width: 80px;
+      box-shadow: 2px 0 4px -2px rgba(0,0,0,.22);
+    }
+    /* A sticky cell slides over the ones behind it, so it needs its own
+       ground - a transparent one would show the scrolling row through it. */
+    #dispRoot table tbody td:nth-child(1),
+    #dispRoot table tbody td:nth-child(3) { background: #fff; }
+    #dispRoot table tbody tr:nth-of-type(odd) td:nth-child(1),
+    #dispRoot table tbody tr:nth-of-type(odd) td:nth-child(3) { background: #f2f2f2; }
+    #dispRoot table thead th:nth-child(1),
+    #dispRoot table thead th:nth-child(3) { background: #212529; }
+
+    /* The same number is printed twice on this board, once where it has
+       always been and once beside Status. That was asked for on a wide screen
+       where both are in view at once; on a phone the second one is 92px of a
+       number already pinned to the left edge. */
+    #dispRoot table thead th:nth-child(15),
+    #dispRoot table tbody td:nth-child(15) { display: none; }
+
+    /* Two 30px buttons in a cell are two 30px targets. Give the action cells
+       room and let the buttons breathe. */
+    td .btn-sm + .btn-sm, td .d-flex > .btn + .btn { margin-left: 4px; }
+    td .btn-sm { min-height: 38px; min-width: 38px; }
+
+    /* The filter header is a button; it was 30px tall. */
+    .filter-toggle-btn { min-height: 44px; }
+  }
+
+  /* ── BOTTOM NAV ──
+     Drawn in the markup for everyone, shown only below the desktop
+     breakpoint. The colours are the panel's own - same dark ground, same
+     yellow for where you are - so it reads as the same menu moved, not a
+     second one. */
+  .bottom-nav { display: none; }
+
+  @media (max-width: 991.98px) {
+    .bottom-nav {
+      display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 1035;
+      background: #212529; border-top: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 -2px 12px rgba(0,0,0,0.35);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .bnav-link {
+      flex: 1 1 0; min-width: 0; min-height: 56px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+      background: transparent; border: 0; padding: 7px 2px 6px; color: #adb5bd;
+    }
+    .bnav-link i { font-size: 17px; line-height: 1; }
+    .bnav-link span {
+      font-size: 10px; line-height: 1.15; font-weight: 600; max-width: 100%;
+      /* Two lines, then clipped. "Production Dashboard" in a fifth of a phone
+         is never going to fit on one, and cutting it at "Produc..." says less
+         than two lines of it do. */
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden; text-align: center; word-break: break-word;
+    }
+    .bnav-link.active { color: #ffcc00; }
+    .bnav-link.active i { transform: translateY(-1px); }
+    /* The lit tab gets a bar above it rather than a filled block: a solid
+       yellow fifth of the bar fights the yellow wordmark at the top. */
+    .bnav-link.active::before {
+      content: ''; position: absolute; top: 0; width: 34px; height: 3px;
+      border-radius: 0 0 3px 3px; background: #ffcc00;
+    }
+    .bnav-link { position: relative; }
+
+    /* The bar sits over the page, so the last row of every board needs room
+       to clear it - otherwise the final order is permanently under it. */
+    #mainContent { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
+
+    /* The drawer and its backdrop go over the bar, not under it, or More
+       opens a menu with its own button on top of it. */
+    .side-panel { z-index: 1045; }
+    .side-backdrop { z-index: 1040; }
+  }
+
   @media (max-width: 480px) {
     /* The tightest phones. Padding is the first thing to go: on a 320px screen
        24px of it either side is 15% of the width. */

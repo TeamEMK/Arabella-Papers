@@ -87,6 +87,29 @@
 </aside>
 <div class="side-backdrop d-lg-none" onclick="sideCloseDrawer()"></div>
 
+<%# A bar along the bottom of a phone, where a thumb already is. Reaching the
+    burger in the top-left corner one-handed is the thing people stop doing.
+
+    Four tabs and a More, not nineteen: a bar can hold five before they stop
+    being targets. The four are the first four of THIS person's own menu, which
+    is already in the order the office works in - so a designer's bar opens on
+    their own pages rather than on somebody else's. More opens the drawer that
+    was already there, which is where the rest of the sections live along with
+    the logo, the user and Logout, so nothing has been taken away.
+
+    Drawn for everyone and shown only by the media query, so no desktop ever
+    sees it. %>
+<nav class="bottom-nav d-lg-none" id="bottomNav">
+  <% navMenu.slice(0, 4).forEach(function(tab) { %>
+    <button type="button" class="bnav-link" id="<%= tab.id %>BTab" onclick="loadPage('<%= tab.id %>')">
+      <i class="fas <%= tab.icon %>"></i><span><%= tab.name %></span>
+    </button>
+  <% }); %>
+  <button type="button" class="bnav-link" id="bnavMore" onclick="sideOpenDrawer()">
+    <i class="fas fa-ellipsis"></i><span>More</span>
+  </button>
+</nav>
+
 <!-- MAIN CONTENT -->
 <div id="mainContent">
   <!-- CONTENT AREA -->
@@ -591,6 +614,12 @@
     const activeTab = document.getElementById(page + 'Tab');
     if (activeTab) activeTab.classList.add('active');
 
+    // The bottom bar follows the same page. A section that is not one of its
+    // four leaves every tab unlit rather than lighting the wrong one.
+    document.querySelectorAll('.bottom-nav .bnav-link').forEach(b => b.classList.remove('active'));
+    const bTab = document.getElementById(page + 'BTab');
+    if (bTab) bTab.classList.add('active');
+
     // On mobile the panel is a drawer sitting over the content — picking a page
     // is the moment to get it out of the way.
     sideCloseDrawer();
@@ -618,6 +647,33 @@
           '<div class="alert alert-danger m-3">Error loading page. Please refresh.</div>';
       });
   }
+
+  // ── A TOOLTIP YOU CAN TAP ──
+  //
+  // A phone has no hover, so every title= in this app is invisible on one -
+  // and a lot of the boards put their real answer there. A production stage
+  // badge is a coloured box reading "Dye" whose title says "Dye: NO DIE"; the
+  // dispatch chip says "6 stages left" and names them in the title; a remark
+  // cell is clipped with the whole note in the title. On a desktop all of
+  // that is a hover away. On a phone it was simply gone.
+  //
+  // One delegated listener rather than a tooltip library: it costs nothing,
+  // it picks up anything with a title including markup added later, and it
+  // leaves the desktop's own tooltips exactly as they were.
+  var TITLE_TAP_WIDTH = 768;
+
+  document.addEventListener('click', function (e) {
+    if (window.innerWidth > TITLE_TAP_WIDTH) return;
+    // Not on something that already does something when tapped, or the note
+    // would appear instead of the button working.
+    if (e.target.closest('button, a, input, select, textarea, label, [onclick]')) return;
+    var el = e.target.closest('[title]');
+    if (!el) return;
+    var text = (el.getAttribute('title') || '').trim();
+    if (!text) return;
+    e.preventDefault();
+    showToast('info', text);
+  }, true);
 
   // ── WORK WAITING ON A TAB ──
   // How many corrections are sitting on this person. Shown on the tab so a
