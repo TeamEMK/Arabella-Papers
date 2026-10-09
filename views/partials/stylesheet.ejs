@@ -505,6 +505,81 @@
     .side-backdrop { z-index: 1040; }
   }
 
+  /* ── A WIDE TABLE AS CARDS ──
+     Opt-in with class="mcard". The labels come from the table's own thead,
+     stamped on by mcardStamp() in app.ejs, so nothing here depends on a row
+     template spelling them out. */
+  @media (max-width: 768px) {
+    table.mcard, table.mcard tbody, table.mcard tr, table.mcard td { display: block; width: 100%; }
+    /* The heading row is what the labels are read from, so it stays in the
+       markup and only goes out of sight. */
+    table.mcard thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+    table.mcard tr {
+      background: #fff; border: 1px solid #e6e8eb; border-radius: 10px;
+      margin: 0 0 10px; padding: 4px 2px; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    /* table-striped paints alternate rows; as cards that reads as two kinds
+       of card rather than a list, and it was tinting the whole of every other
+       card grey so the title row could not stand out of it. Bootstrap 5 does
+       the stripe with a variable and an inset shadow on the cells, so both
+       have to go, not just a background. */
+    table.mcard.table-striped > tbody > tr > *,
+    table.mcard.table-hover > tbody > tr:hover > * {
+      --bs-table-accent-bg: transparent;
+      --bs-table-bg-type: transparent;
+      box-shadow: none;
+      background-color: transparent;
+    }
+
+    table.mcard td {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      border: 0; border-bottom: 1px solid #f1f3f5;
+      padding: 9px 12px; text-align: right; white-space: normal; word-break: break-word;
+    }
+    table.mcard td:last-child { border-bottom: 0; }
+    table.mcard td::before {
+      content: attr(data-label);
+      flex: 0 0 38%; text-align: left;
+      font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+      color: #6c757d;
+    }
+    /* A cell with no heading - the checkbox, the row number - would show an
+       empty label and a lot of empty space. */
+    table.mcard td[data-label=""]::before { display: none; }
+    table.mcard td[data-label=""] { justify-content: flex-start; text-align: left; }
+
+    /* The "nothing matches" row is one cell across the whole table. */
+    table.mcard tr[data-mcard-skip] td { display: block; text-align: center; }
+    table.mcard tr[data-mcard-skip] td::before { display: none; }
+
+    /* The row number is a line of its own in a card - "# 1" - and says
+       nothing the position in the list does not. */
+    table.mcard td[data-label="#"] { display: none; }
+
+    /* The order number is what the card IS, so it reads as the card's title
+       rather than as one more field. */
+    table.mcard td[data-label="ID"],
+    table.mcard td[data-label="Order"] {
+      background-color: #f1f3f5; border-bottom: 1px solid #e6e8eb;
+      font-weight: 700; font-size: 15px;
+    }
+    table.mcard td[data-label="ID"]::before,
+    table.mcard td[data-label="Order"]::before { color: #868e96; }
+
+    /* Eighteen fields make a tall card whatever is done, so every row is kept
+       as short as it can be read at. */
+    table.mcard td { padding: 7px 12px; }
+    table.mcard tr { padding: 0; }
+    table.mcard td:first-child { border-radius: 10px 10px 0 0; }
+    table.mcard td:last-child { border-radius: 0 0 10px 10px; }
+
+    /* The wrapper no longer needs to scroll sideways, and its height cap was
+       sized for rows a fifth as tall. */
+    .table-responsive:has(table.mcard) { overflow-x: visible; }
+    [data-fill-height]:has(table.mcard) { max-height: none; }
+  }
+
   @media (max-width: 480px) {
     /* The tightest phones. Padding is the first thing to go: on a 320px screen
        24px of it either side is 15% of the width. */

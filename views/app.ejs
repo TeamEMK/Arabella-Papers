@@ -641,12 +641,67 @@
         // Production and Dispatch build their markup from the script above, so
         // the tables only exist once it has run.
         sizeTables();
+        mcardWatch(document.getElementById('contentArea'));
       })
       .catch(err => {
         document.getElementById('contentArea').innerHTML =
           '<div class="alert alert-danger m-3">Error loading page. Please refresh.</div>';
       });
   }
+
+  // ── A WIDE TABLE AS CARDS ──
+  //
+  // Four boards are 1500 to 2850px wide. Scrolling that sideways on a 390px
+  // screen works, but the order number goes off the left edge and then every
+  // cell is a value with no heading - "Pending", "Done", "NO DIE" with
+  // nothing to say which stage each belongs to. On Dispatch and Corrections
+  // the number sits near the front and can simply be pinned; on these four it
+  // is behind 350px or more of cells, so pinning would eat the screen.
+  //
+  // So on a phone each row becomes a card and each cell carries its own
+  // heading. The heading is stamped on from the table's own <thead> rather
+  // than written into every row template: these rows are built by four
+  // different functions, in batches, and redrawn on every filter - a label
+  // typed into each one would be four more places to keep in step, and would
+  // be wrong the first time a column moved.
+  //
+  // A table opts in with class="mcard". Nothing happens above 768px.
+  var MCARD_WIDTH = 768;
+
+  function mcardStamp(table) {
+    if (!table || window.innerWidth > MCARD_WIDTH) return;
+    var heads = Array.prototype.map.call(
+      table.querySelectorAll('thead th'), function (th) { return (th.innerText || '').trim(); });
+    if (!heads.length) return;
+    Array.prototype.forEach.call(table.querySelectorAll('tbody > tr'), function (tr) {
+      // A "nothing matches" row is one cell spanning the table; labelling it
+      // would put a column heading in front of the message.
+      if (tr.children.length < 2) { tr.setAttribute('data-mcard-skip', ''); return; }
+      Array.prototype.forEach.call(tr.children, function (td, i) {
+        if (!td.hasAttribute('data-label')) td.setAttribute('data-label', heads[i] || '');
+      });
+    });
+  }
+
+  // The boards redraw constantly - a filter, the next 200 rows, a refresh -
+  // so this watches rather than being called from each of them.
+  function mcardWatch(root) {
+    Array.prototype.forEach.call((root || document).querySelectorAll('table.mcard'), function (table) {
+      if (table.__mcard) return;
+      table.__mcard = true;
+      mcardStamp(table);
+      var body = table.querySelector('tbody');
+      if (!body) return;
+      new MutationObserver(function () { mcardStamp(table); })
+        .observe(body, { childList: true });
+    });
+  }
+
+  // Turning the phone, or a desktop window dragged narrow, crosses the line
+  // in either direction; rows drawn on the wide side have no labels yet.
+  window.addEventListener('resize', function () {
+    Array.prototype.forEach.call(document.querySelectorAll('table.mcard'), mcardStamp);
+  });
 
   // ── A TOOLTIP YOU CAN TAP ──
   //
