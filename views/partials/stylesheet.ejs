@@ -451,10 +451,30 @@
        on a phone means Cancel sits above Save. */
     .modal-footer > .btn { flex: 1 1 100%; margin: 0; }
     .modal-footer.justify-content-between { flex-direction: column; align-items: stretch; }
+    /* Stacked, the buttons come out in the order they were written, and that
+       order differs from box to box - the punch form has Submit first, the
+       bulk one has Cancel first. Whichever is the action goes on top, where
+       the thumb lands, rather than depending on which was typed first. */
+    .modal-footer > .btn-primary,
+    .modal-footer > .btn-success { order: -1; }
 
     /* It slides up rather than dropping in. */
     .modal.fade .modal-dialog { transform: translateY(100%); }
     .modal.show .modal-dialog { transform: none; }
+
+    /* The bulk boxes cap their inner table at a fixed 500px, written inline.
+       Inside a sheet that is already capped at 92dvh that is a second, taller
+       cap fighting the first - on a short phone the modal body and the table
+       both scrolled, one inside the other. The sheet holds the height now;
+       !important because the 500px is an inline style. */
+    .modal-body .table-responsive { max-height: none !important; }
+
+    /* A bordered grid inside a card draws a box around every field. */
+    .modal-body table.mcard.table-bordered,
+    .modal-body table.mcard.table-bordered > tbody > tr > td { border: 0; }
+    .modal-body table.mcard > tbody > tr {
+      border: 1px solid #e6e8eb; margin-bottom: 10px;
+    }
   }
 
   /* ── BOTTOM NAV ──

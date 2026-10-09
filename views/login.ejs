@@ -82,6 +82,27 @@
        Sized by width, on a white plate so it does not float on the dark card. */
     .logo { width: 100%; max-width: 240px; height: auto; margin-bottom: 18px;
             background: #fff; border-radius: 6px; padding: 9px 12px; }
+
+    /* ── PHONE ──
+       This page keeps its own look - the dark ground, the yellow, Poppins,
+       the underlined fields. Nothing above is touched; these three things
+       only apply on a small screen. */
+    @media (max-width: 480px) {
+      /* The card is a fixed 350px. On a 320px phone that left it running
+         edge to edge with no gutter at all, the rounded corners squared off
+         against the sides of the screen. */
+      .login-container { width: 100%; max-width: 350px; margin: 0 16px; padding: 26px 22px; }
+
+      /* The eye was 23px of actual target in the corner of a field, which is
+         where a thumb is least accurate. Grown without moving the field: the
+         padding does it, and the box is pulled back up by the same amount. */
+      .pw-toggle { top: -6px; min-width: 44px; min-height: 44px; padding: 16px 12px; font-size: 16px; }
+
+      /* 100vh on a phone is taller than the screen, because the address bar
+         is counted in and then slides away. The card was pushed below the
+         fold on a short screen for no reason. */
+      body { min-height: 100dvh; }
+    }
   </style>
 </head>
 <body>
