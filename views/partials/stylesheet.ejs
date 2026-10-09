@@ -606,5 +606,22 @@
     .container-fluid { padding-left: 12px; padding-right: 12px; }
     .card-body { padding: 12px; }
     .modal-body { padding: 14px; }
+
+    /* Two rows were still tipping a 320px screen over by a few pixels, and
+       both for the same reason: the wider padding that made buttons tappable
+       also made them wider, and these two do not wrap.
+
+       A button group is meant to stay on one line - four of them across the
+       Leave filter - so its buttons give the padding back and shrink instead
+       of breaking the group apart. */
+    .btn-group > .btn { min-width: 0; padding-left: .4rem; padding-right: .4rem; }
+
+    /* The speed row on FMS puts its Pause button at the far end with ms-auto
+       and never wraps; so do a few other control rows. They wrap here rather
+       than push the whole page sideways. */
+    #contentArea .d-flex.gap-1,
+    #contentArea .d-flex.gap-2,
+    #contentArea .d-flex.gap-3,
+    .fms-train-speed { flex-wrap: wrap; }
   }
 </style>
