@@ -93,7 +93,11 @@ var st_data = [], st_editId = null, st_shown = [];
 // changed by picking, not by typing it slightly differently each time.
 var ST_STATES = ['In Stock', 'Out of Stock', 'Please confirm before placing an order'];
 
-const st_esc = v => String(v == null ? '' : v)
+// var, not const: loadPage() re-runs this whole block every time the tab
+// is opened, and a repeat `const` is a parse error that kills the script
+// before anything else in it runs - so opening this page a second time in
+// one session left it half drawn with every button dead.
+var st_esc = v => String(v == null ? '' : v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 function st_badge(status) {
@@ -260,7 +264,7 @@ function st_clear() {
   st_render();
 }
 
-const ST_FIELDS = ['code', 'name', 'category', 'thickness', 'status', 'note'];
+var ST_FIELDS = ['code', 'name', 'category', 'thickness', 'status', 'note'];
 
 function st_openAdd() {
   st_editId = null;

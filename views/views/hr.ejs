@@ -124,7 +124,11 @@ var HR_FIELDS = ['company','name','emp_code','mobile','email','emergency_no',
 // already in use as suggestions.
 var HR_DOC_FIELDS = ['appointment_nda_status', 'code_of_conduct', 'policy_handbook', 'background_verification'];
 
-const hr_esc = v => String(v == null ? '' : v)
+// var, not const: loadPage() re-runs this whole block every time the tab
+// is opened, and a repeat `const` is a parse error that kills the script
+// before anything else in it runs - so opening this page a second time in
+// one session left it half drawn with every button dead.
+var hr_esc = v => String(v == null ? '' : v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 async function hr_fetch() {

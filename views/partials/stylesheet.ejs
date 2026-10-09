@@ -401,6 +401,60 @@
 
     /* The filter header is a button; it was 30px tall. */
     .filter-toggle-btn { min-height: 44px; }
+
+    /* Corrections: the order number is the second cell with only the row
+       number in front of it, so hiding that one number pulls it to the edge
+       and it can be pinned for nothing. The row number is not the order
+       number, is not searchable, and changes the moment a filter does - it is
+       the one column on this page a phone can do without. */
+    #crRoot table thead th:nth-child(1),
+    #crRoot table tbody td:nth-child(1) { display: none; }
+    #crRoot table thead th:nth-child(2),
+    #crRoot table tbody td:nth-child(2) {
+      position: sticky; left: 0; z-index: 3; min-width: 84px;
+      box-shadow: 2px 0 4px -2px rgba(0,0,0,.22);
+    }
+    #crRoot table tbody td:nth-child(2) { background: #fff; }
+    #crRoot table tbody tr:nth-of-type(odd) td:nth-child(2) { background: #f2f2f2; }
+    #crRoot table thead th:nth-child(2) { background: #212529; }
+  }
+
+  /* ── MODALS ON A PHONE ──
+     A dialog floating in the middle of a 390px screen wastes the edges and
+     puts its buttons under the thumb's reach. These come up from the bottom
+     instead, filling the width, with the header and footer held still and
+     only the body scrolling - so a long form never pushes Save off the
+     screen, which is what the punch form did. */
+  @media (max-width: 768px) {
+    .modal-dialog {
+      margin: 0; position: absolute; bottom: 0; left: 0; right: 0;
+      max-width: 100%; width: 100%;
+    }
+    .modal-content {
+      border-radius: 14px 14px 0 0; border: 0;
+      max-height: 92dvh; display: flex; flex-direction: column;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    /* A bar to say it can be dragged away, the way a phone sheet looks. */
+    .modal-header { position: relative; flex: 0 0 auto; padding-top: 18px; }
+    .modal-header::before {
+      content: ''; position: absolute; top: 7px; left: 50%; transform: translateX(-50%);
+      width: 38px; height: 4px; border-radius: 2px; background: rgba(0,0,0,0.18);
+    }
+    .modal-header.bg-primary::before, .modal-header.bg-dark::before,
+    .modal-header.bg-success::before, .modal-header.bg-danger::before,
+    .modal-header.bg-warning::before { background: rgba(255,255,255,0.45); }
+    .modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1 1 auto; }
+    .modal-footer { flex: 0 0 auto; gap: 8px; }
+    /* Footer buttons full width, stacked, the primary one on top where the
+       thumb lands first. Bootstrap puts them in reverse order on a row, which
+       on a phone means Cancel sits above Save. */
+    .modal-footer > .btn { flex: 1 1 100%; margin: 0; }
+    .modal-footer.justify-content-between { flex-direction: column; align-items: stretch; }
+
+    /* It slides up rather than dropping in. */
+    .modal.fade .modal-dialog { transform: translateY(100%); }
+    .modal.show .modal-dialog { transform: none; }
   }
 
   /* ── BOTTOM NAV ──

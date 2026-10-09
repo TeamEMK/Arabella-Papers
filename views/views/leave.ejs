@@ -114,7 +114,11 @@
 var lv_data = [], lv_scope = 'mine', lv_status = '', lv_canDecide = false;
 var lv_type = '', lv_picked = [], lv_calDate = new Date(), lv_decideId = null;
 
-const lv_esc = v => String(v == null ? '' : v)
+// var, not const: loadPage() re-runs this whole block every time the tab
+// is opened, and a repeat `const` is a parse error that kills the script
+// before anything else in it runs - so opening this page a second time in
+// one session left it half drawn with every button dead.
+var lv_esc = v => String(v == null ? '' : v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 // yyyy-mm-dd in the user's own day, not UTC - toISOString() on an evening date
@@ -171,7 +175,7 @@ function lv_clear() {
   lv_fetch();
 }
 
-const LV_STATUS_STYLE = { pending: 'warning text-dark', approved: 'success', rejected: 'danger' };
+var LV_STATUS_STYLE = { pending: 'warning text-dark', approved: 'success', rejected: 'danger' };
 
 function lv_render() {
   const q = (document.getElementById('lv_search').value || '').toLowerCase().trim();

@@ -223,10 +223,14 @@ var INV_REASON_SHORT = { offboarding: 'Offboarding', damaged: 'Damaged', retired
 // the server enforces this too, this only keeps it out of reach.
 var INV_HOLDER_REASONS = ['offboarding', 'damaged'];
 
-const inv_esc = v => String(v == null ? '' : v)
+// var, not const: loadPage() re-runs this whole block every time the tab
+// is opened, and a repeat `const` is a parse error that kills the script
+// before anything else in it runs - so opening this page a second time in
+// one session left it half drawn with every button dead.
+var inv_esc = v => String(v == null ? '' : v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-const inv_reasonOptions = keys => '<option value="">-- select --</option>'
+var inv_reasonOptions = keys => '<option value="">-- select --</option>'
   + keys.map(k => `<option value="${k}">${inv_esc(INV_REASONS[k])}</option>`).join('');
 
 async function inv_fetch() {
@@ -463,7 +467,7 @@ function inv_renderAssignments(el) {
   sizeTables();
 }
 
-const inv_date = d => (d ? new Date(d).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }) : '-');
+var inv_date = d => (d ? new Date(d).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }) : '-');
 
 function inv_openDetail(id) {
   const i = inv_items.find(x => String(x.id) === String(id));
@@ -509,7 +513,7 @@ function inv_openPhoto(id, from) {
 }
 
 // ── ADD / EDIT ────────────────────────────────────────
-const INV_FORM = ['type', 'other', 'brand', 'model', 'serial', 'condition', 'notes'];
+var INV_FORM = ['type', 'other', 'brand', 'model', 'serial', 'condition', 'notes'];
 
 function inv_resetForm() {
   document.getElementById('inv_f_type').value = 'laptop';
