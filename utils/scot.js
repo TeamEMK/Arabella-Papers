@@ -26,9 +26,67 @@ const TAB = process.env.SCOT_SHEET_TAB || 'SCOT Sheet';
 
 // Rows 1-4 are the title, a blank, the band headings and the column names.
 const FIRST_ROW = 5;
-// Column A is =ROW()-4 and numbers itself. Everything this file writes starts
-// at B, and the day grid starts at N.
+// Where the day grid starts, when nothing better is known. Read off the sheet
+// in practice - see layout() - because columns have been added and taken away
+// by hand and a number written here goes stale the first time that happens.
 const FIRST_GRID_COL = 14;
+
+// The headings this file writes under, as they read in row 4. Matched loosely
+// - lowered, and runs of spaces squeezed - because they are typed by hand and
+// 'Usual Order  Days' already has two.
+const WANT = {
+  client: 'client name',
+  company: 'company name',
+  frequency: 'order frequency',
+  usualDays: 'usual order days',
+  callDate: 'date for calling',
+  callFreq: 'frequency of calling',
+};
+
+const tidy = (v) => String(v === null || v === undefined ? '' : v)
+  .replace(/\s+/g, ' ').trim().toLowerCase();
+
+let _layout = null;
+
+/**
+ * Which column each heading is in, read from row 4.
+ *
+ * The sheet is maintained by hand: a column has been added between the bands
+ * and taken out again, and every letter written into this file was wrong the
+ * moment that happened. Asking the sheet where its own columns are costs one
+ * read, cached, and cannot drift.
+ *
+ * `company` collects EVERY column headed Company Name, because the sheet has
+ * carried two of them and both were filled with the dealer's name.
+ */
+async function layout() {
+  if (_layout) return _layout;
+  const rows = await sheets.readValues(SHEET_ID, `'${TAB}'!A4:ZZ4`, { fresh: true });
+  const head = (rows && rows[0]) || [];
+
+  const at = {};
+  const company = [];
+  head.forEach((v, i) => {
+    const h = tidy(v);
+    if (!h) return;
+    const col = i + 1;
+    if (h === WANT.company) { company.push(col); return; }
+    for (const key of Object.keys(WANT)) {
+      if (key !== 'company' && h === WANT[key] && !at[key]) at[key] = col;
+    }
+  });
+
+  // The grid is everything to the right of the last named column - its own
+  // headings are dates, which calendar() reads separately.
+  const named = Math.max(0, ...company, ...Object.values(at));
+  const grid = named ? named + 1 : FIRST_GRID_COL;
+
+  if (!at.client) throw new Error(`'${TAB}' row 4 me 'Client Name' nahi mila`);
+  _layout = { ...at, company, grid };
+  return _layout;
+}
+
+function forgetLayout() { _layout = null; }
 
 // Names that cannot be a row on a calling list.
 //
@@ -89,23 +147,24 @@ let _calendar = null;
 
 async function calendar() {
   if (_calendar) return _calendar;
+  const start = (await layout()).grid;
   const api = await sheets.getReadClient();
   const res = await api.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
-    range: `'${TAB}'!${colLetters(FIRST_GRID_COL)}4:ZZ4`,
+    range: `'${TAB}'!${colLetters(start)}4:ZZ4`,
     valueRenderOption: 'UNFORMATTED_VALUE',
   });
   const row = (res.data.values || [])[0] || [];
   const byDay = new Map();
   row.forEach((v, i) => {
-    if (typeof v === 'number' && v > 0) byDay.set(serialToDay(v), FIRST_GRID_COL + i);
+    if (typeof v === 'number' && v > 0) byDay.set(serialToDay(v), start + i);
   });
   if (!byDay.size) throw new Error(`'${TAB}' row 4 me koi date column nahi mila`);
   _calendar = byDay;
   return byDay;
 }
 
-function forgetCalendar() { _calendar = null; }
+function forgetCalendar() { _calendar = null; _layout = null; }
 
 // ── which row belongs to which dealer ─────────────────
 
@@ -237,24 +296,38 @@ async function ensureCallDateFormat() {
  * rather than money - so whatever somebody types there has to survive every
  * later sync. Writing B to M in one block would wipe all five.
  */
-function detailRanges(name, freq, row) {
+async function detailRanges(name, freq, row) {
+  const L = await layout();
   const dash = row - 3;              // SCOT row 5 is Dashboard row 2
-  return [
-    { range: `'${TAB}'!B${row}`, values: [[name]] },   // Client Name
-    { range: `'${TAB}'!E${row}`, values: [[name]] },   // Company Name
-    { range: `'${TAB}'!H${row}`, values: [[name]] },   // Company Name again
-    {
-      range: `'${TAB}'!J${row}:M${row}`,
-      values: [[
-        freq ? freq.label : '',      // J  Order Frequency
-        freq ? freq.days : '',       // K  Usual Order Days
-        // Formulas, not values. Written as values they would be right on the
-        // day of the sync and quietly wrong every day after it.
-        `=IFERROR(Dashboard!L${dash},"")`,   // L  Date for calling
-        `=IFERROR(Dashboard!H${dash},"")`,   // M  Frequency Of Calling
-      ]],
-    },
-  ];
+  const cell = (col) => `'${TAB}'!${colLetters(col)}${row}`;
+
+  const out = [{ range: cell(L.client), values: [[name]] }];
+  // However many Company Name columns the sheet is carrying - it has had two,
+  // and may have one after somebody tidies up.
+  for (const col of L.company) out.push({ range: cell(col), values: [[name]] });
+
+  // The four that sit together, written as one range when they are still
+  // next to each other and one at a time when they are not.
+  const four = [
+    [L.frequency, freq ? freq.label : ''],
+    [L.usualDays, freq ? freq.days : ''],
+    // Formulas, not values. Written as values they would be right on the day
+    // of the sync and quietly wrong every day after it.
+    [L.callDate, `=IFERROR(Dashboard!L${dash},"")`],
+    [L.callFreq, `=IFERROR(Dashboard!H${dash},"")`],
+  ].filter(([col]) => col);
+
+  const cols = four.map(([col]) => col);
+  const run = cols.length === 4 && cols.every((c, i) => i === 0 || c === cols[i - 1] + 1);
+  if (run) {
+    out.push({
+      range: `'${TAB}'!${colLetters(cols[0])}${row}:${colLetters(cols[3])}${row}`,
+      values: [four.map(([, v]) => v)],
+    });
+  } else {
+    for (const [col, v] of four) out.push({ range: cell(col), values: [[v]] });
+  }
+  return out;
 }
 
 /**
@@ -291,7 +364,7 @@ async function syncDealer(dealerName, { from } = {}) {
   }
 
   const data = [
-    ...detailRanges(name, freq, row),
+    ...(await detailRanges(name, freq, row)),
     {
       range: `'${TAB}'!${colLetters(first)}${row}:${colLetters(last)}${row}`,
       values: [line],
@@ -347,6 +420,7 @@ async function recordPunchedOrder(dealerName) {
 
 module.exports = {
   SHEET_ID, TAB, FIRST_ROW, FIRST_GRID_COL, NOT_A_CLIENT, FROM_DAY,
+  layout, forgetLayout,
   colLetters, dayKey, serialToDay, firstDay,
   calendar, forgetCalendar, rowIndex,
   frequencyFrom, dealerHistory, detailRanges, ensureCallDateFormat,

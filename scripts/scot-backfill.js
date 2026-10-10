@@ -161,15 +161,24 @@ async function main() {
   if (outside) console.log(`${outside} din sheet ke calendar se bahar the, chhod diye`);
 
   const lastRow = scot.FIRST_ROW + dealers.length - 1;
-  const span = (col) => `'${scot.TAB}'!${col}${scot.FIRST_ROW}:${col}${lastRow}`;
-  const gridRange = `'${scot.TAB}'!${scot.colLetters(scot.FIRST_GRID_COL)}${scot.FIRST_ROW}`
+  // Columns come from the sheet's own row 4, not from letters written here:
+  // this sheet is maintained by hand and a column taken out between the bands
+  // would otherwise send every name one place to the left.
+  const L = await scot.layout();
+  const span = (col) => `'${scot.TAB}'!${scot.colLetters(col)}${scot.FIRST_ROW}`
+    + `:${scot.colLetters(col)}${lastRow}`;
+  const gridRange = `'${scot.TAB}'!${scot.colLetters(L.grid)}${scot.FIRST_ROW}`
     + `:${scot.colLetters(lastCol)}${lastRow}`;
 
   const data = [
-    { range: span('B'), values: names },
-    { range: span('E'), values: names },
-    { range: span('H'), values: names },
-    { range: `'${scot.TAB}'!J${scot.FIRST_ROW}:M${lastRow}`, values: freqs },
+    { range: span(L.client), values: names },
+    // However many Company Name columns there are - the sheet has carried two.
+    ...L.company.map((col) => ({ range: span(col), values: names })),
+    {
+      range: `'${scot.TAB}'!${scot.colLetters(L.frequency)}${scot.FIRST_ROW}`
+        + `:${scot.colLetters(L.callFreq)}${lastRow}`,
+      values: freqs,
+    },
     { range: gridRange, values: grid },
   ];
 
