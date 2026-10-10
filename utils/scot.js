@@ -173,6 +173,11 @@ async function dealerHistory(dealerName, from) {
     `SELECT DATE(timestamp) AS day, COUNT(*) AS n
        FROM orders
       WHERE is_deleted = 0 AND LOWER(TRIM(dealer_name)) = LOWER(TRIM(?))
+      -- A repeat is the same job going through the press again, not the
+      -- client asking for something new. This sheet exists to say when
+      -- somebody is due to be called, so counting a Reprint as an order
+      -- pushes that call back for work the office had already taken.
+        AND remake_of IS NULL
       GROUP BY DATE(timestamp) ORDER BY day`,
     [dealerName],
   );

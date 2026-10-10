@@ -75,6 +75,11 @@ async function main() {
       WHERE is_deleted = 0
         AND DATE(timestamp) >= ?
         AND TRIM(IFNULL(dealer_name, '')) <> ''
+      -- A repeat is the same job going through the press again, not the
+      -- client asking for something new. This sheet exists to say when
+      -- somebody is due to be called, so counting a Reprint as an order
+      -- pushes that call back for work the office had already taken.
+        AND remake_of IS NULL
       GROUP BY TRIM(dealer_name), DATE(timestamp)
       ORDER BY dealer, day`,
     [from],
@@ -93,6 +98,9 @@ async function main() {
     `SELECT TRIM(dealer_name) AS dealer, DATE(timestamp) AS day
        FROM orders
       WHERE is_deleted = 0 AND TRIM(IFNULL(dealer_name, '')) <> ''
+        -- Same rule as the grid above, or the rhythm would be measured over
+        -- days the grid does not show.
+        AND remake_of IS NULL
       GROUP BY TRIM(dealer_name), DATE(timestamp)`);
   const allDays = new Map();
   for (const r of hist) {
