@@ -28,6 +28,7 @@ const fmsTasksApi = require('./routes/api/fmsTasks');
 const accessApi = require('./routes/api/access');
 const recruitmentApi = require('./routes/api/recruitment');
 const joiningApi = require('./routes/api/joining');
+const scotApi = require('./routes/api/scot');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -110,6 +111,7 @@ app.use('/api/recruitment', recruitmentApi);
 // what says whose form this is, and it is checked on both of them. Everything
 // an employee of Arabella does with that form is in /api/recruitment instead.
 app.use('/api/joining', joiningApi);
+app.use('/api/scot', scotApi);
 
 // ── 404 FALLBACK ──
 app.use((req, res) => {

@@ -27,6 +27,61 @@
     </div>
   </div>
 
+  <%# ── S.C.O.T. CALLING LIST ──
+      The sheet already works out each client's ordering rhythm and when they
+      are due again; this shows the answer where people already are, instead
+      of in a tab somebody has to remember to open.
+
+      Shut to begin with, and it does not fetch until it is opened: reading
+      the sheet takes about three seconds, which is not a price to pay on
+      every dashboard open for a panel most people will not look at. %>
+  <div class="card bg-light-glass mt-3 mb-3 shadow-sm smooth-ui p-2">
+    <button class="filter-toggle-btn btn-sm py-1 px-3 w-100 d-flex justify-content-between align-items-center rounded p-2"
+      type="button" data-bs-toggle="collapse" data-bs-target="#scotContent" onclick="scot_open()">
+      <span class="text-dark fw-bold">
+        <i class="fas fa-phone-volume me-2"></i> Clients due for a call
+        <span class="badge bg-danger ms-2 d-none" id="scot_dueBadge">0</span>
+        <span class="badge bg-warning text-dark ms-1 d-none" id="scot_soonBadge">0</span>
+      </span>
+      <i class="fas fa-chevron-down text-dark"></i>
+    </button>
+    <div id="scotContent" class="collapse">
+      <div class="card-body p-2">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+          <select id="scot_when" class="form-select form-select-sm" style="max-width:220px" onchange="scot_render()">
+            <option value="due">Due now or overdue</option>
+            <option value="soon">Due in the next 7 days</option>
+            <option value="all">Everyone on the list</option>
+          </select>
+          <input type="text" id="scot_search" class="form-control form-control-sm" style="max-width:220px"
+                 placeholder="Client name..." onkeyup="scot_render()">
+          <button class="btn btn-sm btn-outline-dark" onclick="scot_load(true)"><i class="fas fa-sync-alt me-1"></i>Refresh</button>
+          <button class="btn btn-sm btn-outline-success" onclick="scot_download(this)"><i class="fas fa-file-excel me-1"></i>Excel</button>
+          <a class="btn btn-sm btn-outline-primary ms-auto" id="scot_sheetLink" target="_blank" rel="noopener" href="#">
+            <i class="fas fa-up-right-from-square me-1"></i>Open the sheet
+          </a>
+        </div>
+        <div class="text-muted small mb-2" id="scot_note">Opening…</div>
+        <div class="table-responsive" style="max-height:380px;overflow-y:auto;">
+          <table class="mcard table table-hover table-striped mb-0 text-nowrap">
+            <thead class="table-dark">
+              <tr>
+                <th style="position:sticky;top:0;background:#212529;color:white;">Client</th>
+                <th style="position:sticky;top:0;background:#212529;color:white;">Orders every</th>
+                <th style="position:sticky;top:0;background:#212529;color:white;">Last order</th>
+                <th style="position:sticky;top:0;background:#212529;color:white;">Days since</th>
+                <th style="position:sticky;top:0;background:#212529;color:white;">Orders so far</th>
+                <th style="position:sticky;top:0;background:#212529;color:white;">Expected</th>
+                <th style="position:sticky;top:0;background:#212529;color:white;">Overdue by</th>
+              </tr>
+            </thead>
+            <tbody id="scot_tbody"><tr><td colspan="7" class="text-center py-3 text-muted">Open to load.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- FILTERS -->
   <div class="card bg-light-glass mt-3 mb-3 shadow-sm smooth-ui p-2">
     <button class="filter-toggle-btn btn-sm py-1 px-3 w-100 d-flex justify-content-between align-items-center rounded p-2"
@@ -598,6 +653,99 @@ function dt_demandCustom(selectId) {
   box.classList.add('is-invalid');
   box.focus();
   return false;
+}
+
+// ── S.C.O.T. CALLING LIST ──
+// The sheet does the thinking - the rhythm, the expected date - and this
+// shows the answer. Nothing here recalculates it; two answers to one question
+// is how a number starts being argued about.
+var scot_rows = [], scot_shown = [], scot_loaded = false;
+
+function scot_open() {
+  // Bootstrap toggles on the same click, so this reads the state BEFORE the
+  // toggle: shut now means it is about to open.
+  var shut = !document.getElementById('scotContent').classList.contains('show');
+  if (shut && !scot_loaded) scot_load(false);
+}
+
+async function scot_load(fresh) {
+  var note = document.getElementById('scot_note');
+  note.textContent = fresh ? 'Reading the sheet again…' : 'Reading the sheet…';
+  document.getElementById('scot_tbody').innerHTML =
+    '<tr><td colspan="7" class="text-center py-3"><i class="fas fa-spinner fa-spin me-2"></i>Loading…</td></tr>';
+  try {
+    var res = await fetch('/api/scot/calling-list' + (fresh ? '?fresh=1' : ''));
+    var json = await res.json();
+    if (!json.success) {
+      note.textContent = '';
+      document.getElementById('scot_tbody').innerHTML =
+        '<tr><td colspan="7" class="text-center py-3 text-danger">' + bulkEsc(json.error || 'Could not read the sheet.') + '</td></tr>';
+      return;
+    }
+    scot_loaded = true;
+    scot_rows = json.list || [];
+    document.getElementById('scot_sheetLink').href = json.sheetUrl;
+
+    var due = document.getElementById('scot_dueBadge');
+    due.textContent = json.due; due.classList.toggle('d-none', !json.due);
+    var soon = document.getElementById('scot_soonBadge');
+    soon.textContent = json.soon; soon.classList.toggle('d-none', !json.soon);
+
+    note.textContent = json.due + ' due now, ' + json.soon + ' in the next 7 days, '
+      + json.total + ' clients on the list · read at ' + json.readAt;
+    scot_render();
+  } catch (e) {
+    note.textContent = '';
+    document.getElementById('scot_tbody').innerHTML =
+      '<tr><td colspan="7" class="text-center py-3 text-danger">Server error.</td></tr>';
+  }
+}
+
+function scot_render() {
+  var when = document.getElementById('scot_when').value;
+  var q = (document.getElementById('scot_search').value || '').toLowerCase().trim();
+
+  scot_shown = scot_rows.filter(function (c) {
+    if (when === 'due' && !(c.late !== null && c.late >= 0)) return false;
+    if (when === 'soon' && !(c.late !== null && c.late < 0 && c.late >= -7)) return false;
+    if (q && c.client.toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+
+  var body = document.getElementById('scot_tbody');
+  if (!scot_shown.length) {
+    body.innerHTML = '<tr><td colspan="7" class="text-center py-3 text-muted">Nobody here.</td></tr>';
+    return;
+  }
+  body.innerHTML = scot_shown.map(function (c) {
+    // How late, said in words rather than as a signed number: -3 for "due in
+    // three days" is a thing to decode, not to read.
+    var when2 = c.late === null
+      ? '<span class="text-muted">-</span>'
+      : c.late > 0 ? '<span class="badge bg-danger">' + c.late + ' day' + (c.late === 1 ? '' : 's') + '</span>'
+      : c.late === 0 ? '<span class="badge bg-warning text-dark">today</span>'
+      : '<span class="text-muted small">in ' + (-c.late) + ' day' + (c.late === -1 ? '' : 's') + '</span>';
+    return '<tr>'
+      + '<td class="fw-bold">' + bulkEsc(c.client) + '</td>'
+      + '<td>' + (c.frequency ? bulkEsc(c.frequency) : '<span class="text-muted">not enough history</span>') + '</td>'
+      + '<td>' + bulkEsc(c.lastOrder || '-') + '</td>'
+      + '<td>' + (c.daysSince === null ? '-' : c.daysSince) + '</td>'
+      + '<td>' + (c.totalOrders === null ? '-' : c.totalOrders) + '</td>'
+      + '<td>' + bulkEsc(c.expectedNext || '-') + '</td>'
+      + '<td>' + when2 + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function scot_download(btn) {
+  var cols = ['Client', 'Orders every', 'Last order', 'Days since', 'Orders so far', 'Expected', 'Overdue by (days)'];
+  var rows = (scot_shown || []).map(function (c) {
+    return [c.client, c.frequency, c.lastOrder,
+            c.daysSince === null ? '' : c.daysSince,
+            c.totalOrders === null ? '' : c.totalOrders,
+            c.expectedNext, c.late === null ? '' : c.late];
+  });
+  downloadXlsx('SCOT calling list', cols, rows, btn);
 }
 
 var ordersData = [];
