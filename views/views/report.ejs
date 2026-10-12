@@ -201,7 +201,8 @@ function rep_render() {
   // ask the same question would be felt.
   var whose = rep_whoseCol();
   var html = rep_filtered.slice(0, REP_SHOW).map(function (o, i) {
-    return '<tr' + (rep_ourFault(o) ? ' class="rep-ourfault"' : '') + '><td>' + (i + 1) + '</td>'
+    var cls = rep_faultRow(o);
+    return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + (i + 1) + '</td>'
       + rep_cells(o).map(function (v, n) {
         // The fault reads as a badge, the way it does on the Corrections page
         // itself - two pages describing the same thing should look the same.
@@ -217,11 +218,18 @@ function rep_render() {
 }
 
 // ── WHOSE THE CORRECTION WAS ──
-// Asked for: the ones that were our own doing should stand out of the list.
-// A client's change is new work and a client's own mistake is not ours to
-// answer for; a designer's mistake is the only one of the three the office
-// can do anything about, so it is the only one marked.
-var REP_OUR_FAULT = "Designer's mistake";
+// Two of the three are somebody's mistake and the third is not. A change the
+// client asked for is new work - it costs time, but nobody got anything
+// wrong - so it stays plain, and the two that did go wrong each get their
+// own colour: ours red, theirs amber.
+//
+// Marking all three would leave nothing standing out. Marking none would
+// make the column something you have to stop and read.
+var REP_FAULT_STYLE = {
+  "Designer's mistake": { badge: 'bg-danger', row: 'rep-ourfault' },
+  "Client's mistake":   { badge: 'bg-warning text-dark', row: 'rep-theirfault' },
+  'Client asked for a change': { badge: 'bg-light text-dark border', row: '' },
+};
 
 /** Which cell holds Whose, or 0 when this report has no such column. */
 function rep_whoseCol() {
@@ -229,17 +237,19 @@ function rep_whoseCol() {
   return all.indexOf('Whose') + 1;   // +1 for the row-number cell in front
 }
 
-function rep_ourFault(o) {
-  return (o && o.Whose) === REP_OUR_FAULT;
+/** The row class for this correction, or '' for the ones nobody got wrong. */
+function rep_faultRow(o) {
+  var st = REP_FAULT_STYLE[o && o.Whose];
+  return st ? st.row : '';
 }
 
 function rep_faultBadge(v) {
   var t = String(v == null ? '' : v);
+  // Raised before the field existed. Saying so is the honest answer; giving
+  // it one of the three would be inventing it.
   if (!t) return '<span class="text-muted small fst-italic">not recorded</span>';
-  // Only ours is red. Painting all three would leave nothing standing out,
-  // and a change the client asked for is not a mistake at all.
-  if (t === REP_OUR_FAULT) return '<span class="badge bg-danger">' + rep_esc(t) + '</span>';
-  return '<span class="badge bg-light text-dark border">' + rep_esc(t) + '</span>';
+  var st = REP_FAULT_STYLE[t];
+  return '<span class="badge ' + (st ? st.badge : 'bg-secondary') + '">' + rep_esc(t) + '</span>';
 }
 
 function rep_rangePicked() { applyDateRange('rep_range', 'rep_start', 'rep_end', rep_apply); }

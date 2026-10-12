@@ -92,13 +92,17 @@
     font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
   .side-count[hidden] { display: none; }
 
-  /* A correction that was our own doing, on the Corrections report.
-     The same tint the late production rows use, for the same reason - a
-     whole row in solid colour makes a list unreadable the moment more than a
-     handful match, and the hard red is spent on the badge that names it.
+  /* Whose a correction was, on the Corrections report.
+     Two of the three went wrong and get a tint - ours red, the client's
+     amber. A change the client asked for is new work and nobody's mistake,
+     so it stays plain; if all three were coloured none of them would stand
+     out. A tint rather than a block of colour, the same as a late production
+     row, with the hard colour kept for the badge that names it.
      !important for table-striped, which paints every other row. */
   tr.rep-ourfault > td { background-color: #fbd9db !important; }
   tr.rep-ourfault:hover > td { background-color: #f7c3c7 !important; }
+  tr.rep-theirfault > td { background-color: #fdf0d2 !important; }
+  tr.rep-theirfault:hover > td { background-color: #fbe3ab !important; }
 
   /* A production row that has run past the days it was given.
      A tint, not a block of red: whole rows in solid colour make the board
