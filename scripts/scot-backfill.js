@@ -43,6 +43,9 @@ if (process.argv.includes('--live')) {
 const db = require('../config/db');
 const sheets = require('../utils/sheets');
 const scot = require('../utils/scot');
+// Same IST day the sync uses, so a fill and a punch can never disagree about
+// which column an order belongs in.
+const { IST_DAY } = scot;
 
 // No date given means everything the sheet has columns for, which is also the
 // window a punch syncs. The two have to ask for the same thing, or a fill from
@@ -70,17 +73,17 @@ async function main() {
 
   // ── every dealer with work in the window, and every day they ordered ──
   const [rows] = await db.query(
-    `SELECT TRIM(dealer_name) AS dealer, DATE(timestamp) AS day, COUNT(*) AS n
+    `SELECT TRIM(dealer_name) AS dealer, ${IST_DAY} AS day, COUNT(*) AS n
        FROM orders
       WHERE is_deleted = 0
-        AND DATE(timestamp) >= ?
+        AND ${IST_DAY} >= ?
         AND TRIM(IFNULL(dealer_name, '')) <> ''
       -- A repeat is the same job going through the press again, not the
       -- client asking for something new. This sheet exists to say when
       -- somebody is due to be called, so counting a Reprint as an order
       -- pushes that call back for work the office had already taken.
         AND remake_of IS NULL
-      GROUP BY TRIM(dealer_name), DATE(timestamp)
+      GROUP BY TRIM(dealer_name), ${IST_DAY}
       ORDER BY dealer, day`,
     [from],
   );
@@ -95,13 +98,13 @@ async function main() {
 
   // ── the rhythm, measured over the whole history not just this window ──
   const [hist] = await db.query(
-    `SELECT TRIM(dealer_name) AS dealer, DATE(timestamp) AS day
+    `SELECT TRIM(dealer_name) AS dealer, ${IST_DAY} AS day
        FROM orders
       WHERE is_deleted = 0 AND TRIM(IFNULL(dealer_name, '')) <> ''
         -- Same rule as the grid above, or the rhythm would be measured over
         -- days the grid does not show.
         AND remake_of IS NULL
-      GROUP BY TRIM(dealer_name), DATE(timestamp)`);
+      GROUP BY TRIM(dealer_name), ${IST_DAY}`);
   const allDays = new Map();
   for (const r of hist) {
     if (!allDays.has(r.dealer)) allDays.set(r.dealer, []);
