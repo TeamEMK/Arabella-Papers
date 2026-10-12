@@ -9,6 +9,8 @@ const { notifyClientDispatched } = require('../../utils/notify');
 // entry instead of writing over the old one. Every route that sets an approval
 // asks this first, and does what it always did when it comes back empty.
 const { raiseRemake, rootOrderId } = require('../../utils/remake');
+// The three fault labels, from the page that owns them.
+const { FAULTS } = require('./corrections');
 const { requireLogin } = require('../../middleware/auth');
 // The board a request is asking for is the same thing the side panel decides
 // whether to show - role rule plus whatever was granted on the Access Control
@@ -1991,6 +1993,53 @@ const REPORT_SOURCES = {
       });
     },
   },
+  // Every correction raised, one row each.
+  //
+  // A correction is its own thing, not a state an order is in - the same
+  // order comes back a second and a third time and each round has its own
+  // date, its own fault and its own account of what was changed. The other
+  // reports are one row per order and would have to pick one of those rounds
+  // to show; this one shows them all.
+  //
+  // Whose it was is the column the office asked for this page to carry. It is
+  // written at the time the correction is raised, and the ones raised before
+  // that field existed come through blank rather than being guessed at.
+  corrections: {
+    stages: ['pending', 'done', 'delayed'],
+    // Listed in that order because it reads better than alphabetical, but
+    // they are not a sequence. "Stage completed" asks which stages an order
+    // has already been through, and a correction has not been through
+    // pending on its way to done - it is in one of the three. The page hides
+    // that box when this is false.
+    ordered: false,
+    sql: `SELECT c.order_id, c.designer, c.fault, c.client_note, c.work_note,
+                 c.delay_reason, c.raised_by, c.status, c.created_at, c.closed_at,
+                 o.dealer_name, o.client_name, o.remake_of
+            FROM corrections c
+            LEFT JOIN orders o ON o.order_id = c.order_id
+           ORDER BY c.created_at DESC, c.id DESC
+           LIMIT 20000`,
+    row(r) {
+      const line = reportRow(r, r.created_at, (r.status || '').trim() || 'pending', [], {
+        // The designer the correction landed on, which is copied at the time
+        // it was raised - reassigning the order later must not silently move
+        // a correction somebody has already answered. reportRow fills
+        // Designer from the order, so this says the other one outright.
+        'Correction on': r.designer || '',
+        Whose: FAULTS[r.fault] || '',
+        'What the client asked': r.client_note || '',
+        'What was corrected': r.work_note || '',
+        'Reason for delay': r.delay_reason || '',
+        'Raised by': r.raised_by || '',
+        Closed: r.closed_at ? reportShow(r.closed_at) : '',
+      });
+      // The order's own designer is not the question here; who the correction
+      // went to is, and that is the line above.
+      line.Designer = r.designer || '';
+      return line;
+    },
+  },
+
   // Every change anybody has made to an order, one row per change.
   //
   // The other four reports answer "where is this order"; this one answers
@@ -2045,7 +2094,7 @@ const REPORT_SOURCES = {
   },
 };
 
-// GET /api/dashboards/report?source=production|dispatch|orders|tillApproval|history
+// GET /api/dashboards/report?source=production|dispatch|orders|tillApproval|corrections|history
 router.get('/report', requireLogin, async (req, res) => {
   try {
     if (!(await canSee(req.session.user, 'report'))) {
@@ -2060,7 +2109,10 @@ router.get('/report', requireLogin, async (req, res) => {
     // Production and Dispatch have a fixed order of stages; the other two are
     // whatever status the orders actually carry.
     const stages = src.stages || [...new Set(data.map(d => d.Stage).filter(Boolean))].sort();
-    res.json({ success: true, data, stages, ordered: !!src.stages });
+    // A source can name its stages and still say they are not a sequence -
+    // Corrections does, so the "Stage completed" box stays hidden there.
+    const ordered = src.ordered === undefined ? !!src.stages : src.ordered;
+    res.json({ success: true, data, stages, ordered });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });

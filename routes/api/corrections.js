@@ -515,4 +515,9 @@ router.delete('/:id', requireLogin, async (req, res) => {
   }
 });
 
+// The report on the other side reads these too. Hung off the router rather
+// than copied over there, so the three labels have one home - the list and
+// the report cannot start calling the same fault different things.
+router.FAULTS = FAULTS;
+
 module.exports = router;

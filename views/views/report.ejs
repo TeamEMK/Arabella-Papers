@@ -25,6 +25,7 @@
             <option value="dispatch">Dispatch</option>
             <option value="orders">Orders Dashboard</option>
             <option value="tillApproval">Till Approval</option>
+            <option value="corrections">Corrections</option>
             <option value="history">Order History (who changed what)</option>
           </select></div>
         <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Designer</label>
@@ -78,12 +79,20 @@ var rep_data = [], rep_filtered = [], rep_ordered = false;
 var REP_SHOW = 500;
 var REP_BASE = ['Date', 'ID', 'Repeat of', 'Dealer', 'Client', 'Designer', 'Stage'];
 
-// The same column holds a different thing on the history report - the kind of
-// change rather than where the order has got to - so the heading follows it,
-// on screen and in the file. One function, so the two cannot disagree.
+// One column holds a different thing on three of these reports: where the
+// order has got to on the boards, the kind of change in the history, the
+// state of the correction on Corrections. The heading follows it, on screen,
+// in the dropdown above it and in the file - from one place, so the three
+// cannot disagree.
+var REP_STAGE_WORD = { history: 'Change', corrections: 'Status' };
+
+function rep_stageWord() {
+  return REP_STAGE_WORD[document.getElementById('rep_source').value] || 'Stage';
+}
+
 function rep_baseCols() {
-  var isHistory = document.getElementById('rep_source').value === 'history';
-  return REP_BASE.map(function (c) { return c === 'Stage' && isHistory ? 'Change' : c; });
+  var word = rep_stageWord();
+  return REP_BASE.map(function (c) { return c === 'Stage' ? word : c; });
 }
 
 function rep_esc(v) {
@@ -121,11 +130,10 @@ async function rep_load() {
   document.getElementById('rep_modeBox').style.display = rep_ordered ? '' : 'none';
   if (!rep_ordered) document.getElementById('rep_mode').value = 'current';
 
-  // On the history report the "stage" is the kind of change - Updated,
-  // Created, Correction raised - so the label follows what the list holds.
   var isHistory = source === 'history';
-  document.getElementById('rep_stageLabel').textContent = isHistory ? 'Change' : 'Stage';
-  rep_fill('rep_stage', isHistory ? 'All changes' : 'All Stages', json.stages || []);
+  var word = rep_stageWord();
+  document.getElementById('rep_stageLabel').textContent = word;
+  rep_fill('rep_stage', 'All ' + word.toLowerCase() + (word === 'Status' ? 'es' : 's'), json.stages || []);
 
   document.getElementById('rep_byBox').classList.toggle('d-none', !isHistory);
   if (isHistory) {
