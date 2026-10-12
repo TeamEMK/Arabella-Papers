@@ -227,20 +227,9 @@ function frequencyFrom(days) {
  * when it should never have existed, and counting it would keep calling a
  * dealer about work nobody is doing.
  */
-// Railway stores UTC and this sheet is a day grid, so the day has to be the
-// one the office was working in, not the one Greenwich was. Six orders since
-// April were punched between midnight and half past five in the morning IST,
-// which is the evening before in UTC, and every one of them went into the
-// column for the day before - moving that dealer's last order date, and with
-// it the day the sheet says to ring them.
-//
-// Every other date in this app already comes out as IST; these two queries
-// were the ones left behind.
-const IST_DAY = "DATE(CONVERT_TZ(timestamp, '+00:00', '+05:30'))";
-
 async function dealerHistory(dealerName, from) {
   const [rows] = await db.query(
-    `SELECT ${IST_DAY} AS day, COUNT(*) AS n
+    `SELECT DATE(timestamp) AS day, COUNT(*) AS n
        FROM orders
       WHERE is_deleted = 0 AND LOWER(TRIM(dealer_name)) = LOWER(TRIM(?))
       -- A repeat is the same job going through the press again, not the
@@ -248,7 +237,7 @@ async function dealerHistory(dealerName, from) {
       -- somebody is due to be called, so counting a Reprint as an order
       -- pushes that call back for work the office had already taken.
         AND remake_of IS NULL
-      GROUP BY ${IST_DAY} ORDER BY day`,
+      GROUP BY DATE(timestamp) ORDER BY day`,
     [dealerName],
   );
   const all = rows.map(r => dayKey(r.day));
@@ -430,7 +419,7 @@ async function recordPunchedOrder(dealerName) {
 }
 
 module.exports = {
-  SHEET_ID, TAB, FIRST_ROW, FIRST_GRID_COL, NOT_A_CLIENT, FROM_DAY, IST_DAY,
+  SHEET_ID, TAB, FIRST_ROW, FIRST_GRID_COL, NOT_A_CLIENT, FROM_DAY,
   layout, forgetLayout,
   colLetters, dayKey, serialToDay, firstDay,
   calendar, forgetCalendar, rowIndex,
