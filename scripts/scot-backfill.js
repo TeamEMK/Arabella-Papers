@@ -127,8 +127,17 @@ async function main() {
   }
 
   // ── build the two blocks ──
+  //
+  // Where the grid starts comes from the sheet, not from the constant. The
+  // two have to be the same number: the line below is built by counting from
+  // it, and the range further down is written from it. They were allowed to
+  // differ once - the constant said N while the sheet, a column shorter after
+  // a tidy-up, said M - and every order in the fill landed one column to the
+  // left, which on a grid of days is one day early. 1,825 cells of it.
+  const L = await scot.layout();
+  const gridStart = L.grid;
   const lastCol = Math.max(...[...cal.values()]);
-  const width = lastCol - scot.FIRST_GRID_COL + 1;
+  const width = lastCol - gridStart + 1;
 
   // Column by column rather than one B:M block. C, D, F, G and I belong to the
   // office - a phone number or an order size typed in there has to survive
@@ -153,7 +162,7 @@ async function main() {
     for (const { day, n } of d.list) {
       const col = cal.get(day);
       if (!col) { outside++; continue; }
-      line[col - scot.FIRST_GRID_COL] = n;
+      line[col - gridStart] = n;
     }
     grid.push(line);
   });
@@ -164,10 +173,9 @@ async function main() {
   // Columns come from the sheet's own row 4, not from letters written here:
   // this sheet is maintained by hand and a column taken out between the bands
   // would otherwise send every name one place to the left.
-  const L = await scot.layout();
   const span = (col) => `'${scot.TAB}'!${scot.colLetters(col)}${scot.FIRST_ROW}`
     + `:${scot.colLetters(col)}${lastRow}`;
-  const gridRange = `'${scot.TAB}'!${scot.colLetters(L.grid)}${scot.FIRST_ROW}`
+  const gridRange = `'${scot.TAB}'!${scot.colLetters(gridStart)}${scot.FIRST_ROW}`
     + `:${scot.colLetters(lastCol)}${lastRow}`;
 
   const data = [
