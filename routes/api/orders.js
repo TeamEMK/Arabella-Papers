@@ -7,6 +7,7 @@ const { generateOrderId } = require('../../utils/idgen');
 const { rootOrderId } = require('../../utils/remake');
 const { notifyDesignerAssigned } = require('../../utils/notify');
 const { logOrderUpdate, logOrderEvent } = require('../../utils/auditlog');
+const pmsEngine = require('../../utils/pms/engine');
 const { recordPunchedOrder } = require('../../utils/scot');
 const { requireLogin } = require('../../middleware/auth');
 // Dates are stored as IST wall-clock and read back through a +05:30
@@ -276,6 +277,12 @@ router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
     // only ever return, never throw, so a sheet nobody shared with us cannot
     // stop the office taking an order.
     await recordPunchedOrder(dealer);
+
+    // Put the order on the step board. Awaited for the same reason, and like
+    // the call above it can only return - an order must not fail to be taken
+    // because the board could not be written. It does nothing at all until
+    // pms_start_date is set, so this is inert on the day it ships.
+    await pmsEngine.startOrder(orderId);
 
     // Let the designer know before we answer. On Vercel the container is
     // frozen the moment the response goes out, so anything left running after

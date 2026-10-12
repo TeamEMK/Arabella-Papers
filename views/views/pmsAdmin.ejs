@@ -1,0 +1,155 @@
+<%# Step Settings — the TAT, the role and the on/off switch for each step.
+    The names and the order are not editable here: rows already written
+    against a step carry copies of both, and an order halfway through must
+    not have its board reshuffled under the floor. %>
+<div class="container-fluid py-4" id="paRoot">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-sliders me-2"></i>Step Settings</h3>
+      <div class="text-muted small">How many working days each step is allowed, and who answers for it.</div>
+    </div>
+    <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, pa_load, 'pmsAdmin')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+  </div>
+
+  <div class="alert alert-warning d-none" id="pa_warn">
+    <i class="fas fa-triangle-exclamation me-1"></i>
+    <b><span id="pa_missing"></span> steps have no TAT yet.</b>
+    Until a step has one it still runs and still records who did it and when —
+    it just cannot be called late, because there is no date to be late against.
+    <div class="small mt-1">
+      These start empty on purpose. What each production stage really takes
+      cannot be recovered from the old data: 92% of orders have every
+      production stage stamped within the same minute, because one form writes
+      them all at the end. A number guessed here would print a due date on the
+      floor's board and then mark them late against it.
+    </div>
+  </div>
+
+  <div class="card shadow smooth-ui">
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table align-middle mcard mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width:3rem;">#</th>
+              <th>Step</th>
+              <th>Runs when</th>
+              <th style="width:9rem;">TAT (days)</th>
+              <th style="width:13rem;">Who</th>
+              <th style="width:6rem;">On</th>
+              <th style="width:6rem;"></th>
+            </tr>
+          </thead>
+          <tbody id="pa_rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var pa_steps = [];
+
+// What each condition key means, in the words the office uses. The key alone
+// ('die') tells a reader nothing about which orders it lets through.
+var PA_COND = {
+  revision: 'Client asked for changes',
+  guest_name: 'Guest list / addressing given',
+  die: 'Die needed',
+  block: 'Block needed',
+  edges: 'Edges needed',
+  laser: 'Laser cutting needed',
+  output: 'Output needed',
+};
+
+function pa_esc(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function pa_load() {
+  try {
+    var r = await fetch('/api/pms/steps');
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not load the steps.');
+    pa_steps = j.steps || [];
+
+    var warn = document.getElementById('pa_warn');
+    if (j.missingTat > 0) {
+      document.getElementById('pa_missing').textContent = j.missingTat;
+      warn.classList.remove('d-none');
+    } else {
+      warn.classList.add('d-none');
+    }
+    pa_draw();
+  } catch (e) {
+    document.getElementById('pa_rows').innerHTML =
+      '<tr><td colspan="7" class="text-center text-danger py-4">' + pa_esc(e.message) + '</td></tr>';
+  }
+}
+
+function pa_draw() {
+  var body = document.getElementById('pa_rows');
+  body.innerHTML = pa_steps.map(function (s) {
+    var when = s.condition_key
+      ? '<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">'
+        + pa_esc(PA_COND[s.condition_key] || s.condition_key) + '</span>'
+      : '<span class="text-muted small">Always</span>';
+
+    return '<tr' + (s.is_active ? '' : ' class="opacity-50"') + '>'
+      + '<td class="text-muted">' + s.step_order + '</td>'
+      + '<td><span class="fw-semibold">' + pa_esc(s.name) + '</span>'
+      + (s.note ? '<div class="small text-muted">' + pa_esc(s.note) + '</div>' : '')
+      + '</td>'
+      + '<td>' + when + '</td>'
+      + '<td><input type="number" min="0" max="365" step="0.5" class="form-control form-control-sm'
+      + (s.tat_days === null ? ' border-warning' : '') + '" id="pa_tat_' + s.id + '" value="'
+      + (s.tat_days === null ? '' : s.tat_days) + '" placeholder="not set"></td>'
+      + '<td><input type="text" class="form-control form-control-sm" id="pa_role_' + s.id
+      + '" value="' + pa_esc(s.doer_role || '') + '" placeholder="role"></td>'
+      + '<td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="pa_on_'
+      + s.id + '"' + (s.is_active ? ' checked' : '') + '></div></td>'
+      + '<td class="text-end"><button class="btn btn-sm btn-outline-success smooth-ui" onclick="pa_save('
+      + s.id + ', this)">Save</button></td>'
+      + '</tr>';
+  }).join('');
+
+  if (window.mcardStamp) mcardStamp(body.closest('table'));
+}
+
+async function pa_save(id, btn) {
+  var step = pa_steps.filter(function (s) { return s.id === id; })[0];
+  if (!step) return;
+  var raw = document.getElementById('pa_tat_' + id).value;
+  var old = btn.innerHTML;
+  btn.disabled = true; btn.textContent = '...';
+
+  try {
+    var r = await fetch('/api/pms/steps/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tat_days: raw,
+        doer_role: document.getElementById('pa_role_' + id).value,
+        note: step.note || '',
+        is_active: document.getElementById('pa_on_' + id).checked,
+      }),
+    });
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not save.');
+    btn.className = 'btn btn-sm btn-success smooth-ui';
+    btn.textContent = 'Saved';
+    setTimeout(function () {
+      btn.className = 'btn btn-sm btn-outline-success smooth-ui';
+      btn.innerHTML = old; btn.disabled = false;
+    }, 1200);
+    await pa_load();
+  } catch (e) {
+    btn.disabled = false; btn.innerHTML = old;
+    alert(e.message || 'Could not save.');
+  }
+}
+
+pa_load();
+</script>

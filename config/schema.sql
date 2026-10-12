@@ -733,3 +733,115 @@ CREATE TABLE IF NOT EXISTS recruit_files (
   UNIQUE KEY uq_recruit_file (candidate_id, field),
   INDEX idx_recruit_file_cand (candidate_id)
 );
+
+-- =============================================
+-- PMS - THE STEP CATALOGUE
+-- What the steps of an order are, in order. One row per step.
+--
+-- The orders table already carries this flow, but as eighty columns -
+-- paper_cutting, paper_cutting_actual_time, dye_status, block_status and so
+-- on. That shape is why nothing can be added without a migration, and why
+-- every stage of an order gets stamped at the same second: there is one form
+-- holding all of them, so the floor fills it once at the end. 92% of orders
+-- with five production stages filled have all five within the same minute.
+--
+-- Rows instead of columns. A new step is an INSERT, and each one can be timed,
+-- assigned and chased on its own.
+--
+-- This deliberately does not point at a Google Sheet the way fms_steps does.
+-- Those rows store a column LETTER (plan_col 'I', actual_col 'J'), which goes
+-- quietly wrong the moment somebody inserts a column in the sheet - the same
+-- failure that broke the SCOT grid and the calling-date format twice over. The
+-- order is already in this database; the steps belong beside it.
+CREATE TABLE IF NOT EXISTS pms_steps (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  -- Position in the flow. Not the primary key: steps get reordered, and a
+  -- row already written against a step must not follow it.
+  step_order INT NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  -- NULL means the step runs on every order. Otherwise a key the engine
+  -- knows (see utils/pms/engine.js CONDITIONS) deciding whether this order
+  -- needs it - die cutting is on 3% of orders, laser on 1%, so most orders
+  -- must skip most of production rather than sit pending forever.
+  --
+  -- A key, not SQL: a condition stored as SQL is a condition nobody can read
+  -- on the admin screen, and one a typo turns into a query error at punch.
+  condition_key VARCHAR(40) DEFAULT NULL,
+  -- Who answers for it, by role. The person comes from pms_step_doers; this
+  -- is the fallback that decides whose board it shows on when nobody is named.
+  doer_role VARCHAR(60) DEFAULT '',
+  -- Working days allowed. NULL means NOT YET KNOWN, and the engine leaves the
+  -- planned date empty rather than inventing one.
+  --
+  -- Most of these are NULL on purpose. The time each production stage really
+  -- takes cannot be recovered from the old data - every stage is stamped in
+  -- one submit, so the gap between them reads as zero. Guessing here would put
+  -- a confident wrong number on every board. They get filled from the floor.
+  tat_days DECIMAL(5,2) DEFAULT NULL,
+  -- Off, without deleting: a step switched off stops being created for new
+  -- orders while the rows already written against it stay readable.
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  note VARCHAR(255) DEFAULT '',
+  updated_by VARCHAR(150) DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_pms_step_order (step_order)
+);
+
+-- People named on a step. A step with nobody named falls to its doer_role.
+CREATE TABLE IF NOT EXISTS pms_step_doers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  step_id INT NOT NULL,
+  user_id INT NOT NULL,
+  UNIQUE KEY uq_pms_step_doer (step_id, user_id),
+  INDEX idx_pms_doer_user (user_id)
+);
+
+-- =============================================
+-- PMS - A STEP ON ONE ORDER
+-- One row per order per step: when it was due, when it was done, by whom.
+CREATE TABLE IF NOT EXISTS pms_order_steps (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id VARCHAR(20) NOT NULL,
+  step_id INT NOT NULL,
+  -- Copied from the step when the row is made. The catalogue gets reordered;
+  -- an order already running must keep the order it started with, or its
+  -- board reshuffles under the floor mid-job.
+  step_order INT NOT NULL,
+  step_name VARCHAR(120) NOT NULL,
+
+  -- waiting  - earlier steps are not done, so this is not anybody's job yet
+  -- pending  - open, waiting on its doer
+  -- done     - finished, actual_at is set
+  -- skipped  - the condition said no; the next step opened straight away
+  status VARCHAR(12) NOT NULL DEFAULT 'waiting',
+
+  -- When it became due. Step one counts from the order date; every later step
+  -- counts from the previous step's actual. NULL where the step has no TAT
+  -- yet - an empty date says "not known", where a made-up one would say
+  -- "late" on a board the floor is meant to trust.
+  planned_at DATETIME DEFAULT NULL,
+  -- When it opened. Kept apart from planned_at so a step that opened late is
+  -- not confused with one that was done late.
+  opened_at DATETIME DEFAULT NULL,
+  actual_at DATETIME DEFAULT NULL,
+
+  -- Who finished it. Name as well as email because people leave and a board
+  -- read a year later should still say who did the work.
+  doer_email VARCHAR(150) DEFAULT '',
+  doer_name VARCHAR(150) DEFAULT '',
+  remark TEXT,
+  -- Why it was late, asked for only once planned_at has passed.
+  delay_reason TEXT,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  -- One row per step per order. Makes creating an order's steps safe to
+  -- repeat: a retry cannot give the floor the same step twice.
+  UNIQUE KEY uq_pms_order_step (order_id, step_id),
+  INDEX idx_pms_os_order (order_id),
+  INDEX idx_pms_os_status (status),
+  INDEX idx_pms_os_planned (planned_at),
+  INDEX idx_pms_os_doer (doer_email)
+);

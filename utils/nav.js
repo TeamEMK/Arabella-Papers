@@ -46,6 +46,21 @@ const SECTIONS = [
     id: 'oldProduction', group: 'Production', name: 'Backup Production', icon: 'fa-box-archive',
     rule: (role) => role === 'SuperAdmin' || role.includes('Production Manager'),
   },
+  // The step board: which step every running order is sitting on, and who it
+  // is sitting with. Open to everyone, like the Corrections tab, because
+  // being named on a step is what puts anything on it - somebody on no step
+  // sees an empty board rather than a locked door, and the floor is most of
+  // who needs it.
+  { id: 'pms', group: 'Production', name: 'Step Board', icon: 'fa-list-check', rule: () => true },
+  // Where the TAT of each step is set. Nearly every one starts empty: what a
+  // production stage really takes cannot be read out of the old data, since
+  // one form stamps them all at once. Until they are filled the board runs
+  // but marks nothing late.
+  {
+    id: 'pmsAdmin', group: 'Production', name: 'Step Settings', icon: 'fa-sliders',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head'
+      || role.includes('Production Manager'),
+  },
   {
     id: 'dispatchBD', group: 'Dispatch', name: 'Dispatch Dashboard', icon: 'fa-truck-fast',
     rule: (role) => role === 'SuperAdmin' || role === 'Accounts',

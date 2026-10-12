@@ -1,0 +1,320 @@
+<%# Step Board — which step every running order is sitting on, and who with.
+    Reads /api/pms/board; one order opens into its whole step list. %>
+<div class="container-fluid py-4" id="pmRoot">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-list-check me-2"></i>Step Board</h3>
+      <div class="text-muted small">Every running order and the step it is waiting on.</div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, pm_load, 'pms')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3 row-cols-2 row-cols-md-4">
+    <div class="col">
+      <div class="card shadow smooth-ui kpi-card" style="cursor:pointer;border-left:4px solid #0d6efd;" onclick="pm_show('mine')">
+        <div class="card-body p-3"><h6 class="text-muted mb-0 small">Waiting on you</h6>
+        <div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">your steps</div>
+        <h3 class="fw-bold text-primary mb-0" id="pm_n_mine">--</h3></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card shadow smooth-ui kpi-card" style="cursor:pointer;border-left:4px solid #198754;" onclick="pm_show('all')">
+        <div class="card-body p-3"><h6 class="text-muted mb-0 small">Running</h6>
+        <div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">orders on the board</div>
+        <h3 class="fw-bold text-success mb-0" id="pm_n_all">--</h3></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card shadow smooth-ui kpi-card" style="cursor:pointer;border-left:4px solid #dc3545;" onclick="pm_show('late')">
+        <div class="card-body p-3"><h6 class="text-muted mb-0 small">Late</h6>
+        <div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">past the step's date</div>
+        <h3 class="fw-bold text-danger mb-0" id="pm_n_late">--</h3></div>
+      </div>
+    </div>
+    <!-- Untimed is its own figure, not folded into Late. A step with no TAT
+         is not running behind, it is unmeasured, and showing it as late would
+         be this system blaming the floor for a number nobody has given it. -->
+    <div class="col">
+      <div class="card shadow smooth-ui kpi-card" style="cursor:pointer;border-left:4px solid #6c757d;" onclick="pm_show('untimed')">
+        <div class="card-body p-3"><h6 class="text-muted mb-0 small">No TAT set</h6>
+        <div class="text-muted mb-1" style="font-size:.7rem;line-height:1.2;">cannot be timed yet</div>
+        <h3 class="fw-bold text-secondary mb-0" id="pm_n_untimed">--</h3></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-warning d-none" id="pm_tatWarn">
+    <i class="fas fa-triangle-exclamation me-1"></i>
+    <span id="pm_tatWarnText"></span>
+  </div>
+
+  <div class="card shadow smooth-ui">
+    <div class="card-body">
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <input type="text" class="form-control form-control-sm" style="max-width:320px;"
+               id="pm_q" placeholder="Order no, client, dealer, step..." oninput="pm_draw()">
+        <span class="text-muted small ms-auto" id="pm_count"></span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mcard mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Order</th><th>Client</th><th>Current step</th>
+              <th>Due</th><th>Progress</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="pm_rows"></tbody>
+        </table>
+      </div>
+      <div class="text-center text-muted py-4 d-none" id="pm_empty"></div>
+    </div>
+  </div>
+</div>
+
+<!-- One order's whole flow. -->
+<div class="modal fade" id="pm_modal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="pm_modalTitle">Order</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="pm_modalBody"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Everything here is `var` and prefixed. loadPage() re-runs this whole script
+// each time the tab is opened, and a top-level `const` is a parse error the
+// second time - it took out five pages before anyone traced it.
+var pm_all = [];
+var pm_mine = [];
+var pm_filter = 'all';
+var pm_open = null;        // the order id showing in the modal
+
+async function pm_load() {
+  try {
+    var r = await fetch('/api/pms/board');
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not load the board.');
+    pm_all = j.orders || [];
+
+    var rm = await fetch('/api/pms/my-tasks');
+    var jm = await rm.json();
+    pm_mine = (jm && jm.success && jm.tasks) ? jm.tasks : [];
+
+    document.getElementById('pm_n_all').textContent = j.counts.running;
+    document.getElementById('pm_n_late').textContent = j.counts.late;
+    document.getElementById('pm_n_untimed').textContent = j.counts.untimed;
+    document.getElementById('pm_n_mine').textContent = pm_mine.length;
+
+    // Say it once, plainly, rather than letting every empty Due cell ask the
+    // same question. Until the TATs are in, the board tracks where an order
+    // is but cannot say whether it is late.
+    var warn = document.getElementById('pm_tatWarn');
+    if (j.counts.untimed > 0) {
+      document.getElementById('pm_tatWarnText').innerHTML =
+        '<b>' + j.counts.untimed + '</b> order(s) are on a step with no TAT set, so nothing can be '
+        + 'called late yet. Fill the days each step takes in <b>Step Settings</b>.';
+      warn.classList.remove('d-none');
+    } else {
+      warn.classList.add('d-none');
+    }
+    pm_draw();
+  } catch (e) {
+    document.getElementById('pm_rows').innerHTML = '';
+    pm_note('Could not load the board. ' + (e.message || ''));
+  }
+}
+
+function pm_show(which) { pm_filter = which; pm_draw(); }
+
+function pm_note(msg) {
+  var el = document.getElementById('pm_empty');
+  el.textContent = msg;
+  el.classList.remove('d-none');
+}
+
+function pm_esc(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** '2026-10-12 15:30:00' -> '12 Oct, 3:30 pm'. Already IST; no conversion. */
+function pm_when(s, withTime) {
+  if (!s) return '';
+  var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m) return String(s);
+  var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var out = Number(m[3]) + ' ' + MON[Number(m[2]) - 1];
+  if (!withTime) return out;
+  var h = Number(m[4]), ap = h >= 12 ? 'pm' : 'am';
+  h = h % 12; if (!h) h = 12;
+  return out + ', ' + h + ':' + m[5] + ' ' + ap;
+}
+
+function pm_dueCell(o) {
+  if (!o.planned_at) return '<span class="text-muted small">no TAT</span>';
+  if (o.late > 0) {
+    return '<span class="text-danger fw-bold">' + pm_when(o.planned_at)
+      + '</span><div class="small text-danger">' + o.late + ' day(s) late</div>';
+  }
+  return pm_when(o.planned_at);
+}
+
+function pm_draw() {
+  var q = (document.getElementById('pm_q').value || '').trim().toLowerCase();
+  var list = pm_all;
+
+  if (pm_filter === 'late') list = list.filter(function (o) { return o.late > 0; });
+  else if (pm_filter === 'untimed') list = list.filter(function (o) { return o.untimed; });
+  else if (pm_filter === 'mine') {
+    var ids = {};
+    pm_mine.forEach(function (t) { ids[t.order_id] = 1; });
+    list = list.filter(function (o) { return ids[o.order_id]; });
+  }
+
+  if (q) {
+    list = list.filter(function (o) {
+      return [o.order_id, o.client_name, o.dealer_name, o.step_name, o.designer]
+        .join(' ').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  var LABEL = { all: 'Running orders', late: 'Late', untimed: 'No TAT set', mine: 'Waiting on you' };
+  document.getElementById('pm_count').textContent = LABEL[pm_filter] + ' — ' + list.length;
+
+  var body = document.getElementById('pm_rows');
+  var empty = document.getElementById('pm_empty');
+  if (!list.length) {
+    body.innerHTML = '';
+    pm_note(pm_filter === 'all'
+      ? 'No orders are on the board yet. New orders join it as they are punched.'
+      : 'Nothing here.');
+    return;
+  }
+  empty.classList.add('d-none');
+
+  body.innerHTML = list.map(function (o) {
+    return '<tr' + (o.late > 0 ? ' class="prod-late"' : '') + '>'
+      + '<td><span class="fw-bold">' + pm_esc(o.order_id) + '</span>'
+      + '<div class="small text-muted">' + pm_esc(o.dealer_name || '') + '</div></td>'
+      + '<td>' + pm_esc(o.client_name || '') + '</td>'
+      + '<td><span class="badge bg-secondary">S' + o.step_order + '</span> '
+      + pm_esc(o.step_name) + '</td>'
+      + '<td>' + pm_dueCell(o) + '</td>'
+      + '<td style="min-width:110px;">'
+      + '<div class="progress" style="height:6px;"><div class="progress-bar bg-success" style="width:'
+      + o.progress + '%"></div></div>'
+      + '<div class="small text-muted">' + o.progress + '%</div></td>'
+      + '<td class="text-end"><button class="btn btn-sm btn-outline-dark smooth-ui" onclick="pm_openOrder(\''
+      + pm_esc(o.order_id) + '\')">Open</button></td>'
+      + '</tr>';
+  }).join('');
+
+  if (window.mcardStamp) mcardStamp(body.closest('table'));
+}
+
+async function pm_openOrder(orderId) {
+  pm_open = orderId;
+  document.getElementById('pm_modalTitle').textContent = orderId;
+  document.getElementById('pm_modalBody').innerHTML =
+    '<div class="text-center text-muted py-4">Loading...</div>';
+  var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('pm_modal'));
+  modal.show();
+  await pm_drawOrder();
+}
+
+async function pm_drawOrder() {
+  var body = document.getElementById('pm_modalBody');
+  try {
+    var r = await fetch('/api/pms/order/' + encodeURIComponent(pm_open));
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not load it.');
+
+    if (!j.started) {
+      body.innerHTML = '<div class="alert alert-secondary mb-0">This order was punched before the '
+        + 'step board started, so it has no steps.</div>';
+      return;
+    }
+
+    var ICON = {
+      done: '<i class="fas fa-circle-check text-success"></i>',
+      pending: '<i class="fas fa-circle-dot text-primary"></i>',
+      skipped: '<i class="fas fa-circle-minus text-muted"></i>',
+      waiting: '<i class="far fa-circle text-muted"></i>',
+    };
+
+    body.innerHTML = j.steps.map(function (s) {
+      var dim = (s.status === 'waiting' || s.status === 'skipped') ? ' opacity-50' : '';
+      var right = '';
+      if (s.status === 'done') {
+        right = '<div class="small text-success">' + pm_when(s.actual_at, true) + '</div>'
+          + '<div class="small text-muted">' + pm_esc(s.doer_name || s.doer_email || '') + '</div>';
+      } else if (s.status === 'pending') {
+        right = '<button class="btn btn-sm btn-success smooth-ui" onclick="pm_done('
+          + s.step_id + ',' + (s.late || 0) + ')">Done</button>';
+      } else if (s.status === 'skipped') {
+        right = '<span class="badge bg-light text-muted border">skipped</span>';
+      }
+
+      var due = '';
+      if (s.status === 'pending') {
+        due = s.planned_at
+          ? '<div class="small ' + (s.late > 0 ? 'text-danger fw-bold' : 'text-muted') + '">due '
+            + pm_when(s.planned_at, true) + (s.late > 0 ? ' · ' + s.late + 'd late' : '') + '</div>'
+          : '<div class="small text-muted">no TAT set</div>';
+      }
+
+      return '<div class="d-flex align-items-start gap-3 py-2 border-bottom' + dim + '">'
+        + '<div style="width:1.4rem;text-align:center;">' + ICON[s.status] + '</div>'
+        + '<div class="flex-grow-1">'
+        + '<div><span class="text-muted small me-1">S' + s.step_order + '</span>'
+        + '<span class="fw-semibold">' + pm_esc(s.step_name) + '</span></div>'
+        + '<div class="small text-muted">' + pm_esc(s.doer_role || '') + '</div>'
+        + due
+        + (s.remark ? '<div class="small fst-italic">' + pm_esc(s.remark) + '</div>' : '')
+        + (s.delay_reason ? '<div class="small text-danger">Late: ' + pm_esc(s.delay_reason) + '</div>' : '')
+        + '</div>'
+        + '<div class="text-end" style="min-width:7rem;">' + right + '</div>'
+        + '</div>';
+    }).join('');
+  } catch (e) {
+    body.innerHTML = '<div class="alert alert-danger mb-0">' + pm_esc(e.message) + '</div>';
+  }
+}
+
+async function pm_done(stepId, late) {
+  var remark = '';
+  var delayReason = '';
+  // Asked for here, while the job is fresh. A reason collected a week later
+  // is a guess, and a board full of guesses is worse than one with blanks.
+  if (late > 0) {
+    delayReason = window.prompt('This step is ' + late + ' day(s) past its date.\nWhy was it late?');
+    if (delayReason === null) return;
+    if (!delayReason.trim()) { alert('A reason is needed for a late step.'); return; }
+  } else {
+    remark = window.prompt('Any remark? (optional)') || '';
+  }
+
+  try {
+    var r = await fetch('/api/pms/order/' + encodeURIComponent(pm_open) + '/step/' + stepId + '/done', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remark: remark, delayReason: delayReason }),
+    });
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not save that.');
+    await pm_drawOrder();
+    await pm_load();
+  } catch (e) {
+    alert(e.message || 'Could not save that.');
+  }
+}
+
+pm_load();
+</script>

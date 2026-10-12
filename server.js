@@ -29,6 +29,7 @@ const accessApi = require('./routes/api/access');
 const recruitmentApi = require('./routes/api/recruitment');
 const joiningApi = require('./routes/api/joining');
 const scotApi = require('./routes/api/scot');
+const pmsApi = require('./routes/api/pms');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -104,6 +105,7 @@ app.use('/api/corrections', correctionsApi);
 app.use('/api/export', exportApi);
 app.use('/api/fms', fmsApi);
 app.use('/api/fms-tasks', fmsTasksApi);
+app.use('/api/pms', pmsApi);
 app.use('/api/access', accessApi);
 app.use('/api/recruitment', recruitmentApi);
 // The onboarding form's own two routes, and the only ones in the app outside

@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
+const pmsEngine = require('../utils/pms/engine');
 
 // Runs schema.sql on first boot so a fresh database sets itself up. There is no
 // ORM here to sync models, and hosted MySQL (Railway, PlanetScale) hands you an
@@ -195,6 +196,12 @@ const SETTING_SEED = [
   // Order Quantity is compulsory on a punch. The office asked to be able to
   // relax that themselves rather than come back for a code change.
   ['order_quantity_required', '1'],
+  // The day the PMS step board starts counting, as YYYY-MM-DD. Empty means
+  // off, and off is how it ships: until somebody sets a date, punching an
+  // order writes no steps and the board stays empty. Switching it on is a
+  // decision about the floor's working day, not something a deploy should
+  // make on its own.
+  ['pms_start_date', ''],
 ];
 
 async function seedSettings() {
@@ -259,7 +266,11 @@ async function run() {
   const addOns = await seedAddOns();
   const settings = await seedSettings();
   const approvals = await seedApprovalHistory();
-  return { created, admin, columns, gna, addOns, settings, approvals };
+  // The PMS step catalogue. Only ever onto an empty table, so the TATs the
+  // office fills in from the floor are not pushed back to null on the next
+  // boot - see seedSteps.
+  const pmsSteps = await pmsEngine.seedSteps();
+  return { created, admin, columns, gna, addOns, settings, approvals, pmsSteps };
 }
 
 let ready = null;
