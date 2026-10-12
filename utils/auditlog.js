@@ -56,12 +56,44 @@ function actor(user) {
   return user.username || user.email || 'Unknown';
 }
 
+/**
+ * One go at the insert, tried twice.
+ *
+ * Every log in this file goes through here, and every caller swallows what
+ * comes out of it - a correction must save whether or not its history row
+ * did. The cost of that is silent loss, and it has happened: thirteen
+ * corrections closed between the 10th and the 21st of September have no
+ * "Correction done" line against them, five of those on the busiest day of
+ * the month. Nothing was wrong with the writes; the database simply did not
+ * answer that moment.
+ *
+ * So it asks again before giving up. A quarter of a second, once - long
+ * enough to be past a blip, short enough that the person waiting on the
+ * response does not notice, and bounded so a database that is properly down
+ * cannot hold a request open.
+ *
+ * It still never throws past its callers. This makes the gap rarer, not
+ * impossible, and a log that cannot be written must not fail the work it
+ * describes.
+ */
+const RETRY_AFTER_MS = 250;
+
 async function insert(rows) {
   if (!rows.length) return;
-  await db.query(
-    `INSERT INTO order_logs (order_id, action, field, old_value, new_value, changed_by) VALUES ?`,
-    [rows.map(r => [r[0], r[1], r[2], r[3].slice(0, 500), r[4].slice(0, 500), r[5]])]
-  );
+  const values = rows.map(r => [r[0], r[1], r[2], r[3].slice(0, 500), r[4].slice(0, 500), r[5]]);
+  const sql = `INSERT INTO order_logs (order_id, action, field, old_value, new_value, changed_by) VALUES ?`;
+
+  try {
+    await db.query(sql, [values]);
+    return;
+  } catch (first) {
+    // A bad row fails the same way twice, so say what went wrong the first
+    // time - otherwise only the second, identical message is ever seen and it
+    // reads as one failure rather than two.
+    console.error(`[log] first attempt failed (${rows.length} row(s)):`, first.message);
+    await new Promise(r => setTimeout(r, RETRY_AFTER_MS));
+    await db.query(sql, [values]);
+  }
 }
 
 /**
