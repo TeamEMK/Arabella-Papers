@@ -264,25 +264,38 @@ async function dealerHistory(dealerName, from) {
 async function ensureCallDateFormat() {
   const tab = await sheets.findTabByTitle(SHEET_ID, TAB);
   if (!tab) throw new Error(`'${TAB}' tab nahi mila`);
+  const L = await layout();
   const api = await sheets.getWriteClient();
-  await api.spreadsheets.batchUpdate({
-    spreadsheetId: SHEET_ID,
-    requestBody: {
-      requests: [{
-        repeatCell: {
-          range: {
-            sheetId: tab.sheetId,
-            startRowIndex: FIRST_ROW - 1,
-            endRowIndex: 404,
-            startColumnIndex: 11,   // L
-            endColumnIndex: 12,
-          },
-          cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'd-MMM-yyyy' } } },
-          fields: 'userEnteredFormat.numberFormat',
-        },
-      }],
+
+  const col = (n, format) => ({
+    repeatCell: {
+      range: {
+        sheetId: tab.sheetId,
+        startRowIndex: FIRST_ROW - 1,
+        endRowIndex: 404,
+        startColumnIndex: n - 1,
+        endColumnIndex: n,
+      },
+      cell: { userEnteredFormat: { numberFormat: format } },
+      fields: 'userEnteredFormat.numberFormat',
     },
   });
+
+  const requests = [];
+  // Which column this is comes from row 4, not from a letter written here.
+  // It used to say L, and when the duplicate Company Name column came out
+  // everything shifted one to the left: the date format stayed on L, which
+  // was now Frequency Of Calling, and that column's count of days started
+  // reading as 23-Jan-1900.
+  if (L.callDate) requests.push(col(L.callDate, { type: 'DATE', pattern: 'd-MMM-yyyy' }));
+  // And the one beside it is a number of days, not a date. Said explicitly
+  // rather than left alone, because it has been wrongly formatted once and
+  // nothing else would ever put it right.
+  if (L.callFreq) requests.push(col(L.callFreq, { type: 'NUMBER', pattern: '0' }));
+
+  if (requests.length) {
+    await api.spreadsheets.batchUpdate({ spreadsheetId: SHEET_ID, requestBody: { requests } });
+  }
 }
 
 /**
