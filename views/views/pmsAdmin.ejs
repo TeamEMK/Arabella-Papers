@@ -8,7 +8,10 @@
       <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-sliders me-2"></i>Step Settings</h3>
       <div class="text-muted small">How many working days each step is allowed, and who answers for it.</div>
     </div>
-    <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, pa_load, 'pmsAdmin')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary smooth-ui fw-bold" onclick="pa_openAdd()"><i class="fas fa-plus me-1"></i> Add Step</button>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, pa_load, 'pmsAdmin')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
   </div>
 
   <!-- The switch. Without this the whole PMS is inert, so it goes above the
@@ -52,7 +55,7 @@
     <div class="card-body">
       <div class="table-responsive">
         <table class="table align-middle mcard mb-0">
-          <thead class="table-light">
+          <thead class="table-dark">
             <tr>
               <th style="width:3rem;">#</th>
               <th>Step</th>
@@ -60,7 +63,8 @@
               <th style="width:9rem;">TAT (days)</th>
               <th style="width:13rem;">Who</th>
               <th style="width:6rem;">On</th>
-              <th style="width:6rem;"></th>
+              <th style="width:10rem;">Order</th>
+              <th style="width:9rem;"></th>
             </tr>
           </thead>
           <tbody id="pa_rows"></tbody>
@@ -70,8 +74,58 @@
   </div>
 </div>
 
+<div class="modal fade" id="pa_addModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-plus me-2"></i>Add a step</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Step name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="pa_n_name" placeholder="e.g. Foil Stamping" maxlength="120">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Where does it go?</label>
+          <select class="form-select" id="pa_n_pos"></select>
+          <div class="form-text">Everything from here down moves one place along.</div>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-7">
+            <label class="form-label small fw-semibold">Runs when</label>
+            <select class="form-select" id="pa_n_cond">
+              <option value="">Always</option>
+            </select>
+          </div>
+          <div class="col-5">
+            <label class="form-label small fw-semibold">TAT (days)</label>
+            <input type="number" min="0" max="365" step="0.5" class="form-control" id="pa_n_tat" placeholder="leave empty">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Who answers for it</label>
+          <input type="text" class="form-control" id="pa_n_role" placeholder="e.g. Production">
+          <div class="form-text">A role. It decides whose My Tasks the step shows on.</div>
+        </div>
+        <div class="alert alert-secondary small mb-0">
+          <i class="fas fa-circle-info me-1"></i>
+          This reaches <b>orders punched from now on</b>. Orders already running keep
+          the flow they started with — a step appearing behind where the floor has
+          already got to could never be done.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary smooth-ui" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary smooth-ui" onclick="pa_add(this)">Add step</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 var pa_steps = [];
+var pa_conds = [];
 
 // What each condition key means, in the words the office uses. The key alone
 // ('die') tells a reader nothing about which orders it lets through.
@@ -133,6 +187,7 @@ async function pa_load() {
     var j = await r.json();
     if (!j.success) throw new Error(j.error || 'Could not load the steps.');
     pa_steps = j.steps || [];
+    pa_conds = j.conditions || [];
 
     var warn = document.getElementById('pa_warn');
     if (j.missingTat > 0) {
@@ -171,8 +226,17 @@ function pa_draw() {
       + '" value="' + pa_esc(s.doer_role || '') + '" placeholder="role"></td>'
       + '<td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="pa_on_'
       + s.id + '"' + (s.is_active ? ' checked' : '') + '></div></td>'
-      + '<td class="text-end"><button class="btn btn-sm btn-outline-success smooth-ui" onclick="pa_save('
-      + s.id + ', this)">Save</button></td>'
+      + '<td><div class="btn-group btn-group-sm">'
+      + '<button class="btn btn-outline-secondary" title="Move up" onclick="pa_move(' + s.id + ",'up')\">"
+      + '<i class="fas fa-arrow-up"></i></button>'
+      + '<button class="btn btn-outline-secondary" title="Move down" onclick="pa_move(' + s.id + ",'down')\">"
+      + '<i class="fas fa-arrow-down"></i></button>'
+      + '</div></td>'
+      + '<td class="text-end"><div class="btn-group btn-group-sm">'
+      + '<button class="btn btn-outline-success" onclick="pa_save(' + s.id + ', this)">Save</button>'
+      + '<button class="btn btn-outline-danger" title="Remove" onclick="pa_remove(' + s.id + ', '
+      + JSON.stringify(s.name).replace(/"/g, '&quot;') + ')"><i class="fas fa-trash"></i></button>'
+      + '</div></td>'
       + '</tr>';
   }).join('');
 
@@ -209,6 +273,96 @@ async function pa_save(id, btn) {
   } catch (e) {
     btn.disabled = false; btn.innerHTML = old;
     alert(e.message || 'Could not save.');
+  }
+}
+
+// ── ADD, MOVE, REMOVE ──
+
+function pa_openAdd() {
+  document.getElementById('pa_n_name').value = '';
+  document.getElementById('pa_n_tat').value = '';
+  document.getElementById('pa_n_role').value = '';
+
+  // Positions, named by what currently sits there, so picking one does not
+  // mean counting rows in the table behind the dialog.
+  var pos = document.getElementById('pa_n_pos');
+  pos.innerHTML = pa_steps.map(function (s) {
+    return '<option value="' + s.step_order + '">Before ' + s.step_order + ' · '
+      + pa_esc(s.name) + '</option>';
+  }).join('') + '<option value="' + (pa_steps.length + 1) + '" selected>At the end</option>';
+
+  var cond = document.getElementById('pa_n_cond');
+  cond.innerHTML = '<option value="">Always</option>'
+    + pa_conds.map(function (k) {
+      return '<option value="' + k + '">' + pa_esc(PA_COND[k] || k) + '</option>';
+    }).join('');
+
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('pa_addModal')).show();
+}
+
+async function pa_add(btn) {
+  var name = document.getElementById('pa_n_name').value.trim();
+  if (!name) { alert('The step needs a name.'); return; }
+  var old = btn.innerHTML;
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    var r = await fetch('/api/pms/steps', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name,
+        step_order: Number(document.getElementById('pa_n_pos').value),
+        condition_key: document.getElementById('pa_n_cond').value,
+        tat_days: document.getElementById('pa_n_tat').value,
+        doer_role: document.getElementById('pa_n_role').value,
+      }),
+    });
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not add it.');
+    bootstrap.Modal.getInstance(document.getElementById('pa_addModal')).hide();
+    await pa_load();
+  } catch (e) {
+    alert(e.message || 'Could not add it.');
+  }
+  btn.disabled = false; btn.innerHTML = old;
+}
+
+async function pa_move(id, dir) {
+  try {
+    var r = await fetch('/api/pms/steps/' + id + '/move', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir: dir }),
+    });
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not move it.');
+    await pa_load();
+  } catch (e) {
+    alert(e.message || 'Could not move it.');
+  }
+}
+
+async function pa_remove(id, name) {
+  if (!window.confirm('Remove "' + name + '" from the flow?')) return;
+  try {
+    var r = await fetch('/api/pms/steps/' + id, { method: 'DELETE' });
+    var j = await r.json();
+    if (!j.success) {
+      // A step orders have been through cannot go without taking their
+      // history with it, so offer the switch instead of just refusing.
+      if (j.inUse && window.confirm(j.error + '\n\nSwitch it off now?')) {
+        var s = pa_steps.filter(function (x) { return x.id === id; })[0] || {};
+        await fetch('/api/pms/steps/' + id, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tat_days: s.tat_days, doer_role: s.doer_role,
+            note: s.note, is_active: false }),
+        });
+        await pa_load();
+        return;
+      }
+      throw new Error(j.error || 'Could not remove it.');
+    }
+    await pa_load();
+  } catch (e) {
+    alert(e.message || 'Could not remove it.');
   }
 }
 

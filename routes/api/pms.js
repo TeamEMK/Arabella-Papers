@@ -110,6 +110,142 @@ router.get('/steps', requireLogin, async (req, res) => {
 });
 
 /**
+ * Add a step, at a position in the flow.
+ *
+ * Everything from that position down shifts one place to make room. Only the
+ * catalogue moves: orders already running keep the flow they started with,
+ * because pms_order_steps carries its own copy of the order and the name.
+ * A step appearing in the middle of a job the floor is halfway through would
+ * either slot in behind where they are - never to be done - or reshuffle
+ * their board under them.
+ *
+ * So a new step reaches orders punched after it is added, and the screen
+ * says so rather than letting anyone assume otherwise.
+ */
+router.post('/steps', requireLogin, async (req, res) => {
+  try {
+    if (!isAdmin(req.session.user)) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    const b = req.body || {};
+    const name = String(b.name || '').trim();
+    if (!name) return res.status(400).json({ success: false, error: 'The step needs a name.' });
+    if (name.length > 120) {
+      return res.status(400).json({ success: false, error: 'That name is too long (120 characters).' });
+    }
+
+    const cond = String(b.condition_key || '').trim();
+    // A condition the engine does not know would read as "always runs", which
+    // is not what somebody picking one from a list means.
+    if (cond && !engine.CONDITIONS[cond]) {
+      return res.status(400).json({ success: false, error: 'That condition does not exist.' });
+    }
+
+    let tat = null;
+    if (b.tat_days !== null && b.tat_days !== undefined && String(b.tat_days).trim() !== '') {
+      tat = Number(b.tat_days);
+      if (!Number.isFinite(tat) || tat < 0 || tat > 365) {
+        return res.status(400).json({ success: false, error: 'TAT must be between 0 and 365 days.' });
+      }
+    }
+
+    const [[last]] = await db.query('SELECT IFNULL(MAX(step_order), 0) AS n FROM pms_steps');
+    let at = Number(b.step_order);
+    if (!Number.isInteger(at) || at < 1) at = last.n + 1;
+    if (at > last.n + 1) at = last.n + 1;
+
+    // Shift first, then insert, so nothing ever shares a position.
+    await db.query('UPDATE pms_steps SET step_order = step_order + 1 WHERE step_order >= ?', [at]);
+    const [out] = await db.query(
+      `INSERT INTO pms_steps (step_order, name, condition_key, doer_role, tat_days, note, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [at, name, cond || null, String(b.doer_role || '').slice(0, 60), tat,
+        String(b.note || '').slice(0, 255), who(req.session.user).email]);
+
+    res.json({ success: true, id: out.insertId, step_order: at });
+  } catch (err) {
+    console.error('[pms] add step:', err.message);
+    res.status(500).json({ success: false, error: 'Could not add the step.' });
+  }
+});
+
+/**
+ * Remove a step.
+ *
+ * Only one nothing has been recorded against. Once an order has been through
+ * it, those rows are the record of who did what and when, and deleting the
+ * step would leave them pointing at nothing. In that case the answer is the
+ * on/off switch, which stops it being given to new orders while the history
+ * stays readable - so this says that rather than refusing blankly.
+ */
+router.delete('/steps/:id', requireLogin, async (req, res) => {
+  try {
+    if (!isAdmin(req.session.user)) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) {
+      return res.status(400).json({ success: false, error: 'Bad step.' });
+    }
+
+    const [[used]] = await db.query(
+      'SELECT COUNT(*) AS n FROM pms_order_steps WHERE step_id = ?', [id]);
+    if (used.n) {
+      return res.status(409).json({
+        success: false, inUse: used.n,
+        error: used.n + ' order(s) have been through this step, so deleting it would '
+          + 'throw away that record. Switch it off instead — it stops being given to '
+          + 'new orders and the history stays.',
+      });
+    }
+
+    const [[row]] = await db.query('SELECT step_order FROM pms_steps WHERE id = ?', [id]);
+    if (!row) return res.status(404).json({ success: false, error: 'No such step.' });
+
+    await db.query('DELETE FROM pms_steps WHERE id = ?', [id]);
+    await db.query('DELETE FROM pms_step_doers WHERE step_id = ?', [id]);
+    // Close the gap, so the numbers the office reads stay 1..n.
+    await db.query('UPDATE pms_steps SET step_order = step_order - 1 WHERE step_order > ?',
+      [row.step_order]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[pms] delete step:', err.message);
+    res.status(500).json({ success: false, error: 'Could not remove the step.' });
+  }
+});
+
+/** Move a step one place up or down, swapping with its neighbour. */
+router.post('/steps/:id/move', requireLogin, async (req, res) => {
+  try {
+    if (!isAdmin(req.session.user)) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    const id = Number(req.params.id);
+    const dir = String((req.body && req.body.dir) || '') === 'up' ? -1 : 1;
+
+    const [[me]] = await db.query('SELECT id, step_order FROM pms_steps WHERE id = ?', [id]);
+    if (!me) return res.status(404).json({ success: false, error: 'No such step.' });
+
+    const [[other]] = await db.query(
+      dir < 0
+        ? 'SELECT id, step_order FROM pms_steps WHERE step_order < ? ORDER BY step_order DESC LIMIT 1'
+        : 'SELECT id, step_order FROM pms_steps WHERE step_order > ? ORDER BY step_order ASC LIMIT 1',
+      [me.step_order]);
+    if (!other) return res.json({ success: true, moved: false });
+
+    // Through a position nothing uses, because step_order has to stay unique
+    // for the two seconds the swap takes.
+    await db.query('UPDATE pms_steps SET step_order = 0 WHERE id = ?', [me.id]);
+    await db.query('UPDATE pms_steps SET step_order = ? WHERE id = ?', [me.step_order, other.id]);
+    await db.query('UPDATE pms_steps SET step_order = ? WHERE id = ?', [other.step_order, me.id]);
+    res.json({ success: true, moved: true });
+  } catch (err) {
+    console.error('[pms] move step:', err.message);
+    res.status(500).json({ success: false, error: 'Could not move the step.' });
+  }
+});
+
+/**
  * Edit one step. Only the TAT, the role, the note and the on/off switch —
  * not the name or the order, which rows already written are carrying copies
  * of.
