@@ -42,6 +42,18 @@
             list of people to choose from. %>
         <div class="col-6 col-md-2 d-none" id="rep_byBox"><label class="form-label text-dark fw-bold small mb-0">Changed by</label>
           <select id="rep_by" class="form-select form-select-sm" onchange="rep_apply()"><option value="">Everyone</option></select></div>
+        <%# Only on Corrections. The three are a fixed set, so they are
+            written out rather than collected off the rows - "not recorded"
+            would otherwise only appear in the list once an old correction
+            happened to be on screen. %>
+        <div class="col-6 col-md-2 d-none" id="rep_whoseBox"><label class="form-label text-dark fw-bold small mb-0">Whose</label>
+          <select id="rep_whose" class="form-select form-select-sm" onchange="rep_apply()">
+            <option value="">All</option>
+            <option value="Designer's mistake">Designer's mistake</option>
+            <option value="Client's mistake">Client's mistake</option>
+            <option value="Client asked for a change">Client asked for a change</option>
+            <option value="__none">Not recorded</option>
+          </select></div>
         <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0" id="rep_stageLabel">Stage</label>
           <select id="rep_stage" class="form-select form-select-sm" onchange="rep_apply()"><option value="">All Stages</option></select></div>
         <div class="col-6 col-md-2" id="rep_modeBox"><label class="form-label text-dark fw-bold small mb-0">Stage filter</label>
@@ -135,6 +147,10 @@ async function rep_load() {
   document.getElementById('rep_stageLabel').textContent = word;
   rep_fill('rep_stage', 'All ' + word.toLowerCase() + (word === 'Status' ? 'es' : 's'), json.stages || []);
 
+  var isCorrections = source === 'corrections';
+  document.getElementById('rep_whoseBox').classList.toggle('d-none', !isCorrections);
+  if (!isCorrections) document.getElementById('rep_whose').value = '';
+
   document.getElementById('rep_byBox').classList.toggle('d-none', !isHistory);
   if (isHistory) {
     var people = {};
@@ -183,6 +199,11 @@ function rep_apply() {
     }
     var by = document.getElementById('rep_by').value;
     if (by && (o['Changed By'] || '') !== by) return false;
+    var whose = document.getElementById('rep_whose').value;
+    // __none is the ones raised before the field existed - a blank Whose,
+    // which an empty dropdown value could not ask for.
+    if (whose === '__none') { if ((o.Whose || '').trim()) return false; }
+    else if (whose && o.Whose !== whose) return false;
     if (search && JSON.stringify(o).toLowerCase().indexOf(search) < 0) return false;
     return true;
   });
@@ -256,7 +277,7 @@ function rep_rangePicked() { applyDateRange('rep_range', 'rep_start', 'rep_end',
 
 function rep_clear() {
   document.getElementById('rep_range').value = '';
-  ['rep_designer', 'rep_stage', 'rep_search', 'rep_by'].forEach(function (id) { document.getElementById(id).value = ''; });
+  ['rep_designer', 'rep_stage', 'rep_search', 'rep_by', 'rep_whose'].forEach(function (id) { document.getElementById(id).value = ''; });
   document.getElementById('rep_mode').value = 'current';
   rep_rangePicked();
 }
