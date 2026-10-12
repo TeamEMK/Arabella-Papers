@@ -196,15 +196,50 @@ function rep_render() {
     body.innerHTML = '<tr><td colspan="30" class="text-center p-4 text-muted">No orders match.</td></tr>';
     return;
   }
+  // Worked out once, not per cell: the Production report draws 2,693 rows of
+  // nineteen columns, and rebuilding the column list fifty thousand times to
+  // ask the same question would be felt.
+  var whose = rep_whoseCol();
   var html = rep_filtered.slice(0, REP_SHOW).map(function (o, i) {
-    return '<tr><td>' + (i + 1) + '</td>'
-      + rep_cells(o).map(function (v) { return '<td>' + rep_esc(v) + '</td>'; }).join('') + '</tr>';
+    return '<tr' + (rep_ourFault(o) ? ' class="rep-ourfault"' : '') + '><td>' + (i + 1) + '</td>'
+      + rep_cells(o).map(function (v, n) {
+        // The fault reads as a badge, the way it does on the Corrections page
+        // itself - two pages describing the same thing should look the same.
+        if (whose && whose === n + 1) return '<td>' + rep_faultBadge(v) + '</td>';
+        return '<td>' + rep_esc(v) + '</td>';
+      }).join('') + '</tr>';
   }).join('');
   if (rep_filtered.length > REP_SHOW) {
     html += '<tr><td colspan="30" class="text-center p-3 text-muted small">Showing the first ' + REP_SHOW
       + ' of ' + rep_filtered.length + '. Excel has all of them.</td></tr>';
   }
   body.innerHTML = html;
+}
+
+// ── WHOSE THE CORRECTION WAS ──
+// Asked for: the ones that were our own doing should stand out of the list.
+// A client's change is new work and a client's own mistake is not ours to
+// answer for; a designer's mistake is the only one of the three the office
+// can do anything about, so it is the only one marked.
+var REP_OUR_FAULT = "Designer's mistake";
+
+/** Which cell holds Whose, or 0 when this report has no such column. */
+function rep_whoseCol() {
+  var all = rep_baseCols().concat(rep_extraCols());
+  return all.indexOf('Whose') + 1;   // +1 for the row-number cell in front
+}
+
+function rep_ourFault(o) {
+  return (o && o.Whose) === REP_OUR_FAULT;
+}
+
+function rep_faultBadge(v) {
+  var t = String(v == null ? '' : v);
+  if (!t) return '<span class="text-muted small fst-italic">not recorded</span>';
+  // Only ours is red. Painting all three would leave nothing standing out,
+  // and a change the client asked for is not a mistake at all.
+  if (t === REP_OUR_FAULT) return '<span class="badge bg-danger">' + rep_esc(t) + '</span>';
+  return '<span class="badge bg-light text-dark border">' + rep_esc(t) + '</span>';
 }
 
 function rep_rangePicked() { applyDateRange('rep_range', 'rep_start', 'rep_end', rep_apply); }
