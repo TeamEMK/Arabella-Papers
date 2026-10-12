@@ -1,0 +1,139 @@
+<%# My Tasks — the steps waiting on me, and for whoever runs the queue, the
+    steps waiting on nobody. An unassigned step is the one that quietly never
+    gets done, so it gets its own panel rather than hiding in a list. %>
+<div class="container-fluid py-4" id="ptRoot">
+  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+      <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-list-check me-2"></i>My Tasks</h3>
+      <div class="text-muted small" id="pt_sub">The steps waiting on you.</div>
+    </div>
+    <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, pt_load, 'pmsTasks')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-7">
+      <div class="card shadow smooth-ui h-100">
+        <div class="card-body">
+          <h6 class="fw-bold mb-3"><i class="far fa-square-check me-2"></i>My Steps
+            <span class="badge bg-secondary ms-1" id="pt_n_mine">0</span></h6>
+          <div id="pt_mine"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-5">
+      <div class="card shadow smooth-ui h-100">
+        <div class="card-body">
+          <h6 class="fw-bold mb-3"><i class="fas fa-flag me-2"></i>Unassigned Steps
+            <span class="badge bg-secondary ms-1" id="pt_n_free">0</span></h6>
+          <div class="text-muted small mb-2">Open, with nobody named and no role set.</div>
+          <div id="pt_free"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var pt_tasks = [];
+
+function pt_esc(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function pt_when(s) {
+  if (!s) return '';
+  var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m) return String(s);
+  var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var h = Number(m[4]), ap = h >= 12 ? 'pm' : 'am';
+  h = h % 12; if (!h) h = 12;
+  return Number(m[3]) + ' ' + MON[Number(m[2]) - 1] + ', ' + h + ':' + m[5] + ' ' + ap;
+}
+
+async function pt_load() {
+  try {
+    var r = await fetch('/api/pms/my-tasks');
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not load.');
+    pt_tasks = j.tasks || [];
+
+    document.getElementById('pt_n_mine').textContent = pt_tasks.length;
+    document.getElementById('pt_sub').textContent = pt_tasks.length
+      ? pt_tasks.length + ' step' + (pt_tasks.length === 1 ? '' : 's') + ' waiting on you.'
+      : 'All work is complete.';
+    pt_draw('pt_mine', pt_tasks, true);
+
+    // The steps nobody owns. Read off the board rather than from my-tasks,
+    // which by definition only returns what is already somebody's.
+    var rb = await fetch('/api/pms/board');
+    var jb = await rb.json();
+    var free = (jb.success ? jb.orders : []).filter(function (o) {
+      return o.running && !o.named && !o.doer_role;
+    });
+    document.getElementById('pt_n_free').textContent = free.length;
+    pt_draw('pt_free', free.map(function (o) {
+      return { order_id: o.order_id, client_name: o.client_name, dealer_name: o.dealer_name,
+        step_order: o.step_order, step_name: o.step_name, planned_at: o.planned_at,
+        late: o.late, step_id: o.step_id };
+    }), false);
+  } catch (e) {
+    document.getElementById('pt_mine').innerHTML =
+      '<div class="text-danger small py-3">' + pt_esc(e.message) + '</div>';
+  }
+}
+
+function pt_draw(elId, list, withDone) {
+  var el = document.getElementById(elId);
+  if (!list.length) {
+    el.innerHTML = '<div class="text-center text-muted py-4">'
+      + '<i class="far fa-circle-check fa-2x mb-2 d-block opacity-50"></i>'
+      + (elId === 'pt_mine' ? 'No pending steps' : 'All steps are assigned') + '</div>';
+    return;
+  }
+  el.innerHTML = list.map(function (t) {
+    var due = t.planned_at
+      ? '<div class="small ' + (t.late > 0 ? 'text-danger fw-bold' : 'text-muted') + '">due '
+        + pt_when(t.planned_at) + (t.late > 0 ? ' · ' + t.late + 'd late' : '') + '</div>'
+      : '<div class="small text-muted">no TAT set</div>';
+    return '<div class="d-flex justify-content-between align-items-start py-2 border-bottom'
+      + (t.late > 0 ? ' prod-late' : '') + '">'
+      + '<div><div class="fw-semibold">' + pt_esc(t.order_id)
+      + (t.client_name ? ' · ' + pt_esc(t.client_name) : '') + '</div>'
+      + '<div class="small"><span class="badge bg-secondary">S' + t.step_order + '</span> '
+      + pt_esc(t.step_name) + '</div>'
+      + '<div class="small text-muted">' + pt_esc(t.dealer_name || '') + '</div>'
+      + due + '</div>'
+      + (withDone
+        ? '<div class="text-end"><button class="btn btn-sm btn-success smooth-ui" onclick="pt_done(\''
+          + pt_esc(t.order_id) + '\',' + t.step_id + ',' + (t.late || 0) + ')">Done</button></div>'
+        : '')
+      + '</div>';
+  }).join('');
+}
+
+async function pt_done(orderId, stepId, late) {
+  var remark = '', delayReason = '';
+  if (late > 0) {
+    delayReason = window.prompt('This step is ' + late + ' day(s) past its date.\nWhy was it late?');
+    if (delayReason === null) return;
+    if (!delayReason.trim()) { alert('A reason is needed for a late step.'); return; }
+  } else {
+    remark = window.prompt('Any remark? (optional)') || '';
+  }
+  try {
+    var r = await fetch('/api/pms/order/' + encodeURIComponent(orderId) + '/step/' + stepId + '/done', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remark: remark, delayReason: delayReason }),
+    });
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not save that.');
+    await pt_load();
+  } catch (e) {
+    alert(e.message || 'Could not save that.');
+  }
+}
+
+pt_load();
+</script>

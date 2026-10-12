@@ -1,0 +1,222 @@
+<%# Workflow — how an order moves through the PMS, read top to bottom. Built
+    from the live catalogue rather than written out by hand, so it cannot
+    drift from what the engine actually does when somebody edits a step. %>
+<div class="container-fluid py-4" id="pfRoot">
+  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+      <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-diagram-project me-2"></i>Workflow — <span id="pf_nsteps">…</span> Steps</h3>
+      <div class="text-muted small">How every order moves through the PMS, from the punch to dispatch. Read it top to bottom.</div>
+    </div>
+    <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, pf_load, 'pmsFlow')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+  </div>
+
+  <div class="card shadow smooth-ui mb-3">
+    <div class="card-body">
+      <h6 class="fw-bold mb-3"><i class="fas fa-circle-info me-2"></i>How it works, in five points</h6>
+      <div class="row g-3 row-cols-1 row-cols-md-5">
+        <div class="col"><div class="border rounded p-3 h-100">
+          <div class="badge bg-dark mb-2">1</div>
+          <div class="fw-semibold mb-1">Order comes in</div>
+          <div class="small text-muted">Punched on the New Order form. It joins the board only if it was punched on or after the start date in Step Settings.</div>
+        </div></div>
+        <div class="col"><div class="border rounded p-3 h-100">
+          <div class="badge bg-dark mb-2">2</div>
+          <div class="fw-semibold mb-1">Step 1 opens</div>
+          <div class="small text-muted">Due = order date + TAT, counted from 10:00. With no TAT the step still opens, just without a date.</div>
+        </div></div>
+        <div class="col"><div class="border rounded p-3 h-100">
+          <div class="badge bg-dark mb-2">3</div>
+          <div class="fw-semibold mb-1">Steps run in order</div>
+          <div class="small text-muted">One after another. A step whose condition says no is skipped and the next opens straight away.</div>
+        </div></div>
+        <div class="col"><div class="border rounded p-3 h-100">
+          <div class="badge bg-dark mb-2">4</div>
+          <div class="fw-semibold mb-1">Done &rarr; next step</div>
+          <div class="small text-muted">The actual is recorded with who marked it, and the next step opens with Due = that actual + its TAT.</div>
+        </div></div>
+        <div class="col"><div class="border rounded p-3 h-100">
+          <div class="badge bg-dark mb-2">5</div>
+          <div class="fw-semibold mb-1">Past the date &rarr; Delayed</div>
+          <div class="small text-muted">It turns red on the board and marking it done asks why it was late. A step with no TAT is never called late.</div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow smooth-ui mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
+        <h6 class="mb-0 fw-bold"><i class="fas fa-sitemap me-2"></i>Flow chart</h6>
+        <div class="small">
+          <span class="badge bg-success-subtle text-success-emphasis">Always</span>
+          <span class="badge bg-info-subtle text-info-emphasis">Only sometimes</span>
+          <span class="badge bg-light text-muted border">Off</span>
+        </div>
+      </div>
+      <div class="text-muted small mb-3">Steps open one after another, top to bottom. A coloured step runs only when its condition is met — otherwise it is skipped and the next one opens.</div>
+      <div id="pf_chart"></div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-6">
+      <div class="card shadow smooth-ui h-100">
+        <div class="card-body">
+          <h6 class="fw-bold mb-3"><i class="far fa-calendar me-2"></i>How the due date is worked out</h6>
+          <ul class="small mb-3">
+            <li><b>Step 1:</b> order date + TAT, counted from 10:00.</li>
+            <li><b>Every next step:</b> the previous step's actual + its TAT.</li>
+            <li>Done <b>after 18:00</b> &rarr; the TAT counts from 10:00 the next working day.</li>
+            <li>Done <b>before 10:00</b> &rarr; it counts from 10:00 the same day.</li>
+            <li><b>Sunday is a holiday.</b> A TAT is in working days, so a 3 day step that crosses a Sunday is still 3 days of work.</li>
+            <li><b>No TAT set</b> &rarr; no due date, and the step is never late.</li>
+          </ul>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead class="table-light"><tr><th colspan="2" class="small">EXAMPLE</th></tr></thead>
+              <tbody class="small">
+                <tr><td>Order punched</td><td class="text-end fw-semibold">Mon 14 Sep, 3:00 pm</td></tr>
+                <tr><td>Step 1 due (TAT 1 day)</td><td class="text-end fw-semibold">Tue 15 Sep, 3:00 pm</td></tr>
+                <tr><td>Step 1 done</td><td class="text-end fw-semibold">Thu 24 Sep, 2:30 pm</td></tr>
+                <tr><td>Step 2 due (TAT 4 days)</td><td class="text-end fw-semibold">Tue 29 Sep, 2:30 pm</td></tr>
+                <tr><td class="text-muted" colspan="2">Sun 27 Sep was skipped, so 4 working days lands on the 29th.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="card shadow smooth-ui h-100">
+        <div class="card-body">
+          <h6 class="fw-bold mb-3"><i class="fas fa-triangle-exclamation me-2"></i>Rules worth knowing</h6>
+          <div class="border-start border-4 border-danger ps-3 mb-3">
+            <div class="fw-semibold small">Late needs a reason</div>
+            <div class="small text-muted">Marking a step done past its date asks why, and will not save without one. Asked later it would be a guess.</div>
+          </div>
+          <div class="border-start border-4 border-warning ps-3 mb-3">
+            <div class="fw-semibold small">A step with no TAT is not late</div>
+            <div class="small text-muted">It is unmeasured. The board counts those separately so nobody is marked down against a number that was never set.</div>
+          </div>
+          <div class="border-start border-4 border-info ps-3 mb-3">
+            <div class="fw-semibold small">Conditions are read when the step is about to open</div>
+            <div class="small text-muted">Not at the punch. Nobody yet knows at punch whether the job needs a die, so deciding early would freeze a guess into the order.</div>
+          </div>
+          <div class="border-start border-4 border-secondary ps-3">
+            <div class="fw-semibold small">Older orders are left alone</div>
+            <div class="small text-muted">Only orders punched on or after the start date get steps. The thousands already in the system stay as they are.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow smooth-ui">
+    <div class="card-body">
+      <h6 class="fw-bold mb-1"><i class="fas fa-table-list me-2"></i>All steps at a glance</h6>
+      <div class="text-muted small mb-3">A step that does not apply to an order is skipped and the next opens straight away.</div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mcard mb-0">
+          <thead class="table-light">
+            <tr><th>#</th><th>Step</th><th>When it applies</th><th>Who</th><th>TAT</th></tr>
+          </thead>
+          <tbody id="pf_table"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var PF_COND = {
+  revision: 'Client asked for changes',
+  guest_name: 'Guest list / addressing given',
+  die: 'Die needed',
+  block: 'Block needed',
+  edges: 'Edges needed',
+  laser: 'Laser cutting needed',
+  output: 'Output needed',
+};
+
+function pf_esc(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function pf_load() {
+  try {
+    var r = await fetch('/api/pms/steps');
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not load.');
+    var steps = j.steps || [];
+    document.getElementById('pf_nsteps').textContent = steps.filter(function (s) {
+      return s.is_active;
+    }).length;
+    pf_chart(steps);
+    pf_table(steps);
+  } catch (e) {
+    document.getElementById('pf_chart').innerHTML =
+      '<div class="text-danger">' + pf_esc(e.message) + '</div>';
+  }
+}
+
+function pf_arrow() {
+  return '<div class="text-center text-muted" style="line-height:1;">'
+    + '<i class="fas fa-arrow-down"></i></div>';
+}
+
+function pf_chart(steps) {
+  var html = '<div class="text-center mb-2"><span class="badge rounded-pill px-3 py-2" '
+    + 'style="background:#4b5320;">Order punched · joins the board</span></div>' + pf_arrow();
+
+  steps.forEach(function (s) {
+    var off = !s.is_active;
+    var cond = !!s.condition_key;
+    var cls = off ? 'bg-light border' : cond
+      ? 'bg-info-subtle border border-info-subtle'
+      : 'bg-success-subtle border border-success-subtle';
+
+    html += '<div class="rounded p-2 px-3 my-1 ' + cls + (off ? ' opacity-50' : '') + '">'
+      + '<div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">'
+      + '<div><span class="badge bg-dark me-2">' + s.step_order + '</span>'
+      + '<span class="fw-semibold">' + pf_esc(s.name) + '</span>'
+      + (off ? ' <span class="badge bg-secondary ms-1">off</span>' : '')
+      + (cond ? '<div class="small text-info-emphasis mt-1"><i class="fas fa-code-branch me-1"></i>'
+        + 'Only if: ' + pf_esc(PF_COND[s.condition_key] || s.condition_key)
+        + ' — otherwise skipped</div>' : '')
+      + (s.note ? '<div class="small text-muted">' + pf_esc(s.note) + '</div>' : '')
+      + '</div>'
+      + '<div class="text-end small text-muted" style="min-width:9rem;">'
+      + '<div><i class="far fa-user me-1"></i>' + pf_esc(s.doer_role || 'nobody set') + '</div>'
+      + (s.tat_days === null
+        ? '<div class="text-warning-emphasis"><i class="far fa-clock me-1"></i>no TAT</div>'
+        : '<div><i class="far fa-clock me-1"></i>TAT ' + s.tat_days + ' day'
+          + (s.tat_days === 1 ? '' : 's') + '</div>')
+      + '</div></div></div>' + pf_arrow();
+  });
+
+  html += '<div class="text-center mt-2"><span class="badge rounded-pill px-3 py-2 bg-success">'
+    + 'Order completed</span></div>';
+  document.getElementById('pf_chart').innerHTML = html;
+}
+
+function pf_table(steps) {
+  document.getElementById('pf_table').innerHTML = steps.map(function (s) {
+    return '<tr' + (s.is_active ? '' : ' class="opacity-50"') + '>'
+      + '<td class="text-muted">' + s.step_order + '</td>'
+      + '<td class="fw-semibold">' + pf_esc(s.name) + '</td>'
+      + '<td>' + (s.condition_key
+        ? '<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">'
+          + pf_esc(PF_COND[s.condition_key] || s.condition_key) + '</span>'
+        : '<span class="text-muted small">Always</span>') + '</td>'
+      + '<td class="small">' + pf_esc(s.doer_role || '—') + '</td>'
+      + '<td class="small">' + (s.tat_days === null
+        ? '<span class="text-warning-emphasis">not set</span>'
+        : s.tat_days + 'd') + '</td></tr>';
+  }).join('');
+  if (window.mcardStamp) mcardStamp(document.getElementById('pf_table').closest('table'));
+}
+
+pf_load();
+</script>

@@ -1,0 +1,316 @@
+<%# PMS Orders — live status of every order on the step board: current step,
+    plan vs actual. The dashboard hands this page a tab through
+    sessionStorage, so clicking "Delayed" there opens the delayed list here. %>
+<div class="container-fluid py-4" id="poRoot">
+  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+      <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-box me-2"></i>Orders</h3>
+      <div class="text-muted small">Live status of every order — current step, plan vs actual.</div>
+    </div>
+    <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, po_load, 'pmsOrders')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+  </div>
+
+  <div class="card shadow smooth-ui">
+    <div class="card-body">
+      <ul class="nav nav-tabs mb-3" id="po_tabs">
+        <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-tab="active" onclick="po_tab('active')">Active <span class="badge bg-secondary ms-1" id="po_c_active">0</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-tab="late" onclick="po_tab('late')"><i class="fas fa-triangle-exclamation me-1"></i>Delayed <span class="badge bg-danger ms-1" id="po_c_late">0</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-tab="untimed" onclick="po_tab('untimed')">No TAT <span class="badge bg-secondary ms-1" id="po_c_untimed">0</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-tab="done" onclick="po_tab('done')">Completed <span class="badge bg-secondary ms-1" id="po_c_done">0</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="javascript:void(0)" data-tab="all" onclick="po_tab('all')">All <span class="badge bg-secondary ms-1" id="po_c_all">0</span></a></li>
+      </ul>
+
+      <div class="row g-2 mb-3">
+        <div class="col-12 col-md-5">
+          <input type="text" class="form-control form-control-sm" id="po_q"
+                 placeholder="Search order no, client, dealer, designer..." oninput="po_draw()">
+        </div>
+        <div class="col-6 col-md-4">
+          <select class="form-select form-select-sm" id="po_step" onchange="po_draw()">
+            <option value="">Any current step</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <select class="form-select form-select-sm" id="po_type" onchange="po_draw()">
+            <option value="">All order types</option>
+            <option value="RUSH">RUSH</option>
+            <option value="Normal">Normal</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mcard mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Order</th><th>Client</th><th>Current step</th>
+              <th>Progress</th><th>Due</th><th>Status</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="po_rows"></tbody>
+        </table>
+      </div>
+      <div class="text-center text-muted py-4 d-none" id="po_empty"></div>
+      <div class="text-muted small mt-2" id="po_count"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="po_modal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="po_modalTitle">Order</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="po_modalBody"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var po_all = [];
+var po_filter = 'active';
+var po_open = null;
+
+function po_esc(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function po_when(s, withTime) {
+  if (!s) return '';
+  var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m) return String(s);
+  var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var out = Number(m[3]) + ' ' + MON[Number(m[2]) - 1] + ' ' + m[1];
+  if (!withTime) return out;
+  var h = Number(m[4]), ap = h >= 12 ? 'pm' : 'am';
+  h = h % 12; if (!h) h = 12;
+  return out + ', ' + h + ':' + m[5] + ' ' + ap;
+}
+
+function po_tab(which) {
+  po_filter = which;
+  try { sessionStorage.setItem('pmsOrdersTab', which); } catch (e) {}
+  po_draw();
+}
+
+async function po_load() {
+  // The dashboard leaves a tab here when you click one of its cards. A step
+  // comes through as 'step:12', which selects the dropdown instead.
+  try {
+    var want = sessionStorage.getItem('pmsOrdersTab');
+    if (want) {
+      sessionStorage.removeItem('pmsOrdersTab');
+      if (want.indexOf('step:') === 0) {
+        po_filter = 'active';
+        po_wantStep = want.slice(5);
+      } else {
+        po_filter = want;
+      }
+    }
+  } catch (e) {}
+
+  try {
+    var r = await fetch('/api/pms/board');
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not load.');
+    po_all = j.orders || [];
+
+    ['active', 'late', 'untimed', 'done', 'all'].forEach(function (k) {
+      var n = k === 'active' ? j.counts.running : j.counts[k];
+      document.getElementById('po_c_' + k).textContent = n || 0;
+    });
+
+    // Build the step dropdown off what is actually on the board, so it never
+    // offers a step with nothing on it.
+    var seen = {};
+    po_all.forEach(function (o) { if (o.step_order) seen[o.step_order] = o.step_name; });
+    var sel = document.getElementById('po_step');
+    var keep = sel.value;
+    sel.innerHTML = '<option value="">Any current step</option>'
+      + Object.keys(seen).sort(function (a, b) { return a - b; }).map(function (k) {
+        return '<option value="' + k + '">S' + k + ' · ' + po_esc(seen[k]) + '</option>';
+      }).join('');
+    sel.value = po_wantStep || keep || '';
+    po_wantStep = null;
+
+    po_draw();
+  } catch (e) {
+    document.getElementById('po_rows').innerHTML = '';
+    var el = document.getElementById('po_empty');
+    el.textContent = e.message; el.classList.remove('d-none');
+  }
+}
+var po_wantStep = null;
+
+function po_draw() {
+  Array.prototype.forEach.call(document.querySelectorAll('#po_tabs .nav-link'), function (a) {
+    a.classList.toggle('active', a.getAttribute('data-tab') === po_filter);
+  });
+
+  var list = po_all;
+  if (po_filter === 'active') list = list.filter(function (o) { return o.running; });
+  else if (po_filter === 'late') list = list.filter(function (o) { return o.late > 0; });
+  else if (po_filter === 'untimed') list = list.filter(function (o) { return o.untimed; });
+  else if (po_filter === 'done') list = list.filter(function (o) { return !o.running; });
+
+  var step = document.getElementById('po_step').value;
+  if (step) list = list.filter(function (o) { return String(o.step_order) === step; });
+
+  var type = document.getElementById('po_type').value;
+  if (type) list = list.filter(function (o) { return (o.order_type || '') === type; });
+
+  var q = (document.getElementById('po_q').value || '').trim().toLowerCase();
+  if (q) {
+    list = list.filter(function (o) {
+      return [o.order_id, o.client_name, o.dealer_name, o.step_name, o.designer]
+        .join(' ').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  document.getElementById('po_count').textContent = list.length + ' order(s)';
+
+  var body = document.getElementById('po_rows');
+  var empty = document.getElementById('po_empty');
+  if (!list.length) {
+    body.innerHTML = '';
+    empty.textContent = po_all.length
+      ? 'Nothing matches.'
+      : 'No orders are on the board yet. They join it as they are punched.';
+    empty.classList.remove('d-none');
+    return;
+  }
+  empty.classList.add('d-none');
+
+  body.innerHTML = list.map(function (o) {
+    var status = !o.running
+      ? '<span class="badge bg-success-subtle text-success-emphasis">Completed</span>'
+      : o.late > 0
+        ? '<span class="badge bg-danger-subtle text-danger-emphasis">Delayed</span>'
+        : o.untimed
+          ? '<span class="badge bg-light text-muted border">No TAT</span>'
+          : '<span class="badge bg-warning-subtle text-warning-emphasis">In Progress</span>';
+
+    var due = !o.running ? '<span class="text-muted small">—</span>'
+      : o.planned_at
+        ? (o.late > 0
+          ? '<span class="text-danger fw-bold">' + po_when(o.planned_at) + '</span>'
+            + '<div class="small text-danger">' + o.late + ' day(s) late</div>'
+          : po_when(o.planned_at))
+        : '<span class="text-muted small">not set</span>';
+
+    return '<tr' + (o.late > 0 ? ' class="prod-late"' : '') + '>'
+      + '<td><span class="fw-bold">' + po_esc(o.order_id) + '</span>'
+      + '<div class="small text-muted">' + po_esc(o.dealer_name || '')
+      + (o.order_type ? ' · ' + po_esc(o.order_type) : '') + '</div></td>'
+      + '<td>' + po_esc(o.client_name || '')
+      + '<div class="small text-muted">' + po_esc(o.designer || '') + '</div></td>'
+      + '<td>' + (o.step_order
+        ? '<span class="badge bg-secondary">S' + o.step_order + '</span> ' + po_esc(o.step_name)
+        : '<span class="text-muted">—</span>') + '</td>'
+      + '<td style="min-width:110px;">'
+      + '<div class="progress" style="height:6px;"><div class="progress-bar bg-success" style="width:'
+      + o.progress + '%"></div></div><div class="small text-muted">' + o.progress + '%</div></td>'
+      + '<td>' + due + '</td>'
+      + '<td>' + status + '</td>'
+      + '<td class="text-end"><button class="btn btn-sm btn-outline-dark smooth-ui" onclick="po_openOrder(\''
+      + po_esc(o.order_id) + '\')">Open</button></td>'
+      + '</tr>';
+  }).join('');
+
+  if (window.mcardStamp) mcardStamp(body.closest('table'));
+}
+
+async function po_openOrder(orderId) {
+  po_open = orderId;
+  document.getElementById('po_modalTitle').textContent = orderId;
+  document.getElementById('po_modalBody').innerHTML =
+    '<div class="text-center text-muted py-4">Loading...</div>';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('po_modal')).show();
+  await po_drawOrder();
+}
+
+async function po_drawOrder() {
+  var body = document.getElementById('po_modalBody');
+  try {
+    var r = await fetch('/api/pms/order/' + encodeURIComponent(po_open));
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not load it.');
+    if (!j.started) {
+      body.innerHTML = '<div class="alert alert-secondary mb-0">This order was punched before '
+        + 'the step board started, so it has no steps.</div>';
+      return;
+    }
+
+    var ICON = {
+      done: '<i class="fas fa-circle-check text-success"></i>',
+      pending: '<i class="fas fa-circle-dot text-primary"></i>',
+      skipped: '<i class="fas fa-circle-minus text-muted"></i>',
+      waiting: '<i class="far fa-circle text-muted"></i>',
+    };
+
+    body.innerHTML = j.steps.map(function (s) {
+      var dim = (s.status === 'waiting' || s.status === 'skipped') ? ' opacity-50' : '';
+      var right = '';
+      if (s.status === 'done') {
+        right = '<div class="small text-success">' + po_when(s.actual_at, true) + '</div>'
+          + '<div class="small text-muted">' + po_esc(s.doer_name || s.doer_email || '') + '</div>';
+      } else if (s.status === 'pending') {
+        right = '<button class="btn btn-sm btn-success smooth-ui" onclick="po_done('
+          + s.step_id + ',' + (s.late || 0) + ')">Done</button>';
+      } else if (s.status === 'skipped') {
+        right = '<span class="badge bg-light text-muted border">skipped</span>';
+      }
+
+      var due = '';
+      if (s.status === 'pending') {
+        due = s.planned_at
+          ? '<div class="small ' + (s.late > 0 ? 'text-danger fw-bold' : 'text-muted') + '">due '
+            + po_when(s.planned_at, true) + (s.late > 0 ? ' · ' + s.late + 'd late' : '') + '</div>'
+          : '<div class="small text-muted">no TAT set</div>';
+      }
+
+      return '<div class="d-flex align-items-start gap-3 py-2 border-bottom' + dim + '">'
+        + '<div style="width:1.4rem;text-align:center;">' + ICON[s.status] + '</div>'
+        + '<div class="flex-grow-1">'
+        + '<div><span class="text-muted small me-1">S' + s.step_order + '</span>'
+        + '<span class="fw-semibold">' + po_esc(s.step_name) + '</span></div>'
+        + '<div class="small text-muted">' + po_esc(s.doer_role || '') + '</div>'
+        + due
+        + (s.remark ? '<div class="small fst-italic">' + po_esc(s.remark) + '</div>' : '')
+        + (s.delay_reason ? '<div class="small text-danger">Late: ' + po_esc(s.delay_reason) + '</div>' : '')
+        + '</div><div class="text-end" style="min-width:7rem;">' + right + '</div></div>';
+    }).join('');
+  } catch (e) {
+    body.innerHTML = '<div class="alert alert-danger mb-0">' + po_esc(e.message) + '</div>';
+  }
+}
+
+async function po_done(stepId, late) {
+  var remark = '', delayReason = '';
+  if (late > 0) {
+    delayReason = window.prompt('This step is ' + late + ' day(s) past its date.\nWhy was it late?');
+    if (delayReason === null) return;
+    if (!delayReason.trim()) { alert('A reason is needed for a late step.'); return; }
+  } else {
+    remark = window.prompt('Any remark? (optional)') || '';
+  }
+  try {
+    var r = await fetch('/api/pms/order/' + encodeURIComponent(po_open) + '/step/' + stepId + '/done', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remark: remark, delayReason: delayReason }),
+    });
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not save that.');
+    await po_drawOrder();
+    await po_load();
+  } catch (e) {
+    alert(e.message || 'Could not save that.');
+  }
+}
+
+po_load();
+</script>

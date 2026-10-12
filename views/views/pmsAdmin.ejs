@@ -11,9 +11,32 @@
     <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, pa_load, 'pmsAdmin')"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
   </div>
 
+  <!-- The switch. Without this the whole PMS is inert, so it goes above the
+       catalogue rather than at the bottom of it. -->
+  <div class="card shadow smooth-ui mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+          <h6 class="fw-bold mb-1"><i class="fas fa-power-off me-2"></i>Board start date</h6>
+          <div class="text-muted small" style="max-width:48rem;">
+            Orders punched <b>on or after</b> this day get steps and appear on the board.
+            Everything older is left alone — there are thousands of finished orders in
+            the system, and giving them steps would open one on every single one.
+            <b>Leave it empty to switch the board off.</b>
+          </div>
+          <div class="small mt-1" id="pa_state"></div>
+        </div>
+        <div class="d-flex gap-2 align-items-start">
+          <input type="date" class="form-control form-control-sm" style="width:11rem;" id="pa_start">
+          <button class="btn btn-sm btn-success smooth-ui" onclick="pa_saveStart(this)">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="alert alert-warning d-none" id="pa_warn">
     <i class="fas fa-triangle-exclamation me-1"></i>
-    <b><span id="pa_missing"></span> steps have no TAT yet.</b>
+    <b id="pa_missing"></b>
     Until a step has one it still runs and still records who did it and when —
     it just cannot be called late, because there is no date to be late against.
     <div class="small mt-1">
@@ -68,7 +91,43 @@ function pa_esc(s) {
     .replace(/"/g, '&quot;');
 }
 
+async function pa_loadStart() {
+  try {
+    var r = await fetch('/api/pms/start-date');
+    var j = await r.json();
+    if (!j.success) return;
+    document.getElementById('pa_start').value = j.startDate || '';
+    document.getElementById('pa_state').innerHTML = j.startDate
+      ? '<span class="badge bg-success-subtle text-success-emphasis">Board is on</span>'
+        + ' <span class="text-muted">from ' + pa_esc(j.startDate) + ' · '
+        + j.onBoard + ' step row(s) written so far</span>'
+      : '<span class="badge bg-secondary">Board is off</span>'
+        + ' <span class="text-muted">no order is getting steps</span>';
+  } catch (e) { /* the catalogue below still matters */ }
+}
+
+async function pa_saveStart(btn) {
+  var v = document.getElementById('pa_start').value;
+  if (v && !window.confirm('Orders punched on or after ' + v + ' will get steps.\n\n'
+      + 'Older orders are left alone. Continue?')) return;
+  var old = btn.innerHTML;
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    var r = await fetch('/api/pms/start-date', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startDate: v }),
+    });
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not save.');
+    await pa_loadStart();
+  } catch (e) {
+    alert(e.message || 'Could not save.');
+  }
+  btn.disabled = false; btn.innerHTML = old;
+}
+
 async function pa_load() {
+  await pa_loadStart();
   try {
     var r = await fetch('/api/pms/steps');
     var j = await r.json();
@@ -77,7 +136,9 @@ async function pa_load() {
 
     var warn = document.getElementById('pa_warn');
     if (j.missingTat > 0) {
-      document.getElementById('pa_missing').textContent = j.missingTat;
+      document.getElementById('pa_missing').textContent = j.missingTat === 1
+        ? '1 step has no TAT yet.'
+        : j.missingTat + ' steps have no TAT yet.';
       warn.classList.remove('d-none');
     } else {
       warn.classList.add('d-none');

@@ -46,18 +46,22 @@ const SECTIONS = [
     id: 'oldProduction', group: 'Production', name: 'Backup Production', icon: 'fa-box-archive',
     rule: (role) => role === 'SuperAdmin' || role.includes('Production Manager'),
   },
-  // The step board: which step every running order is sitting on, and who it
-  // is sitting with. Open to everyone, like the Corrections tab, because
-  // being named on a step is what puts anything on it - somebody on no step
-  // sees an empty board rather than a locked door, and the floor is most of
-  // who needs it.
-  { id: 'pms', group: 'Production', name: 'Step Board', icon: 'fa-list-check', rule: () => true },
+  // The PMS: where every order is in the flow, and who it is waiting on.
+  // Open to everyone, like the Corrections tab, because being named on a step
+  // is what puts anything on these pages - somebody on no step sees an empty
+  // board rather than a locked door, and the floor is most of who needs them.
+  { id: 'pms', group: 'PMS', name: 'PMS Dashboard', icon: 'fa-gauge-high', rule: () => true },
+  { id: 'pmsTasks', group: 'PMS', name: 'My Tasks', icon: 'fa-list-check', rule: () => true },
+  { id: 'pmsOrders', group: 'PMS', name: 'Orders (Steps)', icon: 'fa-box', rule: () => true },
+  // How the flow works, drawn from the live catalogue rather than written
+  // out, so editing a step updates the documentation with it.
+  { id: 'pmsFlow', group: 'PMS', name: 'Workflow', icon: 'fa-diagram-project', rule: () => true },
   // Where the TAT of each step is set. Nearly every one starts empty: what a
   // production stage really takes cannot be read out of the old data, since
   // one form stamps them all at once. Until they are filled the board runs
   // but marks nothing late.
   {
-    id: 'pmsAdmin', group: 'Production', name: 'Step Settings', icon: 'fa-sliders',
+    id: 'pmsAdmin', group: 'PMS', name: 'Step Settings', icon: 'fa-sliders',
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head'
       || role.includes('Production Manager'),
   },
