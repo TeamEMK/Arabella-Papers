@@ -7,7 +7,7 @@ const { canSee } = require('../../utils/access');
 const recruitEmail = require('../../utils/recruitEmail');
 const { FILE_FIELDS, ALLOWED_TYPES, formUrl, mailForm, logMessage, saveFile } = require('../../utils/joiningForm');
 const { buildOfferLetter } = require('../../utils/offerLetter');
-const { STATUSES } = require('../../utils/recruitStatus');
+const { STATUSES, DEFAULT_STATUS } = require('../../utils/recruitStatus');
 
 // ══════════════════════════════════════════════════════
 // RECRUITMENT (/api/recruitment/*)
@@ -246,12 +246,17 @@ router.post('/candidates', requireLogin, upload.single('resume_file'), async (re
          (name, email, phone, profile_position, interviewer_email,
           interview_date, interview_time, interview_mode, interview_link,
           current_location, notice_period, salary, notes, status, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'Scheduled', ?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [candidate.name, candidate.email, candidate.phone, candidate.profile_position,
        candidate.interviewer_email, candidate.interview_date, candidate.interview_time,
        candidate.interview_mode, candidate.interview_link,
        candidate.current_location, candidate.notice_period,
-       candidate.salary, candidate.notes, req.session.user.id]);
+       candidate.salary, candidate.notes,
+       // A date is what makes an interview scheduled. Without one the name is
+       // just on the list, and saying otherwise is what left rows reading
+       // "Scheduled" with nothing under Interview.
+       candidate.interview_date ? 'Scheduled' : DEFAULT_STATUS,
+       req.session.user.id]);
     candidate.id = result.insertId;
 
     // The invitation goes only when there is a time to invite them to: a
@@ -333,13 +338,19 @@ router.put('/candidates/:id', requireLogin, async (req, res) => {
           SET name = ?, email = ?, phone = ?, profile_position = ?, interviewer_email = ?,
               interview_date = ?, interview_time = ?, interview_mode = ?, interview_link = ?,
               salary = ?, notes = ?, joining_date = ?,
-              current_location = ?, notice_period = ?
+              current_location = ?, notice_period = ?,
+              -- Putting a date on somebody who was only on the list is what
+              -- schedules their interview. Only out of Applied: a candidate
+              -- who is already Selected does not go backwards because a date
+              -- was corrected.
+              status = CASE WHEN status = 'Applied' AND ? IS NOT NULL THEN 'Scheduled' ELSE status END
         WHERE id = ?`,
       [name, email, clean(b.phone, 50), clean(b.profile_position), clean(b.interviewer_email),
        dateOrNull(b.interview_date), clean(b.interview_time, 20),
        editWhere.interview_mode, editWhere.interview_link, clean(b.salary, 100),
        clean(b.notes, 5000), dateOrNull(b.joining_date),
-       clean(b.current_location), clean(b.notice_period, 60), id]);
+       clean(b.current_location), clean(b.notice_period, 60),
+       dateOrNull(b.interview_date), id]);
     res.json({ success: true });
   } catch (err) {
     console.error('Recruitment update failed:', err);

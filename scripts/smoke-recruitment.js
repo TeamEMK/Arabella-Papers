@@ -130,7 +130,8 @@ async function loginAs(email, password) {
   res = await call('GET', '/api/bulk/columns/candidates');
   const statusCol = res.json.columns.find(c => c.key === 'status');
   check('the status column offers the pipeline',
-    statusCol.allowed.join('|') === 'Scheduled|Rescheduled|Selected|Onboarding|Offer Sent|Rejected', statusCol.allowed);
+    statusCol.allowed.join('|') === 'Applied|Scheduled|Rescheduled|Selected|Onboarding|Offer Sent|Rejected',
+    statusCol.allowed);
   check('and only Name and Email are required',
     res.json.columns.filter(c => c.required).map(c => c.header).join(', ') === 'Name, Email',
     res.json.columns.filter(c => c.required).map(c => c.header));
@@ -156,7 +157,9 @@ async function loginAs(email, password) {
   const line = (n) => rows.find(r => r.line === n) || {};
   check('a good row reads clean', (line(2).errors || []).length === 0, line(2).errors);
   check('"offer sent" is read as Offer Sent', line(2).data.status === 'Offer Sent', line(2).data);
-  check('a blank status becomes Scheduled', line(3).data.status === 'Scheduled', line(3).data);
+  // Not Scheduled: nothing is arranged for them, and a row that says it is
+  // while the Interview column is empty is a row telling two stories.
+  check('a blank status becomes Applied', line(3).data.status === 'Applied', line(3).data);
   check('a row with no email is refused',
     (line(4).errors || []).some(e => /Email is required/i.test(e)), line(4).errors);
   check('a stage nobody has heard of is refused',
@@ -210,6 +213,42 @@ async function loginAs(email, password) {
     { status: 'Rejected', sendEmail: true });
   check('and a letter can be sent to them like anybody else',
     res.json.success === true && SENT.length === 1, { ok: res.json.success, sent: SENT.length });
+
+  // ══════════════════════════════════════════════════
+  // Applied, and what moves a row out of it
+  // ══════════════════════════════════════════════════
+  console.log('\nThe Applied stage');
+
+  const statusOf = async (id) =>
+    (await db.query('SELECT status FROM recruit_candidates WHERE id = ?', [id]))[0][0].status;
+
+  SENT.length = 0;
+  res = await call('POST', '/api/recruitment/candidates',
+    { name: 'No Date Yet', email: 'nodate@example.com', sendEmail: true });
+  const quietId = res.json.data.id;
+  check('a candidate with no date starts as Applied', await statusOf(quietId) === 'Applied',
+    await statusOf(quietId));
+  check('and nobody is written to', SENT.length === 0, SENT);
+
+  res = await call('POST', '/api/recruitment/candidates',
+    { name: 'Has A Date', email: 'hasdate@example.com', interview_date: '2026-12-01',
+      interview_time: '10:00', sendEmail: false });
+  check('one booked with a date starts as Scheduled',
+    await statusOf(res.json.data.id) === 'Scheduled', await statusOf(res.json.data.id));
+
+  // Putting a date on somebody who was only on the list schedules them.
+  await call('PUT', '/api/recruitment/candidates/' + quietId,
+    { name: 'No Date Yet', email: 'nodate@example.com', interview_date: '2026-12-05', interview_time: '11:00' });
+  check('setting a date moves them to Scheduled', await statusOf(quietId) === 'Scheduled',
+    await statusOf(quietId));
+
+  // But it must never drag a later stage backwards.
+  await call('PUT', '/api/recruitment/candidates/' + quietId + '/status',
+    { status: 'Selected', sendEmail: false });
+  await call('PUT', '/api/recruitment/candidates/' + quietId,
+    { name: 'No Date Yet', email: 'nodate@example.com', interview_date: '2026-12-06' });
+  check('correcting a date does not drag Selected backwards', await statusOf(quietId) === 'Selected',
+    await statusOf(quietId));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
 
