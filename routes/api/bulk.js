@@ -80,10 +80,13 @@ const TYPES = {
     // Spread across the samples: a full row, a row at a later stage, and one
     // with every optional column blank - so the file answers "what goes
     // here?" without anybody having to read a separate note.
+    // The first row is Applied on purpose: a list being moved in is mostly
+    // people nobody has arranged anything with yet, and a sample that showed
+    // Scheduled would teach the wrong habit.
     samples: [
-      ['1', 'Asha Kumari', '9876500001', 'asha@example.com', 'MIS Executive', 'Scheduled', 'Jaipur', '4.5 LPA', '30 days'],
-      ['2', 'Rahul Meena', '9876500002', 'rahul@example.com', 'Production Manager', 'Selected', 'Delhi', '7 LPA', 'Immediate'],
-      ['3', 'Sunita Verma', '', 'sunita@example.com', 'Designer', '', '', '', ''],
+      ['1', 'Kavita Nair', '9876500031', 'kavita@example.com', 'Accounts Executive', 'Applied', 'Jaipur', '4.5 LPA', '30 days'],
+      ['2', 'Imran Qureshi', '9876500032', 'imran@example.com', 'Production Manager', 'Selected', 'Udaipur', '7 LPA', 'Immediate'],
+      ['3', 'Deepak Joshi', '', 'deepak@example.com', 'Designer', '', '', '', ''],
     ],
   },
   dealers: {
