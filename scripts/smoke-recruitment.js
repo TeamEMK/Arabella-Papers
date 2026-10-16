@@ -250,6 +250,51 @@ async function loginAs(email, password) {
   check('correcting a date does not drag Selected backwards', await statusOf(quietId) === 'Selected',
     await statusOf(quietId));
 
+  // ══════════════════════════════════════════════════
+  // Putting a CV on somebody already on the board
+  // ══════════════════════════════════════════════════
+  console.log('\nThe CV');
+
+  // Give them an interviewer first, so there is somebody to send it to.
+  await call('PUT', '/api/recruitment/candidates/' + quietId,
+    { name: 'No Date Yet', email: 'nodate@example.com', interview_date: '2026-12-06',
+      interviewer_email: 'panel@arabellapapers.com' });
+
+  const cvUpload = (name, notify) => {
+    const f = new FormData();
+    f.append('resume_file', new Blob([Buffer.alloc(1800, 4)], { type: 'application/pdf' }), name);
+    if (notify) f.append('notifyInterviewer', 'true');
+    return call('POST', '/api/recruitment/candidates/' + quietId + '/cv', f, true);
+  };
+
+  SENT.length = 0;
+  res = await cvUpload('quiet-cv.pdf', false);
+  check('a CV goes on from the edit dialog', res.json.success === true, res.json);
+  check('and nothing is sent unless it is asked for',
+    SENT.length === 0 && res.json.data.sent === null, [SENT.length, res.json.data]);
+
+  const [[onFile]] = await db.query(
+    "SELECT file_name, size_bytes FROM recruit_files WHERE candidate_id = ? AND field = 'resume_file'", [quietId]);
+  check('it is kept on the record', onFile.file_name === 'quiet-cv.pdf' && onFile.size_bytes === 1800, onFile);
+
+  SENT.length = 0;
+  res = await cvUpload('to-the-panel.pdf', true);
+  check('ticking the box sends it to the interviewer',
+    res.json.data.sent === true && SENT.length === 1 && SENT[0].to === 'panel@arabellapapers.com',
+    { sent: res.json.data, to: SENT.map(s => s.to) });
+  check('with the CV attached',
+    SENT[0].attachments.some(a => a.filename === 'to-the-panel.pdf'),
+    SENT[0].attachments.map(a => a.filename));
+
+  res = await call('GET', '/api/recruitment/candidates/' + quietId + '/joining-details');
+  check('and the panel lists it under Documents',
+    (res.json.data.files || []).some(f => f.field === 'resume_file'), res.json.data.files);
+
+  const notACv = new FormData();
+  notACv.append('resume_file', new Blob([Buffer.alloc(40, 1)], { type: 'application/x-msdownload' }), 'cv.exe');
+  res = await call('POST', '/api/recruitment/candidates/' + quietId + '/cv', notACv, true);
+  check('an executable is refused', res.status === 400 && /PDF/.test(res.json.error), res.json);
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
 
   server.close();
