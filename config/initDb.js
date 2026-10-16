@@ -130,6 +130,10 @@ const COLUMN_MIGRATIONS = [
   { table: 'recruit_candidates', column: 'work_location', type: "VARCHAR(255) DEFAULT ''" },
   { table: 'recruit_candidates', column: 'offer_valid_till', type: 'DATE NULL' },
   { table: 'recruit_candidates', column: 'offer_sent_at', type: 'DATETIME NULL' },
+  // Asked for on the bulk upload sheet, so they arrive with the import rather
+  // than being typed in afterwards for everybody already on it.
+  { table: 'recruit_candidates', column: 'current_location', type: "VARCHAR(255) DEFAULT ''" },
+  { table: 'recruit_candidates', column: 'notice_period', type: "VARCHAR(60) DEFAULT ''" },
 ];
 
 async function addMissingColumns() {

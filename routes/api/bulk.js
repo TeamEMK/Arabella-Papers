@@ -7,6 +7,7 @@ const { recordPunchedOrder } = require('../../utils/scot');
 const { requireRole } = require('../../middleware/auth');
 const { readRows, normalizeHeader, toCsv } = require('../../utils/sheet');
 const { generateOrderIds } = require('../../utils/idgen');
+const { STATUSES, DEFAULT_STATUS, matchStatus } = require('../../utils/recruitStatus');
 
 // Vercel rejects request bodies over 4.5MB before they reach this handler.
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 } });
@@ -55,6 +56,34 @@ const TYPES = {
       ['orders@arabella.com', 'India Team', 'Sharma Traders', 'Hotel Grand', 'Menu card reprint', 'Ravi Kumar', '2 Hours', '250', 'RSVP Card x 50; Menu Card x 250'],
       ['orders@arabella.com', 'India Team', 'Verma Papers', 'Cafe Mocha', 'Wedding invite - gold foil', 'Priya Sharma', 'EOD', '120', 'Thank You Card x 120'],
       ['orders@arabella.com', 'India Team', 'Gupta Enterprises', 'Sunrise Hotel', '', 'Neha Sharma', '10 Minutes', '80', ''],
+    ],
+  },
+  candidates: {
+    label: 'Recruitment candidates',
+    columns: [
+      // On the sheet because the office's own copy has one. Nothing is done
+      // with it: where a row sits in a file is not a fact about the person.
+      { key: 'srNo', header: 'Sr. No', aliases: ['sr no', 'sno', 's no', 'serial no', '#'], required: false },
+      { key: 'name', header: 'Name', aliases: ['candidate name', 'candidate'], required: true },
+      { key: 'phone', header: 'Contact Number', aliases: ['contact no', 'contact', 'mobile', 'mobile no', 'phone', 'phone number'], required: false },
+      // Required, and the one column that will reject rows: every letter this
+      // section sends goes to an address, and a candidate without one can
+      // never be written to.
+      { key: 'email', header: 'Email', aliases: ['email address', 'email id'], required: true },
+      { key: 'position', header: 'Position', aliases: ['profile', 'role', 'designation', 'position applied for'], required: false },
+      { key: 'status', header: 'Status', aliases: ['stage'], required: false },
+      // Where the candidate is, not where the job is.
+      { key: 'location', header: 'Location', aliases: ['current location', 'city', 'candidate location', 'present location'], required: false },
+      { key: 'salary', header: 'Expected Salary', aliases: ['salary', 'expected ctc', 'ctc', 'expected'], required: false },
+      { key: 'notice', header: 'Notice Period', aliases: ['notice'], required: false },
+    ],
+    // Spread across the samples: a full row, a row at a later stage, and one
+    // with every optional column blank - so the file answers "what goes
+    // here?" without anybody having to read a separate note.
+    samples: [
+      ['1', 'Asha Kumari', '9876500001', 'asha@example.com', 'MIS Executive', 'Scheduled', 'Jaipur', '4.5 LPA', '30 days'],
+      ['2', 'Rahul Meena', '9876500002', 'rahul@example.com', 'Production Manager', 'Selected', 'Delhi', '7 LPA', 'Immediate'],
+      ['3', 'Sunita Verma', '', 'sunita@example.com', 'Designer', '', '', '', ''],
     ],
   },
   dealers: {
@@ -202,6 +231,26 @@ function validate(type, data, context) {
     }
   }
 
+  if (type === 'candidates') {
+    if (data.email && !EMAIL_RE.test(data.email)) errors.push('Email is not a valid email');
+
+    // A sheet filled in by hand says "offer sent", "Offer  Sent" and "OFFER
+    // SENT", and all three mean the same stage. Anything that is not one of
+    // ours is refused: a status the board will not show is worse than none.
+    if (data.status) {
+      const matched = matchStatus(data.status);
+      if (!matched) errors.push('Status must be one of: ' + STATUSES.join(', '));
+      else data.status = matched;
+    } else {
+      data.status = DEFAULT_STATUS;
+    }
+
+    if (data.email && context.existingEmails && context.existingEmails.has(data.email.toLowerCase())) {
+      warnings.push('Already on the list — this row will be skipped');
+      data.__skip = true;
+    }
+  }
+
   if (type === 'dealers' || type === 'designers') {
     if (data.email && !EMAIL_RE.test(data.email)) errors.push('Email is not a valid email');
     if (data.name && context.existingNames && context.existingNames.has(data.name.toLowerCase())) {
@@ -231,6 +280,10 @@ async function buildContext(type, team) {
       addOnNames: new Set(addOns.map(a => String(a.name || '').toLowerCase())),
       orderQuantityRequired: !qtyRule || qtyRule.value !== '0',
     };
+  }
+  if (type === 'candidates') {
+    const [rows] = await db.query('SELECT email FROM recruit_candidates WHERE is_deleted = 0');
+    return { existingEmails: new Set(rows.map(r => String(r.email || '').toLowerCase())) };
   }
   if (type === 'dealers') {
     const [rows] = await db.query('SELECT name FROM dealers');
@@ -317,9 +370,15 @@ router.get('/columns/:type', canImport, async (req, res) => {
       required: c.key === 'orderQuantity' ? qtyRequired : !!c.required,
       // Only a genuinely closed set goes in `allowed` - the format line prints
       // it as the values the column takes, and design time takes others now.
-      allowed: c.key === 'punchedBy' ? PUNCHED_BY : null,
+      allowed: c.key === 'punchedBy' ? PUNCHED_BY
+        : c.key === 'status' ? STATUSES
+        : null,
       hint: c.key === 'addOns' ? 'e.g. RSVP Card x 50; Menu Card x 250'
         : c.key === 'designTime' ? 'e.g. ' + DESIGN_TIMES.slice(0, 3).join(', ') + ', or your own'
+        : c.key === 'srNo' ? 'ignored — here so your own sheet imports unchanged'
+        : c.key === 'status' ? 'blank means ' + DEFAULT_STATUS
+        : c.key === 'location' ? 'where the candidate is, not where the job is'
+        : c.key === 'notice' ? 'e.g. 30 days, Immediate'
         : null,
     })),
   });
@@ -393,7 +452,10 @@ router.post('/import', canImport, async (req, res) => {
       // already in the table, so two identical names in one payload would both
       // pass the database check.
       if (type !== 'orders') {
-        const key = data.name.toLowerCase();
+        // Candidates are keyed by address, not name: two people called Sharma
+        // is ordinary, two rows for one mailbox is the file having the same
+        // person twice.
+        const key = (type === 'candidates' ? data.email : data.name).toLowerCase();
         if (seen.has(key)) continue;
         seen.add(key);
       }
@@ -464,6 +526,17 @@ router.post('/import', canImport, async (req, res) => {
       for (const dealer of new Set(valid.map(v => String(v.dealer || '').trim()).filter(Boolean))) {
         await recordPunchedOrder(dealer);
       }
+    } else if (type === 'candidates') {
+      // Nothing is sent. This is an existing list arriving, and a hundred
+      // people do not want an invitation to an interview they already had.
+      // Letters start from the board, once somebody is looking at the row.
+      imported = await insertChunks(
+        `INSERT INTO recruit_candidates
+           (name, email, phone, profile_position, status, current_location, salary, notice_period, created_by)
+         VALUES ?`,
+        valid.map(d => [d.name, d.email, d.phone || '', d.position || '', d.status,
+                        d.location || '', d.salary || '', d.notice || '', req.session.user.id]),
+      );
     } else if (type === 'dealers') {
       imported = await insertChunks(
         'INSERT INTO dealers (name, email, mobile) VALUES ?',

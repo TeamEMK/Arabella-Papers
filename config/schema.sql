@@ -620,6 +620,12 @@ CREATE TABLE IF NOT EXISTS recruit_candidates (
   reschedule_reason TEXT,
   joining_date DATE DEFAULT NULL,
   salary VARCHAR(100) DEFAULT '',
+  -- Where the candidate is now, which is not where the job is: work_location
+  -- below is the office the offer letter names. Somebody in Delhi applying to
+  -- Jaipur is the whole reason this column is worth having.
+  current_location VARCHAR(255) DEFAULT '',
+  -- Free text on purpose - "30 days", "Immediate", "serving, till 12 Nov".
+  notice_period VARCHAR(60) DEFAULT '',
   -- What the offer letter needs and the interview never asked for. Typed when
   -- the offer is sent, and kept, so sending it a second time does not make
   -- somebody remember what they put the first time.

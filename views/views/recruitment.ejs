@@ -78,6 +78,11 @@
         <div class="col-md-6"><label class="form-label fw-bold text-dark small">Email * <span class="text-muted fw-normal">(the invitation goes here)</span></label><input class="form-control" id="rec_f_email" type="email" placeholder="name@example.com"></div>
         <div class="col-md-6"><label class="form-label fw-bold text-dark small">Phone</label><input class="form-control" id="rec_f_phone" placeholder="9876543210"></div>
         <div class="col-md-6"><label class="form-label fw-bold text-dark small">Position / profile</label><input class="form-control" id="rec_f_profile_position" placeholder="e.g. MIS Executive"></div>
+        <%# Known from the day they apply, not afterwards — and both come
+            across on the bulk upload sheet, so they are here rather than in
+            the block that only opens when a candidate is edited. %>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark small">Location <span class="text-muted fw-normal">(where they are)</span></label><input class="form-control" id="rec_f_current_location" placeholder="e.g. Jaipur"></div>
+        <div class="col-md-6"><label class="form-label fw-bold text-dark small">Notice period</label><input class="form-control" id="rec_f_notice_period" placeholder="e.g. 30 days, Immediate"></div>
       </div>
 
       <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">The interview</h6>
@@ -134,7 +139,7 @@
       <div id="rec_laterFields" style="display:none">
         <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Afterwards</h6>
         <div class="row g-3">
-          <div class="col-md-6"><label class="form-label fw-bold text-dark small">Salary discussed</label><input class="form-control" id="rec_f_salary"></div>
+          <div class="col-md-6"><label class="form-label fw-bold text-dark small">Expected / discussed salary</label><input class="form-control" id="rec_f_salary"></div>
           <div class="col-md-6"><label class="form-label fw-bold text-dark small">Expected joining</label><input class="form-control" type="date" id="rec_f_joining_date"></div>
         </div>
       </div>
@@ -143,6 +148,15 @@
         <input class="form-check-input" type="checkbox" id="rec_f_sendEmail" checked>
         <label class="form-check-label fw-bold text-dark small" for="rec_f_sendEmail">Email the invitation now</label>
         <div class="form-text">Only sent when an interview date is set. Untick to add the candidate quietly and invite them later.</div>
+      </div>
+
+      <%# A whole list at once, for the day somebody arrives with a
+          spreadsheet. Only on the add form - importing from inside "edit this
+          candidate" would make no sense - and the widget hides itself from
+          anybody who is not allowed to import. %>
+      <div id="rec_bulkWrap" class="mt-4 pt-3 border-top">
+        <h6 class="fw-bold text-dark mb-2">Or bring in a whole list</h6>
+        <div class="bulk-inline" data-bulk-type="candidates"></div>
       </div>
     </div>
     <div class="modal-footer justify-content-between">
@@ -251,12 +265,20 @@
 </div>
 
 <script>
+<%# The import widget, shared with the Orders dashboard. %>
+<%- include('../partials/bulkUpload') %>
+
+// What to do once a sheet has landed: redraw the board, so the people
+// just imported are on it without anybody reaching for Refresh.
+window.bulkAfterImport = async function () { await rec_fetch(); };
+
 var rec_data = [], rec_editId = null, rec_join = null, rec_busy = false;
 
 // Every field on the add/edit form, so loading and saving do not each carry
 // their own list that can drift apart.
 var REC_FIELDS = ['name', 'email', 'phone', 'profile_position', 'interviewer_email',
-  'interview_date', 'interview_time', 'interview_link', 'salary', 'joining_date', 'notes'];
+  'interview_date', 'interview_time', 'interview_link', 'current_location', 'notice_period',
+  'salary', 'joining_date', 'notes'];
 
 // ── OFFLINE OR ONLINE ──
 // Offline is the default and always has been: everything booked before this
@@ -554,6 +576,7 @@ function rec_openAdd() {
   rec_setMode('offline');
   document.getElementById('rec_f_sendEmail').checked = true;
   document.getElementById('rec_sendWrap').style.display = '';
+  document.getElementById('rec_bulkWrap').style.display = '';
   document.getElementById('rec_f_resume').value = '';
   document.getElementById('rec_resumeWrap').style.display = '';
   document.getElementById('rec_cvNotifyWrap').classList.add('d-none');
@@ -577,6 +600,7 @@ function rec_openEdit(id) {
   // Editing never emails — only adding does, and only then because an
   // invitation is the point of adding somebody.
   document.getElementById('rec_sendWrap').style.display = 'none';
+  document.getElementById('rec_bulkWrap').style.display = 'none';
   // A CV that turned up after the booking goes on here. Nothing is sent
   // unless the tick box below it is ticked on purpose.
   document.getElementById('rec_f_resume').value = '';

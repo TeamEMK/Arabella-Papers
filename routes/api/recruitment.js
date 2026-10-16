@@ -7,6 +7,7 @@ const { canSee } = require('../../utils/access');
 const recruitEmail = require('../../utils/recruitEmail');
 const { FILE_FIELDS, ALLOWED_TYPES, formUrl, mailForm, logMessage, saveFile } = require('../../utils/joiningForm');
 const { buildOfferLetter } = require('../../utils/offerLetter');
+const { STATUSES } = require('../../utils/recruitStatus');
 
 // ══════════════════════════════════════════════════════
 // RECRUITMENT (/api/recruitment/*)
@@ -35,11 +36,6 @@ async function guard(req, res) {
   return false;
 }
 
-// The pipeline, in the order it actually runs. Onboarding sits between the
-// selection and the offer because that is the shape the office asked for: the
-// candidate is told they are in, then asked for their details, and only once
-// those are back does the offer letter go.
-const STATUSES = ['Scheduled', 'Rescheduled', 'Selected', 'Onboarding', 'Offer Sent', 'Rejected'];
 
 // Which letter belongs to which status. A status with no entry sends nothing —
 // "Offer Sent" is here as a pipeline stage, and the offer letter itself is not
@@ -176,6 +172,7 @@ router.get('/candidates', requireLogin, async (req, res) => {
               c.interview_time, c.interview_mode, c.interview_link,
               c.reschedule_time, c.reschedule_reason, c.status,
               c.salary, c.notes, c.department, c.work_location,
+              c.current_location, c.notice_period,
               u.username AS created_by_name,
               DATE_FORMAT(c.interview_date,  '%Y-%m-%d') AS interview_date,
               DATE_FORMAT(c.reschedule_date, '%Y-%m-%d') AS reschedule_date,
@@ -223,6 +220,8 @@ router.post('/candidates', requireLogin, upload.single('resume_file'), async (re
       interviewer_email: clean(b.interviewer_email),
       interview_date: dateOrNull(b.interview_date),
       interview_time: clean(b.interview_time, 20),
+      current_location: clean(b.current_location),
+      notice_period: clean(b.notice_period, 60),
       salary: clean(b.salary, 100),
       notes: clean(b.notes, 5000),
       ...where,
@@ -246,11 +245,12 @@ router.post('/candidates', requireLogin, upload.single('resume_file'), async (re
       `INSERT INTO recruit_candidates
          (name, email, phone, profile_position, interviewer_email,
           interview_date, interview_time, interview_mode, interview_link,
-          salary, notes, status, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?, 'Scheduled', ?)`,
+          current_location, notice_period, salary, notes, status, created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'Scheduled', ?)`,
       [candidate.name, candidate.email, candidate.phone, candidate.profile_position,
        candidate.interviewer_email, candidate.interview_date, candidate.interview_time,
        candidate.interview_mode, candidate.interview_link,
+       candidate.current_location, candidate.notice_period,
        candidate.salary, candidate.notes, req.session.user.id]);
     candidate.id = result.insertId;
 
@@ -332,12 +332,14 @@ router.put('/candidates/:id', requireLogin, async (req, res) => {
       `UPDATE recruit_candidates
           SET name = ?, email = ?, phone = ?, profile_position = ?, interviewer_email = ?,
               interview_date = ?, interview_time = ?, interview_mode = ?, interview_link = ?,
-              salary = ?, notes = ?, joining_date = ?
+              salary = ?, notes = ?, joining_date = ?,
+              current_location = ?, notice_period = ?
         WHERE id = ?`,
       [name, email, clean(b.phone, 50), clean(b.profile_position), clean(b.interviewer_email),
        dateOrNull(b.interview_date), clean(b.interview_time, 20),
        editWhere.interview_mode, editWhere.interview_link, clean(b.salary, 100),
-       clean(b.notes, 5000), dateOrNull(b.joining_date), id]);
+       clean(b.notes, 5000), dateOrNull(b.joining_date),
+       clean(b.current_location), clean(b.notice_period, 60), id]);
     res.json({ success: true });
   } catch (err) {
     console.error('Recruitment update failed:', err);

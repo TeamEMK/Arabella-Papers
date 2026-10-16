@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "mail:test": "node scripts/mail-test.js"
+    "mail:test": "node scripts/mail-test.js",
+    "smoke:recruitment": "node scripts/smoke-recruitment.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
