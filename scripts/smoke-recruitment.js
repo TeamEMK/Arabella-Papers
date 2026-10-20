@@ -125,26 +125,32 @@ async function loginAs(email, password) {
   const header = res.text.replace(/^\uFEFF/, '').split('\n')[0].trim();
   check('a template comes down', res.status === 200, res.status);
   check('with the columns the office asked for',
-    header === 'Sr. No,Name,Contact Number,Email,Position,Status,Location,Expected Salary,Notice Period', header);
+    header === 'Sr. No,Name,Contact Number,Email,Position,Status,Location,Expected Salary,Notice Period,Sourcing', header);
 
   res = await call('GET', '/api/bulk/columns/candidates');
   const statusCol = res.json.columns.find(c => c.key === 'status');
-  check('the status column offers the pipeline',
-    statusCol.allowed.join('|') === 'Applied|Scheduled|Rescheduled|Selected|Onboarding|Offer Sent|Rejected',
-    statusCol.allowed);
-  check('and only Name and Email are required',
-    res.json.columns.filter(c => c.required).map(c => c.header).join(', ') === 'Name, Email',
+  // Deliberately not a closed set any more: the column takes call outcomes,
+  // and printing the seven stages as "the values this takes" would send the
+  // office off to rewrite a column the import already understands.
+  check('the status column is not presented as a fixed list',
+    statusCol.allowed === null, statusCol.allowed);
+  check('only Name is required',
+    res.json.columns.filter(c => c.required).map(c => c.header).join(', ') === 'Name',
     res.json.columns.filter(c => c.required).map(c => c.header));
 
-  // A sheet of their own: their header spellings, a blank status, a row with
-  // no address, a stage nobody has heard of, and the same person twice.
+  // A sheet of their own, and specifically the shape the office's real list
+  // turned out to be: their header spellings, a sourcing column, a blank
+  // status, a row with a phone number and no address, and a Status column
+  // holding the outcome of a phone call rather than a stage. Plus the same
+  // person twice, which is the one thing that should still be dropped.
   const sheet = [
-    'Sr. No,Candidate Name,Contact no,Email ID,Position applied for,Stage,Current Location,Expected CTC,Notice',
-    '1,Meera Joshi,9876500021,meera@example.com,Accounts Executive,offer sent,Jaipur,5 LPA,30 days',
-    '2,Vikram Rao,9876500022,vikram@example.com,Designer,,Udaipur,,Immediate',
-    '3,No Address,9876500023,,Designer,Selected,Kota,,',
-    '4,Bad Stage,9876500024,bad@example.com,Designer,Interviewing,Jaipur,,',
-    '5,Meera Joshi,9876500021,meera@example.com,Accounts Executive,Selected,Jaipur,5 LPA,30 days',
+    'Sr. No,Candidate Name,Contact no,Email ID,Position applied for,Stage,Current Location,Expected CTC,Notice,Sourcing',
+    '1,Meera Joshi,9876500021,meera@example.com,Accounts Executive,offer sent,Jaipur,5 LPA,30 days,Indeed',
+    '2,Vikram Rao,9876500022,vikram@example.com,Designer,,Udaipur,,Immediate,',
+    '3,No Address,9876500023,,Designer,Selected,Kota,,,Naukri',
+    '4,Said No,9876500024,no@example.com,Designer,not interested (location issue),Jaipur,,,',
+    '5,Still Ringing,9876500025,ring@example.com,Designer,not responding,Jaipur,,,',
+    '6,Meera Joshi,9876500021,meera@example.com,Accounts Executive,Selected,Jaipur,5 LPA,30 days,Indeed',
   ].join('\n');
 
   const form = new FormData();
@@ -160,30 +166,54 @@ async function loginAs(email, password) {
   // Not Scheduled: nothing is arranged for them, and a row that says it is
   // while the Interview column is empty is a row telling two stories.
   check('a blank status becomes Applied', line(3).data.status === 'Applied', line(3).data);
-  check('a row with no email is refused',
-    (line(4).errors || []).some(e => /Email is required/i.test(e)), line(4).errors);
-  check('a stage nobody has heard of is refused',
-    (line(5).errors || []).some(e => /Status must be one of/.test(e)), line(5).errors);
+  // The row that used to be thrown out. 87 of the office's 206 rows look like
+  // this - a name and a number off a job board - and refusing them kept 42% of
+  // a real list out of the system to protect a letter nobody was sending.
+  check('a row with only a phone number is accepted',
+    (line(4).errors || []).length === 0, line(4).errors);
+  check('a decline is read as Rejected', line(5).data.status === 'Rejected', line(5).data);
+  check('and the caller\'s own wording is kept',
+    line(5).data.statusRaw === 'not interested (location issue)', line(5).data);
+  // The distinction the whole mapping turns on: nobody declined, the call just
+  // did not happen. Filing these as Rejected would quietly throw away the
+  // forty people the office has not actually spoken to yet.
+  check('but an unanswered call stays Applied', line(6).data.status === 'Applied', line(6).data);
+  check('an interpreted status is flagged, not silently applied',
+    (line(6).warnings || []).some(w => /Read "not responding" as Applied/.test(w)), line(6).warnings);
 
   SENT.length = 0;
   res = await call('POST', '/api/bulk/import', { type: 'candidates', rows });
-  // Two, not three: line 6 is line 2 again, and the same mailbox twice in one
-  // file is the file having the person twice.
-  check('the good rows import', res.json.success === true && res.json.imported === 2,
+  // Five, not six: the last line is line 2 again, and the same mailbox twice
+  // in one file is the file having the person twice.
+  check('every usable row imports', res.json.success === true && res.json.imported === 5,
     { imported: res.json.imported, rejected: res.json.rejected });
-  check('the two bad ones come back named', (res.json.rejected || []).length === 2, res.json.rejected);
+  check('and nothing is rejected', (res.json.rejected || []).length === 0, res.json.rejected);
   // The point of the whole thing: this is an existing list arriving, not a
   // hiring round starting.
   check('and not one letter goes out', SENT.length === 0, SENT.map(s => s.subject));
 
   const [landed] = await db.query(
-    `SELECT name, status, current_location, notice_period, salary, created_by
+    `SELECT name, email, status, current_location, notice_period, salary,
+            sourcing, internal_remark, created_by
        FROM recruit_candidates WHERE is_deleted = 0 ORDER BY name`);
-  check('two people landed', landed.length === 2, landed.map(r => r.name));
+  check('five people landed', landed.length === 5, landed.map(r => r.name));
   const meera = landed.find(r => r.name === 'Meera Joshi') || {};
   check('the new columns are filled in',
     meera.current_location === 'Jaipur' && meera.notice_period === '30 days' && meera.salary === '5 LPA', meera);
   check('the status came across', meera.status === 'Offer Sent', meera.status);
+  check('sourcing came across', meera.sourcing === 'Indeed', meera.sourcing);
+  // Nothing to explain: the cell already named a stage, so a remark repeating
+  // it would be noise on every row the office had filled in properly.
+  check('a literal stage leaves no remark behind', meera.internal_remark === null, meera.internal_remark);
+
+  const said = landed.find(r => r.name === 'Said No') || {};
+  check('the decline landed as Rejected', said.status === 'Rejected', said.status);
+  check('with the call note kept against the person',
+    said.internal_remark === 'not interested (location issue)', said.internal_remark);
+
+  const phoneOnly = landed.find(r => r.name === 'No Address') || {};
+  check('the phone-only candidate is on the list with a blank address',
+    phoneOnly.email === '', JSON.stringify(phoneOnly.email));
   check('the importer is recorded as the author', !!meera.created_by, meera.created_by);
   check('the same person twice in one file goes in once',
     landed.filter(r => r.name === 'Meera Joshi').length === 1, landed.map(r => r.name));

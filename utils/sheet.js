@@ -16,10 +16,16 @@ function cellText(value) {
   // the string the user sees in the cell.
   if (typeof value === 'object') {
     if (value instanceof Date) return value.toISOString();
-    if (value.text !== undefined) return String(value.text);
-    if (value.result !== undefined) return String(value.result);
-    if (Array.isArray(value.richText)) return value.richText.map(t => t.text).join('');
-    if (value.hyperlink !== undefined) return String(value.hyperlink);
+    // richText first, and each of these read back through cellText rather than
+    // String(). A cell somebody typed an address into and let Excel turn into a
+    // mailto link comes back as { text: { richText: [...] }, hyperlink: ... } -
+    // nested, and String() on that object gives "[object Object]". One such
+    // cell in the office's list of 206 read as exactly that and the row was
+    // turned away for having an invalid email.
+    if (Array.isArray(value.richText)) return value.richText.map(t => cellText(t.text)).join('');
+    if (value.text !== undefined) return cellText(value.text);
+    if (value.result !== undefined) return cellText(value.result);
+    if (value.hyperlink !== undefined) return String(value.hyperlink).replace(/^mailto:/i, '');
     return '';
   }
   return String(value).trim();

@@ -7,7 +7,7 @@ const { recordPunchedOrder } = require('../../utils/scot');
 const { requireRole } = require('../../middleware/auth');
 const { readRows, normalizeHeader, toCsv } = require('../../utils/sheet');
 const { generateOrderIds } = require('../../utils/idgen');
-const { STATUSES, DEFAULT_STATUS, matchStatus } = require('../../utils/recruitStatus');
+const { STATUSES, matchStatus, mapStatus } = require('../../utils/recruitStatus');
 
 // Vercel rejects request bodies over 4.5MB before they reach this handler.
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 } });
@@ -66,16 +66,25 @@ const TYPES = {
       { key: 'srNo', header: 'Sr. No', aliases: ['sr no', 'sno', 's no', 'serial no', '#'], required: false },
       { key: 'name', header: 'Name', aliases: ['candidate name', 'candidate'], required: true },
       { key: 'phone', header: 'Contact Number', aliases: ['contact no', 'contact', 'mobile', 'mobile no', 'phone', 'phone number'], required: false },
-      // Required, and the one column that will reject rows: every letter this
-      // section sends goes to an address, and a candidate without one can
-      // never be written to.
-      { key: 'email', header: 'Email', aliases: ['email address', 'email id'], required: true },
+      // Not required, though it was at first, on the reasoning that every
+      // letter this section sends goes to an address. The office's own list
+      // settled it: 87 of its 206 rows have a phone number and no email,
+      // because that is what a job board gives you. Refusing them kept 42% of
+      // a real list out of the system to protect a letter nobody was trying to
+      // send. A row with no address imports and can be called; the moment
+      // somebody tries to write to them the portal refuses and says why.
+      { key: 'email', header: 'Email', aliases: ['email address', 'email id'], required: false },
       { key: 'position', header: 'Position', aliases: ['profile', 'role', 'designation', 'position applied for'], required: false },
       { key: 'status', header: 'Status', aliases: ['stage'], required: false },
       // Where the candidate is, not where the job is.
       { key: 'location', header: 'Location', aliases: ['current location', 'city', 'candidate location', 'present location'], required: false },
       { key: 'salary', header: 'Expected Salary', aliases: ['salary', 'expected ctc', 'ctc', 'expected'], required: false },
       { key: 'notice', header: 'Notice Period', aliases: ['notice'], required: false },
+      // Last, which is where the office's own sheet keeps it. The position in
+      // the file does not actually matter - columns are found by their header,
+      // not their order - but a sample file that reads like theirs is one less
+      // thing to reconcile.
+      { key: 'sourcing', header: 'Sourcing', aliases: ['source', 'sourced from', 'sourcing from'], required: false },
     ],
     // Spread across the samples: a full row, a row at a later stage, and one
     // with every optional column blank - so the file answers "what goes
@@ -83,10 +92,14 @@ const TYPES = {
     // The first row is Applied on purpose: a list being moved in is mostly
     // people nobody has arranged anything with yet, and a sample that showed
     // Scheduled would teach the wrong habit.
+    // The third row has no email on purpose. That is the commonest row in a
+    // real list - a name and a number off a job board - and the sample has to
+    // show it imports, or somebody will go looking for addresses they do not
+    // have before uploading.
     samples: [
-      ['1', 'Kavita Nair', '9876500031', 'kavita@example.com', 'Accounts Executive', 'Applied', 'Jaipur', '4.5 LPA', '30 days'],
-      ['2', 'Imran Qureshi', '9876500032', 'imran@example.com', 'Production Manager', 'Selected', 'Udaipur', '7 LPA', 'Immediate'],
-      ['3', 'Deepak Joshi', '', 'deepak@example.com', 'Designer', '', '', '', ''],
+      ['1', 'Kavita Nair', '9876500031', 'kavita@example.com', 'Accounts Executive', 'Applied', 'Jaipur', '4.5 LPA', '30 days', 'Indeed'],
+      ['2', 'Imran Qureshi', '9876500032', 'imran@example.com', 'Production Manager', 'Selected', 'Udaipur', '7 LPA', 'Immediate', 'Naukri'],
+      ['3', 'Deepak Joshi', '9876500033', '', 'Designer', 'not responding', '', '', '', ''],
     ],
   },
   dealers: {
@@ -146,6 +159,11 @@ function fromKeys(type, obj) {
     const v = obj ? obj[col.key] : '';
     out[col.key] = String(v === undefined || v === null ? '' : v).trim();
   }
+  // Not a column on anybody's sheet: the Status cell as it was actually typed,
+  // worked out during the preview and needed again at the insert. Everything
+  // else here is rebuilt from the named columns, so without this one line the
+  // caller's wording would not survive the trip through the browser.
+  if (obj && obj.statusRaw !== undefined) out.statusRaw = String(obj.statusRaw || '').trim();
   return out;
 }
 
@@ -235,20 +253,42 @@ function validate(type, data, context) {
   }
 
   if (type === 'candidates') {
+    // A space typed inside an address, which is the same slip that used to
+    // split an order number in two: the office's own list had
+    // "deepanshukumawat328@ gmail.com" on two rows, and both were turned away
+    // for an address that is plainly correct and plainly fixable. No address
+    // has a space in it, so removing them cannot change what was meant - and
+    // it is done before the duplicate check, so the two rows now collapse into
+    // the one person they always were.
+    data.email = data.email.replace(/\s+/g, '');
     if (data.email && !EMAIL_RE.test(data.email)) errors.push('Email is not a valid email');
 
     // A sheet filled in by hand says "offer sent", "Offer  Sent" and "OFFER
-    // SENT", and all three mean the same stage. Anything that is not one of
-    // ours is refused: a status the board will not show is worse than none.
-    if (data.status) {
-      const matched = matchStatus(data.status);
-      if (!matched) errors.push('Status must be one of: ' + STATUSES.join(', '));
-      else data.status = matched;
-    } else {
-      data.status = DEFAULT_STATUS;
+    // SENT", and all three mean the same stage. It also says "not responding"
+    // and "asking for WFH only", because the people keeping it are recording
+    // phone calls, not moving cards along a board.
+    //
+    // This used to refuse anything that was not one of our stages, which read
+    // as strictness and was really just a refusal to understand the file: of
+    // the office's 206 rows, ten would have passed. mapStatus reads the intent
+    // instead, and the cell's own wording is kept on the candidate so the
+    // guess can be checked.
+    // The cell as typed, kept under its own key rather than left in
+    // data.status. validate() runs twice - once for the preview, once more on
+    // import, over the rows the browser sends back - and the second pass sees
+    // whatever the first one wrote. Mapping data.status in place meant the
+    // import re-read "Rejected" as a literal stage and the caller's own words
+    // were gone by the time there was a row to attach them to.
+    if (data.statusRaw === undefined || data.statusRaw === '') data.statusRaw = data.status;
+
+    const mapped = mapStatus(data.statusRaw);
+    data.status = mapped.status;
+    if (!mapped.matched) {
+      warnings.push(`Read "${data.statusRaw}" as ${data.status} — the original wording is kept on the candidate`);
     }
 
-    if (data.email && context.existingEmails && context.existingEmails.has(data.email.toLowerCase())) {
+    const key = dedupeKey('candidates', data);
+    if (key !== null && context.existingCandidates && context.existingCandidates.has(key)) {
       warnings.push('Already on the list — this row will be skipped');
       data.__skip = true;
     }
@@ -285,8 +325,18 @@ async function buildContext(type, team) {
     };
   }
   if (type === 'candidates') {
-    const [rows] = await db.query('SELECT email FROM recruit_candidates WHERE is_deleted = 0');
-    return { existingEmails: new Set(rows.map(r => String(r.email || '').toLowerCase())) };
+    // Name and phone as well as the address, because dedupeKey falls back to
+    // those for a candidate who has no address - and a check that only knew
+    // about emails would wave the whole phone-only half of a re-uploaded
+    // sheet straight back in.
+    const [rows] = await db.query(
+      'SELECT name, email, phone FROM recruit_candidates WHERE is_deleted = 0');
+    const existing = new Set();
+    for (const r of rows) {
+      const key = dedupeKey('candidates', r);
+      if (key !== null) existing.add(key);
+    }
+    return { existingCandidates: existing };
   }
   if (type === 'dealers') {
     const [rows] = await db.query('SELECT name FROM dealers');
@@ -297,6 +347,38 @@ async function buildContext(type, team) {
   return { existingNames: new Set(rows.map(r => String(r.name || '').toLowerCase())) };
 }
 
+/**
+ * What makes two rows the same person or thing, or null if nothing does.
+ *
+ * One function because there are two places that need it - the preview, which
+ * warns about repeats inside the file, and the import, which drops them - and
+ * they had drifted apart: the preview compared candidates by name while the
+ * import compared them by email, so a file with one mailbox under two names
+ * previewed clean and imported once.
+ *
+ * Candidates are keyed by address where there is one: two people called
+ * Sharma is ordinary, two rows for one mailbox is the file having somebody
+ * twice. Where there is no address - the common case now that phone-only rows
+ * import - the key is the name and the number together.
+ *
+ * Neither half of that pair would do alone. A blank email keyed on its own
+ * would fold all 87 of the office's phone-only rows into one candidate; the
+ * name alone would merge two real people who happen to share one; and leaving
+ * them unkeyed meant re-running the same sheet silently added those 87 people
+ * a second time. Same name and same number is one person.
+ */
+function dedupeKey(type, data) {
+  if (type === 'orders') return null;
+  if (type === 'candidates') {
+    const email = String(data.email || '').trim().toLowerCase();
+    if (email) return 'e:' + email;
+    const name = String(data.name || '').trim().toLowerCase();
+    const phone = String(data.phone || '').replace(/\D/g, '');
+    return name && phone ? 'np:' + name + '|' + phone : null;
+  }
+  return String(data.name || '').trim().toLowerCase() || null;
+}
+
 // Duplicates inside the file itself are invisible to a database check, since
 // nothing has been inserted yet.
 function flagInFileDuplicates(type, results) {
@@ -304,7 +386,8 @@ function flagInFileDuplicates(type, results) {
   const seen = new Set();
   for (const r of results) {
     if (r.errors.length || r.data.__skip) continue;
-    const key = (r.data.name || '').toLowerCase();
+    const key = dedupeKey(type, r.data);
+    if (key === null) continue;
     if (seen.has(key)) {
       r.warnings.push('Duplicate of an earlier row in this file — will be skipped');
       r.data.__skip = true;
@@ -373,15 +456,19 @@ router.get('/columns/:type', canImport, async (req, res) => {
       required: c.key === 'orderQuantity' ? qtyRequired : !!c.required,
       // Only a genuinely closed set goes in `allowed` - the format line prints
       // it as the values the column takes, and design time takes others now.
-      allowed: c.key === 'punchedBy' ? PUNCHED_BY
-        : c.key === 'status' ? STATUSES
-        : null,
+      // Only a genuinely closed set goes in `allowed`. Status left it when the
+      // import started reading call outcomes: printing the seven stages as
+      // "the values this column takes" would tell the office to go and rewrite
+      // a column the import now understands as it stands.
+      allowed: c.key === 'punchedBy' ? PUNCHED_BY : null,
       hint: c.key === 'addOns' ? 'e.g. RSVP Card x 50; Menu Card x 250'
         : c.key === 'designTime' ? 'e.g. ' + DESIGN_TIMES.slice(0, 3).join(', ') + ', or your own'
         : c.key === 'srNo' ? 'ignored — here so your own sheet imports unchanged'
-        : c.key === 'status' ? 'blank means ' + DEFAULT_STATUS
+        : c.key === 'status' ? STATUSES.join(', ') + ' — or your own call notes, which are read and kept'
+        : c.key === 'email' ? 'leave blank if you only have a phone number'
         : c.key === 'location' ? 'where the candidate is, not where the job is'
         : c.key === 'notice' ? 'e.g. 30 days, Immediate'
+        : c.key === 'sourcing' ? 'e.g. Indeed, Naukri, or the agency name'
         : null,
     })),
   });
@@ -454,11 +541,8 @@ router.post('/import', canImport, async (req, res) => {
       // Repeated inside the request too: buildContext only knows what was
       // already in the table, so two identical names in one payload would both
       // pass the database check.
-      if (type !== 'orders') {
-        // Candidates are keyed by address, not name: two people called Sharma
-        // is ordinary, two rows for one mailbox is the file having the same
-        // person twice.
-        const key = (type === 'candidates' ? data.email : data.name).toLowerCase();
+      const key = dedupeKey(type, data);
+      if (key !== null) {
         if (seen.has(key)) continue;
         seen.add(key);
       }
@@ -535,10 +619,17 @@ router.post('/import', canImport, async (req, res) => {
       // Letters start from the board, once somebody is looking at the row.
       imported = await insertChunks(
         `INSERT INTO recruit_candidates
-           (name, email, phone, profile_position, status, current_location, salary, notice_period, created_by)
+           (name, email, phone, profile_position, status, current_location, salary,
+            notice_period, sourcing, internal_remark, created_by)
          VALUES ?`,
-        valid.map(d => [d.name, d.email, d.phone || '', d.position || '', d.status,
-                        d.location || '', d.salary || '', d.notice || '', req.session.user.id]),
+        // internal_remark only carries the Status cell when it was not already
+        // one of our stages. A row that said "Rejected" needs no remark - the
+        // status says it - whereas "currently working not looking foe job" is
+        // the only record of why, and the stage alone throws it away.
+        valid.map(d => [d.name, d.email || '', d.phone || '', d.position || '', d.status,
+                        d.location || '', d.salary || '', d.notice || '', d.sourcing || '',
+                        (!d.statusRaw || matchStatus(d.statusRaw)) ? null : d.statusRaw,
+                        req.session.user.id]),
       );
     } else if (type === 'dealers') {
       imported = await insertChunks(

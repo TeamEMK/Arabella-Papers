@@ -172,7 +172,7 @@ router.get('/candidates', requireLogin, async (req, res) => {
               c.interview_time, c.interview_mode, c.interview_link,
               c.reschedule_time, c.reschedule_reason, c.status,
               c.salary, c.notes, c.department, c.work_location,
-              c.current_location, c.notice_period,
+              c.current_location, c.notice_period, c.sourcing, c.internal_remark,
               u.username AS created_by_name,
               DATE_FORMAT(c.interview_date,  '%Y-%m-%d') AS interview_date,
               DATE_FORMAT(c.reschedule_date, '%Y-%m-%d') AS reschedule_date,

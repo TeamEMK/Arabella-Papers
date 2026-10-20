@@ -634,6 +634,17 @@ CREATE TABLE IF NOT EXISTS recruit_candidates (
   offer_valid_till DATE DEFAULT NULL,
   offer_sent_at DATETIME DEFAULT NULL,
   notes TEXT,
+  -- Where the name came from: a job board, an agency. On the office's own
+  -- sheet before it was on this table, and worth keeping - it is the only
+  -- thing that can later answer which source is worth paying for.
+  sourcing VARCHAR(160) DEFAULT '',
+  -- The caller's own words about the last call, and strictly internal.
+  --
+  -- Not `notes`, which looks like the obvious home for it and is the wrong
+  -- one: that column is printed into the interview invitation, so filing
+  -- "not responding" or "zero knowledge of excel" there would email it to
+  -- the candidate. Nothing reads this one into a letter.
+  internal_remark TEXT,
   -- The onboarding form is opened by a link, not a login, so this token is the
   -- credential. One per candidate, made the first time the form is sent and
   -- kept afterwards, so sending it twice sends the same form.

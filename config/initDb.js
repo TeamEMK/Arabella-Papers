@@ -134,6 +134,11 @@ const COLUMN_MIGRATIONS = [
   // than being typed in afterwards for everybody already on it.
   { table: 'recruit_candidates', column: 'current_location', type: "VARCHAR(255) DEFAULT ''" },
   { table: 'recruit_candidates', column: 'notice_period', type: "VARCHAR(60) DEFAULT ''" },
+  // Both came off the office's real list, which carried a sourcing column and
+  // a Status column full of call outcomes rather than stages. See the comments
+  // on the table itself for why the outcome does not go in `notes`.
+  { table: 'recruit_candidates', column: 'sourcing', type: "VARCHAR(160) DEFAULT ''" },
+  { table: 'recruit_candidates', column: 'internal_remark', type: 'TEXT NULL' },
 ];
 
 async function addMissingColumns() {

@@ -554,8 +554,15 @@ function rec_render() {
     const moved = c.reschedule_date ? ' <span class="badge bg-light text-secondary fw-normal">moved</span>' : '';
     return '<tr>'
       + '<td>' + (i + 1) + '</td>'
-      + '<td><span class="fw-bold">' + rec_esc(c.name) + '</span>' + moved
-        + '<div class="small text-muted">' + rec_esc(c.email) + (c.phone ? ' · ' + rec_esc(c.phone) : '') + '</div></td>'
+      + '<td><span class="fw-bold">' + rec_esc(c.name) + '</span>' + moved + rec_sourceTag(c)
+        // Joined rather than concatenated: an imported candidate often has a
+        // phone number and no address, and the old version led the line with
+        // a stray separator for every one of them.
+        + '<div class="small text-muted">'
+          + ([c.email, c.phone].filter(Boolean).map(rec_esc).join(' · ')
+             || '<span class="fst-italic">no contact details</span>')
+        + '</div>'
+        + rec_remarkLine(c) + '</td>'
       + '<td>' + (rec_esc(c.profile_position) || '-') + '</td>'
       + '<td>' + rec_date(d) + (t ? '<div class="small text-muted">' + rec_time(t) + '</div>' : '') + '</td>'
       + '<td><span class="badge bg-' + (REC_PILL[c.status] || 'light') + '">' + rec_esc(c.status) + '</span></td>'
@@ -564,6 +571,32 @@ function rec_render() {
       + '<td>' + rec_actions(c) + '</td>'
       + '</tr>';
   }).join('');
+}
+
+// Where the name came from, when it was imported from a sheet that said.
+function rec_sourceTag(c) {
+  if (!c.sourcing) return '';
+  return ' <span class="badge bg-light text-secondary fw-normal" title="Sourced from">'
+    + rec_esc(c.sourcing) + '</span>';
+}
+
+/**
+ * The caller's own words about the last call.
+ *
+ * On the row rather than behind a click, because this is what somebody
+ * scanning the board is actually looking for: "not responding" and "asking
+ * for WFH only" are the difference between a name worth ringing again and one
+ * that is settled, and the stage alone cannot say which.
+ *
+ * Marked internal in the title because it is - unlike the notes box, nothing
+ * puts this in a letter - and truncated by CSS rather than in the string, so
+ * the full text is still there on hover and in a copy-paste.
+ */
+function rec_remarkLine(c) {
+  if (!c.internal_remark) return '';
+  return '<div class="small text-secondary fst-italic text-truncate" style="max-width:22rem"'
+    + ' title="Internal note — never sent to the candidate:&#10;' + rec_esc(c.internal_remark) + '">'
+    + '<i class="fas fa-phone-slash me-1 opacity-50"></i>' + rec_esc(c.internal_remark) + '</div>';
 }
 
 function rec_clear() {
