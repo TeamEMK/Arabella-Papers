@@ -274,6 +274,23 @@ function validate(type, data, context) {
     // it is done before the duplicate check, so the two rows now collapse into
     // the one person they always were.
     data.email = data.email.replace(/\s+/g, '');
+
+    // Somebody writing "no email" in the Email column, rather than a broken
+    // address. Their list says "NotAvailable", and one row has a phone number
+    // in the box. Neither contains an @, so neither is an attempt at an
+    // address that went wrong - it is the sheet's way of saying there isn't
+    // one, which is now a thing a candidate is allowed to not have. Blanked
+    // and kept, rather than refused over wording.
+    //
+    // The @ is what makes this safe to do silently. "shalini...@gmailcom" is
+    // somebody's real address with the dot missed, and must stay an error so
+    // it gets fixed - blanking it would quietly throw away a way of reaching
+    // a person who has one.
+    if (data.email && !data.email.includes('@')) {
+      warnings.push(`"${data.email}" is not an address — imported with no email`);
+      data.email = '';
+    }
+
     if (data.email && !EMAIL_RE.test(data.email)) errors.push('Email is not a valid email');
 
     // A sheet filled in by hand says "offer sent", "Offer  Sent" and "OFFER
