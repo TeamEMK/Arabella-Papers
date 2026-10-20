@@ -54,6 +54,7 @@
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">#</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Candidate</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Position</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Sourcing</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Interview</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Status</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Joining</th>
@@ -61,7 +62,7 @@
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
             </tr>
           </thead>
-          <tbody id="rec_tbody"><tr><td colspan="8" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="rec_tbody"><tr><td colspan="9" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -390,7 +391,7 @@ async function rec_fetch() {
     return rec_data.length;
   } catch (e) {
     document.getElementById('rec_tbody').innerHTML =
-      '<tr><td colspan="8" class="text-center text-danger py-4">Could not load candidates.</td></tr>';
+      '<tr><td colspan="9" class="text-center text-danger py-4">Could not load candidates.</td></tr>';
     return 0;
   }
 }
@@ -555,7 +556,7 @@ function rec_render() {
 
   const tbody = document.getElementById('rec_tbody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4">No candidates found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4">No candidates found.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((c, i) => {
@@ -566,7 +567,7 @@ function rec_render() {
     const moved = c.reschedule_date ? ' <span class="badge bg-light text-secondary fw-normal">moved</span>' : '';
     return '<tr>'
       + '<td>' + (i + 1) + '</td>'
-      + '<td><span class="fw-bold">' + rec_esc(c.name) + '</span>' + moved + rec_sourceTag(c)
+      + '<td><span class="fw-bold">' + rec_esc(c.name) + '</span>' + moved
         // Joined rather than concatenated: an imported candidate often has a
         // phone number and no address, and the old version led the line with
         // a stray separator for every one of them.
@@ -576,6 +577,10 @@ function rec_render() {
         + '</div>'
         + rec_remarkLine(c) + '</td>'
       + '<td>' + (rec_esc(c.profile_position) || '-') + '</td>'
+      // An agency's full registered name is long and the same on hundreds of
+      // rows, so it wraps rather than pushing the table wider, and sits muted:
+      // it is there to be counted and compared, not read on every line.
+      + '<td class="small text-muted" style="max-width:11rem">' + (rec_esc(c.sourcing) || '-') + '</td>'
       + '<td>' + rec_date(d) + (t ? '<div class="small text-muted">' + rec_time(t) + '</div>' : '') + '</td>'
       + '<td><span class="badge bg-' + (REC_PILL[c.status] || 'light') + '">' + rec_esc(c.status) + '</span></td>'
       + '<td>' + rec_date(c.joining_date) + '</td>'
@@ -623,13 +628,6 @@ function rec_fillPositions() {
     '<option value="' + rec_esc(o.key) + '">' + rec_esc(o.label) + ' (' + o.total + ')</option>').join('');
 
   if (was && groups.has(was)) sel.value = was;
-}
-
-// Where the name came from, when it was imported from a sheet that said.
-function rec_sourceTag(c) {
-  if (!c.sourcing) return '';
-  return ' <span class="badge bg-light text-secondary fw-normal" title="Sourced from">'
-    + rec_esc(c.sourcing) + '</span>';
 }
 
 /**
