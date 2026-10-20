@@ -69,10 +69,11 @@ document.getElementById('dispRoot').innerHTML = `
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Vol. Weight</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">ID</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Status</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Email</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Action</th>
             </tr>
           </thead>
-          <tbody id="dsp_tbody"><tr><td colspan="17" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
+          <tbody id="dsp_tbody"><tr><td colspan="18" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -132,12 +133,13 @@ function dsp_rangePicked() { applyDateRange('dsp_range', 'dsp_startDate', 'dsp_e
 function dsp_download(btn) {
   const cols = ['Sent to Dispatch', 'Dispatch Date', 'Order ID', 'Repeat of', 'Dealer',
     'Client', 'Courier', 'Docket No', 'Invoice No', 'Inv. Amount', 'Boxes', 'Weight',
-    'Vol. Weight', 'Status', 'Client Email', 'Sample Details'];
+    'Vol. Weight', 'Status', 'Email Sent', 'Client Email', 'Sample Details'];
   const rows = (dsp_filtered || []).map(o => [
     o.Ready_Date || '', o.Dispatch_Date || '', o.Display_ID || o.ID || '', o.Remake_Of || '',
     o.Dealer_name || '', o.Client_name || '', o.Dispatch_Courier_Name || '', o.Docket_No || '',
     o.Invoice_Number || '', o.Invoice_Amount || '', o.Number_of_Boxes || '', o.Weight || '',
-    o.Volumetric_Weight || '', o.Dispatch_Status || '', o.Client_Email || '', o.Sample_Details || '',
+    o.Volumetric_Weight || '', o.Dispatch_Status || '', o.Mail_Sent || '',
+    o.Client_Email || '', o.Sample_Details || '',
   ]);
   downloadXlsx(DSP_ARCHIVE ? 'Backup Dispatch' : 'Dispatch', cols, rows, btn);
 }
@@ -336,7 +338,7 @@ var dsp_shown = [];
 function dsp_renderTable(data) {
   dsp_shown = data;
   const tbody = document.getElementById('dsp_tbody');
-  if(!data.length) { tbody.innerHTML = '<tr><td colspan="17" class="text-center">No orders found.</td></tr>'; return; }
+  if(!data.length) { tbody.innerHTML = '<tr><td colspan="18" class="text-center">No orders found.</td></tr>'; return; }
   tbody.innerHTML = data.map((o, i) => {
     const s = o.Dispatch_Status||'Ready';
     let b = 'warning';
@@ -359,6 +361,13 @@ function dsp_renderTable(data) {
       <td>${o.Volumetric_Weight||'-'}</td>
       <td class="fw-bold">${o.Display_ID || o.ID}</td>
       <td><span class="badge bg-${b}">${s}</span></td>
+      <!-- Whether the client has been told. Blank when nothing has gone,
+           because an empty cell is what somebody is scanning the column
+           for; the date it went is on the badge for the one row they
+           then stop at. -->
+      <td class="text-nowrap">${o.Mail_Sent
+        ? `<span class="badge bg-success" title="Sent ${o.Mail_Sent}">Email sent</span>`
+        : ''}</td>
       <td>
         <button class="btn btn-sm btn-info me-1" onclick="dsp_openView('${o.ID}')"><i class="fas fa-eye"></i></button>
         <button class="btn btn-sm btn-primary" onclick="dsp_openEdit('${o.ID}')"><i class="fas fa-shipping-fast"></i></button>
