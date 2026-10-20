@@ -83,7 +83,6 @@ document.getElementById('analyticsRoot').innerHTML = `
       <div class="card shadow-sm h-100">
         <div class="card-header text-dark fw-bold d-flex justify-content-between align-items-center gap-2">
           <span><i class="fas fa-palette me-2"></i>Designs by Designer</span>
-          <div class="dropdown an-month-picker"><button class="btn btn-sm btn-light border dropdown-toggle" type="button" id="an_designMonthBtn" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false"></button><input type="hidden" id="an_designMonth"><ul class="dropdown-menu dropdown-menu-end an-month-menu" id="an_designMonthMenu"></ul></div>
         </div>
         <div class="card-body d-flex align-items-center justify-content-center" style="height:250px;"><canvas id="chart_designStatus"></canvas></div>
       </div>
@@ -98,11 +97,10 @@ document.getElementById('analyticsRoot').innerHTML = `
       <div class="card shadow-sm h-100">
         <div class="card-header text-dark fw-bold d-flex justify-content-between align-items-center gap-2">
           <span><i class="fas fa-shipping-fast me-2"></i>Dispatched</span>
-          <div class="dropdown an-month-picker"><button class="btn btn-sm btn-light border dropdown-toggle" type="button" id="an_dispatchMonthBtn" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false"></button><input type="hidden" id="an_dispatchMonth"><ul class="dropdown-menu dropdown-menu-end an-month-menu" id="an_dispatchMonthMenu"></ul></div>
         </div>
         <div class="card-body d-flex align-items-center justify-content-center position-relative" style="height:250px;">
           <canvas id="chart_dispatchStatus"></canvas>
-          <div id="an_dispatchEmpty" class="text-muted small d-none position-absolute">Nothing went out this month.</div>
+          <div id="an_dispatchEmpty" class="text-muted small d-none position-absolute">Nothing went out in this period.</div>
         </div>
       </div>
     </div>
@@ -502,90 +500,14 @@ function renderKPIs(rows) {
   document.getElementById('kpi_dispatched').textContent = at('dispatched');
   document.getElementById('kpi_cancelled').textContent = at('cancelled');
 }
-
-// ── ORDERS BY DESIGNER ──
-// This chart answers "who was given how much last month", so it counts the
-// month the order was PUNCHED, against whoever is on it now.
-//
-// It used to count the month the design was finished in, which meant an order
-// punched today showed nothing until the designer filled in a Design Done
-// date - sometimes weeks later, often never. The office reads this chart as
-// the day's work going out, and an empty bar beside a designer who had just
-// been given seven jobs is what got reported as a fault.
-//
-// Counting at the punch is the trade: the bar is now what a designer has been
-// handed, not what they have finished. A job sitting untouched counts the same
-// as a job drawn and approved, so this is a load chart, not an output one.
-//
-// The heading still reads "Designs by Designer" - kept at the office's
-// request, because that is what they call this chart. It is worth knowing the
-// title is the older of the two: the bars are orders, and a designer's bar is
-// not a count of work they have done.
-//
-// It reads its own month box and ignores the filters above the page: the two
-// would otherwise fight over the same question.
-function an_designMonthKey(raw) {
-  if(!raw) return '';
-  const d = new Date(raw);
-  return isNaN(d) ? '' : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-}
-
-function an_monthLabel(key) {
-  const [y, m] = key.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleString('en-GB', { month: 'long', year: 'numeric' });
-}
-
-// A plain <select> holding 29 months opens a popup taller than the card, and
-// Chrome flips it upward so it covers the filters above. The list has to stay
-// complete, so the control changes instead: a dropdown we own, capped in height
-// and scrolled, always hanging below its button. The chosen month still lives
-// in an input with the same id, so everything reading .value is unaffected.
-function an_fillMonthPicker(id, keys, current, onPick) {
-  const input = document.getElementById(id);
-  const btn = document.getElementById(id + 'Btn');
-  const menu = document.getElementById(id + 'Menu');
-  if(!input || !btn || !menu) return;
-
-  const chosen = keys.indexOf(input.value) >= 0 ? input.value : current;
-  input.value = chosen;
-  btn.textContent = an_monthLabel(chosen);
-  menu.innerHTML = keys.map(k =>
-    '<li><button type="button" class="dropdown-item' + (k === chosen ? ' active' : '') +
-    '" data-month="' + k + '">' + an_monthLabel(k) + '</button></li>').join('');
-
-  menu.onclick = function(e) {
-    const item = e.target.closest('[data-month]');
-    if(!item) return;
-    input.value = item.dataset.month;
-    btn.textContent = item.textContent;
-    menu.querySelectorAll('.dropdown-item').forEach(x => x.classList.toggle('active', x === item));
-    onPick();
-  };
-}
-
-function an_fillDesignMonths() {
-  const keys = Array.from(new Set(an_all.map(o => an_designMonthKey(o.RawDate)).filter(Boolean)))
-    .sort().reverse();
-
-  const current = todayValue().slice(0, 7);
-  if(keys.indexOf(current) < 0) keys.unshift(current);
-
-  an_fillMonthPicker('an_designMonth', keys, current, renderDesignerChart);
-}
-
-function renderDesignerChart() {
-  const sel = document.getElementById('an_designMonth');
-  if(!sel) return;
-  const month = sel.value;
-
+function renderDesignerChart(rows) {
   // Orders only: a repeat is the same drawing going through the press again,
-  // and crediting the designer with it a second time overstates the month.
+  // and crediting the designer with it a second time overstates the period.
   const counts = {};
-  an_ordersOnly(an_all).forEach(o => {
+  an_ordersOnly(rows || []).forEach(o => {
     // Cancelled is not work anybody was given: the job stopped, and leaving it
     // on the bar credits a designer with something the business never made.
     if(o.Stage === 'cancelled') return;
-    if(an_designMonthKey(o.RawDate) !== month) return;
     // Whoever is on the order now, not whoever was on it at the punch. Moving
     // an order from one designer to another moves the bar with it, which is
     // the point - the chart is meant to show where the work is sitting today.
@@ -674,47 +596,42 @@ function renderProductionCounts() {
   });
 }
 
+// Every chart draws the rows the filters left, the same rows the cards and
+// the table are counting.
+//
+// They each used to read the whole table and carry a month box of their own,
+// deliberately, so the two controls would not fight over the same question.
+// What that actually produced was a page where setting a date range moved the
+// cards and left the charts alone - and, worse, two different numbers for one
+// word on screen at once: the Dispatched card reading 22 for the period above
+// a Dispatched pie reading 127 for all time. Picking a designer moved nothing
+// either.
+//
+// So there is one control now, at the top, and it governs the page.
 function renderCharts(data) {
-  an_fillDesignMonths();
-  renderDesignerChart();
-
+  renderDesignerChart(data);
+  // Production is the exception, and stays one: it is a standing figure for
+  // what the shop is holding altogether, which the comment above it says was
+  // asked for in those words. The two that had month boxes are the two that
+  // were fighting the range.
   renderProductionCounts();
-
-  an_fillDispatchMonths();
-  renderDispatchChart();
+  renderDispatchChart(data);
 }
-
-// ── DISPATCHED, BY MONTH ──
-// Counts the parcels that left in the chosen month, so an order taken in
-// April and sent in August is August's. "Not Dispatched" has no place here -
-// an order that never went out never had a month - which is why the card is
-// titled Dispatched rather than Dispatch Status.
-function an_fillDispatchMonths() {
-  const keys = Array.from(new Set(an_all.map(o => an_designMonthKey(o.DispatchDone)).filter(Boolean)))
-    .sort().reverse();
-
-  const current = todayValue().slice(0, 7);
-  if(keys.indexOf(current) < 0) keys.unshift(current);
-
-  an_fillMonthPicker('an_dispatchMonth', keys, current, renderDispatchChart);
-}
-
-function renderDispatchChart() {
-  const sel = document.getElementById('an_dispatchMonth');
-  if(!sel) return;
-  const month = sel.value;
-
+function renderDispatchChart(rows) {
   const counts = {};
-  an_all.forEach(o => {
-    if(an_designMonthKey(o.DispatchDone) !== month) return;
+  (rows || []).forEach(o => {
+    // Only the ones that actually went. The filters above decide which orders
+    // are in play; this decides which of them have left the building, so the
+    // pie and the Dispatched card are finally counting the same thing.
+    if(!o.DispatchDone) return;
     // The imported rows carry a dispatch date but no status word. They went
     // out all the same.
     const s = (o.DispatchStatus || '').trim() || 'Dispatched';
     counts[s] = (counts[s] || 0) + 1;
   });
 
-  // A month with no dispatches would draw an empty circle, which reads as a
-  // broken chart rather than an empty one. Say it in words instead.
+  // Nothing dispatched would draw an empty circle, which reads as a broken
+  // chart rather than an empty one. Say it in words instead.
   const empty = Object.keys(counts).length === 0;
   const note = document.getElementById('an_dispatchEmpty');
   const canvas = document.getElementById('chart_dispatchStatus');
@@ -847,6 +764,4 @@ function renderTable(rows) {
 .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important; }
 /* Roughly eight months at a time, then scroll - a 29-month list left open
    would be taller than the chart it belongs to. */
-.an-month-menu { max-height: 260px; overflow-y: auto; }
-.an-month-picker .btn { font-size: .875rem; padding: .25rem .5rem; font-weight: 400; }
 </style>
