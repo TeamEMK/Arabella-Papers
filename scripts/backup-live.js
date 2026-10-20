@@ -81,6 +81,19 @@ const args = [
   '--routines',
   '--events',
   '--default-character-set=utf8mb4',
+  // The dump goes over Railway's TCP proxy from an office line, and on
+  // 20 October it dropped mid-table: "Lost connection to MySQL server during
+  // query" while reading activity_log, which is a tenth of a megabyte. It was
+  // the link, not the size. These three are what make a dump survive a slow
+  // or jittery one - generous timeouts rather than the ~30s default, and
+  // fewer bytes on the wire to begin with.
+  '--net-read-timeout=600',
+  '--net-write-timeout=600',
+  '--compress',
+  // This dump is restored into a different server, so the source's GTIDs are
+  // not wanted - and leaving it off printed a warning on every single run
+  // that trained everybody to ignore the warnings.
+  '--set-gtid-purged=OFF',
   url.pathname.replace('/', '') || 'railway',
 ];
 

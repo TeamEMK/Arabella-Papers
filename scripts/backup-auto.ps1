@@ -64,10 +64,43 @@ function Show-Failure($text) {
   } catch { }
 }
 
+# Did this dump actually finish?
+#
+# mysqldump signs off with "-- Dump completed on ..." on the last line, and a
+# dump that was cut off has no such line - it simply stops in the middle of an
+# INSERT. That is the only trustworthy test. Size is not one: on 16 October a
+# run died partway and left 1.6MB behind, the check below only asked whether
+# the file was over a megabyte and whether it was from today, and so the day's
+# real backup was skipped because "something from today" was already sitting
+# in the folder. A partial backup is worse than none, because it looks like
+# one.
+function Test-DumpComplete($file) {
+  if (-not $file) { return $false }
+  if ($file.Length -lt 1MB) { return $false }
+  try {
+    # Opened with ReadWrite sharing, and only the last couple of kilobytes
+    # read. Get-Content was the obvious way to do this and the wrong one: on
+    # a file another program is holding open - a sync client, a scanner,
+    # somebody's editor - it blocks rather than failing, and a backup script
+    # that hangs instead of running is no better than one that crashes. This
+    # asks for the end of the file and says no if it cannot have it.
+    $stream = [System.IO.File]::Open($file.FullName, 'Open', 'Read', 'ReadWrite')
+    try {
+      $want = [Math]::Min(2048, $stream.Length)
+      [void]$stream.Seek(-$want, 'End')
+      $buffer = New-Object byte[] $want
+      [void]$stream.Read($buffer, 0, $want)
+      return [System.Text.Encoding]::UTF8.GetString($buffer) -match 'Dump completed'
+    } finally { $stream.Dispose() }
+  } catch { return $false }
+}
+
 # Somebody who has just taken one by hand does not need a second one an hour
 # later. backup-live.cmd is still there for a deliberate extra.
 $already = Get-ChildItem -Path $backupDir -Filter '*.sql' -ErrorAction SilentlyContinue |
            Where-Object { $_.LastWriteTime.Date -eq (Get-Date).Date } |
+           Sort-Object LastWriteTime -Descending |
+           Where-Object { Test-DumpComplete $_ } |
            Select-Object -First 1
 if ($already) {
   Write-Log ("skipped - already backed up today ({0})" -f $already.Name)
@@ -89,35 +122,57 @@ if ($last) {
 # Output goes to files rather than down the pipeline: in Windows PowerShell,
 # redirecting a native program's stderr inline wraps every line in an error
 # record and makes a successful run look like a failed one.
-$outFile = [System.IO.Path]::GetTempFileName()
-$errFile = [System.IO.Path]::GetTempFileName()
-$code    = 1
-
-try {
-  $p = Start-Process -FilePath 'node' `
-        -ArgumentList '"scripts/backup-live.js"' `
-        -WorkingDirectory $root -NoNewWindow -Wait -PassThru `
-        -RedirectStandardOutput $outFile -RedirectStandardError $errFile
-  $code = $p.ExitCode
-} catch {
-  Write-Log ("could not start node - {0}" -f $_.Exception.Message)
-  Show-Failure ("The backup could not start.`n`n{0}`n`nIs Node.js installed and on PATH?" -f $_.Exception.Message)
-  Remove-Item $outFile, $errFile -ErrorAction SilentlyContinue
-  exit 1
-}
-
+$code   = 1
 $stdout = ''
 $stderr = ''
-if (Test-Path $outFile) { $stdout = (Get-Content $outFile -Raw -ErrorAction SilentlyContinue) }
-if (Test-Path $errFile) { $stderr = (Get-Content $errFile -Raw -ErrorAction SilentlyContinue) }
-Remove-Item $outFile, $errFile -ErrorAction SilentlyContinue
+
+# Twice before giving up.
+#
+# The dump crosses the public internet to Railway's proxy, and on 20 October
+# it dropped partway through a table a tenth of a megabyte in size - the link,
+# not the data. That failure put a box on somebody's screen and cost the day
+# its backup, when running the same command again would have worked, as it
+# did when it was run by hand twenty minutes later.
+#
+# So a second attempt, a minute later, and only then the dialog. A real
+# problem - wrong password, MySQL down, no Node - fails both times and still
+# gets in front of somebody; it is only the blip that now passes quietly.
+foreach ($attempt in 1..2) {
+  $outFile = [System.IO.Path]::GetTempFileName()
+  $errFile = [System.IO.Path]::GetTempFileName()
+  try {
+    $p = Start-Process -FilePath 'node' `
+          -ArgumentList '"scripts/backup-live.js"' `
+          -WorkingDirectory $root -NoNewWindow -Wait -PassThru `
+          -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+    $code = $p.ExitCode
+  } catch {
+    Write-Log ("could not start node - {0}" -f $_.Exception.Message)
+    Show-Failure ("The backup could not start.`n`n{0}`n`nIs Node.js installed and on PATH?" -f $_.Exception.Message)
+    Remove-Item $outFile, $errFile -ErrorAction SilentlyContinue
+    exit 1
+  }
+
+  $stdout = ''
+  $stderr = ''
+  if (Test-Path $outFile) { $stdout = (Get-Content $outFile -Raw -ErrorAction SilentlyContinue) }
+  if (Test-Path $errFile) { $stderr = (Get-Content $errFile -Raw -ErrorAction SilentlyContinue) }
+  Remove-Item $outFile, $errFile -ErrorAction SilentlyContinue
+
+  if ($code -eq 0) { break }
+  if ($attempt -eq 1) {
+    Write-Log ("attempt 1 failed (exit {0}) - trying once more in a minute" -f $code)
+    Start-Sleep -Seconds 60
+  }
+}
 
 $fresh = Get-ChildItem -Path $backupDir -Filter '*.sql' -ErrorAction SilentlyContinue |
          Sort-Object LastWriteTime -Descending | Select-Object -First 1
 
-# Both conditions, not just the exit code. A dump that is cut off partway
-# still leaves a file behind, and a file is what somebody would restore from.
-$looksRight = ($code -eq 0) -and ($fresh) -and ($fresh.LastWriteTime.Date -eq (Get-Date).Date) -and ($fresh.Length -gt 1MB)
+# Not just the exit code. A dump cut off partway still leaves a file behind,
+# and a file is what somebody would reach for to restore from.
+$looksRight = ($code -eq 0) -and ($fresh) -and ($fresh.LastWriteTime.Date -eq (Get-Date).Date) `
+              -and (Test-DumpComplete $fresh)
 
 if ($looksRight) {
   $size = '{0:N1} MB' -f ($fresh.Length / 1MB)
@@ -148,6 +203,21 @@ $why = $why.Trim()
 if ($why.Length -gt 900) { $why = $why.Substring(0, 900) + ' ...' }
 
 Write-Log ("FAILED - exit {0} - {1}" -f $code, ($why -replace '\r?\n', ' | '))
+
+# The half-written file is renamed out of the way rather than deleted. Out of
+# the way because *.sql is what everything here counts as a backup, and a
+# stump sitting among them is what somebody restores from at the worst
+# possible moment; not deleted because it is evidence of what went wrong, and
+# throwing that away is how the same failure happens twice.
+if ($fresh -and $fresh.LastWriteTime.Date -eq (Get-Date).Date -and -not (Test-DumpComplete $fresh)) {
+  try {
+    Rename-Item -LiteralPath $fresh.FullName -NewName ($fresh.Name + '.partial') -Force
+    Write-Log ("the half-written file was set aside as {0}.partial" -f $fresh.Name)
+  } catch {
+    Write-Log ("could not set the half-written file aside - {0}" -f $_.Exception.Message)
+  }
+}
+
 $sinceText = 'There is still no backup on this machine.'
 if ($gap -ge 0) { $sinceText = "The newest backup is still the one from $gap day(s) ago." }
 Show-Failure ("The live database was NOT backed up.`n`n$why`n`n$sinceText`n`nRun scripts\backup-live.cmd by hand, or tell whoever looks after the system.")
