@@ -18,7 +18,23 @@ document.getElementById('dispRoot').innerHTML = `
     Parcels sent <b>before 1 August 2026</b>. This is the shipping record &mdash; the
     Dispatch Dashboard shows recent work and anything still to go out.
   </div>` : ''}
-  <div class="row g-3 mb-3"><div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #198754;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">${DSP_ARCHIVE ? 'Backup Dispatch Orders' : 'Dispatch Orders'}</h6><h3 class="fw-bold text-success mb-0" id="dsp_tillCount">--</h3></div></div></div></div>
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-3"><div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #198754;"><div class="card-body p-3"><h6 class="text-muted mb-1 small">${DSP_ARCHIVE ? 'Backup Dispatch Orders' : 'Dispatch Orders'}</h6><h3 class="fw-bold text-success mb-0" id="dsp_tillCount">--</h3></div></div></div>
+    <%# Only the orders that have actually gone. An order still in the queue
+        has nothing to tell anybody yet, and counting those would make this
+        read "everything", which is no number at all. Clicking it sets the
+        Email filter to the same rule, so the card and the table can never
+        disagree about what the number meant. %>
+    <div class="col-6 col-md-3" id="dsp_notToldCard" style="display:none;">
+      <div class="card shadow smooth-ui kpi-card" style="border-left:4px solid #dc3545;cursor:pointer;"
+           onclick="dsp_showNotTold()" title="Show these orders">
+        <div class="card-body p-3">
+          <h6 class="text-muted mb-1 small">Client not told <i class="fas fa-arrow-right ms-1 opacity-50"></i></h6>
+          <h3 class="fw-bold text-danger mb-0" id="dsp_notToldCount">--</h3>
+        </div>
+      </div>
+    </div>
+  </div>
   <!-- Orders production has handed over that nobody has actually sent. They
        carried nothing but a small Ready badge and empty cells, so nine of them
        sat unnoticed until the client asked. -->
@@ -41,6 +57,10 @@ document.getElementById('dispRoot').innerHTML = `
           <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Status</label><select id="dsp_filterStatus" class="form-select form-select-sm" onchange="dspApplyFilters()"><option value="">All</option><option value="Ready">Ready</option><option value="Dispatched">Dispatched</option><option value="Delivered">Delivered</option></select></div>
           <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Courier</label><select id="dsp_filterCourier" class="form-select form-select-sm" onchange="dspApplyFilters()"><option value="">All</option></select></div>
           <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Dealer</label><select id="dsp_filterDealer" class="form-select form-select-sm" onchange="dspApplyFilters()"><option value="">All</option></select></div>
+          <%# "Not told yet" is the card's rule, not a literal "Mail_Sent is
+              blank": every order still in the queue has a blank one, and
+              offering that as a filter would answer a question nobody asked. %>
+          <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Email</label><select id="dsp_filterMail" class="form-select form-select-sm" onchange="dspApplyFilters()"><option value="">All</option><option value="nottold">Not told yet</option><option value="sent">Email sent</option></select></div>
           <div class="col-12 text-end"><button class="btn btn-secondary btn-sm" onclick="dspClearFilters()">Clear</button></div>
         </div>
       </div>
@@ -157,6 +177,7 @@ async function fetchDispatchData() {
     const tc = document.getElementById('dsp_tillCount');
     if(tc) tc.textContent = dsp_data.length;
     dsp_showWaitingBanner();
+    dsp_showNotToldCard();
     dsp_populateFilters(dsp_data);
     dspApplyFilters();
     return dsp_data.length;
@@ -195,6 +216,7 @@ function dspApplyFilters() {
   const status = (document.getElementById('dsp_filterStatus')||{}).value||'';
   const courier = (document.getElementById('dsp_filterCourier')||{}).value||'';
   const dealer = (document.getElementById('dsp_filterDealer')||{}).value||'';
+  const mail = (document.getElementById('dsp_filterMail')||{}).value||'';
   const search = (document.getElementById('dsp_search')||{}).value||'';
   const startV = (document.getElementById('dsp_startDate')||{}).value||'';
   const endV = (document.getElementById('dsp_endDate')||{}).value||'';
@@ -210,6 +232,8 @@ function dspApplyFilters() {
       if(s && d < s) return false;
       if(e && d > e) return false;
     }
+    if (mail === 'nottold' && !dsp_notTold(o)) return false;
+    if (mail === 'sent' && !o.Mail_Sent) return false;
     // Same default the table shows: an order handed over by Production carries
     // status 'Ready', and anything blank is treated as Ready too.
     const ds = (o.Dispatch_Status||'Ready').toLowerCase();
@@ -230,6 +254,46 @@ function dsp_isAwaiting(o) {
   const s = (o.Dispatch_Status || '').trim().toLowerCase();
   if (s.includes('ready')) return true;
   return s === '' && !o.Dispatch_Date;
+}
+
+/**
+ * A client whose parcel has gone and who has not been told.
+ *
+ * The "gone" half is the whole point. 7,147 of the orders with no dispatch
+ * email are simply still in the queue - nothing has shipped, so there is
+ * nothing to tell anybody, and counting them would turn this into a count of
+ * the board itself. What is worth seeing is the parcel that went out while
+ * the client is still waiting to hear.
+ *
+ * One function, used by the card and by the filter behind it, so the number
+ * and the rows it opens cannot drift apart.
+ */
+function dsp_notTold(o) {
+  return !dsp_isAwaiting(o) && !o.Mail_Sent;
+}
+
+function dsp_showNotToldCard() {
+  const card = document.getElementById('dsp_notToldCard');
+  if (!card) return;
+  const n = dsp_data.filter(dsp_notTold).length;
+  // Hidden rather than showing a nought: an empty card is a thing to read and
+  // dismiss every morning, and there is nothing behind it to click.
+  card.style.display = n ? '' : 'none';
+  const box = document.getElementById('dsp_notToldCount');
+  if (box) box.textContent = n;
+}
+
+function dsp_showNotTold() {
+  const sel = document.getElementById('dsp_filterMail');
+  if (sel) sel.value = 'nottold';
+  // The same clearing the waiting banner does: a date range left over from
+  // earlier would hide most of what the card just counted.
+  const r = document.getElementById('dsp_range');
+  if (r) { r.value = ''; dsp_rangePicked(); }
+  ['dsp_startDate','dsp_endDate','dsp_search','dsp_filterStatus'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  dspApplyFilters();
 }
 
 function dsp_showWaitingBanner() {
@@ -328,7 +392,7 @@ async function dsp_moveBoards() {
 }
 
 function dspClearFilters() {
-  ['dsp_filterStatus','dsp_filterCourier','dsp_filterDealer','dsp_search','dsp_startDate','dsp_endDate'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  ['dsp_filterStatus','dsp_filterCourier','dsp_filterDealer','dsp_filterMail','dsp_search','dsp_startDate','dsp_endDate'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   dspApplyFilters();
 }
 // What the table is currently showing, so "select all" means what is in front
