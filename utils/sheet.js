@@ -42,7 +42,7 @@ function isLegacyXls(buffer) {
     buffer[0] === 0xd0 && buffer[1] === 0xcf && buffer[2] === 0x11 && buffer[3] === 0xe0;
 }
 
-async function loadWorksheet(buffer, filename) {
+async function loadWorkbook(buffer, filename) {
   const workbook = new ExcelJS.Workbook();
 
   if (isLegacyXls(buffer)) {
@@ -60,49 +60,79 @@ async function loadWorksheet(buffer, filename) {
     await workbook.csv.read(Readable.from(buffer.toString('utf8')));
   }
 
-  const sheet = workbook.worksheets[0];
-  if (!sheet) throw new Error('That file has no sheets in it.');
-  return sheet;
+  if (!workbook.worksheets.length) throw new Error('That file has no sheets in it.');
+  return workbook;
 }
 
 /**
- * Reads the first worksheet into plain objects keyed by normalized header.
- * Returns { headers, rows } where each row also carries the spreadsheet line
- * number, so errors can point the user at a row they can actually find.
+ * Reads a workbook into plain objects keyed by normalized header.
+ *
+ * EVERY sheet, not just the first. The office's recruitment list turned out to
+ * be eleven tabs, one per role, and reading worksheets[0] took the 206 rows on
+ * the first tab and silently left 930 behind - while reporting a successful
+ * import, which is the worst way to lose data: nobody goes looking.
+ *
+ * Each sheet brings its own header row, so a tab with its columns in a
+ * different order still reads correctly. A sheet with no headers at all is
+ * skipped rather than fatal - a workbook often carries a notes or summary tab,
+ * and refusing the whole upload over one is no help to anybody.
+ *
+ * Returns { headers, rows, sheets }, where every row carries the tab it came
+ * from and its line number within that tab, so an error can name a place
+ * somebody can actually go and look at.
  */
 async function readRows(buffer, filename) {
-  const sheet = await loadWorksheet(buffer, filename);
+  const workbook = await loadWorkbook(buffer, filename);
 
-  const headerRow = sheet.getRow(1);
-  const headers = [];
-  headerRow.eachCell({ includeEmpty: true }, (cell, col) => {
-    headers[col] = normalizeHeader(cellText(cell.value));
-  });
-
-  if (!headers.filter(Boolean).length) {
-    throw new Error('The first row must contain column headers.');
-  }
-
+  const headerUnion = [];
   const rows = [];
-  sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-    if (rowNumber === 1) return;
+  const sheets = [];
 
-    const record = {};
-    let hasValue = false;
-    row.eachCell({ includeEmpty: true }, (cell, col) => {
-      const key = headers[col];
-      if (!key) return;
-      const text = cellText(cell.value);
-      record[key] = text;
-      if (text !== '') hasValue = true;
+  for (const sheet of workbook.worksheets) {
+    // Excel keeps a hidden sheet's data, but hiding a tab is how somebody says
+    // "not this one" - importing from it would be importing what they put away.
+    if (sheet.state && sheet.state !== 'visible') continue;
+
+    const headers = [];
+    sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, col) => {
+      headers[col] = normalizeHeader(cellText(cell.value));
+    });
+    const named = headers.filter(Boolean);
+    if (!named.length) continue;
+
+    for (const h of named) if (!headerUnion.includes(h)) headerUnion.push(h);
+
+    let count = 0;
+    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+
+      const record = {};
+      let hasValue = false;
+      row.eachCell({ includeEmpty: true }, (cell, col) => {
+        const key = headers[col];
+        if (!key) return;
+        const text = cellText(cell.value);
+        record[key] = text;
+        if (text !== '') hasValue = true;
+      });
+
+      // Spreadsheets routinely carry trailing rows that look empty but still
+      // exist; importing them would create blank records.
+      if (!hasValue) return;
+      // The tab name is data in its own right: when the tabs are departments,
+      // it is the only place the department is written down.
+      rows.push({ line: rowNumber, sheet: sheet.name.trim(), values: record });
+      count++;
     });
 
-    // Spreadsheets routinely carry trailing rows that look empty but still
-    // exist; importing them would create blank records.
-    if (hasValue) rows.push({ line: rowNumber, values: record });
-  });
+    sheets.push({ name: sheet.name.trim(), rows: count });
+  }
 
-  return { headers: headers.filter(Boolean), rows };
+  if (!headerUnion.length) {
+    throw new Error('The first row of a sheet must contain column headers.');
+  }
+
+  return { headers: headerUnion, rows, sheets };
 }
 
 function toCsv(rows) {

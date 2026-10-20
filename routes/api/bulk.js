@@ -135,7 +135,7 @@ function matchOne(list, value) {
 }
 
 // Pulls each configured column out of a parsed row by header or alias.
-function extract(type, values) {
+function extract(type, values, sheetName) {
   const out = {};
   for (const col of TYPES[type].columns) {
     const names = [col.header, ...(col.aliases || [])].map(normalizeHeader);
@@ -148,6 +148,19 @@ function extract(type, values) {
     }
     out[col.key] = String(found).trim();
   }
+
+  // When a workbook is split into a tab per role - which is how the office
+  // keeps theirs - the tab name is where the department is written down, and
+  // for a row with an empty Position cell it is the only place it exists.
+  // The cell wins where there is one: a tab is a filing decision, and the cell
+  // is somebody saying what this particular person applied for.
+  //
+  // The caller only passes a name when the workbook actually has several tabs.
+  // One sheet's name says nothing about anybody - it is "Sheet1", or whatever
+  // a CSV got called on the way in - and writing that into a person's position
+  // would be inventing data out of a filename.
+  if (type === 'candidates' && !out.position && sheetName) out.position = sheetName;
+
   return out;
 }
 
@@ -289,7 +302,9 @@ function validate(type, data, context) {
 
     const key = dedupeKey('candidates', data);
     if (key !== null && context.existingCandidates && context.existingCandidates.has(key)) {
-      warnings.push('Already on the list — this row will be skipped');
+      // Naming the role matters: the same person under a different one is not
+      // a duplicate, and without it this reads as a wrong answer.
+      warnings.push('Already on the list for ' + (data.position || 'this role') + ' — this row will be skipped');
       data.__skip = true;
     }
   }
@@ -330,7 +345,7 @@ async function buildContext(type, team) {
     // about emails would wave the whole phone-only half of a re-uploaded
     // sheet straight back in.
     const [rows] = await db.query(
-      'SELECT name, email, phone FROM recruit_candidates WHERE is_deleted = 0');
+      'SELECT name, email, phone, profile_position FROM recruit_candidates WHERE is_deleted = 0');
     const existing = new Set();
     for (const r of rows) {
       const key = dedupeKey('candidates', r);
@@ -356,25 +371,35 @@ async function buildContext(type, team) {
  * import compared them by email, so a file with one mailbox under two names
  * previewed clean and imported once.
  *
- * Candidates are keyed by address where there is one: two people called
- * Sharma is ordinary, two rows for one mailbox is the file having somebody
- * twice. Where there is no address - the common case now that phone-only rows
- * import - the key is the name and the number together.
+ * A candidate is one person FOR ONE ROLE, so the position is part of the key.
  *
- * Neither half of that pair would do alone. A blank email keyed on its own
- * would fold all 87 of the office's phone-only rows into one candidate; the
- * name alone would merge two real people who happen to share one; and leaving
- * them unkeyed meant re-running the same sheet silently added those 87 people
- * a second time. Same name and same number is one person.
+ * That is the office's own unit, and it took seeing the whole workbook to
+ * notice: 92 of their 1136 rows are somebody who appears under two roles -
+ * considered as a Graphic Designer and again as an AI Manager - against only
+ * 12 who are genuinely the same row twice. Keyed on the address alone, those
+ * 92 kept their first role and lost the second, which also quietly broke the
+ * department filter they are there to be found by: ask for AI Manager and four
+ * of the five would not come back.
+ *
+ * Within a role, the address identifies the person. Where there is no address
+ * - the common case, since phone-only rows import - it is the name and the
+ * number together. Neither half of that pair would do alone: a blank email
+ * keyed on its own would fold every phone-only row into one candidate, and the
+ * name alone would merge two real people who happen to share one.
  */
 function dedupeKey(type, data) {
   if (type === 'orders') return null;
   if (type === 'candidates') {
+    // The role as typed, folded, since "Graphic Designer" and "Graphic
+    // designer" are one role. Not the tab name: a candidate already in the
+    // table has a position and no tab, and this key has to mean the same thing
+    // on both sides of the comparison.
+    const role = String(data.position || data.profile_position || '').trim().toLowerCase();
     const email = String(data.email || '').trim().toLowerCase();
-    if (email) return 'e:' + email;
+    if (email) return 'e:' + email + '|' + role;
     const name = String(data.name || '').trim().toLowerCase();
     const phone = String(data.phone || '').replace(/\D/g, '');
-    return name && phone ? 'np:' + name + '|' + phone : null;
+    return name && phone ? 'np:' + name + '|' + phone + '|' + role : null;
   }
   return String(data.name || '').trim().toLowerCase() || null;
 }
@@ -397,12 +422,14 @@ function flagInFileDuplicates(type, results) {
   }
 }
 
-async function analyse(type, rows, team) {
+async function analyse(type, rows, team, tabsAreMeaningful) {
   const context = await buildContext(type, team);
   const results = rows.map(row => {
-    const data = extract(type, row.values);
+    const data = extract(type, row.values, tabsAreMeaningful ? row.sheet : '');
     const { errors, warnings } = validate(type, data, context);
-    return { line: row.line, data, errors, warnings };
+    // The tab travels with the result: "row 42" is not a place anybody can go
+    // and look in a workbook of eleven sheets.
+    return { line: row.line, sheet: row.sheet, data, errors, warnings };
   });
   flagInFileDuplicates(type, results);
 
@@ -481,17 +508,21 @@ router.post('/preview', canImport, upload.single('file'), async (req, res) => {
     if (!TYPES[type]) return res.status(400).json({ success: false, error: 'Choose what you are importing.' });
     if (!req.file) return res.status(400).json({ success: false, error: 'Attach a .xlsx or .csv file.' });
 
-    const { headers, rows } = await readRows(req.file.buffer, req.file.originalname);
+    const { headers, rows, sheets } = await readRows(req.file.buffer, req.file.originalname);
     if (!rows.length) return res.status(400).json({ success: false, error: 'That file has headers but no data rows.' });
     if (rows.length > MAX_ROWS) {
       return res.status(400).json({
         success: false,
-        error: `That file has ${rows.length} rows. Import up to ${MAX_ROWS} at a time.`,
+        error: `That file has ${rows.length} rows across ${sheets.length} sheet(s). `
+          + `Import up to ${MAX_ROWS} at a time.`,
       });
     }
 
-    const { results, summary } = await analyse(type, rows, req.body.team);
-    res.json({ success: true, type, headers, summary, rows: results });
+    const { results, summary } = await analyse(type, rows, req.body.team, sheets.length > 1);
+    // sheets so the widget can say which tabs it read and how many rows each
+    // gave. A workbook of eleven tabs that quietly imported one of them is the
+    // failure this is here to make impossible to miss.
+    res.json({ success: true, type, headers, sheets, summary, rows: results });
   } catch (err) {
     // An unreadable upload is the user's problem, not a fault — log the reason
     // without a stack so real failures stay visible in the logs.
@@ -529,11 +560,11 @@ router.post('/import', canImport, async (req, res) => {
     const seen = new Set();
 
     for (const row of rows) {
-      const data = row.data ? fromKeys(type, row.data) : extract(type, row.values || {});
+      const data = row.data ? fromKeys(type, row.data) : extract(type, row.values || {}, row.sheet);
       const { errors } = validate(type, data, context);
 
       if (errors.length) {
-        rejected.push({ line: row.line, errors });
+        rejected.push({ line: row.line, sheet: row.sheet, errors });
         continue;
       }
       if (data.__skip) continue;

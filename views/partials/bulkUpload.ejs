@@ -119,8 +119,12 @@ async function runBulkUpload(type, box) {
       return;
     }
 
-    // A clean file imports on one click; anything else has to be looked at.
-    if (data.summary.invalid || data.summary.skipped) {
+    // A clean single-tab file imports on one click; anything else has to be
+    // looked at. A workbook of several tabs counts as "anything else" even
+    // when every row is clean: the office should see which tabs were read and
+    // how many rows each gave before a thousand people go in, since reading
+    // the wrong set of tabs is the one mistake here that looks like success.
+    if (data.summary.invalid || data.summary.skipped || (data.sheets || []).length > 1) {
       const go = await Swal.fire({
         title: 'Import ' + ready.length + ' of ' + data.summary.total + ' rows?',
         html: bulkProblemHtml(data),
@@ -140,7 +144,10 @@ async function runBulkUpload(type, box) {
       body: JSON.stringify({
         type: type,
         team: type === 'designers' ? selectedDesignerTeam() : undefined,
-        rows: ready.map(function(r) { return { line: r.line, data: r.data }; }),
+        // The tab travels with the row so a rejection can name a place
+        // somebody can open, and so the import's own fallbacks (an empty
+        // Position takes the tab name) see what the preview saw.
+        rows: ready.map(function(r) { return { line: r.line, sheet: r.sheet, data: r.data }; }),
       }),
     });
     const result = await imp.json();
@@ -159,16 +166,41 @@ async function runBulkUpload(type, box) {
   }
 }
 
+/**
+ * Which tabs were read, and how many rows each one gave.
+ *
+ * Shown whenever there is more than one, because the alternative is what used
+ * to happen: a workbook of eleven department tabs imported the first and
+ * reported a cheerful success, and 930 people were missing with nothing on
+ * screen to suggest it. A count per tab is something the office can check
+ * against their own file at a glance.
+ */
+function bulkSheetsHtml(data) {
+  const sheets = data.sheets || [];
+  if (sheets.length < 2) return '';
+  const total = sheets.reduce(function (n, s) { return n + s.rows; }, 0);
+  return '<div class="small text-start border rounded p-2 mb-2">'
+    + '<div class="fw-bold mb-1">Read ' + total + ' rows from ' + sheets.length + ' tabs</div>'
+    + sheets.map(function (s) {
+        return '<div class="d-flex justify-content-between"><span>' + bulkEsc(s.name)
+          + '</span><span class="text-muted">' + s.rows + '</span></div>';
+      }).join('')
+    + '</div>';
+}
+
 function bulkProblemHtml(data) {
   const bad = data.rows.filter(function(r) { return r.errors.length || r.data.__skip; });
   const shown = bad.slice(0, 8).map(function(r) {
     const why = r.errors.length ? r.errors.join('; ') : r.warnings.join('; ');
-    return '<li class="text-start small">Row ' + r.line + ': ' + bulkEsc(why) + '</li>';
+    // "Row 42" is no use in a workbook of eleven tabs.
+    const where = r.sheet ? bulkEsc(r.sheet) + ' row ' + r.line : 'Row ' + r.line;
+    return '<li class="text-start small">' + where + ': ' + bulkEsc(why) + '</li>';
   }).join('');
   return '<div class="mb-2 small">'
     + data.summary.ready + ' ready &middot; '
     + data.summary.skipped + ' duplicate &middot; '
     + data.summary.invalid + ' with errors</div>'
+    + bulkSheetsHtml(data)
     + '<ul class="mb-0">' + shown + '</ul>'
     + (bad.length > 8 ? '<div class="small text-muted mt-1">...and ' + (bad.length - 8) + ' more</div>' : '');
 }

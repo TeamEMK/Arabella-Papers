@@ -231,6 +231,81 @@ async function loginAs(email, password) {
     res.json.success !== true || res.json.imported === 0,
     { ok: res.json.success, imported: res.json.imported, error: res.json.error });
 
+  // ══════════════════════════════════════════════════
+  // A workbook with a tab per department
+  //
+  // The office's real list is eleven tabs, one per role, and the import read
+  // worksheets[0] - taking 206 rows and leaving 930 behind while reporting a
+  // successful import. These checks exist so that cannot come back: losing
+  // data while saying "done" is the one failure nobody goes looking for.
+  // ══════════════════════════════════════════════════
+  console.log('\nA tab per department');
+
+  const ExcelJS = require(path.join(ROOT, 'node_modules/exceljs'));
+  const wb = new ExcelJS.Workbook();
+  const HEAD = ['Sr. No', 'Name', 'Contact Number', 'Email', 'Position', 'Status', 'Location', 'Expected Salary', 'Notice Period', 'Sourcing'];
+  // Two tabs, and deliberately: a row whose Position cell is empty (the tab
+  // name is the only place its role is written), and one person who appears
+  // under both roles - which is 92 of the office's own rows, and must stay as
+  // two candidates rather than collapsing into one.
+  const t1 = wb.addWorksheet('Graphic Designer');
+  t1.addRow(HEAD);
+  t1.addRow([1, 'Tabbed One', '9000000001', 'tab1@example.com', '', 'interested', 'Jaipur', '', '', 'Indeed']);
+  t1.addRow([2, 'Both Roles', '9000000002', 'both@example.com', '', 'not interested', 'Jaipur', '', '', 'Indeed']);
+  const t2 = wb.addWorksheet('AI Manager');
+  t2.addRow(HEAD);
+  t2.addRow([1, 'Tabbed Two', '9000000003', 'tab2@example.com', '', '', 'Kota', '', '', 'Naukri']);
+  t2.addRow([2, 'Both Roles', '9000000002', 'both@example.com', '', 'interested', 'Jaipur', '', '', 'Indeed']);
+  const hidden = wb.addWorksheet('Old list');
+  hidden.state = 'hidden';
+  hidden.addRow(HEAD);
+  hidden.addRow([1, 'Put Away', '9000000009', 'away@example.com', 'Designer', '', '', '', '', '']);
+  const book = Buffer.from(await wb.xlsx.writeBuffer());
+
+  const multi = new FormData();
+  multi.append('type', 'candidates');
+  multi.append('file', new Blob([book]), 'departments.xlsx');
+  res = await call('POST', '/api/bulk/preview', multi, true);
+  check('every tab is read, not just the first', (res.json.rows || []).length === 4,
+    { rows: (res.json.rows || []).length, sheets: res.json.sheets });
+  check('and each tab is named with its own count',
+    JSON.stringify(res.json.sheets) === JSON.stringify([
+      { name: 'Graphic Designer', rows: 2 }, { name: 'AI Manager', rows: 2 }]),
+    res.json.sheets);
+  // Hiding a tab is how somebody says "not this one".
+  check('a hidden tab is left alone',
+    !(res.json.rows || []).some(r => r.sheet === 'Old list'), (res.json.rows || []).map(r => r.sheet));
+  check('an empty Position takes the tab name',
+    (res.json.rows.find(r => r.data.name === 'Tabbed One') || {}).data.position === 'Graphic Designer',
+    res.json.rows.map(r => r.data.position));
+
+  res = await call('POST', '/api/bulk/import', { type: 'candidates', rows: res.json.rows });
+  check('all four rows import', res.json.imported === 4,
+    { imported: res.json.imported, rejected: res.json.rejected });
+
+  const [tabbed] = await db.query(
+    `SELECT name, profile_position, status FROM recruit_candidates
+      WHERE email IN ('tab1@example.com','tab2@example.com','both@example.com')
+      ORDER BY profile_position`);
+  check('each lands under its own department',
+    tabbed.filter(r => r.profile_position === 'Graphic Designer').length === 2
+    && tabbed.filter(r => r.profile_position === 'AI Manager').length === 2, tabbed);
+  // The thing a department filter is for: one person considered for two roles
+  // is two rows, or asking for AI Manager would not return them.
+  const both = tabbed.filter(r => r.name === 'Both Roles');
+  check('one person under two roles stays two candidates', both.length === 2, both);
+  check('and each carries that role\'s own status',
+    both.some(r => r.profile_position === 'Graphic Designer' && r.status === 'Rejected')
+    && both.some(r => r.profile_position === 'AI Manager' && r.status === 'Applied'), both);
+
+  // Same workbook again: now they are all on the list, under those roles.
+  const twice = new FormData();
+  twice.append('type', 'candidates');
+  twice.append('file', new Blob([book]), 'departments.xlsx');
+  res = await call('POST', '/api/bulk/preview', twice, true);
+  check('a second upload of the workbook adds nobody', res.json.summary.ready === 0,
+    res.json.summary);
+
   // An imported candidate is an ordinary one: the board can act on them.
   res = await call('GET', '/api/recruitment/candidates');
   const fromSheet = (res.json.data || []).find(c => c.name === 'Vikram Rao');
