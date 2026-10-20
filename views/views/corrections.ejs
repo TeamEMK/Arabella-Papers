@@ -573,9 +573,20 @@ function cr_openRaise() {
 
 // The typed box into a list of order numbers, the same way the server splits
 // it — commas, spaces, semicolons or line breaks, repeats dropped.
+//
+// A stray space inside one number is not two numbers. "k- 160190" and
+// "k -160190" are K-160190 typed in a hurry, and splitting them left two
+// halves and "no order with that number" twice. The hyphen is pulled back
+// onto what sits either side of it when a digit follows - so -R1 on a repeat
+// survives too, while "K-160190 - K-160191" stays the two orders it is.
+//
+// This rule and the split below have to match routes/api/corrections.js, or
+// the preview will disagree with what is actually raised.
 function cr_ids() {
   const out = [], seen = new Set();
-  for (const piece of (document.getElementById('cr_orderId').value || '').split(/[\s,;]+/)) {
+  const typed = (document.getElementById('cr_orderId').value || '')
+    .replace(/([A-Za-z0-9])\s*-\s*([A-Za-z]?\d)/g, '$1-$2');
+  for (const piece of typed.split(/[\s,;]+/)) {
     const id = piece.trim();
     if (!id || seen.has(id.toLowerCase())) continue;
     seen.add(id.toLowerCase());
