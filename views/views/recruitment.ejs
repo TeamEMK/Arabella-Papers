@@ -31,12 +31,13 @@
   <div class="card bg-light-glass mb-4 shadow-sm">
     <div class="card-body p-2">
       <div class="row g-2 align-items-end">
-        <div class="col-12 col-md-4"><label class="form-label text-dark fw-bold small mb-0">Search</label><input type="text" id="rec_search" class="form-control form-control-sm" placeholder="Name, email, phone, position..." onkeyup="rec_render()"></div>
-        <%# Filled from whoever is actually on the board, not a fixed list: the
-            roles being hired for change every few months, and a hard-coded
-            dropdown would start lying the first time somebody hires for
-            something new. %>
-        <div class="col-6 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Department</label><select id="rec_position" class="form-select form-select-sm" onchange="rec_render()"><option value="">All</option></select></div>
+        <div class="col-12 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Search</label><input type="text" id="rec_search" class="form-control form-control-sm" placeholder="Name, email, phone, position..." onkeyup="rec_render()"></div>
+        <%# Both of these are filled from whoever is actually on the board, not
+            from a fixed list: the roles being hired for and the places names
+            are bought from both change, and a hard-coded dropdown would start
+            lying the first time either did. %>
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Department</label><select id="rec_position" class="form-select form-select-sm" onchange="rec_render()"><option value="">All</option></select></div>
+        <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Sourcing</label><select id="rec_sourcing" class="form-select form-select-sm" onchange="rec_render()"><option value="">All</option></select></div>
         <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Status</label><select id="rec_status" class="form-select form-select-sm" onchange="rec_render()"><option value="">All</option><option>Applied</option><option>Scheduled</option><option>Rescheduled</option><option>Selected</option><option>Onboarding</option><option>Offer Sent</option><option>Rejected</option></select></div>
         <div class="col-6 col-md-2"><label class="form-label text-dark fw-bold small mb-0">Onboarding</label><select id="rec_form" class="form-select form-select-sm" onchange="rec_render()"><option value="">All</option><option value="waiting">Sent, waiting</option><option value="received">Received</option><option value="none">Not sent</option></select></div>
         <div class="col-6 col-md-1 text-end"><button class="btn btn-secondary btn-sm w-100" onclick="rec_clear()">Clear</button></div>
@@ -386,7 +387,8 @@ async function rec_fetch() {
     ]);
     rec_data = list.data || [];
     rec_kpis(stats.data || {});
-    rec_fillPositions();
+    rec_fillFilter('rec_position', 'profile_position');
+    rec_fillFilter('rec_sourcing', 'sourcing');
     rec_render();
     return rec_data.length;
   } catch (e) {
@@ -539,8 +541,10 @@ function rec_render() {
   const status = document.getElementById('rec_status').value;
   const form = document.getElementById('rec_form').value;
   const position = (document.getElementById('rec_position').value || '').toLowerCase();
+  const sourcing = (document.getElementById('rec_sourcing').value || '').toLowerCase();
 
   const rows = rec_data.filter(c => {
+    if (sourcing && String(c.sourcing || '').trim().toLowerCase() !== sourcing) return false;
     // Compared folded, because the same role arrives spelled several ways -
     // the office's own list had "Graphic Designer" and "Graphic designer" on
     // the same tab. Matching exactly would have hidden half of them from their
@@ -591,25 +595,28 @@ function rec_render() {
 }
 
 /**
- * Refills the Department dropdown from whoever is on the board.
+ * Refills one of the list-driven dropdowns - Department, Sourcing - from
+ * whoever is on the board, rather than from a fixed list. The roles being
+ * hired for and the places names are bought from both change, and a
+ * hard-coded list starts lying the first time either does.
  *
- * Case-folded into one entry per role, keeping the commonest spelling as the
+ * Case-folded into one entry per value, keeping the commonest spelling as the
  * label - so "Graphic Designer" and "Graphic designer" are one line reading
  * the way most of the rows read, rather than two lines splitting a department
  * in half. The count is on the label because the first question anybody asks
- * of a department filter is how many are in it.
+ * of these is how many are in each.
  *
  * The current choice is kept across a refresh where it still exists; losing
  * the filter every time the board reloads would be its own small annoyance.
  */
-function rec_fillPositions() {
-  const sel = document.getElementById('rec_position');
+function rec_fillFilter(selectId, field) {
+  const sel = document.getElementById(selectId);
   if (!sel) return;
   const was = sel.value;
 
   const groups = new Map();
   for (const c of rec_data) {
-    const raw = String(c.profile_position || '').trim();
+    const raw = String(c[field] || '').trim();
     if (!raw) continue;
     const key = raw.toLowerCase();
     const g = groups.get(key) || { total: 0, spellings: new Map() };
@@ -650,7 +657,7 @@ function rec_remarkLine(c) {
 }
 
 function rec_clear() {
-  ['rec_search', 'rec_status', 'rec_form', 'rec_position'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['rec_search', 'rec_status', 'rec_form', 'rec_position', 'rec_sourcing'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   rec_render();
 }
 
