@@ -188,19 +188,44 @@ function bulkSheetsHtml(data) {
     + '</div>';
 }
 
+// Warnings that explain what the import understood rather than what is wrong
+// with the file. On the office's list 959 of 1136 rows carry one, so printing
+// them per row buried the nine rows somebody could actually go and fix. Said
+// once, in the summary, instead.
+function bulkIsReading(w) { return /^Read "/.test(w); }
+
 function bulkProblemHtml(data) {
-  const bad = data.rows.filter(function(r) { return r.errors.length || r.data.__skip; });
+  // Rows with errors first, always. They are the ones that will not import
+  // and the only ones anybody can do something about; listing them after a
+  // screenful of duplicates is hiding the actionable half of the message.
+  const broken = data.rows.filter(function(r) { return r.errors.length; });
+  const skipped = data.rows.filter(function(r) { return !r.errors.length && r.data.__skip; });
+  const bad = broken.concat(skipped);
+
   const shown = bad.slice(0, 8).map(function(r) {
-    const why = r.errors.length ? r.errors.join('; ') : r.warnings.join('; ');
+    const why = r.errors.length
+      ? r.errors.join('; ')
+      : r.warnings.filter(function(w) { return !bulkIsReading(w); }).join('; ');
     // "Row 42" is no use in a workbook of eleven tabs.
     const where = r.sheet ? bulkEsc(r.sheet) + ' row ' + r.line : 'Row ' + r.line;
-    return '<li class="text-start small">' + where + ': ' + bulkEsc(why) + '</li>';
+    return '<li class="text-start small">'
+      + (r.errors.length ? '<span class="text-danger fw-bold">' + where + '</span>' : where)
+      + ': ' + bulkEsc(why) + '</li>';
   }).join('');
+
+  const reading = data.rows.filter(function(r) {
+    return r.warnings.some(bulkIsReading);
+  }).length;
+
   return '<div class="mb-2 small">'
     + data.summary.ready + ' ready &middot; '
     + data.summary.skipped + ' duplicate &middot; '
     + data.summary.invalid + ' with errors</div>'
     + bulkSheetsHtml(data)
+    + (reading ? '<div class="small text-muted text-start mb-2">'
+        + reading + (reading === 1 ? ' row had' : ' rows had')
+        + ' a Status that is not one of the stages — each was read as '
+        + 'Applied or Rejected, and the original wording is kept on the candidate.</div>' : '')
     + '<ul class="mb-0">' + shown + '</ul>'
     + (bad.length > 8 ? '<div class="small text-muted mt-1">...and ' + (bad.length - 8) + ' more</div>' : '');
 }
