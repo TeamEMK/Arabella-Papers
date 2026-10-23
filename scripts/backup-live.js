@@ -84,12 +84,24 @@ const args = [
   // The dump goes over Railway's TCP proxy from an office line, and on
   // 20 October it dropped mid-table: "Lost connection to MySQL server during
   // query" while reading activity_log, which is a tenth of a megabyte. It was
-  // the link, not the size. These three are what make a dump survive a slow
-  // or jittery one - generous timeouts rather than the ~30s default, and
-  // fewer bytes on the wire to begin with.
-  '--net-read-timeout=600',
-  '--net-write-timeout=600',
+  // the link, not the size. Fewer bytes on the wire, a connect that is allowed
+  // to take its time, and room for a big row.
+  //
+  // Every option on this list has been run against the live server. That is
+  // not a boast, it is the whole lesson of 20-23 October: --net-read-timeout
+  // and --net-write-timeout were added here to cure a dropped link, and they
+  // are SERVER variables, not mysqldump options. The client refuses an unknown
+  // variable outright - "unknown variable 'net-read-timeout=600'", exit 7 -
+  // before it has connected to anything, so the dump did not get slower or
+  // flakier, it stopped happening at all. Three mornings, no backup, and the
+  // only thing standing between the office and a bad UPDATE was a dialog
+  // somebody clicked OK on. --connect-timeout is rejected the same way.
+  //
+  // So: nothing goes on this list that has not been run. There is no
+  // client-side read timeout for mysqldump; the retry in backup-auto.ps1 is
+  // what actually carries a dump past a blip.
   '--compress',
+  '--max-allowed-packet=1G',
   // This dump is restored into a different server, so the source's GTIDs are
   // not wanted - and leaving it off printed a warning on every single run
   // that trained everybody to ignore the warnings.
@@ -102,10 +114,20 @@ console.log(`\nBacking up ${url.hostname} -> ${outFile}`);
 const out = fs.createWriteStream(outFile);
 const dump = spawn(findMysqldump(), args);
 dump.stdout.pipe(out);
+// Filtered a line at a time, not a chunk at a time.
+//
+// mysqldump warns about the password on every single run and that warning is
+// noise, but it arrives in the same write as whatever follows it. Testing the
+// whole chunk threw the real message away with it: on 21 October the log of a
+// failed run read "FAILED - exit 7 - mysqldump:" and nothing else, while the
+// line that explained the whole thing - "[ERROR] unknown variable
+// 'net-read-timeout=600'" - had been swallowed by the same filter. Three
+// mornings of failures were diagnosed by reproducing them instead of by
+// reading the log, which is what the log is for.
 dump.stderr.on('data', d => {
-  const msg = d.toString();
-  // mysqldump warns about the password on the command line every single run.
-  if (!msg.includes('Using a password on the command line')) process.stderr.write(msg);
+  const keep = d.toString().split(/\r?\n/)
+    .filter(line => line.trim() && !line.includes('Using a password on the command line'));
+  if (keep.length) process.stderr.write(keep.join('\n') + '\n');
 });
 
 dump.on('error', err => {
