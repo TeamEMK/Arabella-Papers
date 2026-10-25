@@ -100,7 +100,14 @@ const args = [
   // So: nothing goes on this list that has not been run. There is no
   // client-side read timeout for mysqldump; the retry in backup-auto.ps1 is
   // what actually carries a dump past a blip.
-  '--compress',
+  // --compress was here and printed a deprecation notice on every run. That
+  // notice is the first thing the failure dialog shows, above the line that
+  // says what actually went wrong - on 25 October it pushed "Unknown MySQL
+  // server host" into second place. A warning nobody needs, sitting on top of
+  // the message somebody does, is how warnings stop being read. This is the
+  // replacement it names, and it has been run against the live server: same
+  // output, no notice.
+  '--compression-algorithms=zlib',
   '--max-allowed-packet=1G',
   // This dump is restored into a different server, so the source's GTIDs are
   // not wanted - and leaving it off printed a warning on every single run

@@ -126,7 +126,7 @@ $code   = 1
 $stdout = ''
 $stderr = ''
 
-# Twice before giving up.
+# Four times, waiting longer each go, before giving up.
 #
 # The dump crosses the public internet to Railway's proxy, and on 20 October
 # it dropped partway through a table a tenth of a megabyte in size - the link,
@@ -134,10 +134,18 @@ $stderr = ''
 # its backup, when running the same command again would have worked, as it
 # did when it was run by hand twenty minutes later.
 #
-# So a second attempt, a minute later, and only then the dialog. A real
-# problem - wrong password, MySQL down, no Node - fails both times and still
-# gets in front of somebody; it is only the blip that now passes quietly.
-foreach ($attempt in 1..2) {
+# Two attempts a minute apart was the first answer and it was not patient
+# enough. On 25 October the office line lost DNS: 09:33:38 "Unknown MySQL
+# server host", 09:34:39 the same, and that was the day's backup gone - while
+# the name resolved perfectly a few minutes later. An office connection drops
+# for five minutes at a time, not for sixty seconds, so the waits now grow:
+# roughly nine minutes of trying in all.
+#
+# A real problem - wrong password, MySQL down, no Node, an option mysqldump
+# will not take - fails all four times and still gets in front of somebody.
+# Only the blip passes quietly, which is the whole point.
+$waits = @(60, 180, 300)
+foreach ($attempt in 1..4) {
   $outFile = [System.IO.Path]::GetTempFileName()
   $errFile = [System.IO.Path]::GetTempFileName()
   try {
@@ -160,9 +168,10 @@ foreach ($attempt in 1..2) {
   Remove-Item $outFile, $errFile -ErrorAction SilentlyContinue
 
   if ($code -eq 0) { break }
-  if ($attempt -eq 1) {
-    Write-Log ("attempt 1 failed (exit {0}) - trying once more in a minute" -f $code)
-    Start-Sleep -Seconds 60
+  if ($attempt -lt 4) {
+    $wait = $waits[$attempt - 1]
+    Write-Log ("attempt {0} of 4 failed (exit {1}) - trying again in {2}s" -f $attempt, $code, $wait)
+    Start-Sleep -Seconds $wait
   }
 }
 
