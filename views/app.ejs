@@ -791,6 +791,41 @@
     localStorage.setItem('activeTab_arabella', page);
     _origLoadPage(page);
   };
+
+  // Where this person is, asked once a session and never waited for.
+  //
+  // This lives here rather than on the login page because there it did not
+  // work: the browser's prompt needs a decision and the form is gone in
+  // fifteen seconds, so every login arrived with a city from the IP and no
+  // pin. The page this runs on stays open, so a slow or late answer still has
+  // somewhere to land.
+  //
+  // sessionStorage, not localStorage: once per visit rather than once ever,
+  // so somebody who moves between the office and home is recorded in both,
+  // and nobody is asked again on every page they open.
+  (function askWhere() {
+    if (!navigator.geolocation || !window.isSecureContext) return;
+    try {
+      if (sessionStorage.getItem('whereAsked_arabella')) return;
+      sessionStorage.setItem('whereAsked_arabella', '1');
+    } catch (e) { /* private window: ask again, which is no harm */ }
+
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        fetch('/api/account/where', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            acc: Math.round(pos.coords.accuracy || 0),
+          }),
+        }).catch(function () { /* the city is already on the row */ });
+      },
+      function () { /* refused or unavailable - the IP still answers */ },
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 },
+    );
+  })();
 </script>
 </body>
 </html>

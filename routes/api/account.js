@@ -3,8 +3,49 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../../config/db');
 const { requireLogin } = require('../../middleware/auth');
+const { fixFrom } = require('../../utils/whereFrom');
 
 const MIN_PASSWORD = 8;
+
+// POST /api/account/where — attach the browser's position to this login.
+//
+// Asked for from inside the app rather than on the login page, which is where
+// it was first put and where it never once worked. Two things were against it
+// there: the browser's prompt needs a decision, and somebody who logs in in
+// fifteen seconds has submitted the form long before that decision is made -
+// and if the prompt is missed or dismissed, nothing arrives at all. Every
+// login row for a week came through with a city and no pin.
+//
+// Here the page is already open and stays open, so the answer has somewhere
+// to land whenever it comes.
+router.post('/where', requireLogin, async (req, res) => {
+  try {
+    const [lat, lng, acc] = fixFrom(req.body);
+    if (lat === null) return res.json({ success: true, stored: false });
+
+    // The row this person's current visit began with, and only if it is still
+    // waiting for one. Bounded by time so a browser that answers late, or a
+    // tab left open overnight, cannot write a position onto a login from days
+    // ago; and left alone once filled, so the first answer stands rather than
+    // being rewritten by every page they open.
+    const [r] = await db.query(
+      `UPDATE activity_log
+          SET latitude = ?, longitude = ?, accuracy_m = ?
+        WHERE email = ? AND action = 'Login'
+          AND latitude IS NULL
+          AND logged_at > (NOW() - INTERVAL 12 HOUR)
+        ORDER BY id DESC
+        LIMIT 1`,
+      [lat, lng, acc, req.session.user.email],
+    );
+    res.json({ success: true, stored: r.affectedRows > 0 });
+  } catch (err) {
+    // Never worth failing a page over. The city from the IP is already on the
+    // row and the person is already logged in.
+    console.warn('Could not store position:', err.message);
+    res.json({ success: true, stored: false });
+  }
+});
 
 // POST /api/account/password — change your own password
 router.post('/password', requireLogin, async (req, res) => {

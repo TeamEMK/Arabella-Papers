@@ -122,12 +122,6 @@
           <i class="fas fa-eye" id="pwIcon" aria-hidden="true"></i>
         </button>
       </div>
-      <%# Filled in by the browser if the person allows it, left empty if they
-          do not. Hidden rather than shown because there is nothing here for
-          anybody to type or correct. %>
-      <input type="hidden" name="lat" id="geo_lat">
-      <input type="hidden" name="lng" id="geo_lng">
-      <input type="hidden" name="acc" id="geo_acc">
       <button type="submit" class="login-btn" id="loginBtn">Login</button>
       <% if (error) { %>
         <div class="error-msg"><%= error %></div>
@@ -141,35 +135,16 @@
       btn.disabled = true;
     });
 
-    // Asked for, never waited for.
+    // The location prompt used to be here and has moved into the app.
     //
-    // The browser's own position is the only way to get nearer than a city -
-    // an IP maps to a town and an ISP and knows nothing of streets. So the
-    // prompt goes up when the page loads and the answer, if it comes, lands
-    // in the hidden fields before anybody has finished typing a password.
+    // It never worked on this page. The browser's prompt needs a decision and
+    // this form is gone in fifteen seconds, so the answer arrived after the
+    // page it was meant for - every login was stored with a city from the IP
+    // and no pin. Worse, a prompt refused here is refused for the whole site,
+    // which would have shut the door on the one place it can work.
     //
-    // Nothing about logging in depends on it. Refused, dismissed, ignored, no
-    // GPS, an old browser, a page served over plain http - every one of those
-    // leaves the fields empty and the login works exactly as before. A sign-in
-    // that could be held up by a permission prompt would be a worse thing
-    // than not knowing where somebody was.
-    (function askWhere() {
-      if (!navigator.geolocation || !window.isSecureContext) return;
-      try {
-        navigator.geolocation.getCurrentPosition(
-          function (pos) {
-            document.getElementById('geo_lat').value = pos.coords.latitude.toFixed(7);
-            document.getElementById('geo_lng').value = pos.coords.longitude.toFixed(7);
-            document.getElementById('geo_acc').value = Math.round(pos.coords.accuracy || 0);
-          },
-          function () { /* refused or unavailable - the IP still answers */ },
-          // Ten seconds, and a cached fix up to five minutes old will do: this
-          // is about which building somebody is in, not which street corner,
-          // and a long GPS hunt on a desktop never ends well.
-          { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
-        );
-      } catch (e) { /* nothing here is worth breaking a login over */ }
-    })();
+    // It is asked for once per session from the app shell instead, where the
+    // page stays open long enough for an answer to land. See views/app.ejs.
 
     var pwInput = document.getElementById('password');
     var pwToggle = document.getElementById('pwToggle');
