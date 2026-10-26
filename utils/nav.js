@@ -127,8 +127,13 @@ const SECTIONS = [
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
   },
   {
+    // Open to everybody, and narrowed for most of them: the API gives an
+    // admin the whole log and gives everybody else only their own entries.
+    // Somebody wanting to check what they themselves changed on an order had
+    // nowhere to look before, and asking an admin for it is a poor use of two
+    // people's time.
     id: 'logs', group: 'Admin', name: 'Logs', icon: 'fa-clock-rotate-left',
-    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
+    rule: () => true,
   },
   {
     // Logs answers "what happened to this order". This answers "what did this

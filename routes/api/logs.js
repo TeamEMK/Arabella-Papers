@@ -20,12 +20,26 @@ router.get('/', requireLogin, async (req, res) => {
   try {
     const user = req.session.user;
     const role = user.role || '';
-    if (role !== 'SuperAdmin' && user.domain !== 'Head') {
-      return res.status(403).json({ success: false, error: 'Unauthorized' });
-    }
+
+    // Everybody may open this now; what changes is how much of it they get.
+    //
+    // An admin sees the whole log and every filter. Everybody else sees their
+    // own entries and nothing else - their own work, which is the useful half
+    // of this page for them, without the rest of the office's alongside it.
+    //
+    // Forced here rather than in the page, because the page is a suggestion:
+    // the filters are query parameters, and anyone who can open the screen can
+    // type ?changedBy=somebody-else into the address bar. This is the only
+    // place that decision can actually be made.
+    const isAdmin = role === 'SuperAdmin' || user.domain === 'Head';
 
     const where = [];
     const params = [];
+
+    if (!isAdmin) {
+      where.push('changed_by = ?');
+      params.push(user.username || '');
+    }
 
     const orderId = String(req.query.orderId || '').trim();
     if (orderId) {
@@ -33,7 +47,11 @@ router.get('/', requireLogin, async (req, res) => {
       params.push('%' + orderId + '%');
     }
 
-    const changedBy = String(req.query.changedBy || '').trim();
+    // Only an admin's choice of person is honoured. For everybody else the
+    // clause above has already answered this question, and letting a second
+    // one through would be answering it twice with no way for the two to
+    // disagree usefully.
+    const changedBy = isAdmin ? String(req.query.changedBy || '').trim() : '';
     if (changedBy) {
       where.push('changed_by = ?');
       params.push(changedBy);
@@ -76,9 +94,15 @@ router.get('/', requireLogin, async (req, res) => {
 
     // Who and what to offer in the filter boxes, from the whole log rather
     // than the page being shown - otherwise the options change as you filter.
-    const [people] = await db.query(
-      `SELECT DISTINCT changed_by FROM order_logs WHERE IFNULL(changed_by, '') <> '' ORDER BY changed_by`
-    );
+    //
+    // The list of people is for admins alone. It is a roster of everybody who
+    // has ever touched an order, and handing it to a designer who can only
+    // see their own rows would be leaking the one thing this page is being
+    // narrowed to hide.
+    const [people] = isAdmin
+      ? await db.query(
+          `SELECT DISTINCT changed_by FROM order_logs WHERE IFNULL(changed_by, '') <> '' ORDER BY changed_by`)
+      : [[]];
     const [actions] = await db.query(
       `SELECT DISTINCT action FROM order_logs ORDER BY action`
     );
@@ -102,6 +126,9 @@ router.get('/', requireLogin, async (req, res) => {
       limit: MAX_ROWS,
       people: people.map(p => p.changed_by),
       actions: actions.map(a => a.action),
+      // So the page knows whether to draw the Changed By box at all, and
+      // whether to call itself everyone's log or this person's.
+      scope: isAdmin ? 'all' : 'self',
     });
   } catch (err) {
     console.error('Logs failed:', err);

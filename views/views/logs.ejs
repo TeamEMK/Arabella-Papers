@@ -1,7 +1,11 @@
 <%# Order Logs — who changed what, and when %>
 <div class="container-fluid py-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-clock-rotate-left me-2"></i>Order Logs</h3>
+    <%# Named for what the reader is actually getting. "Order Logs" on a page
+        showing one person's own rows invites them to wonder where everyone
+        else went. %>
+    <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-clock-rotate-left me-2"></i><%=
+      (user.role === 'SuperAdmin' || user.domain === 'Head') ? 'Order Logs' : 'My Order Logs' %></h3>
     <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, logFetch, 'entries')">
       <i class="fas fa-sync-alt me-1"></i> Refresh
     </button>
@@ -27,10 +31,16 @@
             <label class="form-label fw-bold small mb-0">Order ID</label>
             <input type="text" id="log_orderId" class="form-control form-control-sm" placeholder="K-159756" onkeyup="logSearchSoon()">
           </div>
+          <%# Admins only. For everybody else the API has already fixed this to
+              them, so the box would be a choice with one answer - and the list
+              behind it names everyone who has ever touched an order, which is
+              the thing their view is being narrowed to keep out. %>
+          <% if (user.role === 'SuperAdmin' || user.domain === 'Head') { %>
           <div class="col-6 col-md-2">
             <label class="form-label fw-bold small mb-0">Changed By</label>
             <select id="log_changedBy" class="form-select form-select-sm" onchange="logFetch()"><option value="">Everyone</option></select>
           </div>
+          <% } %>
           <div class="col-6 col-md-2">
             <label class="form-label fw-bold small mb-0">Action</label>
             <select id="log_action" class="form-select form-select-sm" onchange="logFetch()"><option value="">All</option></select>
