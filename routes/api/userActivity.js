@@ -97,6 +97,7 @@ router.get('/', requireLogin, async (req, res) => {
          SELECT 'Account' AS kind, a.action AS action, '' AS order_id, '' AS field,
                 '' AS old_value, '' AS new_value, a.role AS role,
                 IFNULL(a.ip_address,'') AS ip, IFNULL(a.location,'') AS place,
+                a.latitude AS lat, a.longitude AS lng, a.accuracy_m AS acc,
                 a.logged_at AS at
            FROM activity_log a
           WHERE a.email = ?${act.sql}
@@ -104,6 +105,7 @@ router.get('/', requireLogin, async (req, res) => {
          SELECT 'Order' AS kind, o.action, o.order_id, IFNULL(o.field,''),
                 IFNULL(o.old_value,''), IFNULL(o.new_value,''), '' AS role,
                 '' AS ip, '' AS place,
+                NULL AS lat, NULL AS lng, NULL AS acc,
                 o.changed_at
            FROM order_logs o
           WHERE o.changed_by = ?${ord.sql}
@@ -159,6 +161,13 @@ router.get('/', requireLogin, async (req, res) => {
         // from wherever that person already was, and the address would be the
         // same one repeated down the column.
         Where: [r.place, r.ip].filter(Boolean).join(' · '),
+        // The browser's own fix, where it was allowed. Sent as a map link
+        // rather than a street address: turning coordinates into an address
+        // needs a paid geocoding service on every row, and a map pin answers
+        // "where exactly were they" better than a line of text would.
+        Pin: (r.lat !== null && r.lng !== null)
+          ? { lat: Number(r.lat), lng: Number(r.lng), accuracy: r.acc === null ? null : Number(r.acc) }
+          : null,
         At: istText(r.at),
       })),
     });

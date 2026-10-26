@@ -38,6 +38,17 @@ CREATE TABLE IF NOT EXISTS activity_log (
   -- on anything not running behind Vercel.
   ip_address VARCHAR(64) DEFAULT '',
   location VARCHAR(160) DEFAULT '',
+  -- The browser's own position, when the person allows it. This is the only
+  -- way to get nearer than a city: an address cannot be had from an IP, which
+  -- maps a range to a town and an ISP and knows nothing of streets. Null
+  -- wherever the prompt was refused, dismissed, or never answered in time -
+  -- and the city above still stands in those cases.
+  latitude DECIMAL(10,7) DEFAULT NULL,
+  longitude DECIMAL(10,7) DEFAULT NULL,
+  -- How wide the browser says its own guess is, in metres. Worth keeping:
+  -- 20m is a phone with GPS, 3000m is a laptop working it out from the same
+  -- network the IP came from, and the second is not worth calling a location.
+  accuracy_m INT DEFAULT NULL,
   logged_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

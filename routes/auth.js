@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
-const { ipOf, locationOf } = require('../utils/whereFrom');
+const { ipOf, locationOf, fixFrom } = require('../utils/whereFrom');
 
 // GET /login
 router.get('/login', (req, res) => {
@@ -29,8 +29,11 @@ router.post('/login', async (req, res) => {
 
     // Log activity
     await db.query(
-      'INSERT INTO activity_log (email, action, role, domain, ip_address, location) VALUES (?,?,?,?,?,?)',
-      [user.email, 'Login', user.role, user.domain, ipOf(req), locationOf(req)]
+      `INSERT INTO activity_log
+         (email, action, role, domain, ip_address, location, latitude, longitude, accuracy_m)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+      [user.email, 'Login', user.role, user.domain, ipOf(req), locationOf(req),
+       ...fixFrom(req.body)]
     );
 
     // Set session

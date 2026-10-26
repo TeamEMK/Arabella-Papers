@@ -89,6 +89,35 @@ function ua_when(v) {
   return v ? ua_esc(v) : '-';
 }
 
+/**
+ * Where somebody was, as precisely as is actually known.
+ *
+ * Two different things, and they are kept apart rather than blended into one
+ * confident-looking line. The town comes from the IP and is a guess about the
+ * internet connection - usually the right city, sometimes the ISP's hub. The
+ * pin is the browser's own fix, which is the only thing here that can point
+ * at a building, and only exists where the person allowed it.
+ *
+ * The pin opens a map rather than printing a street address: turning
+ * coordinates into an address needs a paid geocoding service on every row,
+ * and the map shows the spot better than a line of text would anyway. Its
+ * accuracy is on the label, because a fix good to 3km is a city, not a place,
+ * and saying so is the difference between a location and a false one.
+ */
+function ua_where(r) {
+  var parts = [];
+  if (r.Where) parts.push(ua_esc(r.Where));
+  if (r.Pin) {
+    var m = Math.round(r.Pin.accuracy);
+    var how = r.Pin.accuracy === null ? ''
+      : (m < 1000 ? ' ±' + m + 'm' : ' ±' + (m / 1000).toFixed(1) + 'km');
+    parts.push('<a href="https://www.google.com/maps?q=' + r.Pin.lat + ',' + r.Pin.lng
+      + '" target="_blank" rel="noopener" title="Opens the exact spot the browser reported">'
+      + '<i class="fas fa-location-dot me-1"></i>Exact spot' + how + '</a>');
+  }
+  return parts.join('<br>') || '-';
+}
+
 // Account entries are the ones that say nothing about an order, so they are
 // the ones worth marking - a wall of identical "Updated" rows with the odd
 // Login in it is hard to read otherwise.
@@ -174,7 +203,7 @@ window.uaRender = function () {
     + '<td><span class="badge bg-' + (UA_PILL[r.Action] || 'light')
       + (UA_PILL[r.Action] && UA_PILL[r.Action] !== 'light' ? '' : ' text-dark')
       + '">' + ua_esc(r.Action) + '</span></td>'
-    + '<td class="small text-muted">' + (ua_esc(r.Where) || '-') + '</td>'
+    + '<td class="small text-muted">' + ua_where(r) + '</td>'
     + '<td class="fw-bold">' + (ua_esc(r.Order_ID) || '-') + '</td>'
     + '<td>' + (ua_esc(r.Field) || '-') + '</td>'
     + '<td class="small text-muted">' + (ua_esc(r.Old_Value) || '-') + '</td>'

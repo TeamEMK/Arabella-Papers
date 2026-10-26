@@ -143,6 +143,11 @@ const COLUMN_MIGRATIONS = [
   // so its 1,400 existing rows keep the blank they were written with.
   { table: 'activity_log', column: 'ip_address', type: "VARCHAR(64) DEFAULT ''" },
   { table: 'activity_log', column: 'location', type: "VARCHAR(160) DEFAULT ''" },
+  // The browser's own position, where it was allowed. See the table comment:
+  // a street address cannot come from an IP, only from here.
+  { table: 'activity_log', column: 'latitude', type: 'DECIMAL(10,7) NULL' },
+  { table: 'activity_log', column: 'longitude', type: 'DECIMAL(10,7) NULL' },
+  { table: 'activity_log', column: 'accuracy_m', type: 'INT NULL' },
 ];
 
 async function addMissingColumns() {
