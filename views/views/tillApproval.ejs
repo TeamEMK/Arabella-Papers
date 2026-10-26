@@ -507,10 +507,26 @@ async function ta_loadVectors(id) {
     ta_vectorCount = list.length;
     if (list.length) {
       const newest = list[0];
-      note.innerHTML = list.length + ' version' + (list.length > 1 ? 's' : '') + ' on file — newest: '
-        + '<a href="' + newest.file_url + '" target="_blank" rel="noopener">v' + newest.version + '</a> '
-        + '<span class="text-muted">' + (newest.uploaded_at || '') + '</span>'
-        + '. Attaching another adds v' + (newest.version + 1) + ' — nothing is overwritten.';
+      const esc = s => String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      // The newest stands apart, because that is the one in play. The rest
+      // are listed rather than merely counted: keeping old versions is only
+      // worth doing if somebody can actually reach one when the client asks
+      // to go back to it.
+      const older = list.slice(1).map(v =>
+        '<div><a href="' + esc(v.file_url) + '" target="_blank" rel="noopener">v' + v.version + '</a> '
+        + '<span class="text-muted">' + esc(v.file_name) + ' · ' + esc(v.uploaded_at) + '</span></div>').join('');
+      note.innerHTML =
+        '<div><span class="badge bg-success">Latest v' + newest.version + '</span> '
+        + '<a href="' + esc(newest.file_url) + '" target="_blank" rel="noopener">' + esc(newest.file_name) + '</a> '
+        + '<span class="text-muted">' + esc(newest.uploaded_at) + '</span></div>'
+        + (older
+            ? '<details class="mt-1"><summary class="text-muted" style="cursor:pointer">'
+              + list.slice(1).length + ' earlier version'
+              + (list.slice(1).length > 1 ? 's' : '') + '</summary>' + older + '</details>'
+            : '')
+        + '<div class="mt-1">Attaching another saves it as v' + (newest.version + 1)
+        + ' — nothing is overwritten.</div>';
     } else {
       note.textContent = 'No vector file yet. Proofing Done stays locked until one is attached.';
     }
