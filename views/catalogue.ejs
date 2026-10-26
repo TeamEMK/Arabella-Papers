@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Design catalogue — Arabella Papers</title>
+  <%# Standalone, like the tracking page: no session here, so no app shell. %>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+  <style>
+    body { background:#f4f6f9; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 16px 64px; }
+    .brand { letter-spacing:.18em; font-weight:700; color:#5A6E96; }
+    .tile { border:0; border-radius:.6rem; overflow:hidden; background:#fff;
+            box-shadow:0 2px 10px rgba(0,0,0,.06); height:100%; }
+    /* A fixed frame with the picture contained inside it: a catalogue of
+       mixed shapes looks like a jumble otherwise, and cropping to fill would
+       cut the motif somebody is trying to look at. */
+    .frame { height:190px; background:#fbfbfc; display:flex; align-items:center;
+             justify-content:center; cursor:zoom-in; }
+    .frame img { max-width:100%; max-height:100%; object-fit:contain; }
+    .cap { padding:.6rem .7rem; }
+    .code { font-size:.75rem; color:#6c757d; }
+    .pill { cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="text-center mb-4">
+      <div class="brand h5 mb-1">ARABELLA PAPERS</div>
+      <div class="text-muted small">Design catalogue</div>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+      <div id="c_tabs" class="d-flex flex-wrap gap-2"></div>
+      <div class="flex-grow-1"></div>
+      <input type="search" id="c_search" class="form-control form-control-sm" style="max-width:260px"
+             placeholder="Search name or code..." oninput="c_render()">
+    </div>
+
+    <div id="c_out" class="row g-3">
+      <div class="col-12 text-center text-muted py-5">
+        <i class="fas fa-spinner fa-spin me-2"></i>Loading the catalogue...
+      </div>
+    </div>
+  </div>
+
+  <!-- Opened full size, because a motif is chosen by looking at it closely. -->
+  <div class="modal fade" id="c_zoom" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title" id="c_zoomTitle"></h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center p-2">
+          <img id="c_zoomImg" alt="" style="max-width:100%;max-height:72vh;object-fit:contain">
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+var c_items = [], c_cat = '';
+
+var c_esc = v => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function c_tabs(cats) {
+  document.getElementById('c_tabs').innerHTML =
+    ['', ...cats].map(function (c) {
+      return '<span class="badge rounded-pill pill '
+        + (c === c_cat ? 'text-bg-dark' : 'text-bg-light')
+        + '" onclick="c_pick(\'' + c_esc(c) + '\')">' + (c ? c_esc(c) : 'All') + '</span>';
+    }).join('');
+}
+
+function c_pick(cat) {
+  c_cat = cat;
+  c_tabs([...new Set(c_items.map(i => i.category))]);
+  c_render();
+}
+
+function c_render() {
+  var q = (document.getElementById('c_search').value || '').toLowerCase().trim();
+  var rows = c_items.filter(function (i) {
+    if (c_cat && i.category !== c_cat) return false;
+    if (!q) return true;
+    return (i.name || '').toLowerCase().includes(q) || (i.code || '').toLowerCase().includes(q);
+  });
+
+  var out = document.getElementById('c_out');
+  if (!rows.length) {
+    out.innerHTML = '<div class="col-12 text-center text-muted py-5">Nothing to show here yet.</div>';
+    return;
+  }
+
+  out.innerHTML = rows.map(function (i) {
+    return '<div class="col-6 col-md-4 col-lg-3">'
+      + '<div class="tile">'
+      + '<div class="frame" onclick="c_zoom(' + i.id + ')">'
+      + '<img loading="lazy" src="/catalogue/image/' + i.id + '" alt="' + c_esc(i.name || i.category) + '">'
+      + '</div>'
+      + '<div class="cap">'
+      + '<div class="fw-bold text-truncate">' + (c_esc(i.name) || '&nbsp;') + '</div>'
+      + '<div class="code">' + c_esc(i.category) + (i.code ? ' · ' + c_esc(i.code) : '') + '</div>'
+      + '</div></div></div>';
+  }).join('');
+}
+
+function c_zoom(id) {
+  var i = c_items.find(x => x.id === id);
+  if (!i) return;
+  document.getElementById('c_zoomTitle').textContent =
+    (i.name || i.category) + (i.code ? ' · ' + i.code : '');
+  document.getElementById('c_zoomImg').src = '/catalogue/image/' + i.id;
+  new bootstrap.Modal(document.getElementById('c_zoom')).show();
+}
+
+(async function () {
+  try {
+    var json = await fetch('/catalogue/api/items').then(r => r.json());
+    if (!json.success) throw new Error(json.error);
+    c_items = json.data || [];
+    c_tabs(json.categories || []);
+    c_render();
+  } catch (e) {
+    document.getElementById('c_out').innerHTML =
+      '<div class="col-12 text-center text-muted py-5">Could not load the catalogue. Please try again in a moment.</div>';
+  }
+})();
+</script>
+</body>
+</html>

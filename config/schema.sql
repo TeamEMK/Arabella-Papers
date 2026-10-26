@@ -43,6 +43,35 @@ CREATE TABLE IF NOT EXISTS activity_log (
 
 -- =============================================
 -- =============================================
+-- DESIGN CATALOGUE
+-- What the office shows customers: forms, motifs and patterns, put up from
+-- the admin page and read from a public link that needs no login.
+--
+-- The picture lives here rather than on Drive. Drive's share links open a
+-- viewer page, not an image, so a gallery would need its undocumented
+-- thumbnail endpoint - and that is a thing to depend on for an internal
+-- screen, not for a page the client sends to their own customers. Serving
+-- our own bytes has no sharing settings to come undone later.
+-- =============================================
+CREATE TABLE IF NOT EXISTS catalogue_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  category VARCHAR(40) NOT NULL,
+  name VARCHAR(255) DEFAULT '',
+  -- What the customer quotes back when they ring up about one.
+  code VARCHAR(60) DEFAULT '',
+  file_name VARCHAR(255) DEFAULT '',
+  mime_type VARCHAR(100) DEFAULT '',
+  bytes MEDIUMBLOB,
+  -- Taken down without being destroyed: a design pulled from the catalogue is
+  -- usually back next season, and the orders that quote its code remain.
+  is_active TINYINT(1) DEFAULT 1,
+  sort_order INT DEFAULT 0,
+  created_by INT DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_catalogue_live (is_active, category, sort_order)
+);
+
+-- =============================================
 -- VECTOR FILES
 -- The print-ready artwork for an order, which is not the proofing image and
 -- not the client's approval upload - the office keeps all three apart.

@@ -143,6 +143,13 @@ const SECTIONS = [
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
   },
   {
+    // What goes up here is what the client's customers see on /catalogue,
+    // which needs no login - so it is kept to the people who already decide
+    // what the office shows the outside world.
+    id: 'catalogue', group: 'Admin', name: 'Design Catalogue', icon: 'fa-images',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
+  },
+  {
     id: 'users', group: 'Admin', name: 'Users', icon: 'fa-users',
     rule: (role) => role === 'SuperAdmin', locked: true,
   },

@@ -1,0 +1,189 @@
+<%# Design Catalogue — what the public link shows, managed from here %>
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-images me-2"></i>Design Catalogue</h3>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-dark smooth-ui fw-bold" href="/catalogue" target="_blank" rel="noopener">
+        <i class="fas fa-up-right-from-square me-1"></i> Open the public page
+      </a>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="refreshBoard(this, cmFetch, 'designs')">
+        <i class="fas fa-sync-alt me-1"></i> Refresh
+      </button>
+    </div>
+  </div>
+
+  <%# The link is the whole point of this screen, so it is on it rather than
+      something to be reconstructed from memory when a customer asks. %>
+  <div class="alert alert-light border d-flex flex-wrap align-items-center gap-2 py-2">
+    <span class="text-muted small">Customers open this - no login:</span>
+    <code id="cm_link" class="small"></code>
+    <button class="btn btn-sm btn-outline-secondary" onclick="cmCopyLink()">
+      <i class="fas fa-copy me-1"></i>Copy
+    </button>
+  </div>
+
+  <div class="card bg-light-glass mb-3 shadow-sm">
+    <div class="card-body p-3">
+      <div class="row g-2 align-items-end text-dark">
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-bold small mb-0">Category</label>
+          <select id="cm_category" class="form-select form-select-sm"></select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-bold small mb-0">Name</label>
+          <input type="text" id="cm_name" class="form-control form-control-sm" placeholder="e.g. Peacock border">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-bold small mb-0">Code</label>
+          <input type="text" id="cm_code" class="form-control form-control-sm" placeholder="e.g. MTF-021">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-bold small mb-0">Picture</label>
+          <input type="file" id="cm_file" class="form-control form-control-sm"
+                 accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml">
+        </div>
+        <div class="col-12 col-md-2">
+          <button class="btn btn-success btn-sm w-100" onclick="cmAdd(this)">
+            <i class="fas fa-plus me-1"></i>Add
+          </button>
+        </div>
+      </div>
+      <div class="form-text mt-1">JPG, PNG, WEBP, GIF or SVG, up to 4 MB. The code is what a customer quotes back.</div>
+    </div>
+  </div>
+
+  <div class="card bg-light-glass shadow-lg">
+    <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+      <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-list-ul me-2"></i>In the catalogue</h5>
+      <span class="text-muted small" id="cm_count"></span>
+    </div>
+    <div class="card-body">
+      <div class="row g-3" id="cm_grid">
+        <div class="col-12 text-center text-muted py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var cm_items = [], cm_cats = [];
+
+var cm_esc = v => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+document.getElementById('cm_link').textContent = window.location.origin + '/catalogue';
+
+function cmCopyLink() {
+  navigator.clipboard.writeText(window.location.origin + '/catalogue')
+    .then(function () { showToast('success', 'Link copied'); })
+    .catch(function () { showToast('warning', 'Could not copy - select it by hand'); });
+}
+
+window.cmFetch = async function () {
+  const grid = document.getElementById('cm_grid');
+  try {
+    const json = await fetch('/api/catalogue').then(r => r.json());
+    if (!json.success) throw new Error(json.error);
+    cm_items = json.data || [];
+    cm_cats = json.categories || [];
+    const sel = document.getElementById('cm_category');
+    if (!sel.options.length) {
+      sel.innerHTML = cm_cats.map(c => '<option>' + cm_esc(c) + '</option>').join('');
+    }
+    cmRender();
+    return cm_items.length;
+  } catch (e) {
+    grid.innerHTML = '<div class="col-12 text-center text-danger py-4">Could not load the catalogue.</div>';
+    return 0;
+  }
+};
+
+function cmRender() {
+  const grid = document.getElementById('cm_grid');
+  const live = cm_items.filter(i => i.is_active).length;
+  document.getElementById('cm_count').textContent =
+    cm_items.length + ' total · ' + live + ' showing to customers';
+
+  if (!cm_items.length) {
+    grid.innerHTML = '<div class="col-12 text-center text-muted py-4">Nothing added yet.</div>';
+    return;
+  }
+
+  grid.innerHTML = cm_items.map(function (i) {
+    // A hidden one is dimmed rather than removed: the point of this screen is
+    // to see what is and is not reaching customers, side by side.
+    return '<div class="col-6 col-md-3 col-lg-2">'
+      + '<div class="card h-100 ' + (i.is_active ? '' : 'opacity-50') + '">'
+      + '<div style="height:150px;background:#fbfbfc;display:flex;align-items:center;justify-content:center">'
+      + '<img loading="lazy" src="/catalogue/image/' + i.id + '" alt="" style="max-width:100%;max-height:100%;object-fit:contain">'
+      + '</div>'
+      + '<div class="card-body p-2">'
+      + '<div class="fw-bold small text-truncate" title="' + cm_esc(i.name) + '">' + (cm_esc(i.name) || '&nbsp;') + '</div>'
+      + '<div class="text-muted" style="font-size:.72rem">' + cm_esc(i.category)
+      + (i.code ? ' · ' + cm_esc(i.code) : '') + '</div>'
+      + '<div class="d-flex gap-1 mt-2">'
+      + '<button class="btn btn-sm ' + (i.is_active ? 'btn-outline-secondary' : 'btn-outline-success')
+      + ' flex-grow-1" onclick="cmToggle(' + i.id + ',' + (i.is_active ? 0 : 1) + ')">'
+      + (i.is_active ? 'Hide' : 'Show') + '</button>'
+      + '<button class="btn btn-sm btn-outline-danger" onclick="cmRemove(' + i.id + ')" title="Delete">'
+      + '<i class="fas fa-trash"></i></button>'
+      + '</div></div></div></div>';
+  }).join('');
+}
+
+async function cmAdd(btn) {
+  const file = document.getElementById('cm_file').files[0];
+  if (!file) { showToast('warning', 'Choose a picture first.'); return; }
+
+  const fd = new FormData();
+  fd.append('category', document.getElementById('cm_category').value);
+  fd.append('name', document.getElementById('cm_name').value);
+  fd.append('code', document.getElementById('cm_code').value);
+  fd.append('image', file);
+
+  btn.disabled = true;
+  showLoading(true);
+  try {
+    const json = await fetch('/api/catalogue', { method: 'POST', body: fd }).then(r => r.json());
+    showLoading(false);
+    if (!json.success) { showToast('error', json.error || 'Could not add it.'); return; }
+    document.getElementById('cm_file').value = '';
+    document.getElementById('cm_name').value = '';
+    document.getElementById('cm_code').value = '';
+    showToast('success', 'Added - it is on the public page now');
+    cmFetch();
+  } catch (e) {
+    showLoading(false);
+    showToast('error', 'Server error.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function cmToggle(id, on) {
+  const json = await fetch('/api/catalogue/' + id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isActive: !!on }),
+  }).then(r => r.json());
+  if (!json.success) { showToast('error', json.error || 'Could not change it.'); return; }
+  showToast('success', on ? 'Showing to customers' : 'Hidden from customers');
+  cmFetch();
+}
+
+async function cmRemove(id) {
+  const go = await Swal.fire({
+    title: 'Delete this design?',
+    text: 'It goes for good. To take it off the public page without losing it, use Hide.',
+    icon: 'warning', showCancelButton: true, confirmButtonText: 'Delete',
+    confirmButtonColor: '#dc3545',
+  });
+  if (!go.isConfirmed) return;
+  const json = await fetch('/api/catalogue/' + id, { method: 'DELETE' }).then(r => r.json());
+  if (!json.success) { showToast('error', json.error || 'Could not delete it.'); return; }
+  showToast('success', 'Deleted');
+  cmFetch();
+}
+
+cmFetch();
+</script>

@@ -10,6 +10,8 @@ const { ensureSchema } = require('./config/initDb');
 const { injectUser } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const trackRoutes = require('./routes/track');
+const catalogueRoutes = require('./routes/catalogue');
+const catalogueApi = require('./routes/api/catalogue');
 const indexRoutes = require('./routes/index');
 const viewsRoutes = require('./routes/views');
 const ordersApi = require('./routes/api/orders');
@@ -93,6 +95,7 @@ app.set('views', path.join(__dirname, 'views'));
 // Public: no session, no login. Mounted before the app's own
 // routes so nothing downstream can decide it needs one.
 app.use('/track', trackRoutes);
+app.use('/catalogue', catalogueRoutes);
 app.use('/', authRoutes);
 app.use('/', indexRoutes);
 app.use('/views', viewsRoutes);
@@ -103,6 +106,7 @@ app.use('/api/users', usersApi);
 app.use('/api/bulk', bulkApi);
 app.use('/api/logs', logsApi);
 app.use('/api/user-activity', userActivityApi);
+app.use('/api/catalogue', catalogueApi);
 app.use('/api/hr', hrApi);
 app.use('/api/leaves', leavesApi);
 app.use('/api/stock', stockApi);

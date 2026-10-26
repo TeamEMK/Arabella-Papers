@@ -8,7 +8,8 @@
     "dev": "nodemon server.js",
     "mail:test": "node scripts/mail-test.js",
     "smoke:recruitment": "node scripts/smoke-recruitment.js",
-    "smoke:track": "node scripts/smoke-track.js"
+    "smoke:track": "node scripts/smoke-track.js",
+    "smoke:catalogue": "node scripts/smoke-catalogue.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
