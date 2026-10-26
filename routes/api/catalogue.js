@@ -16,7 +16,11 @@ const { requireLogin, requireRole } = require('../../middleware/auth');
 // is set under that - a refusal with a reason beats a request that vanishes.
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 } });
 
-const CATEGORIES = ['Forms', 'Motifs', 'Patterns'];
+// The office's own volumes, which is what the eight PDFs on the shelf are:
+// Borders, three volumes of Fonts, Monograms, Motifs, Patterns, and the order
+// form. "Forms" was a guess from a half-heard recording and meant the order
+// form, not a category of design.
+const CATEGORIES = ['Borders', 'Fonts', 'Monograms', 'Motifs', 'Patterns', 'Order Form'];
 
 // Pictures only. This is a gallery - a PDF or a spreadsheet here would show
 // as a broken image on a page the client's customers are looking at.
