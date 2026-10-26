@@ -107,6 +107,16 @@ document.getElementById('tillApprovalRoot').innerHTML = `
         <input type="number" class="form-control" id="ta_dispatchDays" min="0" max="365" step="1" placeholder="e.g. 7">
         <div class="form-text">Optional — leave it blank if the date is not settled yet. Production can fill it in later.</div>
       </div>
+      <!-- The print-ready artwork, which is not the proofing image and not
+           the approval upload below. Proofing Done stays locked until one of
+           these exists, so this sits above the box it unlocks. -->
+      <div class="mb-3">
+        <label class="form-label text-dark fw-bold">Vector File</label>
+        <input class="form-control" type="file" id="ta_vectorUpload"
+               accept=".ai,.eps,.cdr,.svg,.pdf,application/pdf,application/postscript,image/svg+xml"
+               onchange="ta_vectorPicked()">
+        <div class="form-text" id="ta_vectorNote">Checking...</div>
+      </div>
       <div class="mb-3"><label class="form-label text-dark fw-bold">Final Approval Upload</label><input class="form-control" type="file" id="ta_fileUpload" accept="image/*,application/pdf"></div>
       <div class="mb-3"><label class="form-label text-dark fw-bold">Remark</label><textarea class="form-control" id="ta_remark" rows="2" placeholder="Enter remark..."></textarea></div>
     </div>
@@ -476,7 +486,70 @@ function ta_openEdit(id) {
   });
   ta_syncDispatchNotice();
   ta_syncOrderType();
+  document.getElementById('ta_vectorUpload').value = '';
+  ta_loadVectors(id);
   new bootstrap.Modal(document.getElementById('ta_editModal')).show();
+}
+
+// How many versions of the artwork this order already has, and therefore
+// whether Proofing Done may be chosen at all.
+var ta_vectorCount = 0;
+
+async function ta_loadVectors(id) {
+  const note = document.getElementById('ta_vectorNote');
+  ta_vectorCount = 0;
+  ta_lockProofing();
+  note.textContent = 'Checking...';
+  try {
+    const json = await fetch('/api/dashboards/till-approval/' + encodeURIComponent(id) + '/vectors')
+      .then(r => r.json());
+    const list = (json && json.data) || [];
+    ta_vectorCount = list.length;
+    if (list.length) {
+      const newest = list[0];
+      note.innerHTML = list.length + ' version' + (list.length > 1 ? 's' : '') + ' on file — newest: '
+        + '<a href="' + newest.file_url + '" target="_blank" rel="noopener">v' + newest.version + '</a> '
+        + '<span class="text-muted">' + (newest.uploaded_at || '') + '</span>'
+        + '. Attaching another adds v' + (newest.version + 1) + ' — nothing is overwritten.';
+    } else {
+      note.textContent = 'No vector file yet. Proofing Done stays locked until one is attached.';
+    }
+  } catch (e) {
+    // Said plainly rather than assumed either way: the server decides in the
+    // end, so a failed check must not quietly unlock the option.
+    note.textContent = 'Could not check the vector files — try reopening this order.';
+  }
+  ta_lockProofing();
+}
+
+// Locked unless the order already has artwork, or some is being attached now.
+// The server refuses it regardless; this is so nobody picks an option that
+// is going to be thrown back at them.
+function ta_lockProofing() {
+  const radio = document.getElementById('ta_st_proofing');
+  const picking = document.getElementById('ta_vectorUpload').files.length > 0;
+  const ok = ta_vectorCount > 0 || picking;
+  radio.disabled = !ok;
+  const label = document.querySelector('label[for="ta_st_proofing"]');
+  if (label) {
+    label.classList.toggle('text-muted', !ok);
+    label.classList.toggle('text-info', ok);
+    label.title = ok ? '' : 'Attach the vector file first';
+  }
+  // Leaving the form on a choice that cannot be saved is how somebody ends up
+  // pressing Save and being told no for a reason they cannot see.
+  if (!ok && radio.checked) {
+    radio.checked = false;
+    ta_syncDispatchNotice();
+    ta_syncOrderType();
+  }
+}
+
+function ta_vectorPicked() {
+  ta_lockProofing();
+  const note = document.getElementById('ta_vectorNote');
+  const f = document.getElementById('ta_vectorUpload').files[0];
+  if (f) note.textContent = 'Will be saved as v' + (ta_vectorCount + 1) + ': ' + f.name;
 }
 function ta_orderType() {
   return document.querySelector('input[name="ta_orderType"]:checked')?.value || '';
@@ -507,6 +580,8 @@ async function taHandleApprovalSubmit() {
   }
   formData.append('userEmail', APP_USER.email);
   if(file) formData.append('file', file);
+  const vector = document.getElementById('ta_vectorUpload').files[0];
+  if(vector) formData.append('vectorFile', vector);
   showLoading(true);
   try {
     const res = await fetch(`/api/dashboards/till-approval/${ta_editId}`, {method:'PUT', body:formData});

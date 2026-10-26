@@ -443,15 +443,80 @@ function orderTypeColumns(status, body) {
   return Object.keys(cols).length ? cols : null;
 }
 
+// GET /api/dashboards/till-approval/:id/vectors — every version, newest first.
+//
+// Asked for when the approval modal opens, so the Proofing Done option knows
+// whether it may be chosen. It returns the whole list rather than a count
+// because the same answer is what "go back to version 7" will need.
+router.get('/till-approval/:id/vectors', requireLogin, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT version, file_url, file_name, uploaded_by,
+              DATE_FORMAT(uploaded_at, '%d %b %Y %h:%i %p') AS uploaded_at
+         FROM order_vector_files
+        WHERE order_id = ?
+        ORDER BY version DESC`,
+      [req.params.id],
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('Vector list failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // PUT /api/dashboards/till-approval/:id
-router.put('/till-approval/:id', requireLogin, upload.single('file'), async (req, res) => {
+router.put('/till-approval/:id',
+  requireLogin,
+  // Two files now, each with its own meaning: `file` is the client's approval
+  // upload as before, `vectorFile` is the print-ready artwork.
+  upload.fields([{ name: 'file', maxCount: 1 }, { name: 'vectorFile', maxCount: 1 }]),
+  async (req, res) => {
   try {
     const { approvalStatus, remark, userEmail } = req.body;
     const orderId = req.params.id;
+    const approvalUpload = (req.files && req.files.file && req.files.file[0]) || null;
+    const vectorUpload = (req.files && req.files.vectorFile && req.files.vectorFile[0]) || null;
+
+    // Proofing Done cannot be claimed before the artwork exists.
+    //
+    // The office asked for this and it belongs here rather than only on the
+    // radio button: the status is a form field, and a disabled radio stops
+    // nobody who sends the request directly. A file arriving in this same
+    // submission counts - that is the ordinary way it will happen, somebody
+    // attaching the vector and marking it done in one go.
+    if (approvalStatus === 'Proofing Done' && !vectorUpload) {
+      const [[had]] = await db.query(
+        'SELECT COUNT(*) AS n FROM order_vector_files WHERE order_id = ?', [orderId]);
+      if (!had.n) {
+        return res.status(400).json({
+          success: false,
+          error: 'Upload the vector file first — Proofing Done cannot be set without it.',
+        });
+      }
+    }
 
     let fileUrl = null;
-    if (req.file) {
-      fileUrl = await uploadToDrive(req.file.buffer, req.file.originalname, req.file.mimetype);
+    if (approvalUpload) {
+      fileUrl = await uploadToDrive(approvalUpload.buffer, approvalUpload.originalname, approvalUpload.mimetype);
+    }
+
+    // Kept as its own version rather than overwriting, so "go back to version
+    // 7" stays answerable. The number is worked out from what is already
+    // there, so versions read 1, 2, 3 per order however many orders there are.
+    if (vectorUpload) {
+      const vectorUrl = await uploadToDrive(
+        vectorUpload.buffer, vectorUpload.originalname, vectorUpload.mimetype);
+      const [[last]] = await db.query(
+        'SELECT IFNULL(MAX(version), 0) AS v FROM order_vector_files WHERE order_id = ?', [orderId]);
+      await db.query(
+        `INSERT INTO order_vector_files (order_id, version, file_url, file_name, uploaded_by)
+         VALUES (?,?,?,?,?)`,
+        [orderId, last.v + 1, vectorUrl, vectorUpload.originalname.slice(0, 255),
+         userEmail || req.session.user.email],
+      );
+      await logOrderEvent(orderId, 'Vector file',
+        'v' + (last.v + 1) + ' — ' + vectorUpload.originalname, req.session.user).catch(() => {});
     }
 
     // Made again, and the last one has already gone out: that is a new job on
@@ -529,6 +594,30 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
   try {
     const { updates } = req.body;
     if (!Array.isArray(updates)) return res.json({ success: false, error: 'Invalid data' });
+
+    // The same rule the single box enforces, or this is simply the way round
+    // it: tick fifty orders, choose Proofing Done, and every one of them gets
+    // the status without any artwork existing. There is nowhere to attach a
+    // file in a bulk update, so these are refused by name rather than blocked
+    // silently - the office needs to know which orders to go and open.
+    const wantProofing = updates.filter(u => u.status === 'Proofing Done').map(u => u.id);
+    if (wantProofing.length) {
+      const [withFiles] = await db.query(
+        `SELECT DISTINCT order_id FROM order_vector_files WHERE order_id IN (?)`,
+        [wantProofing],
+      );
+      const have = new Set(withFiles.map(r => r.order_id));
+      const missing = wantProofing.filter(id => !have.has(id));
+      if (missing.length) {
+        return res.status(400).json({
+          success: false,
+          error: 'These have no vector file yet, so Proofing Done cannot be set on them: '
+            + missing.slice(0, 10).join(', ')
+            + (missing.length > 10 ? ` and ${missing.length - 10} more` : '')
+            + '. Open each one and attach the vector file.',
+        });
+      }
+    }
 
     let count = 0;
     let sentBack = 0;

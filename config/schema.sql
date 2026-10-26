@@ -42,6 +42,32 @@ CREATE TABLE IF NOT EXISTS activity_log (
 );
 
 -- =============================================
+-- =============================================
+-- VECTOR FILES
+-- The print-ready artwork for an order, which is not the proofing image and
+-- not the client's approval upload - the office keeps all three apart.
+--
+-- A row per version rather than a column on the order. The order table holds
+-- `upload_design` for the first proof and `revision_design_upload` for every
+-- revision after it, which means one box for all of them: on the 217 orders
+-- that went past one revision, each upload wrote over the last and the older
+-- files are simply gone. A client asking to go back to an earlier version
+-- cannot be answered from a column that only ever holds the newest.
+-- =============================================
+CREATE TABLE IF NOT EXISTS order_vector_files (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id VARCHAR(50) NOT NULL,
+  -- 1, 2, 3... per order, so "version 7" means something to say out loud.
+  version INT NOT NULL DEFAULT 1,
+  file_url TEXT,
+  file_name VARCHAR(255) DEFAULT '',
+  uploaded_by VARCHAR(150) DEFAULT '',
+  uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_vector_order (order_id),
+  UNIQUE KEY uq_vector_version (order_id, version)
+);
+
+-- =============================================
 -- ORDER LOGS TABLE
 -- Who changed what on an order, and when. One row per field that actually
 -- changed, so a saved-but-untouched form leaves nothing behind.
