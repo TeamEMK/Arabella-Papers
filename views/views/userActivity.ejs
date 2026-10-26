@@ -59,6 +59,7 @@
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">#</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">When</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">What</th>
+              <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Where from</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Order</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">Field</th>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">From</th>
@@ -66,7 +67,7 @@
             </tr>
           </thead>
           <tbody id="ua_tbody">
-            <tr><td colspan="7" class="text-center py-4 text-muted">Choose somebody above.</td></tr>
+            <tr><td colspan="8" class="text-center py-4 text-muted">Choose somebody above.</td></tr>
           </tbody>
         </table>
       </div>
@@ -80,18 +81,12 @@ var ua_rows = [];
 var ua_esc = v => String(v == null ? '' : v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-// The API hands back whatever MySQL gives for a DATETIME. Read as a plain
-// local time: these are IST wall-clock values and re-zoning them here would
-// move every entry by five and a half hours.
+// The API now sends these already written out in IST. Re-parsing them here
+// was the bug: JSON had turned the Date into UTC, this read it back as local,
+// and every entry showed five and a half hours early - an 08:11 login read as
+// 02:41. Nothing to do now but print what arrived.
 function ua_when(v) {
-  if (!v) return '-';
-  const s = String(v).replace('T', ' ').replace('Z', '');
-  const d = new Date(s.slice(0, 19).replace(' ', 'T'));
-  if (isNaN(d)) return ua_esc(s.slice(0, 16));
-  return d.toLocaleString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: true,
-  });
+  return v ? ua_esc(v) : '-';
 }
 
 // Account entries are the ones that say nothing about an order, so they are
@@ -124,7 +119,7 @@ window.uaFetch = async function () {
     ua_rows = [];
     cards.style.display = 'none';
     document.getElementById('ua_count').textContent = '';
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">Choose somebody above.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Choose somebody above.</td></tr>';
     return 0;
   }
 
@@ -136,12 +131,12 @@ window.uaFetch = async function () {
   put('from', 'ua_from');
   put('to', 'ua_to');
 
-  tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</td></tr>';
 
   const json = await fetch('/api/user-activity?' + params.toString()).then(r => r.json());
   if (!json.success) {
     cards.style.display = 'none';
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-danger">'
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">'
       + ua_esc(json.error || 'Could not load this.') + '</td></tr>';
     return 0;
   }
@@ -168,7 +163,7 @@ window.uaRender = function () {
     : '';
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">Nothing recorded for this filter.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Nothing recorded for this filter.</td></tr>';
     return;
   }
 
@@ -179,6 +174,7 @@ window.uaRender = function () {
     + '<td><span class="badge bg-' + (UA_PILL[r.Action] || 'light')
       + (UA_PILL[r.Action] && UA_PILL[r.Action] !== 'light' ? '' : ' text-dark')
       + '">' + ua_esc(r.Action) + '</span></td>'
+    + '<td class="small text-muted">' + (ua_esc(r.Where) || '-') + '</td>'
     + '<td class="fw-bold">' + (ua_esc(r.Order_ID) || '-') + '</td>'
     + '<td>' + (ua_esc(r.Field) || '-') + '</td>'
     + '<td class="small text-muted">' + (ua_esc(r.Old_Value) || '-') + '</td>'

@@ -4,6 +4,20 @@ const db = require('../../config/db');
 const { requireLogin } = require('../../middleware/auth');
 const { rootOrderId } = require('../../utils/remake');
 
+// Formatted here, not in the browser.
+//
+// mysql2 reads these as JS Dates through a +05:30 connection, so the instant
+// is right - but JSON turns a Date into UTC, and the page was then reading
+// that back as local time and showing every entry five and a half hours
+// early. A login at 08:11 read as 02:41. The Logs page already names the zone
+// on the way out for exactly this reason; this now does the same.
+const IST = { timeZone: 'Asia/Kolkata', hour12: true };
+function istText(v) {
+  if (!v) return '';
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d) ? String(v) : d.toLocaleString('en-GB', IST);
+}
+
 // ══════════════════════════════════════════════════════
 // ONE PERSON, EVERYTHING THEY DID
 //
@@ -81,12 +95,16 @@ router.get('/', requireLogin, async (req, res) => {
     const [rows] = await db.query(
       `SELECT * FROM (
          SELECT 'Account' AS kind, a.action AS action, '' AS order_id, '' AS field,
-                '' AS old_value, '' AS new_value, a.role AS role, a.logged_at AS at
+                '' AS old_value, '' AS new_value, a.role AS role,
+                IFNULL(a.ip_address,'') AS ip, IFNULL(a.location,'') AS place,
+                a.logged_at AS at
            FROM activity_log a
           WHERE a.email = ?${act.sql}
          UNION ALL
          SELECT 'Order' AS kind, o.action, o.order_id, IFNULL(o.field,''),
-                IFNULL(o.old_value,''), IFNULL(o.new_value,''), '' AS role, o.changed_at
+                IFNULL(o.old_value,''), IFNULL(o.new_value,''), '' AS role,
+                '' AS ip, '' AS place,
+                o.changed_at
            FROM order_logs o
           WHERE o.changed_by = ?${ord.sql}
        ) t
@@ -123,8 +141,8 @@ router.get('/', requireLogin, async (req, res) => {
       summary: {
         logins: counts.logins,
         orderActions: counts.orderActions,
-        firstSeen: seen.first_seen,
-        lastSeen: seen.last_seen,
+        firstSeen: istText(seen.first_seen),
+        lastSeen: istText(seen.last_seen),
         capped: rows.length >= MAX_ROWS,
       },
       data: rows.map(r => ({
@@ -137,7 +155,11 @@ router.get('/', requireLogin, async (req, res) => {
         Old_Value: r.old_value || '',
         New_Value: r.new_value || '',
         Role: r.role || '',
-        At: r.at,
+        // Only a login or a logout has a somewhere. An order change is made
+        // from wherever that person already was, and the address would be the
+        // same one repeated down the column.
+        Where: [r.place, r.ip].filter(Boolean).join(' · '),
+        At: istText(r.at),
       })),
     });
   } catch (err) {

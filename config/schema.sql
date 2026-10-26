@@ -32,6 +32,12 @@ CREATE TABLE IF NOT EXISTS activity_log (
   action VARCHAR(50),
   role VARCHAR(100),
   domain VARCHAR(100),
+  -- Where the person was when they signed in. The address on its own means
+  -- little to whoever reads the log, so the town Vercel worked out at the
+  -- edge is kept beside it. Both are blank on rows written before this, and
+  -- on anything not running behind Vercel.
+  ip_address VARCHAR(64) DEFAULT '',
+  location VARCHAR(160) DEFAULT '',
   logged_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

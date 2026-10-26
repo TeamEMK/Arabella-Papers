@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
+const { ipOf, locationOf } = require('../utils/whereFrom');
 
 // GET /login
 router.get('/login', (req, res) => {
@@ -28,8 +29,8 @@ router.post('/login', async (req, res) => {
 
     // Log activity
     await db.query(
-      'INSERT INTO activity_log (email, action, role, domain) VALUES (?,?,?,?)',
-      [user.email, 'Login', user.role, user.domain]
+      'INSERT INTO activity_log (email, action, role, domain, ip_address, location) VALUES (?,?,?,?,?,?)',
+      [user.email, 'Login', user.role, user.domain, ipOf(req), locationOf(req)]
     );
 
     // Set session
@@ -49,20 +50,30 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Both ways out write the same row.
+//
+// Only the POST used to, and the GET is a plain link anyone can follow - which
+// is most of why the log holds 1,326 logins against 91 logouts. A log that
+// records arrivals and drops most departures cannot answer how long somebody
+// was on the system, which is the main thing anybody asks it.
+async function recordLogout(req) {
+  const user = req.session?.user;
+  if (!user) return;
+  await db.query(
+    'INSERT INTO activity_log (email, action, role, domain, ip_address, location) VALUES (?,?,?,?,?,?)',
+    [user.email, 'Logout', user.role, user.domain, ipOf(req), locationOf(req)]
+  ).catch(() => {});
+}
+
 // POST /logout
 router.post('/logout', async (req, res) => {
-  const user = req.session?.user;
-  if (user) {
-    await db.query(
-      'INSERT INTO activity_log (email, action, role, domain) VALUES (?,?,?,?)',
-      [user.email, 'Logout', user.role, user.domain]
-    ).catch(() => {});
-  }
+  await recordLogout(req);
   req.session.destroy(() => res.redirect('/login'));
 });
 
 // GET /logout (fallback)
-router.get('/logout', (req, res) => {
+router.get('/logout', async (req, res) => {
+  await recordLogout(req);
   req.session.destroy(() => res.redirect('/login'));
 });
 

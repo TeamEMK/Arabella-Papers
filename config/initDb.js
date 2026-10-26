@@ -139,6 +139,10 @@ const COLUMN_MIGRATIONS = [
   // on the table itself for why the outcome does not go in `notes`.
   { table: 'recruit_candidates', column: 'sourcing', type: "VARCHAR(160) DEFAULT ''" },
   { table: 'recruit_candidates', column: 'internal_remark', type: 'TEXT NULL' },
+  // Where somebody signed in from. activity_log predates both by a long way,
+  // so its 1,400 existing rows keep the blank they were written with.
+  { table: 'activity_log', column: 'ip_address', type: "VARCHAR(64) DEFAULT ''" },
+  { table: 'activity_log', column: 'location', type: "VARCHAR(160) DEFAULT ''" },
 ];
 
 async function addMissingColumns() {
