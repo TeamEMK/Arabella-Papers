@@ -9,6 +9,7 @@ const db = require('./config/db');
 const { ensureSchema } = require('./config/initDb');
 const { injectUser } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
+const trackRoutes = require('./routes/track');
 const indexRoutes = require('./routes/index');
 const viewsRoutes = require('./routes/views');
 const ordersApi = require('./routes/api/orders');
@@ -89,6 +90,9 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 // ── ROUTES ──
+// Public: no session, no login. Mounted before the app's own
+// routes so nothing downstream can decide it needs one.
+app.use('/track', trackRoutes);
 app.use('/', authRoutes);
 app.use('/', indexRoutes);
 app.use('/views', viewsRoutes);
