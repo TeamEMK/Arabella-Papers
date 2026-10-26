@@ -131,6 +131,13 @@ const SECTIONS = [
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
   },
   {
+    // Logs answers "what happened to this order". This answers "what did this
+    // person do", which needed both logs at once and the users table to know
+    // they describe the same people under different names.
+    id: 'userActivity', group: 'Admin', name: 'User Activity', icon: 'fa-user-clock',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
+  },
+  {
     id: 'users', group: 'Admin', name: 'Users', icon: 'fa-users',
     rule: (role) => role === 'SuperAdmin', locked: true,
   },
