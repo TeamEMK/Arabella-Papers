@@ -41,8 +41,8 @@
       background: var(--rail-bg); border-right: 1px solid var(--hair);
       display: flex; flex-direction: column; z-index: 40;
     }
-    .crest { padding: 34px 26px 26px; text-align: center; }
-    .crest .mark { color: var(--gold); font-size: 26px; line-height: 1; }
+    .crest { padding: 30px 26px 22px; text-align: center; }
+    .crest .mark { color: var(--gold); width: 58px; height: 58px; display: inline-block; }
     .crest h1 {
       font-family: 'Cormorant Garamond', serif; font-weight: 400;
       font-size: 27px; letter-spacing: .24em; margin: 14px 0 0;
@@ -58,7 +58,13 @@
       line-height: 1.9; text-indent: .26em;
     }
 
-    .cats { padding: 10px 0; flex: 1; overflow-y: auto; }
+    /* No inner scrollbar. Six volumes and a button fit; a bar appearing down
+       the middle of the rail is the one thing on this page that would look
+       like a settings screen. If the list ever outgrows the rail, the rail
+       scrolls as a whole. */
+    .cats { padding: 10px 0; }
+    .rail { overflow-y: auto; scrollbar-width: none; }
+    .rail::-webkit-scrollbar { width: 0; height: 0; }
     .cat {
       display: flex; align-items: center; gap: 15px; width: 100%;
       background: transparent; border: 0; border-left: 2px solid transparent;
@@ -67,18 +73,18 @@
       font-size: 13px; letter-spacing: .17em; text-align: left;
       text-transform: uppercase; transition: background .18s, color .18s, border-color .18s;
     }
-    .cat i { color: var(--gold); width: 17px; font-size: 14px; opacity: .78; transition: opacity .18s; }
+    .cat svg { color: var(--gold); width: 19px; height: 19px; flex: 0 0 19px; opacity: .8; transition: opacity .18s; }
     .cat:hover { background: rgba(201,162,39,.06); color: #fff; }
-    .cat:hover i { opacity: 1; }
+    .cat:hover svg { opacity: 1; }
     .cat.on {
       background: linear-gradient(90deg, rgba(201,162,39,.16), transparent 85%);
       border-left-color: var(--gold); color: #fff;
     }
-    .cat.on i { opacity: 1; }
+    .cat.on svg { opacity: 1; }
     .cat .n { margin-left: auto; font-size: 12px; letter-spacing: .06em; color: var(--dim); }
     .cat.on .n { color: var(--gold-lit); }
 
-    .rail-b { padding: 8px 26px 30px; }
+    .rail-b { padding: 22px 26px 30px; margin-top: auto; }
     .ownbtn {
       display: block; width: 100%; padding: 15px 10px;
       background: transparent; border: 1px solid rgba(201,162,39,.45); border-radius: 2px;
@@ -139,8 +145,11 @@
     /* The scan is white; it is matted on warm paper and lifted off the dark
        field. That contrast is doing most of the work on this page, so the
        frame stays quiet and never crops. */
+    /* Near-white rather than cream. The scans are white paper with their own
+       margins, so a cream mat behind them drew a second rectangle inside the
+       first and the card read as a picture of a page instead of a page. */
     .sheet-img {
-      background: var(--paper); padding: 16px; height: 300px;
+      background: #fdfcf9; padding: 6px; height: 300px;
       display: flex; align-items: center; justify-content: center;
       cursor: zoom-in; box-shadow: 0 10px 34px rgba(0,0,0,.55);
       transition: transform .22s ease, box-shadow .22s ease;
@@ -280,8 +289,29 @@
 <body>
 
 <aside class="rail" id="rail">
+  <%# Drawn rather than set in an icon font. A medallion is the thing a
+      stationer's mark actually looks like, and no icon in Font Awesome is
+      one - the nearest was a pinwheel. %>
   <div class="crest">
-    <div class="mark"><i class="fas fa-fan"></i></div>
+    <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+      <g fill="none" stroke="currentColor" stroke-width="1.1">
+        <circle cx="32" cy="32" r="5.5"/>
+        <circle cx="32" cy="32" r="14.5" stroke-opacity=".5"/>
+        <circle cx="32" cy="32" r="21" stroke-opacity=".28"/>
+        <g stroke-opacity=".9">
+          <path d="M32 10c3.6 4.2 3.6 9.3 0 13.5-3.6-4.2-3.6-9.3 0-13.5z"/>
+          <path d="M32 54c-3.6-4.2-3.6-9.3 0-13.5 3.6 4.2 3.6 9.3 0 13.5z"/>
+          <path d="M10 32c4.2-3.6 9.3-3.6 13.5 0-4.2 3.6-9.3 3.6-13.5 0z"/>
+          <path d="M54 32c-4.2 3.6-9.3 3.6-13.5 0 4.2-3.6 9.3-3.6 13.5 0z"/>
+        </g>
+        <g stroke-opacity=".6">
+          <path d="M16.4 16.4c4.9 1.4 8.1 4.6 9.5 9.5-4.9-1.4-8.1-4.6-9.5-9.5z"/>
+          <path d="M47.6 47.6c-4.9-1.4-8.1-4.6-9.5-9.5 4.9 1.4 8.1 4.6 9.5 9.5z"/>
+          <path d="M47.6 16.4c-1.4 4.9-4.6 8.1-9.5 9.5 1.4-4.9 4.6-8.1 9.5-9.5z"/>
+          <path d="M16.4 47.6c1.4-4.9 4.6-8.1 9.5-9.5-1.4 4.9-4.6 8.1-9.5 9.5z"/>
+        </g>
+      </g>
+    </svg>
     <h1 class="serif">ARABELLA</h1>
     <div class="papers">PAPERS</div>
     <div class="rule"></div>
@@ -381,12 +411,27 @@ var esc = function (v) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 };
 
-// A face for each volume. Nothing turns on these - they are there because a
-// row of identical bullets is a list, and this is a catalogue.
-var CAT_ICON = {
-  'Borders': 'fa-border-style', 'Fonts': 'fa-font', 'Monograms': 'fa-crown',
-  'Motifs': 'fa-spa', 'Order Form': 'fa-file-lines', 'Patterns': 'fa-square-full',
+// A drawn mark for each volume, not an icon from a font.
+//
+// Font Awesome has a crown and a flower and a box, and a row of those beside
+// words like Monograms and Motifs looks like a settings menu. These are line
+// drawings of the thing each volume actually contains - a rule, a letterform,
+// a cipher, a bloom, a sheet, a repeat.
+var CAT_MARK = {
+  'Borders':    '<path d="M2 6h16M2 10h16M2 14h16" stroke-opacity=".9"/><path d="M6 6v8M14 6v8" stroke-opacity=".45"/>',
+  'Fonts':      '<path d="M4 16 10 4l6 12M6.6 12h6.8"/>',
+  'Monograms':  '<path d="M10 3c3.9 0 7 3.1 7 7s-3.1 7-7 7-7-3.1-7-7 3.1-7 7-7z" stroke-opacity=".35"/><path d="M7 13V7l3 4 3-4v6"/>',
+  'Motifs':     '<path d="M10 3c1.9 2.3 1.9 5.1 0 7.4-1.9-2.3-1.9-5.1 0-7.4zM3 10c2.3-1.9 5.1-1.9 7.4 0-2.3 1.9-5.1 1.9-7.4 0zM17 10c-2.3 1.9-5.1 1.9-7.4 0 2.3-1.9 5.1-1.9 7.4 0zM10 17c-1.9-2.3-1.9-5.1 0-7.4 1.9 2.3 1.9 5.1 0 7.4z"/>',
+  'Order Form': '<path d="M5 3h7l3 3v11H5z"/><path d="M12 3v3h3" stroke-opacity=".5"/><path d="M7.5 9.5h5M7.5 12.5h5" stroke-opacity=".7"/>',
+  'Patterns':   '<path d="M4 4h5v5H4zM11 4h5v5h-5zM4 11h5v5H4zM11 11h5v5h-5z" stroke-opacity=".75"/>',
 };
+var CAT_ALL = '<path d="M10 2.5 12.3 7l5 .7-3.6 3.5.9 5-4.6-2.4L5.4 16l.9-5L2.7 7.7l5-.7z"/>';
+
+function c_mark(cat) {
+  return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.1" '
+    + 'stroke-linecap="round" stroke-linejoin="round">'
+    + (cat ? (CAT_MARK[cat] || CAT_ALL) : CAT_ALL) + '</svg>';
+}
 
 function c_rail(open) {
   document.getElementById('rail').classList.toggle('open', open);
@@ -400,7 +445,7 @@ function c_cats() {
   document.getElementById('cats').innerHTML =
     [''].concat(cats).map(function (c) {
       return '<button class="cat' + (c === c_cat ? ' on' : '') + '" onclick="c_pickCat(\'' + esc(c) + '\')">'
-        + '<i class="fas ' + (c ? (CAT_ICON[c] || 'fa-layer-group') : 'fa-border-all') + '"></i>'
+        + c_mark(c)
         + '<span>' + (c ? esc(c) : 'All Designs') + '</span>'
         + '<span class="n">' + (c ? counts[c] : c_items.length) + '</span></button>';
     }).join('');
