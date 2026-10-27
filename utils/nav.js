@@ -37,8 +37,12 @@ const SECTIONS = [
   // raising one is guarded in the API rather than by hiding the tab.
   { id: 'corrections', group: 'Orders', name: 'Corrections', icon: 'fa-pen-ruler', rule: () => true },
   {
+    // 'Production & Dispatch' is named in full rather than caught by an
+    // includes() on 'Production': a role matched by a fragment is a trap for
+    // whoever adds the next role with that word in it.
     id: 'productionBD', group: 'Production', name: 'Production Dashboard', icon: 'fa-industry',
-    rule: (role) => role === 'SuperAdmin' || role.includes('Production Manager'),
+    rule: (role) => role === 'SuperAdmin' || role.includes('Production Manager')
+      || role === 'Production & Dispatch',
   },
   // Same board, the orders from before the August cutoff. Whoever works the
   // queue is who needs to look one of them up, so it goes right below it.
@@ -67,11 +71,15 @@ const SECTIONS = [
   },
   {
     id: 'dispatchBD', group: 'Dispatch', name: 'Dispatch Dashboard', icon: 'fa-truck-fast',
-    rule: (role) => role === 'SuperAdmin' || role === 'Accounts',
+    rule: (role) => role === 'SuperAdmin' || role === 'Accounts'
+      || role === 'Production & Dispatch',
   },
   // The same board, for parcels sent before the cutoff. Whoever works the
   // queue is who needs to look one up, so it sits right below it.
   {
+    // The two archive boards stay with the roles that owned them. This one is
+    // for somebody working today's floor and today's parcels; the cutoff
+    // archives are a different job and were not asked for.
     id: 'oldDispatch', group: 'Dispatch', name: 'Backup Dispatch', icon: 'fa-box-archive',
     rule: (role) => role === 'SuperAdmin' || role === 'Accounts',
   },

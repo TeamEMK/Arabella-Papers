@@ -5,7 +5,13 @@ const db = require('../../config/db');
 const { requireRole } = require('../../middleware/auth');
 
 const MIN_PASSWORD = 8;
-const ROLES = ['SuperAdmin', 'Designer', 'TillApprover', 'Production Manager', 'Accounts', 'HR'];
+// 'Production & Dispatch' is for somebody who works the floor and the parcels
+// both, and neither existing role covers it: Production Manager has no
+// Dispatch board and Accounts has no Production board, so the job could only
+// be done from SuperAdmin, which hands over the whole system to do two
+// screens' worth of work.
+const ROLES = ['SuperAdmin', 'Designer', 'TillApprover', 'Production Manager',
+  'Production & Dispatch', 'Accounts', 'HR'];
 const DOMAINS = ['', 'Head'];
 
 const onlySuperAdmin = requireRole('SuperAdmin');
