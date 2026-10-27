@@ -19,10 +19,18 @@ process.env.VERCEL = '1';
 process.env.ADMIN_EMAIL = 'probe@test.local';
 process.env.ADMIN_PASSWORD = 'probe-pass-123';
 
+// SMTP stubbed, and every letter kept, so the suite can check who was written
+// to as well as whether the request succeeded - the two are not the same, and
+// the one that matters here is that a hidden design never leaves the building.
+const SENT = [];
 const mailerPath = require.resolve(path.join(ROOT, 'utils/mailer.js'));
 require.cache[mailerPath] = {
   id: mailerPath, filename: mailerPath, loaded: true,
-  exports: { sendMail: async () => ({ sent: true }), verifyMail: async () => ({ ok: true }), isMailConfigured: () => true },
+  exports: {
+    sendMail: async (m) => { SENT.push(m); return { sent: true }; },
+    verifyMail: async () => ({ ok: true }),
+    isMailConfigured: () => true,
+  },
 };
 
 let BASE = '';
@@ -158,6 +166,48 @@ const PNG = Buffer.from(
   await asAdmin('PUT', '/api/catalogue/' + hiddenId, { isActive: true });
   r = await get('/catalogue/api/items');
   check('it comes back on the public page', r.json.data.length === 2, r.json.data.length);
+
+  console.log('\nEmailing a selection');
+  SENT.length = 0;
+  r = await get('/catalogue/api/items');
+  const liveIds = r.json.data.map(x => x.id);
+
+  const mail = (body) => fetch(BASE + '/catalogue/api/email', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(async x => ({ status: x.status, json: await x.json().catch(() => null) }));
+
+  let m = await mail({ email: 'customer@example.com', ids: liveIds });
+  check('a customer can email their picks without logging in',
+    m.json && m.json.success === true, m.json);
+  check('the mail went to them', SENT.some(s => s.to === 'customer@example.com'),
+    SENT.map(s => s.to));
+  check('and the office got a copy', SENT.length >= 2, SENT.map(s => s.to));
+
+  // The one that matters: a design taken down must not be reachable by
+  // quoting its number at the mailer either.
+  //
+  // Hidden again first. The step above deliberately put it back on the public
+  // page, and an earlier version of this check ran against it while it was
+  // live and passed for the wrong reason.
+  await asAdmin('PUT', '/api/catalogue/' + hiddenId, { isActive: false });
+  SENT.length = 0;
+  m = await mail({ email: 'customer@example.com', ids: [hiddenId] });
+  check('a hidden design cannot be mailed out by its id',
+    m.json && m.json.success === false, m.json);
+  check('and nothing was sent', SENT.length === 0, SENT.map(s => s.to));
+
+  m = await mail({ email: 'not-an-email', ids: liveIds });
+  check('a bad address is refused', m.json.success === false, m.json);
+  m = await mail({ email: 'customer@example.com', ids: [] });
+  check('an empty selection is refused', m.json.success === false, m.json);
+
+  let blocked = 0;
+  for (let i = 0; i < 8; i++) {
+    const x = await mail({ email: 'spam@example.com', ids: liveIds });
+    if (x.status === 429) blocked++;
+  }
+  check('sending over and over gets cut off', blocked > 0, { blocked });
 
   console.log('\nDeleting');
   r = await asAdmin('DELETE', '/api/catalogue/' + hiddenId);
