@@ -800,15 +800,21 @@
   // pin. The page this runs on stays open, so a slow or late answer still has
   // somewhere to land.
   //
-  // sessionStorage, not localStorage: once per visit rather than once ever,
-  // so somebody who moves between the office and home is recorded in both,
-  // and nobody is asked again on every page they open.
+  // Asked on every load of this shell, which is once per login: the app swaps
+  // views inside the page after that, so this does not run again until
+  // somebody signs in afresh.
+  //
+  // There was a sessionStorage flag here to ask only once a session, and it
+  // was the reason two of today's logins came through with a city and no pin.
+  // sessionStorage belongs to the tab, not the login - so logging out and
+  // back in without closing the tab found the flag still set and never asked
+  // again. The flag was guarding against nothing: once permission is granted
+  // the browser answers without prompting, and once refused it refuses
+  // without prompting, so asking on each sign-in costs the person nothing
+  // either way. The server does the rest of the guarding - it fills a login
+  // row once and leaves it alone afterwards.
   (function askWhere() {
     if (!navigator.geolocation || !window.isSecureContext) return;
-    try {
-      if (sessionStorage.getItem('whereAsked_arabella')) return;
-      sessionStorage.setItem('whereAsked_arabella', '1');
-    } catch (e) { /* private window: ask again, which is no harm */ }
 
     navigator.geolocation.getCurrentPosition(
       function (pos) {
