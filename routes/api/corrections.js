@@ -37,7 +37,28 @@ const FAULTS = {
 
 // Who may raise one and see everybody's. Doing one needs only to be the
 // designer it landed on.
+//
+// Production & Dispatch is here because that is the job: somebody on the
+// floor finds a card printed wrong and says so. They do not get the two
+// below, which is why these are now two functions and not one - raising a
+// correction and deleting one are different powers, and a single check was
+// handing out both together.
 function canRaise(user) {
+  const role = (user && user.role) || '';
+  return role === 'SuperAdmin' || role === 'Head'
+    || role === 'Production & Dispatch'
+    || (user && user.domain === 'Head');
+}
+
+/**
+ * Who may undo one, and who may change the list of GNA designers.
+ *
+ * Deliberately narrower than canRaise. Removing a correction erases a record
+ * that somebody raised about somebody else's work, and the GNA list decides
+ * where every GNA correction lands - neither is part of noticing that a card
+ * came out wrong.
+ */
+function canAdminister(user) {
   const role = (user && user.role) || '';
   return role === 'SuperAdmin' || role === 'Head' || (user && user.domain === 'Head');
 }
@@ -101,7 +122,7 @@ router.get('/gna', requireLogin, async (req, res) => {
 // POST /api/corrections/gna — add a name to it.
 router.post('/gna', requireLogin, async (req, res) => {
   try {
-    if (!canRaise(req.session.user)) {
+    if (!canAdminister(req.session.user)) {
       return res.status(403).json({ success: false, error: 'Only a SuperAdmin can change this list.' });
     }
     const name = String(req.body.name || '').trim();
@@ -125,7 +146,7 @@ router.post('/gna', requireLogin, async (req, res) => {
 // sent to that person are untouched: they are still theirs to answer.
 router.delete('/gna/:id', requireLogin, async (req, res) => {
   try {
-    if (!canRaise(req.session.user)) {
+    if (!canAdminister(req.session.user)) {
       return res.status(403).json({ success: false, error: 'Only a SuperAdmin can change this list.' });
     }
     await db.query('DELETE FROM gna_designers WHERE id = ?', [req.params.id]);
@@ -510,7 +531,7 @@ router.put('/:id', requireLogin, async (req, res) => {
 // DELETE /api/corrections/:id — raised against the wrong order.
 router.delete('/:id', requireLogin, async (req, res) => {
   try {
-    if (!canRaise(req.session.user)) {
+    if (!canAdminister(req.session.user)) {
       return res.status(403).json({ success: false, error: 'Only a SuperAdmin can remove a correction.' });
     }
     const row = await one('SELECT order_id FROM corrections WHERE id = ?', [req.params.id]);
