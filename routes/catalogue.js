@@ -112,17 +112,28 @@ const MAX_PICKS = 40;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SENDS = new Map();
 const SEND_WINDOW_MS = 60 * 60 * 1000;
-const MAX_SENDS = 5;
+const MAX_SENDS = 6;
 
-function sentTooOften(ip) {
+// Asked before doing the work, and counted only once the work was done.
+//
+// These were one function that counted the attempt on the way in, which
+// punished the wrong person: somebody who mistypes their address twice and a
+// missing attachment once had spent their whole allowance without a single
+// mail leaving the building. A refusal is not a send.
+function overLimit(bucket, ip, max) {
   const now = Date.now();
-  const seen = (SENDS.get(ip) || []).filter(t => now - t < SEND_WINDOW_MS);
-  seen.push(now);
-  SENDS.set(ip, seen);
-  if (SENDS.size > 2000) {
-    for (const [k, v] of SENDS) if (!v.length || now - v[v.length - 1] > SEND_WINDOW_MS) SENDS.delete(k);
+  const seen = (bucket.get(ip) || []).filter(t => now - t < SEND_WINDOW_MS);
+  bucket.set(ip, seen);
+  if (bucket.size > 2000) {
+    for (const [k, v] of bucket) if (!v.length || now - v[v.length - 1] > SEND_WINDOW_MS) bucket.delete(k);
   }
-  return seen.length > MAX_SENDS;
+  return seen.length >= max;
+}
+
+function countSend(bucket, ip) {
+  const seen = bucket.get(ip) || [];
+  seen.push(Date.now());
+  bucket.set(ip, seen);
 }
 
 function siteUrl(req) {
@@ -163,7 +174,7 @@ router.post('/api/email', express.json(), async (req, res) => {
   try {
     const chain = String(req.headers['x-forwarded-for'] || '').split(',');
     const ip = (chain[0] || '').trim() || req.socket?.remoteAddress || 'unknown';
-    if (sentTooOften(ip)) {
+    if (overLimit(SENDS, ip, MAX_SENDS)) {
       return res.status(429).json({
         success: false,
         error: 'That is a few emails in a short time. Please try again a little later.',
@@ -234,6 +245,7 @@ router.post('/api/email', express.json(), async (req, res) => {
       }).catch(() => {});
     }
 
+    countSend(SENDS, ip);
     res.json({ success: true, sent: rows.length });
   } catch (err) {
     console.error('Catalogue email failed:', err);
@@ -271,18 +283,7 @@ const SEND_TYPES = [
 ];
 
 const THEIRS = new Map();
-const THEIRS_MAX = 3;
-
-function sentUsTooOften(ip) {
-  const now = Date.now();
-  const seen = (THEIRS.get(ip) || []).filter(t => now - t < SEND_WINDOW_MS);
-  seen.push(now);
-  THEIRS.set(ip, seen);
-  if (THEIRS.size > 2000) {
-    for (const [k, v] of THEIRS) if (!v.length || now - v[v.length - 1] > SEND_WINDOW_MS) THEIRS.delete(k);
-  }
-  return seen.length > THEIRS_MAX;
-}
+const THEIRS_MAX = 6;
 
 const esc = (v) => String(v == null ? '' : v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -292,7 +293,7 @@ router.post('/api/theirs', sendUpload.array('files', 3), async (req, res) => {
   try {
     const chain = String(req.headers['x-forwarded-for'] || '').split(',');
     const ip = (chain[0] || '').trim() || req.socket?.remoteAddress || 'unknown';
-    if (sentUsTooOften(ip)) {
+    if (overLimit(THEIRS, ip, THEIRS_MAX)) {
       return res.status(429).json({
         success: false,
         error: 'That is a few in a short time. Please try again a little later.',
@@ -346,6 +347,7 @@ router.post('/api/theirs', sendUpload.array('files', 3), async (req, res) => {
       return res.status(502).json({ success: false, error: 'It did not go through. Please try again in a moment.' });
     }
 
+    countSend(THEIRS, ip);
     res.json({ success: true, files: files.length });
   } catch (err) {
     // multer's own refusals - too big, too many - arrive here.

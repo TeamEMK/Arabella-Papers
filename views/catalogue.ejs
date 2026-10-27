@@ -5,254 +5,327 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Design Catalogue — Arabella Papers</title>
   <%# Standalone: no session here, so the portal's shell cannot be reused.
-      The look is borrowed from it instead - the same charcoal panel and the
-      same yellow - over a layout built for somebody browsing designs rather
-      than working a board. %>
+      Dark and gold rather than the portal's grey, because this is the page
+      the client sends to brides and planners choosing an expensive order -
+      the white scans glow against the dark, which is the whole trick. %>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
   <style>
     :root {
-      --ink: #212529;          /* the portal's panel */
-      --gold: #ffcc00;         /* and its accent */
-      --page: #f4f6f9;
-      --line: rgba(0,0,0,.08);
-      --muted: #6c757d;
-      --rail: 268px;
+      --void: #0b0c0e;        /* the field everything sits on */
+      --rail-bg: #121316;
+      --gold: #c9a227;        /* the portal's yellow, taken down to a foil */
+      --gold-lit: #e8c766;
+      --paper: #f7f4ed;       /* the scans are white; the mat is warmer */
+      --dim: #8a8578;
+      --hair: rgba(201,162,39,.22);
+      --rail: 286px;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
     body {
-      background: var(--page);
-      font-family: Inter, -apple-system, 'Segoe UI', Roboto, sans-serif;
-      color: #1b1f23;
+      background: var(--void);
+      color: #e8e4da;
+      font-family: Jost, 'Segoe UI', sans-serif;
+      font-weight: 300;
       -webkit-font-smoothing: antialiased;
     }
     .serif { font-family: 'Cormorant Garamond', Georgia, serif; }
+    ::selection { background: var(--gold); color: #000; }
 
     /* ── the rail ─────────────────────────────── */
     .rail {
       position: fixed; inset: 0 auto 0 0; width: var(--rail);
-      background: var(--ink); color: #d7dce1;
-      display: flex; flex-direction: column;
-      box-shadow: 2px 0 18px rgba(0,0,0,.28); z-index: 40;
+      background: var(--rail-bg); border-right: 1px solid var(--hair);
+      display: flex; flex-direction: column; z-index: 40;
     }
-    .rail-head { padding: 26px 22px 20px; border-bottom: 1px solid rgba(255,255,255,.08); }
-    .rail-mark {
-      display: inline-block; background: #fff; color: var(--ink);
-      font-weight: 600; letter-spacing: .22em; font-size: 12px;
-      padding: 9px 12px; border-radius: 3px;
+    .crest { padding: 34px 26px 26px; text-align: center; }
+    .crest .mark { color: var(--gold); font-size: 26px; line-height: 1; }
+    .crest h1 {
+      font-family: 'Cormorant Garamond', serif; font-weight: 400;
+      font-size: 27px; letter-spacing: .24em; margin: 14px 0 0;
+      color: #fff; text-indent: .24em;
     }
-    .rail-sub { color: var(--gold); font-size: 12.5px; letter-spacing: .14em; margin-top: 12px; text-transform: uppercase; }
-    .rail-nav { padding: 16px 12px; overflow-y: auto; flex: 1; }
-    .rail-label { font-size: 10.5px; letter-spacing: .18em; color: #8b939b; padding: 6px 10px 10px; text-transform: uppercase; }
+    .crest .papers {
+      font-family: 'Cormorant Garamond', serif; font-size: 15px;
+      letter-spacing: .4em; color: #cfc9ba; text-indent: .4em; margin-top: 2px;
+    }
+    .crest .rule { height: 1px; background: var(--hair); margin: 16px 34px; }
+    .crest .tag {
+      font-size: 9.5px; letter-spacing: .26em; color: var(--dim);
+      line-height: 1.9; text-indent: .26em;
+    }
+
+    .cats { padding: 10px 0; flex: 1; overflow-y: auto; }
     .cat {
-      display: flex; align-items: center; gap: 11px; width: 100%;
-      background: transparent; border: 0; border-radius: 9px;
-      padding: 11px 12px; color: #d7dce1; cursor: pointer;
-      font-size: 14.5px; text-align: left; transition: background .15s, color .15s;
+      display: flex; align-items: center; gap: 15px; width: 100%;
+      background: transparent; border: 0; border-left: 2px solid transparent;
+      padding: 15px 26px; color: #d8d3c7; cursor: pointer;
+      font-family: Jost, sans-serif; font-weight: 300;
+      font-size: 13px; letter-spacing: .17em; text-align: left;
+      text-transform: uppercase; transition: background .18s, color .18s, border-color .18s;
     }
-    .cat:hover { background: rgba(255,255,255,.08); color: var(--gold); }
+    .cat i { color: var(--gold); width: 17px; font-size: 14px; opacity: .78; transition: opacity .18s; }
+    .cat:hover { background: rgba(201,162,39,.06); color: #fff; }
+    .cat:hover i { opacity: 1; }
     .cat.on {
-      background: rgba(255,204,0,.14); color: var(--gold);
-      font-weight: 600; box-shadow: inset 3px 0 0 var(--gold);
+      background: linear-gradient(90deg, rgba(201,162,39,.16), transparent 85%);
+      border-left-color: var(--gold); color: #fff;
     }
-    .cat .n { margin-left: auto; font-size: 12px; color: #8b939b; }
-    .cat.on .n { color: var(--gold); }
-    .rail-foot { padding: 16px 22px 22px; border-top: 1px solid rgba(255,255,255,.08); font-size: 12px; color: #8b939b; line-height: 1.6; }
+    .cat.on i { opacity: 1; }
+    .cat .n { margin-left: auto; font-size: 12px; letter-spacing: .06em; color: var(--dim); }
+    .cat.on .n { color: var(--gold-lit); }
+
+    .rail-b { padding: 8px 26px 30px; }
+    .ownbtn {
+      display: block; width: 100%; padding: 15px 10px;
+      background: transparent; border: 1px solid rgba(201,162,39,.45); border-radius: 2px;
+      color: var(--gold-lit); font-family: Jost, sans-serif; font-weight: 400;
+      font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+      cursor: pointer; line-height: 1.7; transition: background .18s, border-color .18s;
+    }
+    .ownbtn:hover { background: rgba(201,162,39,.12); border-color: var(--gold); }
+    .ownbtn i { display: block; font-size: 15px; margin-bottom: 7px; opacity: .85; }
+    .creed {
+      margin-top: 26px; text-align: center; font-size: 9.5px;
+      letter-spacing: .3em; color: var(--dim); line-height: 2.3; text-indent: .3em;
+    }
+    .creed .sep { color: var(--gold); opacity: .6; margin-bottom: 8px; font-size: 11px; }
 
     /* ── the page ─────────────────────────────── */
     .main { margin-left: var(--rail); min-height: 100vh; }
-    .top {
-      position: sticky; top: 0; z-index: 30;
-      background: rgba(244,246,249,.92); backdrop-filter: blur(10px);
-      border-bottom: 1px solid var(--line);
-      padding: 20px 34px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    .masthead { padding: 42px 46px 30px; display: flex; align-items: flex-end; gap: 26px; flex-wrap: wrap; }
+    .eyebrow {
+      font-size: 11px; letter-spacing: .42em; color: var(--gold);
+      text-transform: uppercase; text-indent: .42em; margin-bottom: 10px;
     }
-    .top h1 { font-size: 30px; font-weight: 500; margin: 0; letter-spacing: .01em; }
-    .top .count { color: var(--muted); font-size: 13px; }
-    .search {
-      margin-left: auto; position: relative; min-width: 260px;
+    .masthead h2 {
+      font-family: 'Cormorant Garamond', serif; font-weight: 400;
+      font-size: 62px; line-height: .95; margin: 0; color: #fff;
+      letter-spacing: .04em; text-transform: uppercase;
     }
+    .titlewrap { min-width: 0; }
+    .underline { height: 1px; background: var(--gold); width: 92px; margin-top: 16px; opacity: .8; }
+    .countline {
+      font-family: 'Cormorant Garamond', serif; font-style: italic;
+      font-size: 20px; color: var(--dim); padding-bottom: 10px; white-space: nowrap;
+    }
+    .countline::before {
+      content: ''; display: inline-block; width: 46px; height: 1px;
+      background: var(--hair); vertical-align: middle; margin-right: 18px;
+    }
+    .search { margin-left: auto; position: relative; min-width: 330px; padding-bottom: 6px; }
     .search input {
-      width: 100%; padding: 11px 14px 11px 38px; border-radius: 10px;
-      border: 1px solid var(--line); background: #fff; font-size: 14px;
-      font-family: inherit; outline: 0; transition: box-shadow .15s, border-color .15s;
+      width: 100%; padding: 15px 20px 15px 54px; border-radius: 40px;
+      border: 1px solid var(--hair); background: rgba(255,255,255,.03);
+      color: #efebe1; font-family: Jost, sans-serif; font-weight: 300;
+      font-size: 13.5px; letter-spacing: .04em; outline: 0;
+      transition: border-color .18s, background .18s;
     }
-    .search input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(255,204,0,.35); }
-    .search i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #adb5bd; font-size: 13px; }
+    .search input::placeholder { color: #6f6a5f; }
+    .search input:focus { border-color: var(--gold); background: rgba(201,162,39,.05); }
+    .search .ring {
+      position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
+      width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--hair);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--gold); font-size: 11px; pointer-events: none;
+    }
 
-    .grid { padding: 28px 34px 140px; display: grid; gap: 22px;
-            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
-    .tile {
-      background: #fff; border-radius: 14px; overflow: hidden;
-      border: 1px solid var(--line); box-shadow: 0 1px 3px rgba(16,24,40,.05);
-      transition: transform .18s ease, box-shadow .18s ease; position: relative;
+    .grid { padding: 10px 46px 150px; display: grid; gap: 26px;
+            grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); }
+    .tile { position: relative; cursor: default; }
+    /* The scan is white; it is matted on warm paper and lifted off the dark
+       field. That contrast is doing most of the work on this page, so the
+       frame stays quiet and never crops. */
+    .sheet-img {
+      background: var(--paper); padding: 16px; height: 300px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: zoom-in; box-shadow: 0 10px 34px rgba(0,0,0,.55);
+      transition: transform .22s ease, box-shadow .22s ease;
     }
-    .tile:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(16,24,40,.12); }
-    .tile.picked { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(255,204,0,.4); }
-    /* A fixed frame with the art contained in it. A catalogue of mixed shapes
-       looks like a jumble cropped to fill, and cropping cuts the motif
-       somebody is trying to look at. */
-    .frame { height: 250px; background: #fcfcfd; display: flex;
-             align-items: center; justify-content: center; cursor: zoom-in; padding: 14px; }
-    .frame img { max-width: 100%; max-height: 100%; object-fit: contain; }
-    .cap { padding: 13px 15px 15px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
-    .cap .name { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .cap .sub { font-size: 11.5px; color: var(--muted); letter-spacing: .04em; }
+    .sheet-img img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .tile:hover .sheet-img { transform: translateY(-5px); box-shadow: 0 20px 48px rgba(0,0,0,.7); }
+    .cap {
+      background: #141518; border: 1px solid rgba(255,255,255,.05); border-top: 0;
+      padding: 15px 17px; display: flex; align-items: center; gap: 12px;
+    }
+    .cap .who { min-width: 0; flex: 1; }
+    .cap .name {
+      font-family: 'Cormorant Garamond', serif; font-size: 19px; color: #f0ece2;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.25;
+    }
+    .cap .sub {
+      font-size: 9.5px; letter-spacing: .2em; color: var(--dim);
+      text-transform: uppercase; margin-top: 5px; text-indent: .2em;
+    }
     .pick {
-      margin-left: auto; width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%;
-      border: 1.5px solid #ced4da; background: #fff; color: #ced4da; cursor: pointer;
-      display: flex; align-items: center; justify-content: center; font-size: 12px;
-      transition: all .15s;
+      width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%;
+      border: 1px solid rgba(201,162,39,.45); background: transparent;
+      color: transparent; cursor: pointer; font-size: 10px;
+      display: flex; align-items: center; justify-content: center; transition: all .18s;
     }
-    .pick:hover { border-color: var(--ink); color: var(--ink); }
-    .tile.picked .pick { background: var(--gold); border-color: var(--gold); color: var(--ink); }
+    .pick:hover { border-color: var(--gold); color: rgba(201,162,39,.5); }
+    .tile.picked .sheet-img { box-shadow: 0 0 0 2px var(--gold), 0 18px 44px rgba(0,0,0,.7); }
+    .tile.picked .pick { background: var(--gold); border-color: var(--gold); color: #17181b; }
 
-    .empty { grid-column: 1/-1; text-align: center; padding: 90px 20px; color: var(--muted); }
+    .empty {
+      grid-column: 1/-1; text-align: center; padding: 110px 20px; color: var(--dim);
+      font-family: 'Cormorant Garamond', serif; font-size: 22px; font-style: italic;
+    }
 
-    /* ── the tray that appears once something is picked ── */
+    /* ── the tray ─────────────────────────────── */
     .tray {
       position: fixed; left: var(--rail); right: 0; bottom: 0; z-index: 35;
-      background: var(--ink); color: #fff; padding: 16px 34px;
-      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-      transform: translateY(110%); transition: transform .22s ease;
-      box-shadow: 0 -8px 26px rgba(0,0,0,.26);
+      background: rgba(14,15,17,.97); backdrop-filter: blur(14px);
+      border-top: 1px solid var(--hair); padding: 19px 46px;
+      display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+      transform: translateY(115%); transition: transform .26s ease;
     }
     .tray.up { transform: translateY(0); }
-    .tray .lead { font-size: 15px; }
-    .tray .lead b { color: var(--gold); }
+    .tray .lead { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--dim); }
+    .tray .lead b { color: var(--gold-lit); font-size: 15px; letter-spacing: .04em; }
     .tray input[type=email] {
-      flex: 1 1 240px; max-width: 340px; padding: 11px 14px; border-radius: 9px;
-      border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.07);
-      color: #fff; font-family: inherit; font-size: 14px; outline: 0;
+      flex: 1 1 250px; max-width: 350px; padding: 13px 18px; border-radius: 40px;
+      border: 1px solid var(--hair); background: rgba(255,255,255,.03);
+      color: #efebe1; font-family: Jost, sans-serif; font-weight: 300; font-size: 13.5px; outline: 0;
     }
-    .tray input[type=email]::placeholder { color: #8b939b; }
-    .tray input[type=email]:focus { border-color: var(--gold); background: rgba(255,255,255,.12); }
+    .tray input[type=email]::placeholder { color: #6f6a5f; }
+    .tray input[type=email]:focus { border-color: var(--gold); }
     .btn {
-      border: 0; border-radius: 9px; padding: 11px 20px; font-family: inherit;
-      font-size: 14px; font-weight: 600; cursor: pointer; transition: filter .15s, opacity .15s;
+      border: 1px solid transparent; border-radius: 40px; padding: 13px 26px;
+      font-family: Jost, sans-serif; font-weight: 400; font-size: 11px;
+      letter-spacing: .2em; text-transform: uppercase; cursor: pointer;
+      transition: filter .18s, background .18s, opacity .18s;
     }
-    .btn-gold { background: var(--gold); color: var(--ink); }
-    .btn-gold:hover { filter: brightness(1.07); }
-    .btn-gold:disabled { opacity: .55; cursor: default; filter: none; }
-    .btn-ghost { background: transparent; color: #d7dce1; border: 1px solid rgba(255,255,255,.2); }
-    .btn-ghost:hover { background: rgba(255,255,255,.08); color: #fff; }
-    .tray .said { font-size: 13.5px; }
-    .said.ok { color: var(--gold); }
-    .said.bad { color: #ff9b9b; }
-
-    .ownbtn {
-      display: block; width: 100%; margin-top: 16px; padding: 11px 12px;
-      background: transparent; border: 1px solid rgba(255,204,0,.5); border-radius: 9px;
-      color: var(--gold); font-family: inherit; font-size: 13px; cursor: pointer;
-      transition: background .15s;
-    }
-    .ownbtn:hover { background: rgba(255,204,0,.12); }
+    .btn-gold { background: var(--gold); color: #17181b; }
+    .btn-gold:hover { filter: brightness(1.12); }
+    .btn-gold:disabled { opacity: .5; cursor: default; filter: none; }
+    .btn-wire { background: transparent; color: var(--gold-lit); border-color: rgba(201,162,39,.4); }
+    .btn-wire:hover { background: rgba(201,162,39,.1); }
+    .btn-plain { background: transparent; color: var(--dim); }
+    .btn-plain:hover { color: #fff; }
+    .said { font-size: 12.5px; letter-spacing: .1em; }
+    .said.ok { color: var(--gold-lit); }
+    .said.bad { color: #e08a8a; }
 
     /* ── the customer's own design ────────────── */
     .sheet { position: fixed; inset: 0; z-index: 55; display: none;
              align-items: center; justify-content: center; padding: 24px;
-             background: rgba(12,14,16,.6); }
+             background: rgba(5,6,7,.82); backdrop-filter: blur(4px); }
     .sheet.on { display: flex; }
     .card {
-      background: #fff; border-radius: 16px; width: 100%; max-width: 520px;
-      box-shadow: 0 24px 60px rgba(16,24,40,.28); overflow: hidden;
-      max-height: 92vh; display: flex; flex-direction: column;
+      background: #141518; border: 1px solid var(--hair); border-radius: 3px;
+      width: 100%; max-width: 540px; max-height: 92vh;
+      display: flex; flex-direction: column; box-shadow: 0 30px 80px rgba(0,0,0,.8);
     }
-    .card-h { padding: 22px 26px 16px; border-bottom: 1px solid var(--line); }
-    .card-h h2 { margin: 0; font-size: 23px; font-weight: 500; }
-    .card-h p { margin: 6px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
-    .card-b { padding: 20px 26px; overflow-y: auto; }
-    .fld { margin-bottom: 15px; }
-    .fld label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 6px; }
+    .card-h { padding: 32px 34px 22px; text-align: center; border-bottom: 1px solid rgba(255,255,255,.05); }
+    .card-h .orn { color: var(--gold); font-size: 17px; margin-bottom: 14px; }
+    .card-h h3 { font-family: 'Cormorant Garamond', serif; font-weight: 400;
+                 font-size: 31px; margin: 0; color: #fff; }
+    .card-h p { margin: 10px 0 0; color: var(--dim); font-size: 13px; line-height: 1.7; }
+    .card-b { padding: 24px 34px; overflow-y: auto; }
+    .fld { margin-bottom: 17px; }
+    .fld label {
+      display: block; font-size: 9.5px; letter-spacing: .22em; text-transform: uppercase;
+      color: var(--gold); margin-bottom: 8px; text-indent: .22em;
+    }
     .fld input[type=text], .fld input[type=email], .fld textarea, .fld input[type=file] {
-      width: 100%; padding: 11px 13px; border: 1px solid var(--line); border-radius: 9px;
-      font-family: inherit; font-size: 14px; outline: 0; background: #fff;
+      width: 100%; padding: 13px 15px; border: 1px solid rgba(255,255,255,.1);
+      background: rgba(255,255,255,.03); color: #efebe1; border-radius: 2px;
+      font-family: Jost, sans-serif; font-weight: 300; font-size: 13.5px; outline: 0;
     }
-    .fld textarea { resize: vertical; min-height: 84px; }
-    .fld input:focus, .fld textarea:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(255,204,0,.35); }
-    .fld .hint { font-size: 12px; color: var(--muted); margin-top: 5px; }
-    .card-f { padding: 16px 26px 22px; border-top: 1px solid var(--line);
-              display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-    .btn-dark { background: var(--ink); color: #fff; }
-    .btn-dark:hover { filter: brightness(1.25); }
-    .btn-plain { background: transparent; color: var(--muted); }
-    .btn-plain:hover { color: var(--ink); }
-    #o_said { font-size: 13.5px; }
-    #o_said.ok { color: #146c43; }
-    #o_said.bad { color: #b02a37; }
+    .fld input::placeholder, .fld textarea::placeholder { color: #5f5b53; }
+    .fld textarea { resize: vertical; min-height: 90px; }
+    .fld input:focus, .fld textarea:focus { border-color: var(--gold); }
+    .fld .hint { font-size: 11.5px; color: var(--dim); margin-top: 7px; }
+    .card-f { padding: 20px 34px 28px; border-top: 1px solid rgba(255,255,255,.05);
+              display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 
     /* ── zoom ─────────────────────────────────── */
-    .lb { position: fixed; inset: 0; background: rgba(12,14,16,.92); z-index: 60;
-          display: none; align-items: center; justify-content: center; padding: 30px; }
+    .lb { position: fixed; inset: 0; background: rgba(5,6,7,.95); z-index: 60;
+          display: none; align-items: center; justify-content: center; padding: 34px; }
     .lb.on { display: flex; }
-    .lb img { max-width: 94vw; max-height: 82vh; object-fit: contain;
-              background: #fff; border-radius: 10px; padding: 10px; }
-    .lb .cap2 { position: absolute; bottom: 26px; left: 0; right: 0; text-align: center; color: #e9ecef; font-size: 14px; }
-    .lb .x { position: absolute; top: 22px; right: 26px; background: transparent; border: 0;
-             color: #e9ecef; font-size: 26px; cursor: pointer; line-height: 1; }
+    .lb img { max-width: 92vw; max-height: 80vh; object-fit: contain;
+              background: var(--paper); padding: 18px; box-shadow: 0 30px 90px rgba(0,0,0,.9); }
+    .lb .cap2 {
+      position: absolute; bottom: 28px; left: 0; right: 0; text-align: center;
+      color: var(--dim); font-size: 10.5px; letter-spacing: .24em; text-transform: uppercase;
+    }
+    .lb .x { position: absolute; top: 26px; right: 30px; background: transparent;
+             border: 0; color: var(--dim); font-size: 27px; cursor: pointer; line-height: 1; }
+    .lb .x:hover { color: var(--gold); }
 
     /* ── phone ────────────────────────────────── */
-    .burger { display: none; background: transparent; border: 0; font-size: 20px; color: var(--ink); cursor: pointer; }
-    .scrim { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 39; }
-    @media (max-width: 900px) {
-      .rail { transform: translateX(-100%); transition: transform .2s ease; }
+    .burger { display: none; background: transparent; border: 0; color: var(--gold);
+              font-size: 19px; cursor: pointer; padding: 0 4px 10px 0; }
+    .scrim { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 39; }
+    @media (max-width: 980px) {
+      .rail { transform: translateX(-100%); transition: transform .24s ease; }
       .rail.open { transform: translateX(0); }
       .scrim.on { display: block; }
       .main { margin-left: 0; }
-      .tray { left: 0; }
-      .burger { display: inline-flex; }
-      .top, .grid { padding-left: 18px; padding-right: 18px; }
-      .top h1 { font-size: 24px; }
-      .search { min-width: 100%; margin-left: 0; order: 3; }
+      .tray { left: 0; padding: 16px 20px; }
+      .burger { display: inline-block; }
+      .masthead { padding: 26px 20px 20px; }
+      .grid { padding: 6px 20px 150px; }
+      .masthead h2 { font-size: 38px; }
+      .countline { font-size: 16px; }
+      .countline::before { display: none; }
+      .search { min-width: 100%; margin-left: 0; order: 4; }
     }
   </style>
 </head>
 <body>
 
 <aside class="rail" id="rail">
-  <div class="rail-head">
-    <div class="rail-mark">ARABELLA PAPERS</div>
-    <div class="rail-sub serif" style="font-size:15px;letter-spacing:.1em">Design Catalogue</div>
+  <div class="crest">
+    <div class="mark"><i class="fas fa-fan"></i></div>
+    <h1 class="serif">ARABELLA</h1>
+    <div class="papers">PAPERS</div>
+    <div class="rule"></div>
+    <div class="tag">LUXURY WEDDING STATIONERY<br>JAIPUR</div>
   </div>
-  <nav class="rail-nav" id="cats"></nav>
-  <div class="rail-foot">
-    Pick the designs you like, then have them emailed to yourself.<br>
-    Quote the code when you place your order.
+  <nav class="cats" id="cats"></nav>
+  <div class="rail-b">
     <button class="ownbtn" onclick="c_own(true)">
-      <i class="fas fa-paper-plane"></i> Send us your own design
+      <i class="fas fa-cloud-arrow-up"></i>
+      Send us your<br>own design
     </button>
+    <div class="creed">
+      <div class="sep">&#10086;</div>
+      FINE PAPERS<br>TIMELESS<br>CELEBRATIONS
+    </div>
   </div>
 </aside>
 <div class="scrim" id="scrim" onclick="c_rail(false)"></div>
 
 <main class="main">
-  <header class="top">
-    <button class="burger" onclick="c_rail(true)" aria-label="Categories"><i class="fas fa-bars"></i></button>
-    <div>
-      <h1 class="serif" id="c_title">All designs</h1>
-      <div class="count" id="c_count"></div>
+  <header class="masthead">
+    <div class="titlewrap">
+      <button class="burger" onclick="c_rail(true)" aria-label="Categories"><i class="fas fa-bars"></i></button>
+      <div class="eyebrow">Design Catalogue</div>
+      <h2 class="serif" id="c_title">All Designs</h2>
+      <div class="underline"></div>
     </div>
+    <div class="countline" id="c_count"></div>
     <div class="search">
-      <i class="fas fa-magnifying-glass"></i>
-      <input type="search" id="c_search" placeholder="Search a name or code..." oninput="c_render()" autocomplete="off">
+      <span class="ring"><i class="fas fa-magnifying-glass"></i></span>
+      <input type="search" id="c_search" placeholder="Search designs, codes..." oninput="c_render()" autocomplete="off">
     </div>
   </header>
 
   <section class="grid" id="c_grid">
-    <div class="empty"><i class="fas fa-spinner fa-spin"></i> Loading the catalogue...</div>
+    <div class="empty">Bringing out the catalogue...</div>
   </section>
 </main>
 
 <div class="tray" id="c_tray">
-  <div class="lead"><b id="c_picked">0</b> selected</div>
+  <div class="lead"><b id="c_picked">0</b> &nbsp;selected</div>
   <input type="email" id="c_email" placeholder="your@email.com" autocomplete="email">
-  <button class="btn btn-gold" id="c_send" onclick="c_send()">
-    <i class="fas fa-paper-plane"></i> Email these to me
-  </button>
-  <button class="btn btn-ghost" onclick="c_clear()">Clear</button>
+  <button class="btn btn-gold" id="c_send" onclick="c_send()">Email these to me</button>
+  <button class="btn btn-plain" onclick="c_clear()">Clear</button>
   <div class="said" id="c_said"></div>
 </div>
 
@@ -261,8 +334,9 @@
 <div class="sheet" id="c_own" onclick="c_ownOff(event)">
   <div class="card" onclick="event.stopPropagation()">
     <div class="card-h">
-      <h2 class="serif">Send us your own design</h2>
-      <p>Made your own monogram, or have a font you would like used?
+      <div class="orn">&#10086;</div>
+      <h3 class="serif">Send us your own design</h3>
+      <p>Made your own monogram, or have a font you would like used?<br>
          Send it across and we will come back to you.</p>
     </div>
     <div class="card-b">
@@ -286,11 +360,9 @@
       </div>
     </div>
     <div class="card-f">
-      <button class="btn btn-dark" id="o_send" onclick="c_ownSend()">
-        <i class="fas fa-paper-plane"></i> Send it
-      </button>
+      <button class="btn btn-gold" id="o_send" onclick="c_ownSend()">Send it</button>
       <button class="btn btn-plain" onclick="c_own(false)">Cancel</button>
-      <div id="o_said"></div>
+      <div class="said" id="o_said"></div>
     </div>
   </div>
 </div>
@@ -309,6 +381,13 @@ var esc = function (v) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 };
 
+// A face for each volume. Nothing turns on these - they are there because a
+// row of identical bullets is a list, and this is a catalogue.
+var CAT_ICON = {
+  'Borders': 'fa-border-style', 'Fonts': 'fa-font', 'Monograms': 'fa-crown',
+  'Motifs': 'fa-spa', 'Order Form': 'fa-file-lines', 'Patterns': 'fa-square-full',
+};
+
 function c_rail(open) {
   document.getElementById('rail').classList.toggle('open', open);
   document.getElementById('scrim').classList.toggle('on', open);
@@ -319,18 +398,17 @@ function c_cats() {
   c_items.forEach(function (i) { counts[i.category] = (counts[i.category] || 0) + 1; });
   var cats = Object.keys(counts).sort();
   document.getElementById('cats').innerHTML =
-    '<div class="rail-label">Categories</div>'
-    + ['', ].concat(cats).map(function (c) {
-        return '<button class="cat' + (c === c_cat ? ' on' : '') + '" onclick="c_pickCat(\'' + esc(c) + '\')">'
-          + '<i class="fas fa-' + (c ? 'layer-group' : 'border-all') + '" style="width:15px;opacity:.75"></i>'
-          + '<span>' + (c ? esc(c) : 'All designs') + '</span>'
-          + '<span class="n">' + (c ? counts[c] : c_items.length) + '</span></button>';
-      }).join('');
+    [''].concat(cats).map(function (c) {
+      return '<button class="cat' + (c === c_cat ? ' on' : '') + '" onclick="c_pickCat(\'' + esc(c) + '\')">'
+        + '<i class="fas ' + (c ? (CAT_ICON[c] || 'fa-layer-group') : 'fa-border-all') + '"></i>'
+        + '<span>' + (c ? esc(c) : 'All Designs') + '</span>'
+        + '<span class="n">' + (c ? counts[c] : c_items.length) + '</span></button>';
+    }).join('');
 }
 
 function c_pickCat(cat) {
   c_cat = cat;
-  document.getElementById('c_title').textContent = cat || 'All designs';
+  document.getElementById('c_title').textContent = cat || 'All Designs';
   c_cats();
   c_render();
   c_rail(false);
@@ -355,16 +433,16 @@ function c_render() {
 
   var grid = document.getElementById('c_grid');
   if (!rows.length) {
-    grid.innerHTML = '<div class="empty">Nothing matches that. Try another word, or pick a different category.</div>';
+    grid.innerHTML = '<div class="empty">Nothing here matches that.</div>';
     return;
   }
   grid.innerHTML = rows.map(function (i) {
     return '<article class="tile' + (c_pick.has(i.id) ? ' picked' : '') + '" id="t' + i.id + '">'
-      + '<div class="frame" onclick="c_zoom(' + i.id + ')">'
+      + '<div class="sheet-img" onclick="c_zoom(' + i.id + ')">'
       + '<img loading="lazy" src="/catalogue/thumb/' + i.id + '" alt="' + esc(i.name || i.category) + '">'
       + '</div>'
       + '<div class="cap">'
-      + '<div style="min-width:0">'
+      + '<div class="who">'
       + '<div class="name">' + (esc(i.name) || esc(i.category)) + '</div>'
       + '<div class="sub">' + esc(i.category) + (i.code ? ' &middot; ' + esc(i.code) : '') + '</div>'
       + '</div>'
@@ -432,7 +510,7 @@ function c_ownOff(ev) { if (ev.target.id === 'c_own') c_own(false); }
 function c_ownSay(msg, kind) {
   var el = document.getElementById('o_said');
   el.textContent = msg;
-  el.className = kind || '';
+  el.className = 'said ' + (kind || '');
 }
 
 async function c_ownSend() {
@@ -447,9 +525,14 @@ async function c_ownSend() {
   fd.append('note', document.getElementById('o_note').value);
   for (var i = 0; i < files.length; i++) fd.append('files', files[i]);
 
+  // Said on the button itself, because this waits on an SMTP server and takes
+  // several seconds with a real picture attached. A small word beside a button
+  // that still looks pressable reads as stuck rather than busy.
   var btn = document.getElementById('o_send');
+  var label = btn.innerHTML;
   btn.disabled = true;
-  c_ownSay('Sending...', '');
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending';
+  c_ownSay('This can take a few seconds.', '');
   try {
     var json = await fetch('/catalogue/api/theirs', { method: 'POST', body: fd })
       .then(function (r) { return r.json(); });
@@ -462,6 +545,7 @@ async function c_ownSend() {
     c_ownSay('Could not reach us just now. Please try again.', 'bad');
   } finally {
     btn.disabled = false;
+    btn.innerHTML = label;
   }
 }
 
@@ -471,8 +555,10 @@ async function c_send() {
   if (!c_pick.size) { c_say('Pick a design first.', 'bad'); return; }
 
   var btn = document.getElementById('c_send');
+  var label = btn.innerHTML;
   btn.disabled = true;
-  c_say('Sending...', '');
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending';
+  c_say('This can take a few seconds.', '');
   try {
     var res = await fetch('/catalogue/api/email', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -488,6 +574,7 @@ async function c_send() {
     c_say('Could not reach us just now. Please try again.', 'bad');
   } finally {
     btn.disabled = false;
+    btn.innerHTML = label;
   }
 }
 
@@ -500,7 +587,7 @@ async function c_send() {
     c_render();
   } catch (e) {
     document.getElementById('c_grid').innerHTML =
-      '<div class="empty">Could not load the catalogue. Please try again in a moment.</div>';
+      '<div class="empty">Could not bring out the catalogue just now.</div>';
   }
 })();
 </script>

@@ -248,13 +248,19 @@ const PNG = Buffer.from(
   const after = (await get('/catalogue/api/items')).json.data.length;
   check('and none of it lands in the catalogue', after === before, { before, after });
 
+  // A refusal is not a send. Somebody who mistypes their address a few times
+  // must not find themselves locked out without a single mail having gone.
+  for (let i = 0; i < 6; i++) await theirs({ email: 'nope' }, [{ body: PNG, type: 'image/png', name: 'x.png' }]);
+  t = await theirs({ email: 'riya@example.com' }, [{ body: PNG, type: 'image/png', name: 'x.png' }]);
+  check('being refused does not use up the allowance', t.json.success === true, t.json);
+
   let stopped = 0;
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 9; i++) {
     const x = await theirs({ email: 'riya@example.com' },
       [{ body: PNG, type: 'image/png', name: 'x.png' }]);
     if (x.status === 429) stopped++;
   }
-  check('sending over and over gets cut off', stopped > 0, { stopped });
+  check('but sending over and over does get cut off', stopped > 0, { stopped });
 
   console.log('\nDeleting');
   r = await asAdmin('DELETE', '/api/catalogue/' + hiddenId);
