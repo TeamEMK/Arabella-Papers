@@ -278,7 +278,7 @@ function c_render() {
   grid.innerHTML = rows.map(function (i) {
     return '<article class="tile' + (c_pick.has(i.id) ? ' picked' : '') + '" id="t' + i.id + '">'
       + '<div class="frame" onclick="c_zoom(' + i.id + ')">'
-      + '<img loading="lazy" src="/catalogue/image/' + i.id + '" alt="' + esc(i.name || i.category) + '">'
+      + '<img loading="lazy" src="/catalogue/thumb/' + i.id + '" alt="' + esc(i.name || i.category) + '">'
       + '</div>'
       + '<div class="cap">'
       + '<div style="min-width:0">'

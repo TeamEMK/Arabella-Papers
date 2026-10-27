@@ -32,11 +32,20 @@ except ImportError:  # older wheels only expose the deprecated name
 import pymysql
 
 
-# 140 dpi at JPEG 82 is ~130KB a page and renders hairline flourishes cleanly;
-# 141 pages come to about 18MB in all. Higher looks no better on a screen and
-# costs three times the storage.
-DPI = 140
+# Two sizes, because one cannot serve both jobs.
+#
+# The full picture is opened and zoomed into, and a type catalogue that goes
+# soft under a closer look is no use - 140dpi, where this started, broke up on
+# the font pages the moment anybody enlarged one. 200dpi holds.
+#
+# The thumbnail exists because that full picture is ~400KB and the grid shows
+# a hundred and forty of them in tiles 230 pixels wide: a customer browsing
+# would have pulled down 54MB to look at thumbnails. 56dpi is twice the tile's
+# width, which is what a sharp screen wants, and a fifteenth of the weight.
+DPI = 200
 JPEG_QUALITY = 82
+THUMB_DPI = 56
+THUMB_QUALITY = 72
 
 # Which volume each file belongs to, and what to call it. Taken from the file
 # names the office actually uses, so dropping a new "Arabella-Borders_Vol 2"
@@ -131,16 +140,17 @@ def main():
         for i, page in enumerate(doc, start=1):
             pix = page.get_pixmap(dpi=DPI)
             blob = pix.tobytes('jpg', jpg_quality=JPEG_QUALITY)
-            size += len(blob)
+            small = page.get_pixmap(dpi=THUMB_DPI).tobytes('jpg', jpg_quality=THUMB_QUALITY)
+            size += len(blob) + len(small)
             name = ('%s · Page %d' % (label, i)) if label else ('Page %d' % i)
 
             if conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         'INSERT INTO catalogue_items '
-                        '(category, name, code, file_name, mime_type, bytes, sort_order, is_active) '
-                        'VALUES (%s,%s,%s,%s,%s,%s,%s,1)',
-                        (category, name, '', '%s:%d' % (pdf, i), 'image/jpeg', blob, position))
+                        '(category, name, code, file_name, mime_type, bytes, thumb, sort_order, is_active) '
+                        'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1)',
+                        (category, name, '', '%s:%d' % (pdf, i), 'image/jpeg', blob, small, position))
             position += 1
             pages += 1
 

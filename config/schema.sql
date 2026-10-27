@@ -72,7 +72,16 @@ CREATE TABLE IF NOT EXISTS catalogue_items (
   code VARCHAR(60) DEFAULT '',
   file_name VARCHAR(255) DEFAULT '',
   mime_type VARCHAR(100) DEFAULT '',
+  -- The full-size picture, for zooming into. Rendered at a resolution that
+  -- survives being opened: at the 140dpi it started at, a page of fonts went
+  -- soft the moment anybody looked closely, which is the one thing a type
+  -- catalogue cannot do.
   bytes MEDIUMBLOB,
+  -- And a small one for the grid, because the other is 400KB and a customer
+  -- scrolling the catalogue would otherwise pull down tens of megabytes to
+  -- look at tiles 230 pixels wide. Null on anything uploaded by hand through
+  -- the admin page; the route falls back to the full picture there.
+  thumb MEDIUMBLOB,
   -- Taken down without being destroyed: a design pulled from the catalogue is
   -- usually back next season, and the orders that quote its code remain.
   is_active TINYINT(1) DEFAULT 1,

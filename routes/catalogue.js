@@ -46,7 +46,29 @@ router.get('/api/items', async (req, res) => {
   }
 });
 
-// GET /catalogue/image/:id — the picture itself.
+// GET /catalogue/thumb/:id — the grid-sized copy.
+//
+// Its own route rather than a query string on the one below, so a browser,
+// a proxy and our own Cache-Control all treat the two as the different files
+// they are. Falls back to the full picture where there is no small one -
+// anything uploaded by hand through the admin page has only the original.
+router.get('/thumb/:id', async (req, res) => {
+  try {
+    const [[item]] = await db.query(
+      'SELECT mime_type, IFNULL(thumb, bytes) AS bytes FROM catalogue_items WHERE id = ? AND is_active = 1',
+      [parseInt(req.params.id, 10)]);
+    if (!item || !item.bytes) return res.status(404).send('Not found.');
+    res.setHeader('Content-Type', item.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Length', item.bytes.length);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(item.bytes);
+  } catch (err) {
+    console.error('Catalogue thumb failed:', err);
+    res.status(500).send('Could not load that image.');
+  }
+});
+
+// GET /catalogue/image/:id — the full-size picture.
 router.get('/image/:id', async (req, res) => {
   try {
     const [[item]] = await db.query(

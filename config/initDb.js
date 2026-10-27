@@ -148,6 +148,8 @@ const COLUMN_MIGRATIONS = [
   { table: 'activity_log', column: 'latitude', type: 'DECIMAL(10,7) NULL' },
   { table: 'activity_log', column: 'longitude', type: 'DECIMAL(10,7) NULL' },
   { table: 'activity_log', column: 'accuracy_m', type: 'INT NULL' },
+  // The grid-sized copy, added after the full pictures were already in.
+  { table: 'catalogue_items', column: 'thumb', type: 'MEDIUMBLOB NULL' },
 ];
 
 async function addMissingColumns() {
