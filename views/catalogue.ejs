@@ -269,6 +269,18 @@
     .card-f { padding: 20px 34px 28px; border-top: 1px solid rgba(255,255,255,.05);
               display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 
+    /* ── drawn ornament ───────────────────────────
+       The reference has photographed dried flowers and a wax seal in these
+       corners. These are drawn instead, and kept faint on purpose: the page
+       is carrying 141 pieces of real line art and a loud ornament would be
+       competing with the thing people came to look at. */
+    .bot { position: absolute; pointer-events: none; color: var(--gold); }
+    /* Clear of the button rather than behind it: a faint drawing under a
+       bordered control reads as a smudge on the screen, not as ornament. */
+    .bot-rail { left: -22px; bottom: -6px; width: 172px; opacity: .15; }
+    .bot-top { right: 30px; top: 8px; width: 290px; opacity: .13; }
+    @media (max-width: 980px) { .bot-top { display: none; } }
+
     /* ── zoom ─────────────────────────────────── */
     .lb { position: fixed; inset: 0; background: rgba(5,6,7,.95); z-index: 60;
           display: none; align-items: center; justify-content: center; padding: 34px; }
@@ -345,10 +357,48 @@
       FINE PAPERS<br>TIMELESS<br>CELEBRATIONS
     </div>
   </div>
+  <%# A sprig rising out of the bottom corner, drawn rather than photographed.
+      Stems with paired leaves and a few seed heads - the shape of something
+      pressed in a book, not a rendered bouquet. %>
+  <svg class="bot bot-rail" viewBox="0 0 160 210" fill="none" stroke="currentColor"
+       stroke-width="1.2" stroke-linecap="round" aria-hidden="true">
+    <path d="M18 208C26 160 44 118 76 86"/>
+    <path d="M30 170c-9-7-13-17-12-29 11 3 19 11 22 22M34 158c10-4 20-2 29 6-8 8-18 10-29 6"/>
+    <path d="M48 134c-9-6-14-15-14-27 11 2 20 9 24 20M52 124c10-5 20-4 29 3-7 9-17 12-28 8"/>
+    <path d="M66 104c-8-6-12-15-12-25 10 2 18 8 22 18M70 96c10-5 20-5 29 1-7 9-16 13-27 10"/>
+    <path d="M10 190C22 150 30 108 26 66"/>
+    <path d="M26 66c-5 5-8 12-7 20 7-2 11-8 11-16M26 66c5 5 8 12 7 20-7-2-11-8-11-16"/>
+    <g stroke-width="1">
+      <circle cx="96" cy="74" r="3.4"/><circle cx="106" cy="62" r="2.6"/>
+      <circle cx="90" cy="60" r="2.2"/><circle cx="112" cy="76" r="2"/>
+      <path d="M86 84c6-4 13-5 20-3"/>
+    </g>
+  </svg>
 </aside>
 <div class="scrim" id="scrim" onclick="c_rail(false)"></div>
 
 <main class="main">
+  <%# The corner spray and seal the reference photographs, drawn. Behind the
+      masthead and faint, so the title still reads first. %>
+  <svg class="bot bot-top" viewBox="0 0 300 150" fill="none" stroke="currentColor"
+       stroke-width="1.2" stroke-linecap="round" aria-hidden="true">
+    <path d="M298 10c-44 2-82 16-114 42"/>
+    <path d="M262 18c-4-9-3-18 3-26 7 7 9 16 5 26M268 22c9-5 18-5 27 1-7 8-16 10-26 6"/>
+    <path d="M226 36c-5-8-5-17 0-26 8 6 11 15 8 25M232 42c8-6 17-8 27-3-6 9-15 12-25 9"/>
+    <path d="M192 60c-6-8-7-17-3-26 9 5 13 13 11 24M198 68c8-7 17-10 27-6-5 9-14 14-24 11"/>
+    <path d="M290 54c-30 6-56 20-78 42"/>
+    <g stroke-width="1">
+      <circle cx="176" cy="96" r="3"/><circle cx="166" cy="106" r="2.3"/>
+      <circle cx="186" cy="106" r="2"/>
+    </g>
+    <%# the seal %>
+    <g transform="translate(118 96)">
+      <circle r="17" stroke-width="1.3"/>
+      <circle r="11.5" stroke-opacity=".6"/>
+      <path d="M0-7.5C2.6-4 2.6-1 0 2.5-2.6-1-2.6-4 0-7.5zM7.5 0C4 2.6 1 2.6-2.5 0 1-2.6 4-2.6 7.5 0z"
+            stroke-opacity=".8"/>
+    </g>
+  </svg>
   <header class="masthead">
     <div class="titlewrap">
       <button class="burger" onclick="c_rail(true)" aria-label="Categories"><i class="fas fa-bars"></i></button>
