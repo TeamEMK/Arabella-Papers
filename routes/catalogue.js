@@ -241,4 +241,123 @@ router.post('/api/email', express.json(), async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════════════
+// A CUSTOMER SENDING US THEIR OWN DESIGN
+//
+// Somebody has drawn their own monogram, or has a font they want used, and it
+// is not on this page because it was never ours. They attach it here and it
+// reaches the office with their address on it.
+//
+// Public, and it both accepts files and sends mail, which is the two things
+// worth being careful about at once. So:
+//
+//   * It goes to the office and nowhere else. The sender cannot choose a
+//     recipient, so this cannot carry a stranger's file to a stranger's
+//     inbox - the only address it will ever deliver to is ours.
+//   * Nothing is stored. The file rides out on the mail and is gone; there is
+//     no public upload sitting in the database waiting to be found.
+//   * Pictures and PDFs only, 4MB, three files, three sends an hour.
+// ══════════════════════════════════════════════════════
+
+const multer = require('multer');
+const sendUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024, files: 3 },
+});
+
+const SEND_TYPES = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml',
+  'application/pdf', 'application/postscript',
+];
+
+const THEIRS = new Map();
+const THEIRS_MAX = 3;
+
+function sentUsTooOften(ip) {
+  const now = Date.now();
+  const seen = (THEIRS.get(ip) || []).filter(t => now - t < SEND_WINDOW_MS);
+  seen.push(now);
+  THEIRS.set(ip, seen);
+  if (THEIRS.size > 2000) {
+    for (const [k, v] of THEIRS) if (!v.length || now - v[v.length - 1] > SEND_WINDOW_MS) THEIRS.delete(k);
+  }
+  return seen.length > THEIRS_MAX;
+}
+
+const esc = (v) => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// POST /catalogue/api/theirs
+router.post('/api/theirs', sendUpload.array('files', 3), async (req, res) => {
+  try {
+    const chain = String(req.headers['x-forwarded-for'] || '').split(',');
+    const ip = (chain[0] || '').trim() || req.socket?.remoteAddress || 'unknown';
+    if (sentUsTooOften(ip)) {
+      return res.status(429).json({
+        success: false,
+        error: 'That is a few in a short time. Please try again a little later.',
+      });
+    }
+
+    const office = process.env.CATALOGUE_NOTIFY_TO || process.env.MAIL_FROM;
+    if (!office) {
+      return res.status(500).json({ success: false, error: 'We cannot take it just now. Please email us instead.' });
+    }
+
+    const from = String(req.body.email || '').trim();
+    if (!EMAIL_RE.test(from)) {
+      return res.json({ success: false, error: 'Please give us your email address so we can reply.' });
+    }
+    const name = String(req.body.name || '').trim().slice(0, 120);
+    const note = String(req.body.note || '').trim().slice(0, 2000);
+
+    const files = req.files || [];
+    if (!files.length) return res.json({ success: false, error: 'Attach your design first.' });
+    const wrong = files.filter(f => !SEND_TYPES.includes(f.mimetype));
+    if (wrong.length) {
+      return res.json({
+        success: false,
+        error: 'We can take pictures and PDFs — ' + wrong.map(f => f.originalname).join(', '),
+      });
+    }
+
+    const html = `
+      <div style="font-family:Helvetica,Arial,sans-serif;color:#1b1f23;max-width:620px">
+        <h2 style="font-weight:500;margin:0 0 4px">A customer sent their own design</h2>
+        <p style="color:#6c757d;font-size:14px;margin:0 0 18px">Through the catalogue page.</p>
+        <table style="font-size:14px;border-collapse:collapse">
+          ${name ? `<tr><td style="padding:4px 14px 4px 0;color:#6c757d">Name</td><td><b>${esc(name)}</b></td></tr>` : ''}
+          <tr><td style="padding:4px 14px 4px 0;color:#6c757d">Email</td><td><b>${esc(from)}</b></td></tr>
+          <tr><td style="padding:4px 14px 4px 0;color:#6c757d">Files</td><td>${files.length}</td></tr>
+        </table>
+        ${note ? `<p style="font-size:15px;line-height:1.6;white-space:pre-wrap;margin:18px 0;padding:14px;background:#f8f9fa;border-radius:8px">${esc(note)}</p>` : ''}
+      </div>`;
+
+    const sent = await sendMail({
+      to: office,
+      subject: `Design sent in by ${name || from}`,
+      html,
+      text: `${name ? name + '\n' : ''}${from}\n\n${note || '(no message)'}\n`,
+      // So the office can simply hit reply and reach the customer.
+      replyTo: from,
+      attachments: files.map(f => ({ filename: f.originalname, content: f.buffer })),
+    });
+    if (!sent || sent.sent === false) {
+      return res.status(502).json({ success: false, error: 'It did not go through. Please try again in a moment.' });
+    }
+
+    res.json({ success: true, files: files.length });
+  } catch (err) {
+    // multer's own refusals - too big, too many - arrive here.
+    if (err && err.code === 'LIMIT_FILE_SIZE') {
+      return res.json({ success: false, error: 'That file is over 4 MB. Please send a smaller one.' });
+    }
+    if (err && err.code === 'LIMIT_FILE_COUNT') {
+      return res.json({ success: false, error: 'Up to three files at a time.' });
+    }
+    console.error('Customer design failed:', err);
+    res.status(500).json({ success: false, error: 'Something went wrong. Please try again.' });
+  }
+});
+
 module.exports = router;

@@ -143,6 +143,47 @@
     .said.ok { color: var(--gold); }
     .said.bad { color: #ff9b9b; }
 
+    .ownbtn {
+      display: block; width: 100%; margin-top: 16px; padding: 11px 12px;
+      background: transparent; border: 1px solid rgba(255,204,0,.5); border-radius: 9px;
+      color: var(--gold); font-family: inherit; font-size: 13px; cursor: pointer;
+      transition: background .15s;
+    }
+    .ownbtn:hover { background: rgba(255,204,0,.12); }
+
+    /* ── the customer's own design ────────────── */
+    .sheet { position: fixed; inset: 0; z-index: 55; display: none;
+             align-items: center; justify-content: center; padding: 24px;
+             background: rgba(12,14,16,.6); }
+    .sheet.on { display: flex; }
+    .card {
+      background: #fff; border-radius: 16px; width: 100%; max-width: 520px;
+      box-shadow: 0 24px 60px rgba(16,24,40,.28); overflow: hidden;
+      max-height: 92vh; display: flex; flex-direction: column;
+    }
+    .card-h { padding: 22px 26px 16px; border-bottom: 1px solid var(--line); }
+    .card-h h2 { margin: 0; font-size: 23px; font-weight: 500; }
+    .card-h p { margin: 6px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+    .card-b { padding: 20px 26px; overflow-y: auto; }
+    .fld { margin-bottom: 15px; }
+    .fld label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 6px; }
+    .fld input[type=text], .fld input[type=email], .fld textarea, .fld input[type=file] {
+      width: 100%; padding: 11px 13px; border: 1px solid var(--line); border-radius: 9px;
+      font-family: inherit; font-size: 14px; outline: 0; background: #fff;
+    }
+    .fld textarea { resize: vertical; min-height: 84px; }
+    .fld input:focus, .fld textarea:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(255,204,0,.35); }
+    .fld .hint { font-size: 12px; color: var(--muted); margin-top: 5px; }
+    .card-f { padding: 16px 26px 22px; border-top: 1px solid var(--line);
+              display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .btn-dark { background: var(--ink); color: #fff; }
+    .btn-dark:hover { filter: brightness(1.25); }
+    .btn-plain { background: transparent; color: var(--muted); }
+    .btn-plain:hover { color: var(--ink); }
+    #o_said { font-size: 13.5px; }
+    #o_said.ok { color: #146c43; }
+    #o_said.bad { color: #b02a37; }
+
     /* ── zoom ─────────────────────────────────── */
     .lb { position: fixed; inset: 0; background: rgba(12,14,16,.92); z-index: 60;
           display: none; align-items: center; justify-content: center; padding: 30px; }
@@ -180,6 +221,9 @@
   <div class="rail-foot">
     Pick the designs you like, then have them emailed to yourself.<br>
     Quote the code when you place your order.
+    <button class="ownbtn" onclick="c_own(true)">
+      <i class="fas fa-paper-plane"></i> Send us your own design
+    </button>
   </div>
 </aside>
 <div class="scrim" id="scrim" onclick="c_rail(false)"></div>
@@ -210,6 +254,45 @@
   </button>
   <button class="btn btn-ghost" onclick="c_clear()">Clear</button>
   <div class="said" id="c_said"></div>
+</div>
+
+<%# For the customer who has their own monogram or font. It goes to the office
+    and nowhere else - the sender does not choose who receives it. %>
+<div class="sheet" id="c_own" onclick="c_ownOff(event)">
+  <div class="card" onclick="event.stopPropagation()">
+    <div class="card-h">
+      <h2 class="serif">Send us your own design</h2>
+      <p>Made your own monogram, or have a font you would like used?
+         Send it across and we will come back to you.</p>
+    </div>
+    <div class="card-b">
+      <div class="fld">
+        <label for="o_name">Your name</label>
+        <input type="text" id="o_name" autocomplete="name" placeholder="Optional">
+      </div>
+      <div class="fld">
+        <label for="o_email">Your email</label>
+        <input type="email" id="o_email" autocomplete="email" placeholder="your@email.com">
+        <div class="hint">So we can reply to you.</div>
+      </div>
+      <div class="fld">
+        <label for="o_note">Anything you want to tell us</label>
+        <textarea id="o_note" placeholder="What it is, where you would like it used..."></textarea>
+      </div>
+      <div class="fld">
+        <label for="o_files">Your design</label>
+        <input type="file" id="o_files" multiple accept="image/*,application/pdf,.ai,.eps">
+        <div class="hint">Pictures or a PDF, up to three files, 4 MB each.</div>
+      </div>
+    </div>
+    <div class="card-f">
+      <button class="btn btn-dark" id="o_send" onclick="c_ownSend()">
+        <i class="fas fa-paper-plane"></i> Send it
+      </button>
+      <button class="btn btn-plain" onclick="c_own(false)">Cancel</button>
+      <div id="o_said"></div>
+    </div>
+  </div>
 </div>
 
 <div class="lb" id="c_lb" onclick="c_zoomOff(event)">
@@ -327,8 +410,60 @@ function c_zoomOff(ev, force) {
   if (force || ev.target.id === 'c_lb') document.getElementById('c_lb').classList.remove('on');
 }
 document.addEventListener('keydown', function (e) {
-  if (e.key === 'Escape') document.getElementById('c_lb').classList.remove('on');
+  if (e.key !== 'Escape') return;
+  // The zoom sits above the form, so it closes first: pressing Escape with
+  // both open should put back what was just covered, not throw away a form
+  // somebody has been typing into.
+  var lb = document.getElementById('c_lb');
+  if (lb.classList.contains('on')) { lb.classList.remove('on'); return; }
+  c_own(false);
 });
+
+function c_own(open) {
+  document.getElementById('c_own').classList.toggle('on', open);
+  if (open) {
+    c_rail(false);
+    c_ownSay('', '');
+    setTimeout(function () { document.getElementById('o_email').focus(); }, 60);
+  }
+}
+function c_ownOff(ev) { if (ev.target.id === 'c_own') c_own(false); }
+
+function c_ownSay(msg, kind) {
+  var el = document.getElementById('o_said');
+  el.textContent = msg;
+  el.className = kind || '';
+}
+
+async function c_ownSend() {
+  var email = (document.getElementById('o_email').value || '').trim();
+  var files = document.getElementById('o_files').files;
+  if (!email) { c_ownSay('We need your email to reply.', 'bad'); return; }
+  if (!files.length) { c_ownSay('Attach your design first.', 'bad'); return; }
+
+  var fd = new FormData();
+  fd.append('name', document.getElementById('o_name').value);
+  fd.append('email', email);
+  fd.append('note', document.getElementById('o_note').value);
+  for (var i = 0; i < files.length; i++) fd.append('files', files[i]);
+
+  var btn = document.getElementById('o_send');
+  btn.disabled = true;
+  c_ownSay('Sending...', '');
+  try {
+    var json = await fetch('/catalogue/api/theirs', { method: 'POST', body: fd })
+      .then(function (r) { return r.json(); });
+    if (!json.success) { c_ownSay(json.error || 'It did not go.', 'bad'); return; }
+    c_ownSay('Sent — we will be in touch.', 'ok');
+    document.getElementById('o_note').value = '';
+    document.getElementById('o_files').value = '';
+    setTimeout(function () { c_own(false); }, 1800);
+  } catch (e) {
+    c_ownSay('Could not reach us just now. Please try again.', 'bad');
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 async function c_send() {
   var email = (document.getElementById('c_email').value || '').trim();

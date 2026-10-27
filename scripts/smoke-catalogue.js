@@ -209,6 +209,53 @@ const PNG = Buffer.from(
   }
   check('sending over and over gets cut off', blocked > 0, { blocked });
 
+  console.log('\nA customer sending us their own design');
+  SENT.length = 0;
+  const before = (await get('/catalogue/api/items')).json.data.length;
+  const theirs = (fields, files) => {
+    const fd = new FormData();
+    Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
+    (files || []).forEach(f => fd.append('files', new Blob([f.body], { type: f.type }), f.name));
+    return fetch(BASE + '/catalogue/api/theirs', { method: 'POST', body: fd })
+      .then(async x => ({ status: x.status, json: await x.json().catch(() => null) }));
+  };
+
+  let t = await theirs({ name: 'Riya', email: 'riya@example.com', note: 'My own monogram.' },
+    [{ body: PNG, type: 'image/png', name: 'my-monogram.png' }]);
+  check('it goes, with no login', t.json && t.json.success === true, t.json);
+  check('their file is attached',
+    SENT[0] && (SENT[0].attachments || []).length === 1, SENT[0] && SENT[0].attachments);
+  check('and a reply reaches them',
+    SENT[0] && SENT[0].replyTo === 'riya@example.com', SENT[0] && SENT[0].replyTo);
+
+  // The thing that makes a public mail route safe: the sender does not get to
+  // say who it reaches. Whatever is posted, it goes to the office.
+  SENT.length = 0;
+  t = await theirs({ email: 'riya@example.com', to: 'victim@example.com', office: 'victim@example.com' },
+    [{ body: PNG, type: 'image/png', name: 'x.png' }]);
+  check('a sender cannot choose the recipient',
+    SENT.every(s => s.to !== 'victim@example.com'), SENT.map(s => s.to));
+
+  t = await theirs({ email: 'riya@example.com' });
+  check('nothing attached is refused', t.json.success === false, t.json);
+  t = await theirs({ email: 'nope' }, [{ body: PNG, type: 'image/png', name: 'x.png' }]);
+  check('a bad address is refused', t.json.success === false, t.json);
+  t = await theirs({ email: 'riya@example.com' },
+    [{ body: Buffer.from('MZ'), type: 'application/x-msdownload', name: 'x.exe' }]);
+  check('an executable is refused', t.json.success === false, t.json);
+
+  // Nothing a stranger posts should end up sitting on the public page.
+  const after = (await get('/catalogue/api/items')).json.data.length;
+  check('and none of it lands in the catalogue', after === before, { before, after });
+
+  let stopped = 0;
+  for (let i = 0; i < 6; i++) {
+    const x = await theirs({ email: 'riya@example.com' },
+      [{ body: PNG, type: 'image/png', name: 'x.png' }]);
+    if (x.status === 429) stopped++;
+  }
+  check('sending over and over gets cut off', stopped > 0, { stopped });
+
   console.log('\nDeleting');
   r = await asAdmin('DELETE', '/api/catalogue/' + hiddenId);
   check('it goes', r.json.success === true, r.json);
