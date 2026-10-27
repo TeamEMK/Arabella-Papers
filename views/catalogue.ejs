@@ -14,10 +14,12 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
   <style>
     :root {
-      --void: #0b0c0e;        /* the field everything sits on */
-      --rail-bg: #121316;
-      --gold: #c9a227;        /* the portal's yellow, taken down to a foil */
-      --gold-lit: #e8c766;
+      --void: #15171a;        /* the field everything sits on */
+      --rail-bg: #121417;
+      /* Warm gold, not the portal's yellow taken down - that read olive
+         against the dark. This is the foil on a wedding card. */
+      --gold: #c99a3b;
+      --gold-lit: #d8ad55;
       --paper: #f7f4ed;       /* the scans are white; the mat is warmer */
       --dim: #8a8578;
       --hair: rgba(201,162,39,.22);
@@ -38,7 +40,7 @@
     /* ── the rail ─────────────────────────────── */
     .rail {
       position: fixed; inset: 0 auto 0 0; width: var(--rail);
-      background: var(--rail-bg); border-right: 1px solid var(--hair);
+      background: var(--rail-bg); border-right: 1px solid rgba(201,154,59,.3);
       display: flex; flex-direction: column; z-index: 40;
     }
     .crest { padding: 30px 26px 22px; text-align: center; }
@@ -87,7 +89,7 @@
     .rail-b { padding: 22px 26px 30px; margin-top: auto; }
     .ownbtn {
       display: block; width: 100%; padding: 15px 10px;
-      background: transparent; border: 1px solid rgba(201,162,39,.45); border-radius: 2px;
+      background: transparent; border: 1px solid rgba(201,154,59,.5); border-radius: 10px;
       color: var(--gold-lit); font-family: Jost, sans-serif; font-weight: 400;
       font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
       cursor: pointer; line-height: 1.7; transition: background .18s, border-color .18s;
@@ -105,8 +107,10 @@
     .masthead { padding: 42px 46px 30px; display: flex; align-items: flex-end; gap: 26px; flex-wrap: wrap; }
     .eyebrow {
       font-size: 11px; letter-spacing: .42em; color: var(--gold);
-      text-transform: uppercase; text-indent: .42em; margin-bottom: 10px;
+      text-transform: uppercase; text-indent: .42em; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 18px;
     }
+    .eyebrow i { flex: 0 0 86px; height: 1px; background: var(--gold); opacity: .55; }
     .masthead h2 {
       font-family: 'Cormorant Garamond', serif; font-weight: 400;
       font-size: 62px; line-height: .95; margin: 0; color: #fff;
@@ -123,8 +127,14 @@
       background: var(--hair); vertical-align: middle; margin-right: 18px;
     }
     .search { margin-left: auto; position: relative; min-width: 330px; padding-bottom: 6px; }
+    .kbd {
+      position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+      font-family: Jost, sans-serif; font-size: 11px; letter-spacing: .1em;
+      color: var(--dim); border: 1px solid var(--hair); border-radius: 4px;
+      padding: 3px 7px; pointer-events: none;
+    }
     .search input {
-      width: 100%; padding: 15px 20px 15px 54px; border-radius: 40px;
+      width: 100%; padding: 15px 58px 15px 54px; border-radius: 40px;
       border: 1px solid var(--hair); background: rgba(255,255,255,.03);
       color: #efebe1; font-family: Jost, sans-serif; font-weight: 300;
       font-size: 13.5px; letter-spacing: .04em; outline: 0;
@@ -140,7 +150,7 @@
     }
 
     .grid { padding: 10px 46px 150px; display: grid; gap: 26px;
-            grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); }
+            grid-template-columns: repeat(auto-fill, minmax(218px, 1fr)); }
     .tile { position: relative; cursor: default; }
     /* The scan is white; it is matted on warm paper and lifted off the dark
        field. That contrast is doing most of the work on this page, so the
@@ -149,16 +159,23 @@
        margins, so a cream mat behind them drew a second rectangle inside the
        first and the card read as a picture of a page instead of a page. */
     .sheet-img {
-      background: #fdfcf9; padding: 6px; height: 300px;
+      background: #fdfcf9; padding: 10px; height: 282px; position: relative;
       display: flex; align-items: center; justify-content: center;
       cursor: zoom-in; box-shadow: 0 10px 34px rgba(0,0,0,.55);
       transition: transform .22s ease, box-shadow .22s ease;
+    }
+    /* The hairline ruled inside the sheet, the way a printed plate is keyed
+       inside the trim. It is drawn rather than part of the scan, so it sits
+       true on every page whatever that page's own margins are. */
+    .sheet-img::after {
+      content: ''; position: absolute; inset: 7px;
+      border: 1px solid rgba(26,22,14,.17); pointer-events: none;
     }
     .sheet-img img { max-width: 100%; max-height: 100%; object-fit: contain; }
     .tile:hover .sheet-img { transform: translateY(-5px); box-shadow: 0 20px 48px rgba(0,0,0,.7); }
     .cap {
       background: #141518; border: 1px solid rgba(255,255,255,.05); border-top: 0;
-      padding: 15px 17px; display: flex; align-items: center; gap: 12px;
+      padding: 13px 15px; display: flex; align-items: center; gap: 11px;
     }
     .cap .who { min-width: 0; flex: 1; }
     .cap .name {
@@ -335,7 +352,10 @@
   <header class="masthead">
     <div class="titlewrap">
       <button class="burger" onclick="c_rail(true)" aria-label="Categories"><i class="fas fa-bars"></i></button>
-      <div class="eyebrow">Design Catalogue</div>
+      <%# The rule runs on from the words rather than under them, which is
+          what the reference does and what sets the eyebrow apart from a
+          label. %>
+      <div class="eyebrow"><span>Design Catalogue</span><i></i></div>
       <h2 class="serif" id="c_title">All Designs</h2>
       <div class="underline"></div>
     </div>
@@ -343,6 +363,10 @@
     <div class="search">
       <span class="ring"><i class="fas fa-magnifying-glass"></i></span>
       <input type="search" id="c_search" placeholder="Search designs, codes..." oninput="c_render()" autocomplete="off">
+      <%# Shown because the reference shows it - so it has to actually work,
+          or it is a picture of a feature. Ctrl on Windows, Command on a Mac,
+          and the label follows whichever this machine is. %>
+      <kbd class="kbd" id="c_kbd">&#8984;K</kbd>
     </div>
   </header>
 
@@ -532,7 +556,20 @@ function c_zoom(id) {
 function c_zoomOff(ev, force) {
   if (force || ev.target.id === 'c_lb') document.getElementById('c_lb').classList.remove('on');
 }
+// The badge says a shortcut exists, so there is one. Ctrl on Windows and
+// Linux, Command on a Mac, and the badge is relabelled to match the machine
+// it is being read on rather than always claiming a Mac key.
+if (!/Mac|iPhone|iPad/.test(navigator.platform || '')) {
+  document.getElementById('c_kbd').textContent = 'Ctrl K';
+}
 document.addEventListener('keydown', function (e) {
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    var box = document.getElementById('c_search');
+    box.focus();
+    box.select();
+    return;
+  }
   if (e.key !== 'Escape') return;
   // The zoom sits above the form, so it closes first: pressing Escape with
   // both open should put back what was just covered, not throw away a form
