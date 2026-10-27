@@ -104,7 +104,7 @@
 
     /* ── the page ─────────────────────────────── */
     .main { margin-left: var(--rail); min-height: 100vh; }
-    .masthead { padding: 42px 46px 30px; display: flex; align-items: flex-end; gap: 26px; flex-wrap: wrap; }
+    .masthead { padding: 78px 46px 30px; display: flex; align-items: flex-end; gap: 26px; flex-wrap: wrap; }
     .eyebrow {
       font-size: 11px; letter-spacing: .42em; color: var(--gold);
       text-transform: uppercase; text-indent: .42em; margin-bottom: 12px;
@@ -281,10 +281,26 @@
        than it, so a gold sprig on black composites onto this page cleanly
        with no cutting out - and the page's own background is near-black,
        which is what makes the trick hold. */
-    .photo { position: absolute; pointer-events: none; mix-blend-mode: screen; }
-    .photo-rail { left: 0; bottom: 0; width: 100%; opacity: .55; }
-    .photo-top { right: 0; top: 0; width: 620px; max-width: 46%; opacity: .5; }
-    @media (max-width: 980px) { .photo-top { display: none; } }
+    /* Behind everything, and kept off the things people have to read. The
+       first pass had the wax seal sitting on the search box and the sprig
+       over the upload button - ornament that makes a control unreadable has
+       stopped being ornament. */
+    .photo { position: absolute; pointer-events: none; mix-blend-mode: screen; z-index: 0; }
+    .photo-rail { left: -26px; bottom: -24px; width: 252px; opacity: .5; }
+    .photo-top { right: -30px; top: -34px; width: 560px; max-width: 40%; opacity: .5; }
+    @media (max-width: 1200px) { .photo-top { display: none; } }
+
+    /* Lifted clear of it. */
+    .crest, .cats, .rail-b, .masthead, .grid, .tray { position: relative; z-index: 1; }
+    /* The rail's lower half darkens under the button and the creed, so the
+       photograph is behind them rather than through them. */
+    .rail-b::before {
+      content: ''; position: absolute; inset: -40px -10px -10px;
+      background: linear-gradient(to top, var(--rail-bg) 32%, rgba(18,20,23,0));
+      z-index: -1;
+    }
+    /* Same for the search: its field was glass over a wax seal. */
+    .search input { background: rgba(21,23,26,.82) !important; }
     /* Clear of the button rather than behind it: a faint drawing under a
        bordered control reads as a smudge on the screen, not as ornament. */
     .bot-rail { left: -22px; bottom: -6px; width: 172px; opacity: .15; }
