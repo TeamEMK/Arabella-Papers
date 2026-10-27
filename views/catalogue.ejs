@@ -275,6 +275,16 @@
        is carrying 141 pieces of real line art and a loud ornament would be
        competing with the thing people came to look at. */
     .bot { position: absolute; pointer-events: none; color: var(--gold); }
+    /* The photographs come on a black ground rather than with real
+       transparency, because image generators rarely give an alpha channel.
+       Screen blending drops black to nothing and keeps everything lighter
+       than it, so a gold sprig on black composites onto this page cleanly
+       with no cutting out - and the page's own background is near-black,
+       which is what makes the trick hold. */
+    .photo { position: absolute; pointer-events: none; mix-blend-mode: screen; }
+    .photo-rail { left: 0; bottom: 0; width: 100%; opacity: .55; }
+    .photo-top { right: 0; top: 0; width: 620px; max-width: 46%; opacity: .5; }
+    @media (max-width: 980px) { .photo-top { display: none; } }
     /* Clear of the button rather than behind it: a faint drawing under a
        bordered control reads as a smudge on the screen, not as ornament. */
     .bot-rail { left: -22px; bottom: -6px; width: 172px; opacity: .15; }
@@ -357,10 +367,13 @@
       FINE PAPERS<br>TIMELESS<br>CELEBRATIONS
     </div>
   </div>
-  <%# A sprig rising out of the bottom corner, drawn rather than photographed.
-      Stems with paired leaves and a few seed heads - the shape of something
-      pressed in a book, not a rendered bouquet. %>
-  <svg class="bot bot-rail" viewBox="0 0 160 210" fill="none" stroke="currentColor"
+  <%# The photograph if it is there, the drawing if it is not.
+      onerror rather than a server-side check: this page is served from a
+      view with no filesystem look-up in it, and a missing file should leave
+      the ornament it replaced in place rather than a broken image icon. %>
+  <img class="photo photo-rail" src="/ornament/sprig.png" alt=""
+       onerror="this.remove(); document.getElementById('botRail').style.display='';">
+  <svg id="botRail" style="display:none" class="bot bot-rail" viewBox="0 0 160 210" fill="none" stroke="currentColor"
        stroke-width="1.2" stroke-linecap="round" aria-hidden="true">
     <path d="M18 208C26 160 44 118 76 86"/>
     <path d="M30 170c-9-7-13-17-12-29 11 3 19 11 22 22M34 158c10-4 20-2 29 6-8 8-18 10-29 6"/>
@@ -378,9 +391,11 @@
 <div class="scrim" id="scrim" onclick="c_rail(false)"></div>
 
 <main class="main">
+  <img class="photo photo-top" src="/ornament/seal.png" alt=""
+       onerror="this.remove(); document.getElementById('botTop').style.display='';">
   <%# The corner spray and seal the reference photographs, drawn. Behind the
       masthead and faint, so the title still reads first. %>
-  <svg class="bot bot-top" viewBox="0 0 300 150" fill="none" stroke="currentColor"
+  <svg id="botTop" style="display:none" class="bot bot-top" viewBox="0 0 300 150" fill="none" stroke="currentColor"
        stroke-width="1.2" stroke-linecap="round" aria-hidden="true">
     <path d="M298 10c-44 2-82 16-114 42"/>
     <path d="M262 18c-4-9-3-18 3-26 7 7 9 16 5 26M268 22c9-5 18-5 27 1-7 8-16 10-26 6"/>
