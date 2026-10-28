@@ -1,0 +1,168 @@
+<%# ══════════════════════════════════════════════════════
+    S.C.O.T. — THE CALLING LIST
+
+    The panel itself: the filters, the table and the script that fills it.
+    Shared by two places, because it is one thing and was about to become
+    two copies of one thing:
+
+      - the Orders Dashboard, where it sits folded inside a collapse for
+        somebody already on that page;
+      - its own tab, for somebody whose job is the calling list and who
+        should not have to open another page to reach it.
+
+    The sheet does the thinking. It already works out each client's ordering
+    rhythm and when they are due again, and nothing in here recalculates any
+    of it - two answers to one question is how a number starts being argued
+    about in a meeting.
+
+    Self-contained on purpose: the escape helper is its own rather than
+    bulkEsc from the bulkUpload partial, which is only loaded on two pages
+    and would leave this one throwing on a page that did not have it.
+    downloadXlsx comes from app.ejs, so it is on every page.
+ ══════════════════════════════════════════════════════ %>
+<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+  <select id="scot_when" class="form-select form-select-sm" style="max-width:220px" onchange="scot_render()">
+    <option value="due">Due now or overdue</option>
+    <option value="soon">Due in the next 7 days</option>
+    <option value="all">Everyone on the list</option>
+  </select>
+  <input type="text" id="scot_search" class="form-control form-control-sm" style="max-width:220px"
+         placeholder="Client name..." onkeyup="scot_render()">
+  <button class="btn btn-sm btn-outline-dark" onclick="scot_load(true)"><i class="fas fa-sync-alt me-1"></i>Refresh</button>
+  <button class="btn btn-sm btn-outline-success" onclick="scot_download(this)"><i class="fas fa-file-excel me-1"></i>Excel</button>
+  <a class="btn btn-sm btn-outline-primary ms-auto" id="scot_sheetLink" target="_blank" rel="noopener" href="#">
+    <i class="fas fa-up-right-from-square me-1"></i>Open the sheet
+  </a>
+</div>
+<div class="text-muted small mb-2" id="scot_note">Opening…</div>
+<div class="table-responsive" style="max-height:<%= typeof scotTall !== 'undefined' && scotTall ? '68vh' : '380px' %>;overflow-y:auto;">
+  <table class="mcard table table-hover table-striped mb-0 text-nowrap">
+    <thead class="table-dark">
+      <tr>
+        <th style="position:sticky;top:0;background:#212529;color:white;">Client</th>
+        <th style="position:sticky;top:0;background:#212529;color:white;">Orders every</th>
+        <th style="position:sticky;top:0;background:#212529;color:white;">Last order</th>
+        <th style="position:sticky;top:0;background:#212529;color:white;">Days since</th>
+        <th style="position:sticky;top:0;background:#212529;color:white;">Orders so far</th>
+        <th style="position:sticky;top:0;background:#212529;color:white;">Expected</th>
+        <th style="position:sticky;top:0;background:#212529;color:white;">Overdue by</th>
+      </tr>
+    </thead>
+    <tbody id="scot_tbody"><tr><td colspan="7" class="text-center py-3 text-muted">Loading…</td></tr></tbody>
+  </table>
+</div>
+
+<script>
+var scot_rows = [], scot_shown = [], scot_loaded = false;
+
+function scot_esc(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Only the dashboard has the collapse. Bootstrap toggles on the same click,
+// so this reads the state BEFORE the toggle: shut now means it is about to
+// open, which is the moment to go and read the sheet.
+function scot_open() {
+  var panel = document.getElementById('scotContent');
+  if (!panel) return;
+  var shut = !panel.classList.contains('show');
+  if (shut && !scot_loaded) scot_load(false);
+}
+
+async function scot_load(fresh) {
+  var note = document.getElementById('scot_note');
+  if (!note) return;
+  note.textContent = fresh ? 'Reading the sheet again…' : 'Reading the sheet…';
+  document.getElementById('scot_tbody').innerHTML =
+    '<tr><td colspan="7" class="text-center py-3"><i class="fas fa-spinner fa-spin me-2"></i>Loading…</td></tr>';
+  try {
+    var res = await fetch('/api/scot/calling-list' + (fresh ? '?fresh=1' : ''));
+    var json = await res.json();
+    if (!json.success) {
+      note.textContent = '';
+      document.getElementById('scot_tbody').innerHTML =
+        '<tr><td colspan="7" class="text-center py-3 text-danger">' + scot_esc(json.error || 'Could not read the sheet.') + '</td></tr>';
+      return;
+    }
+    scot_loaded = true;
+    scot_rows = json.list || [];
+    document.getElementById('scot_sheetLink').href = json.sheetUrl;
+
+    // The two badges live on the dashboard's fold-out header, which this tab
+    // does not have.
+    var due = document.getElementById('scot_dueBadge');
+    if (due) { due.textContent = json.due; due.classList.toggle('d-none', !json.due); }
+    var soon = document.getElementById('scot_soonBadge');
+    if (soon) { soon.textContent = json.soon; soon.classList.toggle('d-none', !json.soon); }
+
+    var tiles = document.getElementById('scot_tiles');
+    if (tiles) {
+      document.getElementById('scot_tileDue').textContent = json.due;
+      document.getElementById('scot_tileSoon').textContent = json.soon;
+      document.getElementById('scot_tileTotal').textContent = json.total;
+      tiles.classList.remove('d-none');
+    }
+
+    note.textContent = json.due + ' due now, ' + json.soon + ' in the next 7 days, '
+      + json.total + ' clients on the list · read at ' + json.readAt;
+    scot_render();
+  } catch (e) {
+    note.textContent = '';
+    document.getElementById('scot_tbody').innerHTML =
+      '<tr><td colspan="7" class="text-center py-3 text-danger">Server error.</td></tr>';
+  }
+}
+
+function scot_render() {
+  var when = document.getElementById('scot_when').value;
+  var q = (document.getElementById('scot_search').value || '').toLowerCase().trim();
+
+  scot_shown = scot_rows.filter(function (c) {
+    if (when === 'due' && !(c.late !== null && c.late >= 0)) return false;
+    if (when === 'soon' && !(c.late !== null && c.late < 0 && c.late >= -7)) return false;
+    if (q && c.client.toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+
+  var body = document.getElementById('scot_tbody');
+  if (!scot_shown.length) {
+    body.innerHTML = '<tr><td colspan="7" class="text-center py-3 text-muted">Nobody here.</td></tr>';
+    return;
+  }
+  body.innerHTML = scot_shown.map(function (c) {
+    // How late, said in words rather than as a signed number: -3 for "due in
+    // three days" is a thing to decode, not to read.
+    var when2 = c.late === null
+      ? '<span class="text-muted">-</span>'
+      : c.late > 0 ? '<span class="badge bg-danger">' + c.late + ' day' + (c.late === 1 ? '' : 's') + '</span>'
+      : c.late === 0 ? '<span class="badge bg-warning text-dark">today</span>'
+      : '<span class="text-muted small">in ' + (-c.late) + ' day' + (c.late === -1 ? '' : 's') + '</span>';
+    return '<tr>'
+      + '<td class="fw-bold">' + scot_esc(c.client) + '</td>'
+      + '<td>' + (c.frequency ? scot_esc(c.frequency) : '<span class="text-muted">not enough history</span>') + '</td>'
+      + '<td>' + scot_esc(c.lastOrder || '-') + '</td>'
+      + '<td>' + (c.daysSince === null ? '-' : c.daysSince) + '</td>'
+      + '<td>' + (c.totalOrders === null ? '-' : c.totalOrders) + '</td>'
+      + '<td>' + scot_esc(c.expectedNext || '-') + '</td>'
+      + '<td>' + when2 + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function scot_download(btn) {
+  var cols = ['Client', 'Orders every', 'Last order', 'Days since', 'Orders so far', 'Expected', 'Overdue by (days)'];
+  var rows = (scot_shown || []).map(function (c) {
+    return [c.client, c.frequency, c.lastOrder,
+            c.daysSince === null ? '' : c.daysSince,
+            c.totalOrders === null ? '' : c.totalOrders,
+            c.expectedNext, c.late === null ? '' : c.late];
+  });
+  downloadXlsx('SCOT calling list', cols, rows, btn);
+}
+
+// On its own tab there is nothing to unfold, so it reads the sheet straight
+// away: somebody who opened the calling list came to see the calling list.
+if (!document.getElementById('scotContent')) scot_load(false);
+</script>

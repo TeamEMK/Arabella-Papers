@@ -1,0 +1,56 @@
+<%# ══════════════════════════════════════════════════════
+    S.C.O.T. — ITS OWN TAB
+
+    The same calling list that folds out of the Orders Dashboard, on a page
+    of its own for whoever's job it is. One partial behind both, so a change
+    to the list is a change in one file.
+
+    This page adds what a dashboard fold-out had no room for: the three
+    counts across the top, and a table tall enough to work down without
+    scrolling a page inside a page.
+ ══════════════════════════════════════════════════════ %>
+<div class="container-fluid py-3">
+
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h4 class="mb-0 fw-bold">
+      <i class="fas fa-phone-volume me-2 text-primary"></i>S.C.O.T.
+      <span class="text-muted fw-normal fs-6 ms-2">clients due for a call</span>
+    </h4>
+  </div>
+
+  <%# Hidden until the sheet has been read, rather than showing three zeros
+      that look like an answer. %>
+  <div class="row g-2 mb-3 d-none" id="scot_tiles">
+    <div class="col-6 col-md-4">
+      <div class="card bg-light-glass shadow-sm smooth-ui h-100">
+        <div class="card-body py-2">
+          <div class="text-muted small text-uppercase">Due now</div>
+          <div class="fs-3 fw-bold text-danger" id="scot_tileDue">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4">
+      <div class="card bg-light-glass shadow-sm smooth-ui h-100">
+        <div class="card-body py-2">
+          <div class="text-muted small text-uppercase">Next 7 days</div>
+          <div class="fs-3 fw-bold text-warning" id="scot_tileSoon">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card bg-light-glass shadow-sm smooth-ui h-100">
+        <div class="card-body py-2">
+          <div class="text-muted small text-uppercase">On the list</div>
+          <div class="fs-3 fw-bold" id="scot_tileTotal">0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card bg-light-glass shadow-sm smooth-ui p-2">
+    <div class="card-body p-2">
+      <%- include('../partials/scot', { scotTall: true }) %>
+    </div>
+  </div>
+
+</div>

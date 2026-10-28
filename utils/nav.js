@@ -36,6 +36,15 @@ const SECTIONS = [
   // everyone: a designer's own corrections are the point of the page, and
   // raising one is guarded in the API rather than by hiding the tab.
   { id: 'corrections', group: 'Orders', name: 'Corrections', icon: 'fa-pen-ruler', rule: () => true },
+  // The calling list, on a page of its own. It folds out of the Orders
+  // Dashboard too, and both draw the same partial - but somebody whose job
+  // is ringing clients should not have to open a board of orders to get at
+  // it. Same rule as that dashboard, so this tab existing neither gives nor
+  // takes away a sight of the list; narrow it per person from Access Control.
+  {
+    id: 'scot', group: 'Orders', name: 'SCOT', icon: 'fa-phone-volume',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head' || role.includes('Designer'),
+  },
   {
     // 'Production & Dispatch' is named in full rather than caught by an
     // includes() on 'Production': a role matched by a fragment is a trap for
