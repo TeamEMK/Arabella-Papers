@@ -36,15 +36,35 @@ const SECTIONS = [
   // everyone: a designer's own corrections are the point of the page, and
   // raising one is guarded in the API rather than by hiding the tab.
   { id: 'corrections', group: 'Orders', name: 'Corrections', icon: 'fa-pen-ruler', rule: () => true },
-  // The calling list, on a page of its own. It folds out of the Orders
-  // Dashboard too, and both draw the same partial - but somebody whose job
-  // is ringing clients should not have to open a board of orders to get at
-  // it. Same rule as that dashboard, so this tab existing neither gives nor
-  // takes away a sight of the list; narrow it per person from Access Control.
+
+  // ── ASMP ──
+  // The calling list and the sheet-driven work, together. Both are about
+  // chasing a thing along rather than building it, which is why neither sat
+  // comfortably under Orders or in a group of its own.
+  //
+  // Nobody gained or lost a tab by this grouping: every rule below is the one
+  // it already had. A heading is only ever drawn for a group somebody has a
+  // tab in, so this one is invisible to anybody with none of them.
+
+  // SCOT folds out of the Orders Dashboard as well, and both draw the same
+  // partial - but somebody whose job is ringing clients should not have to
+  // open a board of orders to get at it.
   {
-    id: 'scot', group: 'Orders', name: 'SCOT', icon: 'fa-phone-volume',
+    id: 'scot', group: 'ASMP', name: 'SCOT', icon: 'fa-phone-volume',
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head' || role.includes('Designer'),
   },
+  // Work that lives in a Google Sheet — an enquiry or an order walked through
+  // its steps. Two tabs, because they are two jobs: mapping a sheet is done
+  // once by whoever sets the process up, and working a step is done every day
+  // by everybody else. One page carrying both put a setup button in front of
+  // people who will never press it.
+  {
+    id: 'fmsAdmin', group: 'ASMP', name: 'FMS Admin', icon: 'fa-sitemap',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
+  },
+  // Open to everyone: being named on a step is what puts anything on this
+  // page, and somebody on no step sees an empty tab rather than a locked door.
+  { id: 'fms', group: 'ASMP', name: 'FMS Task', icon: 'fa-diagram-project', rule: () => true },
   {
     // 'Production & Dispatch' is named in full rather than caught by an
     // includes() on 'Production': a role matched by a fragment is a trap for
@@ -92,18 +112,6 @@ const SECTIONS = [
     id: 'oldDispatch', group: 'Dispatch', name: 'Backup Dispatch', icon: 'fa-box-archive',
     rule: (role) => role === 'SuperAdmin' || role === 'Accounts',
   },
-  // Work that lives in a Google Sheet — an enquiry or an order walked through
-  // its steps. Two tabs, because they are two jobs: mapping a sheet is done
-  // once by whoever sets the process up, and working a step is done every day
-  // by everybody else. One page carrying both put a setup button in front of
-  // people who will never press it.
-  {
-    id: 'fmsAdmin', group: 'FMS', name: 'FMS Admin', icon: 'fa-sitemap',
-    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
-  },
-  // Open to everyone: being named on a step is what puts anything on this
-  // page, and somebody on no step sees an empty tab rather than a locked door.
-  { id: 'fms', group: 'FMS', name: 'FMS Task', icon: 'fa-diagram-project', rule: () => true },
   // What paper is in stock is asked by everyone who takes an order, so the
   // tab is open to all.
   { id: 'stock', group: 'Company', name: 'Stock', icon: 'fa-layer-group', rule: () => true },
