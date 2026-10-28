@@ -147,7 +147,7 @@
         </div>
         <div class="fld">
           <label for="t_id">Order number</label>
-          <input type="text" id="t_id" value="<%= orderId %>" placeholder="e.g. K-160437" autocomplete="off">
+          <input type="text" id="t_id" value="<%= orderId %>" placeholder="e.g. K-123456" autocomplete="off">
         </div>
       </div>
       <button class="go" id="t_go" onclick="t_look()">Check my order</button>
@@ -249,7 +249,7 @@ async function t_look() {
   });
 });
 
-// A link can carry both - /track?name=Sarah&order=K-160437 - so the office
+// A link can carry both - /track?name=Sarah&order=K-123456 - so the office
 // can send somebody straight to their own order with nothing to type.
 if (document.getElementById('t_id').value.trim() && document.getElementById('t_name').value.trim()) {
   t_look();
