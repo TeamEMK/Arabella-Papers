@@ -4,8 +4,26 @@ const bcrypt = require('bcryptjs');
 const db = require('../../config/db');
 const { requireLogin } = require('../../middleware/auth');
 const { fixFrom } = require('../../utils/whereFrom');
+const vectorDuty = require('../../utils/vectorDuty');
 
 const MIN_PASSWORD = 8;
+
+// GET /api/account/vector-pending
+//
+// What this person still owes, for the app shell: it decides whether to warn
+// on the way out of the tab, and what to show when the logout is refused.
+// Everybody can ask, and everybody only ever gets their own.
+router.get('/vector-pending', requireLogin, async (req, res) => {
+  try {
+    res.json({ success: true, ...(await vectorDuty.pendingFor(req.session.user)) });
+  } catch (err) {
+    console.error('Vector pending failed:', err.message);
+    // Answered as nothing owing rather than as an error: the shell uses this
+    // to decide whether to put a warning in somebody's way, and a wobble in
+    // the database is not a reason to start blocking people.
+    res.json({ success: true, on: false, orders: [], count: 0 });
+  }
+});
 
 // POST /api/account/where — attach the browser's position to this login.
 //

@@ -78,7 +78,7 @@
         </li>
       </ul>
     </div>
-    <form method="POST" action="/logout">
+    <form method="POST" action="/logout" onsubmit="return vd_leaving(event)">
       <button type="submit" class="side-logout" title="Logout">
         <i class="fas fa-right-from-bracket side-icon"></i><span class="side-label">Logout</span>
       </button>
@@ -831,6 +831,107 @@
       function () { /* refused or unavailable - the IP still answers */ },
       { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 },
     );
+  })();
+
+  // ── VECTOR FILES STILL OWED ──
+  //
+  // Three layers, because no one of them is a wall:
+  //
+  //   1. The Logout button checks first and shows the list instead of
+  //      signing out. The server refuses it as well - this is the courtesy,
+  //      not the guard.
+  //   2. Closing the tab raises the browser's own "Leave site?" box. The
+  //      wording is the browser's and cannot be set; every browser stopped
+  //      letting pages write their own years ago, after the ones that said
+  //      your computer was infected. It still stops a thoughtless close.
+  //   3. Whoever ignores both is in the seven o'clock mail.
+  //
+  // Nothing here blocks the work itself. Somebody owing files can still open
+  // every page and upload them, which is the point.
+  var vd_count = 0;
+
+  async function vd_refresh() {
+    try {
+      var res = await fetch('/api/account/vector-pending');
+      var json = await res.json();
+      vd_count = json && json.success ? (json.count || 0) : 0;
+      return json;
+    } catch (e) {
+      // A failed check never invents a hold.
+      vd_count = 0;
+      return null;
+    }
+  }
+
+  function vd_list(json) {
+    var rows = (json.orders || []).slice(0, 40).map(function (o) {
+      return '<tr><td style="text-align:left;padding:4px 8px;font-weight:600;">' + o.orderId + '</td>'
+        + '<td style="text-align:left;padding:4px 8px;">' + (o.client || '') + '</td>'
+        + '<td style="text-align:left;padding:4px 8px;color:#777;">' + (o.punched || '') + '</td></tr>';
+    }).join('');
+    var more = (json.orders || []).length > 40
+      ? '<p style="margin:8px 0 0;color:#777;">and ' + ((json.orders || []).length - 40) + ' more</p>' : '';
+    return '<p style="margin:0 0 10px;">Upload the vector file on each of these, then sign out.</p>'
+      + '<div style="max-height:320px;overflow:auto;border:1px solid #eee;border-radius:6px;">'
+      + '<table style="width:100%;border-collapse:collapse;font-size:13px;">' + rows + '</table></div>' + more;
+  }
+
+  // Called from the Logout form. Checks fresh rather than trusting the number
+  // from a page that may have been open all afternoon.
+  function vd_leaving(ev) {
+    ev.preventDefault();
+    var form = ev.target;
+    vd_refresh().then(function (json) {
+      if (!json || !json.count) {
+        // Nothing owing: let it go out for real, past this handler.
+        window.removeEventListener('beforeunload', vd_warn);
+        form.onsubmit = null;
+        form.submit();
+        return;
+      }
+      Swal.fire({
+        icon: 'warning',
+        title: json.count + ' vector file' + (json.count === 1 ? '' : 's') + ' still to upload',
+        html: vd_list(json),
+        width: 620,
+        confirmButtonText: 'Show me',
+        confirmButtonColor: '#0d6efd',
+      }).then(function () { loadPage('tillApproval'); });
+    });
+    return false;
+  }
+
+  function vd_warn(e) {
+    if (!vd_count) return;
+    e.preventDefault();
+    // Set for the browsers that still read it; the rest show their own words.
+    e.returnValue = '';
+    return '';
+  }
+
+  window.addEventListener('beforeunload', vd_warn);
+
+  (function () {
+    vd_refresh().then(function (json) {
+      // Sent here by a logout that was refused without JavaScript, or by the
+      // link in the mail.
+      if (json && json.count && /[?&]vectors=due/.test(location.search)) {
+        Swal.fire({
+          icon: 'warning',
+          title: json.count + ' vector file' + (json.count === 1 ? '' : 's') + ' still to upload',
+          html: vd_list(json),
+          width: 620,
+          confirmButtonText: 'Show me',
+          confirmButtonColor: '#0d6efd',
+        }).then(function () { loadPage('tillApproval'); });
+      }
+    });
+    // The count moves as files go up, and the warning should stop as soon as
+    // the last one is in rather than at the next page load.
+    setInterval(vd_refresh, 60000);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) vd_refresh();
+    });
   })();
 </script>
 </body>

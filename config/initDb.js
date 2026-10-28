@@ -222,6 +222,13 @@ const SETTING_SEED = [
   // decision about the floor's working day, not something a deploy should
   // make on its own.
   ['pms_start_date', ''],
+
+  // The day the vector-file rule starts biting. Set rather than blank because
+  // the office asked for it to begin the day it went in - and because a rule
+  // with no date applied to all of history would have opened with 1,100
+  // orders pending against one designer, every one of them for a job finished
+  // months before the upload existed. Moved or emptied from Step Settings.
+  ['vector_rule_start_date', '2026-10-28'],
 ];
 
 async function seedSettings() {

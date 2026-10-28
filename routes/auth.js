@@ -3,6 +3,30 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const { ipOf, locationOf, fixFrom } = require('../utils/whereFrom');
+const vectorDuty = require('../utils/vectorDuty');
+
+/**
+ * The vector-file gate.
+ *
+ * A designer who still owes files does not get to log out until they are in.
+ * Both ways out go through this, because the GET is a plain link and leaving
+ * it open would make the whole thing a suggestion.
+ *
+ * It fails open. If the count cannot be read - the database is unwell, the
+ * table is missing on a fresh deploy - the person is let out. A bug in here
+ * must not be able to trap the whole office inside the app.
+ */
+async function vectorHold(req) {
+  try {
+    const user = req.session && req.session.user;
+    if (!user) return null;
+    const pending = await vectorDuty.pendingFor(user);
+    return pending.count > 0 ? pending : null;
+  } catch (err) {
+    console.error('Vector logout check failed:', err.message);
+    return null;
+  }
+}
 
 // GET /login
 router.get('/login', (req, res) => {
@@ -70,12 +94,32 @@ async function recordLogout(req) {
 
 // POST /logout
 router.post('/logout', async (req, res) => {
+  const held = await vectorHold(req);
+  if (held) {
+    // A plain form post - somebody with JavaScript off - wants a page, not a
+    // page of JSON. The app shell puts the list in front of them.
+    if (!req.xhr && req.accepts(['html', 'json']) === 'html') {
+      return res.redirect('/?vectors=due');
+    }
+    return res.status(409).json({
+      success: false,
+      blocked: 'vector',
+      count: held.count,
+      orders: held.orders,
+      error: held.count + ' order' + (held.count === 1 ? '' : 's')
+        + ' still need their vector file. Upload them before signing out.',
+    });
+  }
   await recordLogout(req);
   req.session.destroy(() => res.redirect('/login'));
 });
 
 // GET /logout (fallback)
+//
+// Sent back to the app rather than answered with JSON: somebody who followed
+// a link wants a page, and the app puts the list in front of them.
 router.get('/logout', async (req, res) => {
+  if (await vectorHold(req)) return res.redirect('/?vectors=due');
   await recordLogout(req);
   req.session.destroy(() => res.redirect('/login'));
 });
