@@ -60,7 +60,12 @@ router.get('/thumb/:id', async (req, res) => {
     if (!item || !item.bytes) return res.status(404).send('Not found.');
     res.setHeader('Content-Type', item.mime_type || 'application/octet-stream');
     res.setHeader('Content-Length', item.bytes.length);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    // s-maxage, not just max-age. Without it Vercel's edge does not keep a
+    // function's response at all, so every tile on every visit was waking a
+    // function and asking the database for the same bytes again - which is
+    // most of why this page felt slow. A design's picture never changes
+    // under its id: a new upload is a new row, and taking one down 404s it.
+    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=31536000, immutable');
     res.send(item.bytes);
   } catch (err) {
     console.error('Catalogue thumb failed:', err);
@@ -82,7 +87,12 @@ router.get('/image/:id', async (req, res) => {
     res.setHeader('Content-Length', item.bytes.length);
     // A catalogue picture changes about never, and this page is meant to be
     // opened by a lot of people who are not paying for the bandwidth.
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    // s-maxage, not just max-age. Without it Vercel's edge does not keep a
+    // function's response at all, so every tile on every visit was waking a
+    // function and asking the database for the same bytes again - which is
+    // most of why this page felt slow. A design's picture never changes
+    // under its id: a new upload is a new row, and taking one down 404s it.
+    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=31536000, immutable');
     res.send(item.bytes);
   } catch (err) {
     console.error('Catalogue image failed:', err);
