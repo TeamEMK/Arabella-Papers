@@ -133,14 +133,19 @@ const SECTIONS = [
     id: 'recruitment', group: 'Company', name: 'Recruitment', icon: 'fa-user-plus',
     rule: (role) => role === 'SuperAdmin',
   },
-  // What a job should be quoted at, from the client's own calculator. Kept
-  // to the people who already decide what the office charges: the page shows
-  // the whole price list and the standing 50% discount, which is not a thing
-  // to put in front of everybody. One line here, or the Access Control page,
-  // widens it.
+  // What a job should be quoted at, from the client's own calculator.
+  //
+  // SuperAdmin alone. The page shows the whole price list and the standing
+  // 50% discount - what the office pays for its own work and what it takes
+  // off every quote - which is the tightest thing in here after the Aadhaar
+  // scans on the Recruitment tab.
+  //
+  // Deliberately not `locked`: somebody who really does quote work can still
+  // be handed it one person at a time from the Access Control page, which
+  // leaves a decision behind it instead of a whole role quietly having it.
   {
     id: 'pricing', group: 'Admin', name: 'Pricing Calculator', icon: 'fa-calculator',
-    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head' || role === 'Accounts',
+    rule: (role) => role === 'SuperAdmin',
   },
   {
     id: 'o2dsummary', group: 'Admin', name: 'Analytics', icon: 'fa-chart-line',

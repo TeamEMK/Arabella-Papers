@@ -177,11 +177,18 @@ const check = (name, ok, extra) => {
 
   console.log('\nThe tab is not for everybody');
   const { defaultSectionIds } = require(path.join(ROOT, 'utils/nav.js'));
+  // The price list and the standing discount are the tightest thing in here
+  // after the Recruitment tab's document scans.
   check('a designer is not shown the price list',
     !defaultSectionIds('India Designer', '').includes('pricing'));
   check('nor the production floor',
     !defaultSectionIds('Production & Dispatch', '').includes('pricing'));
-  check('accounts is', defaultSectionIds('Accounts', '').includes('pricing'));
+  check('nor accounts', !defaultSectionIds('Accounts', '').includes('pricing'));
+  check('nor a head of department', !defaultSectionIds('Accounts', 'Head').includes('pricing'));
+  check('only a SuperAdmin', defaultSectionIds('SuperAdmin', '').includes('pricing'));
+  // Not locked, so one person can still be handed it deliberately.
+  const { MANAGEABLE_IDS } = require(path.join(ROOT, 'utils/nav.js'));
+  check('but it can still be granted to one person', MANAGEABLE_IDS.includes('pricing'));
 
   server.close();
   await db.end().catch(() => {});
