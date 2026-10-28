@@ -8,7 +8,20 @@
 // and misses the others.
 // ══════════════════════════════════════════════════════
 
+// The registered name, for the papers that have to carry it: the offer
+// letter and the contract clause inside it. Not for anything a customer
+// reads.
 const COMPANY = 'Arabella Papers Private Limited';
+
+// What the office is called when it speaks to a customer. The catalogue mail
+// goes out to the client's own customers, and "Private Limited" in a subject
+// line reads like a registration certificate rather than a stationer.
+//
+// Deliberately a second name rather than a shortened COMPANY: an offer
+// letter naming "Arabella Papers" where it should name the registered entity
+// is a worse mistake in the other direction, and keeping one string for both
+// is what would eventually cause it.
+const TRADING_NAME = 'Arabella Papers';
 
 /**
  * The letterhead, as the office's own Word template draws it: the name on the
@@ -56,4 +69,4 @@ function officeLines() {
   return String(OFFICE.address || '').split('\n').map(l => l.trim()).filter(Boolean);
 }
 
-module.exports = { COMPANY, LETTERHEAD, OFFICE, officeLines };
+module.exports = { COMPANY, TRADING_NAME, LETTERHEAD, OFFICE, officeLines };

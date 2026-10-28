@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const { sendMail } = require('../utils/mailer');
-const { COMPANY } = require('../utils/office');
+const { TRADING_NAME } = require('../utils/office');
 
 // ══════════════════════════════════════════════════════
 // DESIGN CATALOGUE — the public half
@@ -215,7 +215,7 @@ router.post('/api/email', express.json(), async (req, res) => {
 
     const html = `
       <div style="font-family:Helvetica,Arial,sans-serif;color:#1b1f23;max-width:620px">
-        <div style="letter-spacing:.2em;font-size:12px;color:#5A6E96;font-weight:600">${COMPANY.toUpperCase()}</div>
+        <div style="letter-spacing:.2em;font-size:12px;color:#5A6E96;font-weight:600">${TRADING_NAME.toUpperCase()}</div>
         <h2 style="font-weight:500;margin:14px 0 6px">The designs you picked</h2>
         <p style="color:#6c757d;font-size:14px;margin:0 0 22px">
           ${rows.length} ${rows.length === 1 ? 'design' : 'designs'} from our catalogue.
@@ -227,14 +227,14 @@ router.post('/api/email', express.json(), async (req, res) => {
         </p>
       </div>`;
 
-    const text = 'The designs you picked from the ' + COMPANY + ' catalogue:\n\n'
+    const text = 'The designs you picked from the ' + TRADING_NAME + ' catalogue:\n\n'
       + list.map(l => '  - ' + l).join('\n')
       + '\n\nQuote the code when you place your order.\n'
       + 'The full catalogue: ' + base + '/catalogue\n';
 
     const sent = await sendMail({
       to: email,
-      subject: `Your selection from the ${COMPANY} catalogue`,
+      subject: `Your selection from the ${TRADING_NAME} catalogue`,
       html,
       text,
     });

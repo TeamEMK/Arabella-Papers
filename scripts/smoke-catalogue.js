@@ -184,6 +184,22 @@ const PNG = Buffer.from(
     SENT.map(s => s.to));
   check('and the office got a copy', SENT.length >= 2, SENT.map(s => s.to));
 
+  // "Private Limited" is the registered name and belongs on an offer letter,
+  // not in a subject line a bride reads. The two names are kept apart in
+  // utils/office.js precisely so a change to one does not move the other.
+  const toCustomer = SENT.find(x => x.to === 'customer@example.com') || {};
+  check('the subject calls the office by its trading name',
+    /Arabella Papers/.test(toCustomer.subject || '')
+    && !/Private Limited/i.test(toCustomer.subject || ''), toCustomer.subject);
+  check('and so does the letter itself',
+    !/Private Limited/i.test(toCustomer.html || '')
+    && !/Private Limited/i.test(toCustomer.text || ''),
+    /Private Limited/i.test(toCustomer.html || '') ? 'in the html' : 'in the plain text');
+  // The plain-text copy is built on a different line from the html one, and
+  // read COMPANY after the html had been moved over.
+  check('the plain-text copy names it too',
+    /Arabella Papers/.test(toCustomer.text || ''), (toCustomer.text || '').slice(0, 60));
+
   // The one that matters: a design taken down must not be reachable by
   // quoting its number at the mailer either.
   //
