@@ -1,0 +1,264 @@
+<%# ══════════════════════════════════════════════════════
+    PROSPECTS
+
+    The 928-row spreadsheet, on a screen. A first pass for the client to look
+    at and say what is wrong with it, so it shows everything rather than a
+    tidy selection - at this stage nobody knows which column is dead, and a
+    column hidden to make the table look neat is somebody's note about a
+    customer gone.
+
+    The table shows what a person scanning the list needs; the rest opens in
+    a panel beside it.
+ ══════════════════════════════════════════════════════ %>
+<div class="container-fluid py-3">
+
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h4 class="mb-0 fw-bold">
+      <i class="fas fa-address-book me-2 text-primary"></i>Prospects
+      <span class="text-muted fw-normal fs-6 ms-2" id="pp_count"></span>
+    </h4>
+    <div class="d-flex flex-wrap gap-2">
+      <button class="btn btn-sm btn-outline-success" onclick="pp_excel(this)">
+        <i class="fas fa-file-excel me-1"></i>Excel
+      </button>
+      <button class="btn btn-sm btn-outline-dark" onclick="pp_load()">
+        <i class="fas fa-sync-alt me-1"></i>Refresh
+      </button>
+    </div>
+  </div>
+
+  <div class="row g-2 mb-3" id="pp_tiles"></div>
+
+  <div class="card bg-light-glass shadow-sm smooth-ui p-2 mb-3">
+    <div class="card-body p-2">
+      <div class="d-flex flex-wrap gap-2 align-items-end">
+        <div style="min-width:240px;flex:1 1 240px;">
+          <label class="form-label small text-muted mb-1">Search</label>
+          <input type="text" id="pp_q" class="form-control form-control-sm"
+                 placeholder="Company, person, email, city, phone..." onkeyup="pp_debounce()">
+        </div>
+        <div><label class="form-label small text-muted mb-1">Status</label>
+          <select id="pp_status" class="form-select form-select-sm" style="min-width:160px" onchange="pp_load()"></select></div>
+        <div><label class="form-label small text-muted mb-1">State</label>
+          <select id="pp_state" class="form-select form-select-sm" style="min-width:120px" onchange="pp_load()"></select></div>
+        <div><label class="form-label small text-muted mb-1">Pricing</label>
+          <select id="pp_pricing" class="form-select form-select-sm" style="min-width:140px" onchange="pp_load()"></select></div>
+        <div><label class="form-label small text-muted mb-1">Lead from</label>
+          <select id="pp_source" class="form-select form-select-sm" style="min-width:170px" onchange="pp_load()"></select></div>
+        <div><label class="form-label small text-muted mb-1">Email</label>
+          <select id="pp_mail" class="form-select form-select-sm" style="min-width:150px" onchange="pp_load()">
+            <option value="">Any</option>
+            <option value="ok">Looks good</option>
+            <option value="dead">Known bad</option>
+          </select></div>
+        <button class="btn btn-sm btn-outline-secondary" onclick="pp_clear()">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card bg-light-glass shadow-sm smooth-ui p-2">
+    <div class="card-body p-2">
+      <div class="table-responsive" style="max-height:62vh;overflow:auto;">
+        <table class="table table-hover table-striped mb-0 text-nowrap align-middle">
+          <thead class="table-dark">
+            <tr>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Company</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Contact</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Where</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Phone</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Email</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Status</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Pricing</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;"></th>
+            </tr>
+          </thead>
+          <tbody id="pp_body"><tr><td colspan="8" class="text-center py-4 text-muted">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%# One prospect, everything on it, editable. %>
+<div class="modal fade" id="pp_modal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="pp_modalTitle">Prospect</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="pp_modalBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button class="btn btn-primary" onclick="pp_save(this)">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var ROWS = [], CURRENT = null, timer = null;
+  var esc = function (v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+
+  window.pp_debounce = function () { clearTimeout(timer); timer = setTimeout(pp_load, 300); };
+
+  window.pp_clear = function () {
+    ['pp_q', 'pp_status', 'pp_state', 'pp_pricing', 'pp_source', 'pp_mail']
+      .forEach(function (id) { document.getElementById(id).value = ''; });
+    pp_load();
+  };
+
+  function fillSelect(id, rows, label) {
+    var sel = document.getElementById(id);
+    var keep = sel.value;
+    sel.innerHTML = '<option value="">' + label + '</option>' + rows.map(function (r) {
+      return '<option value="' + esc(r.v) + '">' + esc(r.v) + ' (' + r.n + ')</option>';
+    }).join('');
+    sel.value = keep;
+  }
+
+  async function loadFilters() {
+    try {
+      var j = await (await fetch('/api/prospects/filters')).json();
+      if (!j.success) return;
+      fillSelect('pp_status', j.status, 'Any status');
+      fillSelect('pp_state', j.state, 'Any state');
+      fillSelect('pp_pricing', j.pricing, 'Any');
+      fillSelect('pp_source', j.lead_source, 'Anywhere');
+
+      var t = j.totals;
+      document.getElementById('pp_tiles').innerHTML = [
+        ['On the list', t.all_rows, ''],
+        ['With an email', t.with_email, 'text-success'],
+        ['Email known bad', t.dead_mail, 'text-danger'],
+        ['Need a company name', t.needs_name, 'text-warning'],
+      ].map(function (x) {
+        return '<div class="col-6 col-md-3"><div class="card bg-light-glass shadow-sm smooth-ui h-100">'
+          + '<div class="card-body py-2"><div class="text-muted small text-uppercase">' + x[0] + '</div>'
+          + '<div class="fs-4 fw-bold ' + x[2] + '">' + (x[1] || 0) + '</div></div></div></div>';
+      }).join('');
+    } catch (e) {}
+  }
+
+  window.pp_load = async function () {
+    var p = new URLSearchParams({
+      q: document.getElementById('pp_q').value,
+      status: document.getElementById('pp_status').value,
+      state: document.getElementById('pp_state').value,
+      pricing: document.getElementById('pp_pricing').value,
+      source: document.getElementById('pp_source').value,
+      mail: document.getElementById('pp_mail').value,
+      limit: 1000,
+    });
+    var body = document.getElementById('pp_body');
+    body.innerHTML = '<tr><td colspan="8" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading…</td></tr>';
+    try {
+      var j = await (await fetch('/api/prospects?' + p)).json();
+      if (!j.success) { body.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">' + esc(j.error) + '</td></tr>'; return; }
+      ROWS = j.rows;
+      document.getElementById('pp_count').textContent =
+        j.shown < j.total ? ('showing ' + j.shown + ' of ' + j.total) : (j.total + ' companies');
+      if (!ROWS.length) { body.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Nobody matches.</td></tr>'; return; }
+
+      body.innerHTML = ROWS.map(function (r, i) {
+        var where = [r.city, r.state, r.country].filter(Boolean).join(', ');
+        var mail = !r.email ? '<span class="text-muted">—</span>'
+          : (Number(r.mail_dead)
+              ? '<span class="text-danger" title="' + esc(r.mail_outcome || 'bounced') + '"><s>' + esc(r.email) + '</s></span>'
+              : '<a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a>');
+        return '<tr>'
+          + '<td class="fw-bold">' + esc(r.company_name)
+            + (Number(r.needs_name) ? ' <span class="badge bg-warning text-dark" title="The sheet gave no company name, so this is the contact person">name?</span>' : '')
+          + '</td>'
+          + '<td>' + esc(r.contact_person || '—') + '</td>'
+          + '<td class="small">' + esc(where || '—') + '</td>'
+          + '<td class="small">' + esc(r.phone || '—') + '</td>'
+          + '<td class="small">' + mail + '</td>'
+          + '<td class="small">' + esc(r.status || '—') + '</td>'
+          + '<td class="small">' + esc(r.pricing || '—') + '</td>'
+          + '<td><button class="btn btn-sm btn-outline-primary" onclick="pp_open(' + i + ')"><i class="fas fa-eye"></i></button></td>'
+          + '</tr>';
+      }).join('');
+    } catch (e) {
+      body.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">Server error.</td></tr>';
+    }
+  };
+
+  var FIELDS = [
+    ['company_name', 'Company'], ['contact_person', 'Contact person'],
+    ['address', 'Address'], ['city', 'City'], ['state', 'State'],
+    ['country', 'Country'], ['zipcode', 'Zip'],
+    ['phone', 'Phone'], ['cell', 'Cell'], ['second_phone', 'Second phone'], ['fax', 'Fax'],
+    ['email', 'Email'], ['second_email', 'Second email'],
+    ['website', 'Website'], ['facebook', 'Facebook'], ['instagram', 'Instagram'],
+    ['status', 'Status'], ['pricing', 'Pricing'], ['lead_source', 'Lead from'],
+  ];
+  // Imported history: what was sent and what came back. Shown, not edited -
+  // it is a record of what happened.
+  var HISTORY = [
+    ['sample_1', 'Sample sent'], ['sample_2', 'Sample sent (2)'], ['sample_3', 'Sample sent (3)'],
+    ['text_message_sent', 'Text message'], ['mail_outcome', 'Email outcome'],
+    ['outreach_note', 'Outreach note'],
+  ];
+
+  window.pp_open = function (i) {
+    CURRENT = ROWS[i];
+    document.getElementById('pp_modalTitle').textContent = CURRENT.company_name;
+    var form = FIELDS.map(function (f) {
+      return '<div class="col-md-6"><label class="form-label small text-muted mb-1">' + f[1] + '</label>'
+        + '<input class="form-control form-control-sm" data-f="' + f[0] + '" value="' + esc(CURRENT[f[0]] || '') + '"></div>';
+    }).join('');
+    var past = HISTORY.filter(function (f) { return CURRENT[f[0]]; }).map(function (f) {
+      return '<div class="mb-2"><div class="small text-muted">' + f[1] + '</div><div>' + esc(CURRENT[f[0]]) + '</div></div>';
+    }).join('') || '<div class="text-muted">Nothing recorded.</div>';
+
+    document.getElementById('pp_modalBody').innerHTML =
+      '<div class="row g-2">' + form + '</div>'
+      + '<div class="mt-3"><label class="form-label small text-muted mb-1">Comments</label>'
+      + '<textarea class="form-control form-control-sm" rows="3" data-f="comments">' + esc(CURRENT.comments || '') + '</textarea></div>'
+      + '<hr><h6 class="fw-bold">What has been sent</h6>' + past
+      + '<p class="text-muted small mt-3 mb-0">From row ' + CURRENT.source_row + ' of the spreadsheet.</p>';
+    new bootstrap.Modal(document.getElementById('pp_modal')).show();
+  };
+
+  window.pp_save = async function (btn) {
+    if (!CURRENT) return;
+    var payload = {};
+    document.querySelectorAll('#pp_modalBody [data-f]').forEach(function (el) {
+      payload[el.getAttribute('data-f')] = el.value;
+    });
+    btn.disabled = true;
+    try {
+      var j = await (await fetch('/api/prospects/' + CURRENT.id, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })).json();
+      if (!j.success) { Swal.fire({ icon: 'error', title: 'Not saved', text: j.error }); return; }
+      bootstrap.Modal.getInstance(document.getElementById('pp_modal')).hide();
+      pp_load(); loadFilters();
+    } catch (e) {
+      Swal.fire({ icon: 'error', title: 'Not saved', text: 'Server error.' });
+    } finally { btn.disabled = false; }
+  };
+
+  window.pp_excel = function (btn) {
+    var cols = ['Company', 'Contact', 'Address', 'City', 'State', 'Country', 'Zip',
+                'Phone', 'Cell', 'Email', 'Website', 'Instagram',
+                'Status', 'Pricing', 'Lead from', 'Email outcome', 'Comments'];
+    var rows = ROWS.map(function (r) {
+      return [r.company_name, r.contact_person, r.address, r.city, r.state, r.country, r.zipcode,
+              r.phone, r.cell, r.email, r.website, r.instagram,
+              r.status, r.pricing, r.lead_source, r.mail_outcome, r.comments];
+    });
+    downloadXlsx('Prospects', cols, rows, btn);
+  };
+
+  loadFilters();
+  pp_load();
+})();
+</script>

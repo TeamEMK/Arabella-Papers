@@ -65,6 +65,16 @@ const SECTIONS = [
   // Open to everyone: being named on a step is what puts anything on this
   // page, and somebody on no step sees an empty tab rather than a locked door.
   { id: 'fms', group: 'ASMP', name: 'FMS Task', icon: 'fa-diagram-project', rule: () => true },
+  // The dealers and stationers being worked on - 928 of them, out of the
+  // spreadsheet several people had been adding to for years. It sits with
+  // SCOT because it is the other half of the same job: SCOT says who to ring
+  // back, this says who to ring in the first place.
+  //
+  // Contact details for 928 businesses, so it is not on offer to the floor.
+  {
+    id: 'prospects', group: 'ASMP', name: 'Prospects', icon: 'fa-address-book',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
+  },
   {
     // 'Production & Dispatch' is named in full rather than caught by an
     // includes() on 'Production': a role matched by a fragment is a trap for

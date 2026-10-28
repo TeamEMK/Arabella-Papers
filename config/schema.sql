@@ -624,6 +624,81 @@ CREATE TABLE IF NOT EXISTS order_add_ons (
 );
 
 -- =============================================
+-- PROSPECTS
+-- The dealers and stationers the office is working on: who they are, how to
+-- reach them, what has been sent and whether anything came back.
+--
+-- It arrived as one 928-row spreadsheet that several people had been adding
+-- to for years, which is why the columns read the way they do - they are the
+-- sheet's own, kept recognisable so whoever has been maintaining it can see
+-- their own work in here. Nothing from it is dropped; a column nobody can
+-- explain yet is still somebody's note about a customer.
+--
+-- Separate from `dealers`, which is the short list of people who actually
+-- place orders and is wired into the order form. These 928 are mostly not
+-- that yet, and merging the two would put every cold lead in the dealer
+-- dropdown.
+-- =============================================
+CREATE TABLE IF NOT EXISTS prospects (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  company_name VARCHAR(255) NOT NULL,
+  contact_person VARCHAR(200) DEFAULT NULL,
+
+  address VARCHAR(400) DEFAULT NULL,
+  city VARCHAR(120) DEFAULT NULL,
+  state VARCHAR(120) DEFAULT NULL,
+  country VARCHAR(120) DEFAULT NULL,
+  zipcode VARCHAR(40) DEFAULT NULL,
+
+  phone VARCHAR(80) DEFAULT NULL,
+  cell VARCHAR(80) DEFAULT NULL,
+  second_phone VARCHAR(80) DEFAULT NULL,
+  fax VARCHAR(80) DEFAULT NULL,
+  email VARCHAR(255) DEFAULT NULL,
+  second_email VARCHAR(255) DEFAULT NULL,
+
+  website VARCHAR(400) DEFAULT NULL,
+  facebook VARCHAR(400) DEFAULT NULL,
+  instagram VARCHAR(400) DEFAULT NULL,
+
+  -- Active, Inactive, Prospect, MailChimp Bounced, and the rest. Free text
+  -- rather than an enum: the sheet holds seventeen spellings of five or six
+  -- real answers, and deciding which are the same is the office's call, not
+  -- a migration's.
+  status VARCHAR(120) DEFAULT NULL,
+  -- "ARB Pricing" or "KPC Pricing" - the same two brands the pricing
+  -- calculator quotes against.
+  pricing VARCHAR(60) DEFAULT NULL,
+  -- Where the lead came from: Bella Figura Data, The Wed Data, a referral.
+  lead_source VARCHAR(160) DEFAULT NULL,
+
+  -- What was sent and what came back. Three sample columns because the sheet
+  -- has three, each a different round with its own date written into it.
+  sample_1 TEXT, sample_2 TEXT, sample_3 TEXT,
+  text_message_sent VARCHAR(255) DEFAULT NULL,
+  -- "mail not found", "no revert", "replied". 264 of these are dead
+  -- addresses, which is worth knowing before anybody sends to them again.
+  mail_outcome VARCHAR(255) DEFAULT NULL,
+  outreach_note TEXT,
+  comments TEXT,
+
+  -- Set where the sheet gave no company name and the import used the
+  -- contact person's instead, so those rows can be found and finished
+  -- rather than quietly passing as complete.
+  needs_name TINYINT(1) DEFAULT 0,
+
+  -- The row this came from, so a question about one can be traced back to
+  -- the spreadsheet it was imported from.
+  source_row INT DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  INDEX idx_prospect_name (company_name),
+  INDEX idx_prospect_where (country, state, city),
+  INDEX idx_prospect_status (status)
+);
+
+-- =============================================
 -- PRICING QUOTES
 -- What a job was quoted at, kept rather than retyped.
 --
