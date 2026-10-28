@@ -36,13 +36,15 @@ import pymysql
 #
 # The full picture is opened and zoomed into, and a type catalogue that goes
 # soft under a closer look is no use - 140dpi, where this started, broke up on
-# the font pages the moment anybody enlarged one. 200dpi holds.
+# the font pages the moment anybody enlarged one. 200 holds on any screen;
+# 300 was chosen so a customer can go right into a single flourish without it
+# softening. It costs about 95MB across the 141 pages against 54 at 200.
 #
 # The thumbnail exists because that full picture is ~400KB and the grid shows
 # a hundred and forty of them in tiles 230 pixels wide: a customer browsing
 # would have pulled down 54MB to look at thumbnails. 56dpi is twice the tile's
 # width, which is what a sharp screen wants, and a fifteenth of the weight.
-DPI = 200
+DPI = 300
 JPEG_QUALITY = 82
 THUMB_DPI = 56
 THUMB_QUALITY = 72
