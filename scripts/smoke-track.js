@@ -199,6 +199,10 @@ const check = (name, ok, extra) => {
     stageOf(before3, 'Approved by you').state === 'done', stageOf(before3, 'Approved by you'));
   check('nor on a proof',
     stageOf(before3, 'Design proof ready').state === 'done', stageOf(before3, 'Design proof ready'));
+  // A tick beside the word "Pending" is the same contradiction in small type.
+  check('nor does a settled stage still say Pending underneath',
+    (r.json.data.production || []).every(st => !/pending/i.test(st.note || '')),
+    (r.json.data.production || []).filter(st => /pending/i.test(st.note || '')));
   check('nor does a workshop stage still read pending',
     (r.json.data.production || []).every(st => st.state === 'done' || st.state === 'skipped'),
     (r.json.data.production || []).filter(st => st.state !== 'done' && st.state !== 'skipped'));

@@ -218,8 +218,16 @@ router.get('/api', async (req, res) => {
     // a dispatch date is the office's own paperwork showing, and it reads
     // to a customer as work outstanding on something already delivered.
     // No date is invented for these - only the state is corrected.
+    // The date is kept, because the floor really did write it. The word is
+    // not: a row left on "Pending" under a finished tick is the same
+    // contradiction in smaller type.
     const settle = (st) => (gone && st.state !== 'skipped'
-      ? { label: st.label, state: 'done', note: st.at ? st.note : 'Done', at: st.at }
+      ? {
+          label: st.label,
+          state: 'done',
+          note: st.note && !NEGATED.test(st.note) ? st.note : 'Done',
+          at: st.at,
+        }
       : st);
 
     // The nine the floor works through, in the order it works them.
