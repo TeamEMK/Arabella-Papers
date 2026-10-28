@@ -34,7 +34,12 @@ router.post('/quote', requireLogin, allowed, async (req, res) => {
     let checked;
     try {
       checked = pricing.verify(
-        { brand: body.brand, additionalDiscount: body.additionalDiscount, items: body.items },
+        {
+          brand: body.brand,
+          additionalDiscount: body.additionalDiscount,
+          rushFee: body.rushFee,
+          items: body.items,
+        },
         body.totals,
       );
     } catch (err) {
@@ -56,13 +61,20 @@ router.post('/quote', requireLogin, allowed, async (req, res) => {
     const [out] = await db.query(
       `INSERT INTO pricing_quotes
          (order_id, brand, store_name, customer_name, total, base_discount_amount,
-          additional_discount_amount, balance, summary_text, quote_json, rates_version, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          additional_discount_amount, rush_fee_percent, rush_fee_amount,
+          balance, summary_text, quote_json, rates_version, created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         text(body.orderId, 50) || null, r.brand, who.store || null, who.customer || null,
-        r.total, r.baseDiscountAmount, r.additionalDiscountAmount, r.balance,
+        r.total, r.baseDiscountAmount, r.additionalDiscountAmount,
+        r.rushFeePercent || 0, r.rushFeeAmount || 0, r.balance,
         pricing.summary(r, who),
-        JSON.stringify({ brand: r.brand, additionalDiscount: r.additionalDiscountPercent, items: body.items }),
+        JSON.stringify({
+          brand: r.brand,
+          additionalDiscount: r.additionalDiscountPercent,
+          rushFee: r.rushFeePercent || 0,
+          items: body.items,
+        }),
         r.ratesVersion || null,
         req.session.user.email || '',
       ],
@@ -91,7 +103,8 @@ router.get('/quotes', requireLogin, allowed, async (req, res) => {
 
     const [rows] = await db.query(
       `SELECT id, order_id, brand, store_name, customer_name, total,
-              base_discount_amount, additional_discount_amount, balance,
+              base_discount_amount, additional_discount_amount,
+              rush_fee_percent, rush_fee_amount, balance,
               rates_version, created_by, created_at
          FROM pricing_quotes
         ${where.length ? 'WHERE ' + where.join(' AND ') : ''}

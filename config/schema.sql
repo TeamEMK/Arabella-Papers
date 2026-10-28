@@ -727,6 +727,11 @@ CREATE TABLE IF NOT EXISTS pricing_quotes (
   total DECIMAL(18,2) NOT NULL,
   base_discount_amount DECIMAL(18,2) NOT NULL,
   additional_discount_amount DECIMAL(18,2) NOT NULL,
+  -- Added after both discounts, not taken off. Kept as its own figure so an
+  -- old quote can still be explained: the balance alone cannot say whether a
+  -- job was priced in a hurry.
+  rush_fee_percent DECIMAL(6,2) DEFAULT 0,
+  rush_fee_amount DECIMAL(18,2) DEFAULT 0,
   balance DECIMAL(18,2) NOT NULL,
   summary_text MEDIUMTEXT,
   quote_json MEDIUMTEXT,

@@ -50,6 +50,11 @@ async function seedAdmin() {
 // Each entry is checked before it is applied, so this is safe to run on every
 // boot and a database that already has the column is left alone.
 const COLUMN_MIGRATIONS = [
+  // The pricing module grew a rush fee after the quotes table had already
+  // been deployed, and CREATE TABLE IF NOT EXISTS does not add a column to a
+  // table that is already there.
+  { table: 'pricing_quotes', column: 'rush_fee_percent', type: 'DECIMAL(6,2) DEFAULT 0' },
+  { table: 'pricing_quotes', column: 'rush_fee_amount', type: 'DECIMAL(18,2) DEFAULT 0' },
   { table: 'orders', column: 'printing_type', type: 'VARCHAR(60)' },
   { table: 'orders', column: 'production_archived_at', type: 'DATETIME NULL' },
   // Which production board this order is pinned to, overriding the cutoff

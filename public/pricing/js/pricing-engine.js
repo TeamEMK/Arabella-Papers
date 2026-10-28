@@ -5,8 +5,9 @@
  *   var result = ArabellaPricing.engine.calculate(rates, {
  *     brand: "ARA",                       // or "KPC"
  *     additionalDiscount: 0,              // %
+ *     rushFee: 0,                         // %, added after the discounts
  *     items: [
- *       { code: "INVITE", qty: 100, layers: 2, ply: 0, printing: ["PR-FOIL", "PR-DIGITAL"] },
+ *       { code: "INVITE", qty: 100, layers: 2, ply: 0, printing: ["PR-FOIL", "PR-DIGITAL"], printingBack: ["PR-DIGITAL"] },
  *       { code: "ENV-VF", qty: 100, printing: [] },
  *       { custom: true, name: "Wax seal", comments: "gold", qty: 100, price: 2, printing: [] }
  *     ]
@@ -19,8 +20,9 @@
  *     is the TOTAL for the item.
  *   - Above 100, or when no column applies: quantity x per-piece price.
  *   - Layers and ply: 2 layers or 2 ply = twice the price (layers x ply, each at least 1).
- *   - Each chosen printing technique (up to 3 inks) is priced the same way and added.
- *   - Total, then minus the base discount (50%), then minus the additional discount.
+ *   - Each chosen printing technique (up to 3 front inks and 2 back inks) is priced the same way and added.
+ *   - Total, then minus the base discount (50%), then minus the additional discount,
+ *     then plus the rush fee (% of the discounted amount).
  */
 (function (global) {
   "use strict";
@@ -37,7 +39,8 @@
 
   // Rate list for a component or printing code and brand: [25, 50, 75, 100, each above 100]
   function rateList(rates, code, brand) {
-    var row = (rates.components && rates.components[code]) || (rates.printing && rates.printing[code]);
+    var row = (rates.components && rates.components[code]) || (rates.printing && rates.printing[code]) ||
+              (rates.addons && rates.addons[code]) || (rates.edges && rates.edges[code]);
     if (!row) return null;
     var list = brand === "KPC" && row[2] ? row[2] : row[1];
     return { name: row[0], list: list };
@@ -76,12 +79,12 @@
       var desc, itemCost;
 
       if (it.custom) {
-        desc = "Other item - " + it.name + (it.comments ? " (" + it.comments + ")" : "");
+        desc = it.name + (it.comments ? " (" + it.comments + ")" : "");
         itemCost = qty * (Number(it.price) || 0);
       } else {
         var r = rateList(rates, it.code, brand);
         if (!r) throw new PricingError("Unknown item code: " + it.code);
-        desc = r.name;
+        desc = it.label || r.name;
         var base = priceFromList(r.list, qty);
         if (base === null) {
           warnings.push(r.name + ": no " + bname + " rate for a quantity of " + n(qty) + ", so only printing was priced.");
@@ -91,25 +94,31 @@
         itemCost = base * units;
       }
 
-      var printCost = 0, printNames = [];
-      (it.printing || []).forEach(function (code) {
+      // Front inks (it.printing) and back inks (it.printingBack): each priced from the price list and added.
+      var printCost = 0, printNames = [], backNames = [];
+      function addPrinting(code, names) {
         if (!code) return;
         var p = rateList(rates, code, brand);
         if (!p) throw new PricingError("Unknown printing code: " + code);
         var pc = priceFromList(p.list, qty);
         if (pc === null) throw new PricingError(p.name + " has no " + bname + " rate for a quantity of " + n(qty) + ".");
-        printCost += pc; printNames.push(p.name);
-      });
+        printCost += pc; names.push(p.name);
+      }
+      (it.printing || []).forEach(function (c) { addPrinting(c, printNames); });
+      (it.printingBack || []).forEach(function (c) { addPrinting(c, backNames); });
 
       var s = "";
       if (layers > 0) s = n(layers) + " Layer ";
       if (ply > 0) s += n(ply) + " Ply ";
       s += desc + " Cost";
-      if (printNames.length) s += "(With " + printNames.join(" + ") + ")";
+      var withParts = [];
+      if (printNames.length) withParts.push(printNames.join(" + "));
+      if (backNames.length) withParts.push("Back: " + backNames.join(" + "));
+      if (withParts.length) s += "(With " + withParts.join("; ") + ")";
       var lineCost = itemCost + printCost;
       lines.push(s.trim() + " = " + cur + " " + n(round2(lineCost / qty)) + " X " + n(qty) + " = " + cur + " " + money(lineCost));
       details.push({ code: it.custom ? "X" : it.code, description: desc, qty: qty, layers: layers, ply: ply,
-        printing: printNames, itemCost: itemCost, printingCost: printCost, lineTotal: lineCost, each: round2(lineCost / qty) });
+        printing: printNames, printingBack: backNames, itemCost: itemCost, printingCost: printCost, lineTotal: lineCost, each: round2(lineCost / qty) });
       total += lineCost;
     });
 
@@ -117,25 +126,29 @@
     var addPct = Number(order.additionalDiscount) || 0;
     var baseAmt = total * basePct / 100;
     var addAmt = (total - baseAmt) * addPct / 100;
+    // Rush fee: a percentage added on the discounted amount.
+    var rushPct = Number(order.rushFee) || 0;
+    var rushAmt = (total - baseAmt - addAmt) * rushPct / 100;
 
     return {
       brand: brand, brandName: bname, currency: cur, ratesVersion: rates.version,
       lines: lines, items: details, warnings: warnings,
       total: total, baseDiscountPercent: basePct, baseDiscountAmount: baseAmt,
       additionalDiscountPercent: addPct, additionalDiscountAmount: addAmt,
-      balance: total - baseAmt - addAmt
+      rushFeePercent: rushPct, rushFeeAmount: rushAmt,
+      balance: total - baseAmt - addAmt + rushAmt
     };
   }
 
   function summaryText(result, who) {
     who = who || {};
     var cur = result.currency;
-    var label = result.brand === "ARA" ? "ARABELLA" : result.brandName;
-    var t = "Here is Cost Summary for " + (who.store || "") + (who.customer ? "/" + who.customer : "") + " (" + label + " pricing)\n\n";
+    var t = "Here is Cost Summary for " + (who.store || "") + (who.customer ? "/" + who.customer : "") + "\n\n";
     result.lines.forEach(function (l, k) { t += (k + 1) + ". " + l + "\n"; });
     t += "\nTotal= " + cur + " " + money(result.total) + "\n";
     if (result.baseDiscountPercent > 0) t += "Less (" + n(result.baseDiscountPercent) + "%)= " + cur + " " + money(result.baseDiscountAmount) + "\n";
     if (result.additionalDiscountPercent > 0) t += "Less (" + n(result.additionalDiscountPercent) + "%)= " + cur + " " + money(result.additionalDiscountAmount) + "\n";
+    if (result.rushFeePercent > 0) t += "Add Rush Fee (" + n(result.rushFeePercent) + "%)= " + cur + " " + money(result.rushFeeAmount) + "\n";
     t += "\nBalance= " + cur + " " + money(result.balance);
     return t;
   }
@@ -144,10 +157,10 @@
   global.ArabellaPricing.engine = { calculate: calculate, summaryText: summaryText, PricingError: PricingError };
 })(typeof window !== "undefined" ? window
   // Loaded on the server too, so the totals can be worked out again before
-  // they are saved. The arithmetic below is untouched - one copy of the
+  // they are saved. The arithmetic above is untouched - one copy of the
   // rules, used by both sides, is the whole point.
   : (typeof globalThis !== "undefined" ? globalThis : this));
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = (typeof globalThis !== "undefined" ? globalThis : this).ArabellaPricing;
+  module.exports = (typeof window !== "undefined" ? window : (typeof globalThis !== "undefined" ? globalThis : this)).ArabellaPricing;
 }

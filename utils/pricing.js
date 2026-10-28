@@ -34,7 +34,7 @@ const BRANDS = rates.brands.map(b => b[0]);
  * Work a quote out from its items, here, with no reference to what the
  * browser said the answer was.
  *
- * @param {object} input {brand, additionalDiscount, items[]}
+ * @param {object} input {brand, additionalDiscount, rushFee, items[]}
  * @returns {object} the engine's result
  */
 function price(input) {
@@ -52,7 +52,16 @@ function price(input) {
     throw new Error('The additional discount has to be between 0 and 100.');
   }
 
-  return engine.calculate(rates, { brand, additionalDiscount: add, items });
+  // The rush fee is a percentage ADDED after both discounts, so it has to be
+  // carried through here. Dropping it would not fail loudly - the server
+  // would simply work out a smaller balance than the browser showed and
+  // refuse the quote as tampered with, on every rush job.
+  const rush = Number((input && input.rushFee) || 0);
+  if (!Number.isFinite(rush) || rush < 0 || rush > 100) {
+    throw new Error('The rush fee has to be between 0 and 100.');
+  }
+
+  return engine.calculate(rates, { brand, additionalDiscount: add, rushFee: rush, items });
 }
 
 /**
@@ -70,6 +79,7 @@ function verify(input, claimed) {
     ['balance', result.balance],
     ['baseDiscount', result.baseDiscountAmount],
     ['additionalDiscount', result.additionalDiscountAmount],
+    ['rushFee', result.rushFeeAmount],
   ];
 
   for (const [name, ours] of fields) {

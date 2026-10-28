@@ -74,6 +74,38 @@ const check = (name, ok, extra) => {
     items: [{ code: 'INVITE', qty: 100, layers: 1, printing: [] }] });
   check('the brands price differently', kpc.total !== one.total, { ARA: one.total, KPC: kpc.total });
 
+  // The module grew these after the first integration, and each has a way of
+  // going wrong quietly rather than loudly.
+  console.log('\nThe rush fee');
+  const rushed = pricing.price(Object.assign({}, basket, { rushFee: 10 }));
+  check('it is added, not taken off', rushed.balance > r.balance,
+    { plain: r.balance, rushed: rushed.balance });
+  check('and is worked out on the discounted amount, not the total',
+    Math.abs(rushed.rushFeeAmount
+      - (rushed.total - rushed.baseDiscountAmount - rushed.additionalDiscountAmount) * 0.1) < 0.01,
+    { rush: rushed.rushFeeAmount, total: rushed.total });
+  // The server used to drop rushFee on its way to the engine, which did not
+  // fail loudly - it just priced lower than the screen and refused the quote.
+  check('the server carries it through to the engine',
+    pricing.verify(Object.assign({}, basket, { rushFee: 10 }),
+      { total: rushed.total, balance: rushed.balance }).ok === true,
+    'a rush job would be refused as tampered with');
+
+  console.log('\nInk on the back');
+  const twoSided = pricing.price({ brand: 'ARA', additionalDiscount: 0,
+    items: [{ code: 'INVITE', qty: 100, layers: 1, printing: ['PR-FOIL'], printingBack: ['PR-DIGITAL'] }] });
+  const frontOnly = pricing.price({ brand: 'ARA', additionalDiscount: 0,
+    items: [{ code: 'INVITE', qty: 100, layers: 1, printing: ['PR-FOIL'] }] });
+  check('a back ink costs more than none', twoSided.total > frontOnly.total,
+    { front: frontOnly.total, both: twoSided.total });
+  check('and the line says which side', /Back:/.test(twoSided.lines[0]), twoSided.lines[0]);
+
+  console.log('\nAdd-ons and edges');
+  check('an edge treatment prices from the new list',
+    pricing.price({ brand: 'ARA', additionalDiscount: 0, items: [{ code: 'EDGE-GILDED', qty: 100 }] }).total > 0);
+  check('so does an add-on',
+    pricing.price({ brand: 'ARA', additionalDiscount: 0, items: [{ code: 'ADD-TASSEL', qty: 100 }] }).total > 0);
+
   console.log('\nWhat it refuses to price');
   const refuses = (input) => { try { pricing.price(input); return false; } catch (e) { return true; } };
   check('an unknown brand', refuses({ brand: 'NOPE', items: basket.items }));
@@ -141,7 +173,28 @@ const check = (name, ok, extra) => {
   check('and comes back with the summary to paste',
     /Cost Summary/.test(json.summary || ''), (json.summary || '').slice(0, 40));
 
+  // A rush job, all the way through: the figure the screen showed has to
+  // survive the server's own recalculation and land in the table.
+  json = await (await post({
+    orderId: 'K-160109', brand: 'ARA', additionalDiscount: 0, rushFee: 10,
+    items: basket.items,
+    totals: { total: rushed.total, balance: rushed.balance, rushFee: rushed.rushFeeAmount },
+  })).json();
+  check('a rush job saves rather than being refused', json.success === true, json);
+  const [[rushRow]] = await db.query(
+    'SELECT rush_fee_percent, rush_fee_amount, balance FROM pricing_quotes WHERE id = ?', [json.id]);
+  check('and the rush fee is stored as its own figure',
+    Number(rushRow.rush_fee_percent) === 10
+    && Math.abs(Number(rushRow.rush_fee_amount) - rushed.rushFeeAmount) < 0.01, rushRow);
+  check('with the balance that includes it',
+    Math.abs(Number(rushRow.balance) - rushed.balance) < 0.01, rushRow.balance);
+
   // The whole reason the server re-prices.
+  //
+  // Counted before and after rather than against a fixed number: a check that
+  // breaks when a quote is added above it teaches people to edit the number
+  // until it passes.
+  const [[before]] = await db.query('SELECT COUNT(*) AS n FROM pricing_quotes');
   json = await (await post({
     orderId: 'K-160108', brand: 'ARA', additionalDiscount: 0, items: basket.items,
     totals: { total: 1, balance: 1 },
@@ -149,7 +202,7 @@ const check = (name, ok, extra) => {
   check('a quote with figures somebody edited is refused', json.success === false, json);
 
   const [[stored]] = await db.query('SELECT COUNT(*) AS n FROM pricing_quotes');
-  check('and is not in the table', stored.n === 1, stored.n);
+  check('and nothing was written', stored.n === before.n, { before: before.n, after: stored.n });
 
   // Even with no figures sent, what gets stored is the server's own sum.
   json = await (await post({
