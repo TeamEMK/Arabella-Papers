@@ -34,6 +34,7 @@ const recruitmentApi = require('./routes/api/recruitment');
 const joiningApi = require('./routes/api/joining');
 const scotApi = require('./routes/api/scot');
 const cronApi = require('./routes/api/cron');
+const pricingApi = require('./routes/api/pricing');
 const pmsApi = require('./routes/api/pms');
 
 const app = express();
@@ -126,6 +127,7 @@ app.use('/api/recruitment', recruitmentApi);
 app.use('/api/joining', joiningApi);
 app.use('/api/scot', scotApi);
 app.use('/api/cron', cronApi);
+app.use('/api/pricing', pricingApi);
 
 // ── 404 FALLBACK ──
 app.use((req, res) => {

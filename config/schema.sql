@@ -624,6 +624,45 @@ CREATE TABLE IF NOT EXISTS order_add_ons (
 );
 
 -- =============================================
+-- PRICING QUOTES
+-- What a job was quoted at, kept rather than retyped.
+--
+-- The calculator the client wrote works the price out in the browser. The
+-- figures here are the ones the SERVER worked out from the same rules - the
+-- browser's numbers are read, checked against a fresh calculation and
+-- refused if they disagree. A quote that can be edited on its way to the
+-- database is not a quote, and these are the numbers somebody will invoice
+-- against later.
+--
+-- order_id is text, not a number: this office's orders are K-160108, and the
+-- module's own table declared it INT because the system it came from
+-- numbered them differently.
+--
+-- quote_json holds what was asked for - every component, quantity, layer and
+-- ink - so a quote can be reopened and amended instead of rebuilt. The rates
+-- change; rates_version records which list priced this one, so an old quote
+-- can still be explained.
+-- =============================================
+CREATE TABLE IF NOT EXISTS pricing_quotes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id VARCHAR(50) DEFAULT NULL,
+  brand VARCHAR(10) NOT NULL,
+  store_name VARCHAR(200) DEFAULT NULL,
+  customer_name VARCHAR(200) DEFAULT NULL,
+  total DECIMAL(18,2) NOT NULL,
+  base_discount_amount DECIMAL(18,2) NOT NULL,
+  additional_discount_amount DECIMAL(18,2) NOT NULL,
+  balance DECIMAL(18,2) NOT NULL,
+  summary_text MEDIUMTEXT,
+  quote_json MEDIUMTEXT,
+  rates_version VARCHAR(20) DEFAULT NULL,
+  created_by VARCHAR(150) DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_pricing_order (order_id, created_at),
+  INDEX idx_pricing_when (created_at)
+);
+
+-- =============================================
 -- SETTINGS
 -- The few choices the office should be able to change without a deploy. Kept
 -- as text against a name so adding the next one costs no migration.

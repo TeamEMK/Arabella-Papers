@@ -1,0 +1,191 @@
+<%# ══════════════════════════════════════════════════════
+    PRICING CALCULATOR
+
+    The client's own module, mounted in the app shell. Its three files are
+    served from public/pricing and are left exactly as they were written -
+    the only changes made to them were the two lines that let the engine and
+    the rate list load under Node as well, so the server can work a quote out
+    again before storing it.
+
+    The stylesheet is scoped to .apc, which is why it can sit beside the
+    app's own look without fighting it.
+
+    What is added here is the part the module could not bring: saving a quote
+    against this office's own orders, and the list of what has been quoted
+    before.
+ ══════════════════════════════════════════════════════ %>
+<link rel="stylesheet" href="/pricing/css/pricing-calculator.css">
+
+<div class="container-fluid py-3">
+
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h4 class="mb-0 fw-bold">
+      <i class="fas fa-calculator me-2 text-primary"></i>Pricing Calculator
+      <span class="text-muted fw-normal fs-6 ms-2" id="pr_ratesNote"></span>
+    </h4>
+    <div class="d-flex flex-wrap gap-2">
+      <input type="text" id="pr_orderId" class="form-control form-control-sm" style="max-width:190px"
+             placeholder="Order number (optional)">
+      <button class="btn btn-sm btn-outline-dark" onclick="pr_openSaved()">
+        <i class="fas fa-clock-rotate-left me-1"></i>Saved quotes
+      </button>
+    </div>
+  </div>
+
+  <div id="pricing"></div>
+</div>
+
+<%# The saved quotes, and one quote reopened. %>
+<div class="modal fade" id="pr_savedModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-clock-rotate-left me-2"></i>Saved quotes</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <input type="text" id="pr_search" class="form-control form-control-sm" style="max-width:280px"
+                 placeholder="Order number, store or customer..." onkeyup="pr_loadSaved()">
+          <button class="btn btn-sm btn-outline-dark" onclick="pr_loadSaved()">
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover table-striped mb-0 text-nowrap">
+            <thead class="table-dark">
+              <tr>
+                <th>#</th><th>Order</th><th>Brand</th><th>Store</th><th>Customer</th>
+                <th class="text-end">Total</th><th class="text-end">Balance</th>
+                <th>Quoted by</th><th>When</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="pr_savedBody">
+              <tr><td colspan="10" class="text-center py-3 text-muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/pricing/js/pricing-rates.js"></script>
+<script src="/pricing/js/pricing-engine.js"></script>
+<script src="/pricing/js/pricing-ui.js"></script>
+<script>
+(function () {
+  var esc = function (v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+
+  document.getElementById('pr_ratesNote').textContent =
+    'rates ' + (window.ArabellaPricingRates.version || '') +
+    ' · ' + window.ArabellaPricingRates.currency;
+
+  ArabellaPricing.mount(document.getElementById('pricing'), {
+    rates: window.ArabellaPricingRates,
+    saveLabel: 'Save quote',
+    onSave: async function (quote) {
+      var orderId = (document.getElementById('pr_orderId').value || '').trim();
+      try {
+        var res = await fetch('/api/pricing/quote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: orderId,
+            brand: quote.brand,
+            store: quote.store,
+            customer: quote.customer,
+            additionalDiscount: quote.result.additionalDiscountPercent,
+            items: quote.order.items,
+            // Sent so the server can check its own sum against them. It
+            // prices the items again from scratch and refuses the lot if the
+            // two disagree, so nothing here decides what gets stored.
+            totals: {
+              total: quote.result.total,
+              balance: quote.result.balance,
+              baseDiscount: quote.result.baseDiscountAmount,
+              additionalDiscount: quote.result.additionalDiscountAmount,
+            },
+          }),
+        });
+        var json = await res.json();
+        if (!json.success) {
+          Swal.fire({ icon: 'error', title: 'Not saved', text: json.error });
+          return;
+        }
+        Swal.fire({
+          icon: 'success',
+          title: 'Quote #' + json.id + ' saved',
+          text: orderId ? 'Against order ' + orderId : 'Not linked to an order.',
+          timer: 2200, showConfirmButton: false,
+        });
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: 'Not saved', text: 'Server error.' });
+      }
+    },
+  });
+
+  window.pr_openSaved = function () {
+    new bootstrap.Modal(document.getElementById('pr_savedModal')).show();
+    pr_loadSaved();
+  };
+
+  window.pr_loadSaved = async function () {
+    var q = (document.getElementById('pr_search').value || '').trim();
+    var body = document.getElementById('pr_savedBody');
+    body.innerHTML = '<tr><td colspan="10" class="text-center py-3"><i class="fas fa-spinner fa-spin me-2"></i>Loading…</td></tr>';
+    try {
+      var res = await fetch('/api/pricing/quotes?limit=100&q=' + encodeURIComponent(q));
+      var json = await res.json();
+      if (!json.success || !json.rows.length) {
+        body.innerHTML = '<tr><td colspan="10" class="text-center py-3 text-muted">Nothing quoted yet.</td></tr>';
+        return;
+      }
+      body.innerHTML = json.rows.map(function (r) {
+        return '<tr>'
+          + '<td class="text-muted">' + r.id + '</td>'
+          + '<td class="fw-bold">' + esc(r.order_id || '-') + '</td>'
+          + '<td>' + esc(r.brand) + '</td>'
+          + '<td>' + esc(r.store_name || '-') + '</td>'
+          + '<td>' + esc(r.customer_name || '-') + '</td>'
+          + '<td class="text-end">' + Number(r.total).toFixed(2) + '</td>'
+          + '<td class="text-end fw-bold">' + Number(r.balance).toFixed(2) + '</td>'
+          + '<td class="small">' + esc(r.created_by || '') + '</td>'
+          + '<td class="small text-muted">' + esc(r.created_at) + '</td>'
+          + '<td><button class="btn btn-sm btn-outline-primary" onclick="pr_showQuote(' + r.id + ')">'
+          + '<i class="fas fa-eye"></i></button></td>'
+          + '</tr>';
+      }).join('');
+    } catch (e) {
+      body.innerHTML = '<tr><td colspan="10" class="text-center py-3 text-danger">Server error.</td></tr>';
+    }
+  };
+
+  // The summary as it was saved - the text the office pastes to a client.
+  window.pr_showQuote = async function (id) {
+    try {
+      var json = await (await fetch('/api/pricing/quote/' + id)).json();
+      if (!json.success) { Swal.fire({ icon: 'error', title: 'Not found', text: json.error }); return; }
+      Swal.fire({
+        title: 'Quote #' + id,
+        html: '<pre style="text-align:left;white-space:pre-wrap;font-size:13px;max-height:420px;overflow:auto;">'
+          + esc(json.quote.summary_text || '') + '</pre>',
+        width: 680,
+        confirmButtonText: 'Copy',
+        showCancelButton: true,
+        cancelButtonText: 'Close',
+      }).then(function (r) {
+        if (r.isConfirmed && navigator.clipboard) {
+          navigator.clipboard.writeText(json.quote.summary_text || '');
+        }
+      });
+    } catch (e) {
+      Swal.fire({ icon: 'error', title: 'Not found', text: 'Server error.' });
+    }
+  };
+})();
+</script>

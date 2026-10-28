@@ -133,6 +133,15 @@ const SECTIONS = [
     id: 'recruitment', group: 'Company', name: 'Recruitment', icon: 'fa-user-plus',
     rule: (role) => role === 'SuperAdmin',
   },
+  // What a job should be quoted at, from the client's own calculator. Kept
+  // to the people who already decide what the office charges: the page shows
+  // the whole price list and the standing 50% discount, which is not a thing
+  // to put in front of everybody. One line here, or the Access Control page,
+  // widens it.
+  {
+    id: 'pricing', group: 'Admin', name: 'Pricing Calculator', icon: 'fa-calculator',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head' || role === 'Accounts',
+  },
   {
     id: 'o2dsummary', group: 'Admin', name: 'Analytics', icon: 'fa-chart-line',
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
