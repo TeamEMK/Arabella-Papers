@@ -1,27 +1,49 @@
 /**
  * Bring the prospect spreadsheet into the system.
  *
- *   node scripts/import-prospects.js "C:\\path\\Arabella SCOT Data.xlsx"          (dry run)
- *   node scripts/import-prospects.js "C:\\path\\Arabella SCOT Data.xlsx" --write
+ *   node scripts/import-prospects.js "<file.xlsx>"          what it would do
+ *   node scripts/import-prospects.js "<file.xlsx>" --write  into the dev database
+ *   node scripts/import-prospects.js "<file.xlsx>" --write --live   into the live one
  *
  * Dry by default, and it prints what it would do. An import that changes
  * nothing until it is asked twice is the only kind worth running against a
  * list somebody spent years building.
+ *
+ * The live database only when asked for it in so many words, the same way
+ * import-catalogue.py does it - and it says which one it is writing to
+ * before it writes, because the first version of this did not and two
+ * imports went quietly into the wrong database.
  *
  * It replaces what it imported before rather than appending: run it again
  * after the office edits the sheet and the table matches the sheet, instead
  * of holding two copies of every row.
  */
 require('dotenv').config();
+const fs = require('fs');
 const path = require('path');
 const ExcelJS = require('exceljs');
-const db = require('../config/db');
+const mysql = require('mysql2/promise');
 
 const FILE = process.argv[2];
 const WRITE = process.argv.includes('--write');
+const LIVE = process.argv.includes('--live');
+
+/** The connection, named out loud so nobody has to guess which one it is. */
+async function connect() {
+  if (!LIVE) {
+    const db = require('../config/db');
+    return { db, name: process.env.DB_NAME + ' (dev)' };
+  }
+  const line = fs.readFileSync(path.join(__dirname, '..', '.env.backup'), 'utf8')
+    .split(/\r?\n/).find(l => l.startsWith('LIVE_DB_URL='));
+  if (!line) throw new Error('No LIVE_DB_URL in .env.backup');
+  const url = line.slice('LIVE_DB_URL='.length).trim();
+  const conn = await mysql.createConnection(url);
+  return { db: conn, name: (url.match(/\/([^/?]+)(\?|$)/) || [])[1] + ' (LIVE)' };
+}
 
 if (!FILE) {
-  console.error('Give the spreadsheet: node scripts/import-prospects.js "<file.xlsx>" [--write]');
+  console.error('Give the spreadsheet: node scripts/import-prospects.js "<file.xlsx>" [--write] [--live]');
   process.exit(1);
 }
 
@@ -168,10 +190,19 @@ function tidyCase(v) {
   }
 
   if (!WRITE) {
-    console.log('\nDry run. Nothing written. Add --write to import.');
-    await db.end();
+    console.log('\nDry run. Nothing written.');
+    console.log('  --write        into ' + process.env.DB_NAME + ' (dev)');
+    console.log('  --write --live into the LIVE database');
     return;
   }
+
+  // Named before a single row moves. The first version of this script had no
+  // --live at all, so two runs meant to go to the live database went quietly
+  // into the dev one and the live page stayed empty with nothing to show for
+  // it. An import that does not say where it is writing is an import that can
+  // be run at the wrong thing twice without anybody noticing.
+  const { db, name } = await connect();
+  console.log('\nWriting to: ' + name);
 
   const cols = Object.keys(rows[0]);
   await db.query('DELETE FROM prospects');
@@ -190,6 +221,6 @@ function tidyCase(v) {
   }
 
   const [[n]] = await db.query('SELECT COUNT(*) AS n FROM prospects');
-  console.log('\n\nDone. ' + n.n + ' prospects in the table.');
+  console.log('\n\nDone. ' + n.n + ' prospects in ' + name + '.');
   await db.end();
 })().catch(e => { console.error(e); process.exit(1); });
