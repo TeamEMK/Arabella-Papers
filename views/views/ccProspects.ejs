@@ -98,6 +98,11 @@
      country is readable without a map. */
   .cc-bar { height:4px; border-radius:3px; background:#e9ecef; margin-top:7px; overflow:hidden; }
   .cc-bar i { display:block; height:100%; background:#0d6efd; }
+  /* The tiles open the list they count, so they have to look as though they
+     can be pressed. */
+  .cc-tile { cursor:pointer; transition:.12s; }
+  .cc-tile:hover { transform:translateY(-1px); box-shadow:0 .35rem .8rem rgba(0,0,0,.12) !important; }
+  .cc-tile:focus-visible { outline:2px solid #0d6efd; outline-offset:2px; }
 </style>
 
 <script>
@@ -128,20 +133,49 @@
     }
   };
 
+  // Every tile opens the list it counts, across all fifty states. A number
+  // somebody is looking at is a number they want to see behind - "6,640 with
+  // an email" is only useful if the next click is the 6,640.
+  //
+  // States is the exception: its list is the board already on screen, so it
+  // takes you there rather than opening the same thing twice.
+  var TILES = [
+    { label: 'Retailers', key: 'retailers', cls: '', filter: {} },
+    { label: 'States', key: 'states', cls: '', scroll: true },
+    { label: 'With an email', key: 'with_email', cls: 'text-success', filter: { has: 'email' } },
+    { label: 'With a phone', key: 'with_phone', cls: 'text-success', filter: { has: 'phone' } },
+    { label: 'Online only', key: 'online_only', cls: 'text-warning', filter: { type: 'online' } },
+  ];
+
   function cc_drawTiles() {
-    var t = TOTALS;
-    document.getElementById('cc_tiles').innerHTML = [
-      ['Retailers', n(t.retailers), ''],
-      ['States', n(t.states), ''],
-      ['With an email', n(t.with_email), 'text-success'],
-      ['With a phone', n(t.with_phone), 'text-success'],
-      ['Online only', n(t.online_only), 'text-warning'],
-    ].map(function (x) {
-      return '<div class="col-6 col-md-4 col-xl"><div class="card bg-light-glass shadow-sm smooth-ui h-100">'
-        + '<div class="card-body py-2"><div class="text-muted small text-uppercase">' + x[0] + '</div>'
-        + '<div class="fs-4 fw-bold ' + x[2] + '">' + x[1] + '</div></div></div></div>';
+    document.getElementById('cc_tiles').innerHTML = TILES.map(function (t, i) {
+      return '<div class="col-6 col-md-4 col-xl">'
+        + '<div class="card bg-light-glass shadow-sm smooth-ui h-100 cc-tile" onclick="cc_tile(' + i + ')"'
+        + ' role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();cc_tile(' + i + ')}">'
+        + '<div class="card-body py-2">'
+        + '<div class="text-muted small text-uppercase">' + t.label + '</div>'
+        + '<div class="fs-4 fw-bold ' + t.cls + '">' + n(TOTALS[t.key]) + '</div>'
+        + '</div></div></div>';
     }).join('');
   }
+
+  window.cc_tile = function (i) {
+    var t = TILES[i];
+    if (t.scroll) {
+      document.getElementById('cc_states').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    // Across every state, so the state cards lose their highlight.
+    PICKED = null;
+    cc_drawStates();
+    document.getElementById('cc_detail').hidden = false;
+    document.getElementById('cc_q').value = '';
+    document.getElementById('cc_has').value = t.filter.has || '';
+    document.getElementById('cc_type').value = t.filter.type || '';
+    cc_fillRegions(null);
+    cc_list();
+    document.getElementById('cc_detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   window.cc_drawStates = function () {
     var by = document.getElementById('cc_sort').value;
@@ -167,16 +201,13 @@
     }).join('');
   };
 
-  window.cc_open = async function (state) {
-    PICKED = state;
-    cc_drawStates();
-    document.getElementById('cc_detail').hidden = false;
-    document.getElementById('cc_q').value = '';
-    document.getElementById('cc_has').value = '';
-    document.getElementById('cc_type').value = '';
-
+  // Regions only mean something inside one state - there are 328 of them
+  // across the fifty - so the dropdown is emptied and disabled without one.
+  async function cc_fillRegions(state) {
     var sel = document.getElementById('cc_region');
     sel.innerHTML = '<option value="">Every region</option>';
+    sel.disabled = !state;
+    if (!state) return;
     try {
       var j = await (await fetch('/api/cc-prospects/regions?state=' + encodeURIComponent(state))).json();
       if (j.success) {
@@ -185,7 +216,17 @@
         }).join('');
       }
     } catch (e) {}
+  }
 
+  window.cc_open = async function (state) {
+    PICKED = state;
+    cc_drawStates();
+    document.getElementById('cc_detail').hidden = false;
+    document.getElementById('cc_q').value = '';
+    document.getElementById('cc_has').value = '';
+    document.getElementById('cc_type').value = '';
+
+    await cc_fillRegions(state);
     cc_list();
     document.getElementById('cc_detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -199,9 +240,8 @@
   window.cc_debounce = function () { clearTimeout(timer); timer = setTimeout(cc_list, 300); };
 
   window.cc_list = async function () {
-    if (!PICKED) return;
     var p = new URLSearchParams({
-      state: PICKED,
+      state: PICKED || '',
       region: document.getElementById('cc_region').value,
       q: document.getElementById('cc_q').value,
       has: document.getElementById('cc_has').value,
@@ -214,8 +254,20 @@
       var j = await (await fetch('/api/cc-prospects?' + p)).json();
       if (!j.success) { body.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-danger">' + esc(j.error) + '</td></tr>'; return; }
       ROWS = j.rows;
+      // Named by what is actually being looked at, so somebody who clicked a
+      // tile does not read it as the whole list.
+      var scope = PICKED || 'All fifty states';
+      var narrowed = [];
+      if (document.getElementById('cc_has').value === 'email') narrowed.push('with an email');
+      if (document.getElementById('cc_has').value === 'phone') narrowed.push('with a phone');
+      if (document.getElementById('cc_has').value === 'neither') narrowed.push('with neither');
+      if (document.getElementById('cc_type').value === 'online') narrowed.push('online only');
+      if (document.getElementById('cc_type').value === 'store') narrowed.push('shops');
       document.getElementById('cc_detailTitle').textContent =
-        PICKED + ' — ' + (j.shown < j.total ? ('showing ' + n(j.shown) + ' of ' + n(j.total)) : (n(j.total) + ' retailers'));
+        scope + (narrowed.length ? ', ' + narrowed.join(' and ') : '')
+        + ' — ' + (j.shown < j.total
+          ? ('showing ' + n(j.shown) + ' of ' + n(j.total))
+          : (n(j.total) + ' retailer' + (j.total === 1 ? '' : 's')));
       if (!ROWS.length) { body.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">Nobody matches.</td></tr>'; return; }
 
       body.innerHTML = ROWS.map(function (r) {
@@ -224,7 +276,9 @@
           + '<td class="fw-bold">' + esc(r.retailer)
             + (where ? '<div class="small text-muted fw-normal">' + esc(where) + '</div>' : '')
           + '</td>'
+          // Across all fifty, the town alone does not say where it is.
           + '<td class="small">' + esc(r.city || '—')
+            + (PICKED ? '' : ' <span class="badge bg-light text-dark border">' + esc(r.state_code || r.state) + '</span>')
             + (r.zip ? '<div class="text-muted">' + esc(r.zip) + '</div>' : '') + '</td>'
           + '<td class="small">' + esc(r.region || '—') + '</td>'
           + '<td class="small">' + (r.phone ? '<a href="tel:' + esc(r.phone) + '">' + esc(r.phone) + '</a>' : '<span class="text-muted">—</span>') + '</td>'

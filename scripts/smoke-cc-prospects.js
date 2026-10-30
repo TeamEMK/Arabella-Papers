@@ -144,6 +144,18 @@ const check = (name, ok, extra) => {
   j = await get('/api/cc-prospects?state=New York&region=Hudson Valley');
   check('narrowed to one region', j.total === 1, j.total);
 
+  console.log('\nAcross every state');
+  // What the tiles above the board open: the same list with no state, which
+  // has to come back rather than being treated as a missing argument.
+  j = await get('/api/cc-prospects');
+  check('no state at all lists everybody', j.total === rows.length, j.total);
+  check('from more than one state',
+    new Set(j.rows.map(x => x.state)).size === 3, [...new Set(j.rows.map(x => x.state))]);
+  check('and every row says which, since the town alone does not',
+    j.rows.every(x => x.state_code), j.rows.map(x => x.state_code));
+  j = await get('/api/cc-prospects?type=online');
+  check('a tile narrows it without a state', j.total === 1 && j.rows[0].state === 'New York', j.rows);
+
   console.log('\nFinding one');
   check('by name', (await get('/api/cc-prospects?q=Thistle')).total === 1);
   check('by town', (await get('/api/cc-prospects?q=Dallas')).total === 1);
