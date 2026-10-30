@@ -127,9 +127,21 @@ function summary(result, who) {
   return { price, verify, summary, rates, BRANDS, EPSILON };
 }
 
-// The staff calculator, and the two public brand links frozen where they
-// were until the office sends their own build.
+// THE COPIES
+//
+//   pricing            the staff calculator
+//   pricing-arabella   the Arabella customer link, the office's own build
+//   pricing-public     the KPC link, frozen until its build arrives
+//
+// These are not the same price list. The customer build carries
+// baseDiscount 0 and the staff one carries 50, so the same basket is US$ 615
+// on the public Arabella link and US$ 307.50 in the office. That is the
+// office's decision - customers are shown list price - and it is exactly why
+// each page has to be re-priced by its OWN copy. One shared engine would
+// have refused every public quote as tampered with, because the server would
+// have taken half off a total the browser never did.
 const internal = build('pricing');
+const forArabella = build('pricing-arabella');
 const forPublic = build('pricing-public');
 
-module.exports = Object.assign({}, internal, { internal, forPublic });
+module.exports = Object.assign({}, internal, { internal, forArabella, forPublic });

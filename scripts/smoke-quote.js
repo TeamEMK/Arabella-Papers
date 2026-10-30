@@ -71,8 +71,12 @@ const check = (name, ok, extra) => {
   };
 
   const ITEMS = [{ code: 'INVITE', qty: 100, layers: 2, printing: ['PR-FOIL'] }];
-  const ara = pricing.price({ brand: 'ARA', additionalDiscount: 0, items: ITEMS });
-  const kpc = pricing.price({ brand: 'KPC', additionalDiscount: 0, items: ITEMS });
+  // Each link's own copy, because they are no longer the same price list -
+  // the Arabella customer build carries no base discount and the one KPC is
+  // still on carries 50. Pricing a fixture with the wrong copy would make
+  // every check here fail for a reason that is not the thing being checked.
+  const ara = pricing.forArabella.price({ brand: 'ARA', additionalDiscount: 0, items: ITEMS });
+  const kpc = pricing.forPublic.price({ brand: 'KPC', additionalDiscount: 0, items: ITEMS });
   const WHO = { name: 'Sarah Mitchell', email: 'sarah@example.com', store: 'Mitchell Paper' };
 
   console.log('The pages, with nobody logged in');
@@ -113,6 +117,47 @@ const check = (name, ok, extra) => {
     row.brand === 'KPC' && Number(row.total) === kpc.total && kpc.total < ara.total,
     { kpc: kpc.total, ara: ara.total });
 
+  console.log('\nEach link on its own price list');
+  // The Arabella link runs the office's customer build, which carries
+  // baseDiscount 0; the KPC link is still on the older shared one at 50. The
+  // same basket is therefore twice the money on one link, on purpose - and
+  // every quote has to be re-priced by the copy its own browser ran. One
+  // shared engine would refuse every Arabella quote as tampered with.
+  const all = require(path.join(ROOT, 'utils/pricing.js'));
+  check('the Arabella link has its own copy', !!all.forArabella);
+  check('and it is not the staff one', all.forArabella !== all.internal);
+  check('nor the one KPC is on', all.forArabella !== all.forPublic);
+  const araCust = all.forArabella.price({ brand: 'ARA', items: ITEMS });
+  check('the customer build shows list price, no discount',
+    araCust.baseDiscountPercent === 0 && araCust.balance === araCust.total, araCust.balance);
+  check('which is twice what the office would quote',
+    Math.abs(araCust.balance - all.internal.price({ brand: 'ARA', items: ITEMS }).balance * 2) < 0.01,
+    { customer: araCust.balance, office: all.internal.price({ brand: 'ARA', items: ITEMS }).balance });
+  check('and it carries one brand, not two', all.forArabella.BRANDS.length === 1, all.forArabella.BRANDS);
+
+  // The whole point: a figure worked out by the page has to survive the
+  // server, and it only does if the server used the same list.
+  r = await send('arabella', Object.assign({}, WHO, {
+    items: ITEMS, totals: { total: araCust.total, balance: araCust.balance },
+  }));
+  check('a quote off the customer build is accepted', r.json && r.json.success === true, r.json);
+  [[row]] = await db.query('SELECT balance FROM pricing_quotes ORDER BY id DESC LIMIT 1');
+  check('and stored at the price the customer was shown',
+    Math.abs(Number(row.balance) - araCust.balance) < 0.01, row.balance);
+  // The old half-price figure is now the wrong answer on that link.
+  r = await send('arabella', Object.assign({}, WHO, {
+    items: ITEMS, totals: { total: araCust.total, balance: araCust.balance / 2 },
+  }));
+  check('and the office price is refused there', r.json && r.json.success === false, r.json);
+
+  r = await get('/quote/arabella');
+  html = await r.text();
+  check('the page loads the Arabella build', /\/pricing-arabella\/js\//.test(html));
+  check('and nothing of the other one', !/\/pricing-public\//.test(html));
+  r = await get('/quote/kpc');
+  html = await r.text();
+  check('and the KPC link stays where it was', /\/pricing-public\/js\//.test(html));
+
   console.log('\nWho is asking');
   check('no name is refused',
     (await send('arabella', { email: WHO.email, items: ITEMS })).json.success === false);
@@ -149,7 +194,13 @@ const check = (name, ok, extra) => {
   check('it carries who it is for', words.indexOf(WHO.name) >= 0 && words.indexOf(WHO.email) >= 0);
   check('every line of the quote', (r.json.summary.match(/^d+./gm) || []).length
     === (words.match(/^d+.s/gm) || []).length);
-  check('the discount it was given', words.indexOf('Less (50%)') >= 0, words.slice(0, 160));
+  // The Arabella customer build quotes list price, so there is no discount
+  // line to show - and the paper must not invent one. A PDF that prints a
+  // discount the customer was never given is a document somebody argues with.
+  check('it shows no discount, because this build gives none',
+    words.indexOf('Less (') < 0, words.slice(0, 200));
+  check('and the total and the balance are the same number',
+    Math.abs(ara.total - ara.balance) < 0.01, { total: ara.total, balance: ara.balance });
   check('and the balance, which is the number anybody reads',
     words.indexOf(ara.balance.toFixed(2)) >= 0, ara.balance);
   check('and says it is an estimate, not an invoice', /not an invoice/i.test(words));

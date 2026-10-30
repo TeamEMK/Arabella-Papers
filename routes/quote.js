@@ -1,10 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
-// The frozen copy of the module, not the staff one. The office is sending
-// its own build for each brand; until it arrives these links must not move
-// under the people using them.
-const pricing = require('../utils/pricing').forPublic;
+const pricing = require('../utils/pricing');
 const { buildQuotePdf } = require('../utils/quotePdf');
 const { sendMail } = require('../utils/mailer');
 const { TRADING_NAME } = require('../utils/office');
@@ -30,9 +27,28 @@ const { TRADING_NAME } = require('../utils/office');
 // writes rows to the database, though, which is why it is rate limited.
 // ══════════════════════════════════════════════════════
 
+// Each link names the copy of the module that prices it, because they are
+// not the same price list. Arabella is on the office's own customer build,
+// which shows list price with no discount; KPC is on the older shared one
+// until its build arrives.
+//
+// The copy is part of the link, not a setting, so a page cannot be drawn by
+// one engine and priced by another.
 const BRANDS = {
-  arabella: { code: 'ARA', label: 'ARABELLA (ARB)' },
-  kpc: { code: 'KPC', label: 'KPC' },
+  arabella: {
+    code: 'ARA', label: 'ARABELLA (ARB)',
+    assets: 'pricing-arabella', pricing: pricing.forArabella,
+    // Their build's own words, from the mount call at the foot of the file
+    // they sent. Theirs, not ours to reword.
+    wordmark: 'ARABELLA PAPERS',
+    title: 'Wedding stationery price estimate',
+  },
+  kpc: {
+    code: 'KPC', label: 'KPC',
+    assets: 'pricing-public', pricing: pricing.forPublic,
+    wordmark: 'KPC',
+    title: 'Wedding stationery price estimate',
+  },
 };
 
 // Enough for somebody pricing a real job several ways over, and nowhere near
@@ -77,6 +93,9 @@ router.get('/:brand', (req, res, next) => {
     brandCode: brand.code,
     brandLabel: brand.label,
     brandSlug: String(req.params.brand).toLowerCase(),
+    assets: brand.assets,
+    wordmark: brand.wordmark,
+    pageTitle: brand.title,
   });
 });
 
@@ -111,7 +130,7 @@ router.post('/:brand/api/send', express.json({ limit: '256kb' }), async (req, re
     // the Arabella link prices on the KPC list for anybody who asks it to.
     let checked;
     try {
-      checked = pricing.verify(
+      checked = brand.pricing.verify(
         {
           brand: brand.code,
           additionalDiscount: body.additionalDiscount,
@@ -127,7 +146,7 @@ router.post('/:brand/api/send', express.json({ limit: '256kb' }), async (req, re
 
     const r = checked.result;
     const who = { store: text(body.store, 200), customer: name };
-    const summary = pricing.summary(r, who);
+    const summary = brand.pricing.summary(r, who);
 
     const [out] = await db.query(
       `INSERT INTO pricing_quotes

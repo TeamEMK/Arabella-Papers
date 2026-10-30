@@ -236,19 +236,32 @@ const check = (name, ok, extra) => {
   const both = require(path.join(ROOT, 'utils/pricing.js'));
   check('the staff side and the public side are separate instances',
     both.internal !== both.forPublic);
-  check('and they agree on the arithmetic today',
-    both.internal.price(basket).balance === both.forPublic.price(basket).balance,
-    { staff: both.internal.price(basket).balance, pub: both.forPublic.price(basket).balance });
+  check('and the Arabella customer build is a third, again separate',
+    both.forArabella !== both.internal && both.forArabella !== both.forPublic);
+  // They are deliberately NOT the same price list any more: the customer
+  // build shows list price and the staff one takes half off.
+  check('the staff copy still discounts',
+    both.internal.price(basket).baseDiscountPercent === 50,
+    both.internal.price(basket).baseDiscountPercent);
+  check('and the customer build does not',
+    both.forArabella.price(basket).baseDiscountPercent === 0,
+    both.forArabella.price(basket).baseDiscountPercent);
+
   const staffPage = fs.readFileSync(path.join(ROOT, 'views/views/pricing.ejs'), 'utf8');
   const publicPage = fs.readFileSync(path.join(ROOT, 'views/quote.ejs'), 'utf8');
+  const publicRoute = fs.readFileSync(path.join(ROOT, 'routes/quote.js'), 'utf8');
   check('the staff page loads the staff copy', staffPage.indexOf('"/pricing/js/') >= 0);
-  check('the public page loads the frozen one', publicPage.indexOf('"/pricing-public/js/') >= 0);
-  check('and nothing of the staff copy is left on it',
-    publicPage.indexOf('"/pricing/') < 0,
-    publicPage.slice(Math.max(0, publicPage.indexOf('"/pricing/') - 40), publicPage.indexOf('"/pricing/') + 40));
-  check('the public route prices with the frozen one',
-    /require\('\.\.\/utils\/pricing'\)\.forPublic/.test(
-      fs.readFileSync(path.join(ROOT, 'routes/quote.js'), 'utf8')));
+  // The public page takes its folder from the link rather than naming one,
+  // so a page cannot be drawn by one build and priced by another.
+  check('the public page takes its build from the link',
+    publicPage.indexOf('/<%= assets %>/js/') >= 0);
+  check('and names no copy of its own', publicPage.indexOf('"/pricing') < 0);
+  check('the route gives Arabella its own build',
+    /assets: 'pricing-arabella', pricing: pricing\.forArabella/.test(publicRoute));
+  check('and leaves KPC where it was',
+    /assets: 'pricing-public', pricing: pricing\.forPublic/.test(publicRoute));
+  check('and prices each quote with the link’s own copy',
+    /brand\.pricing\.verify\(/.test(publicRoute));
 
   console.log('\nThe tab is not for everybody');
   const { defaultSectionIds } = require(path.join(ROOT, 'utils/nav.js'));

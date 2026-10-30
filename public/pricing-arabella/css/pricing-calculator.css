@@ -1,0 +1,191 @@
+html, body { margin: 0; background: #eef1f5; }
+#pricing { max-width: 1320px; margin: 0 auto; }
+/* Arabella Papers pricing calculator. Every rule is scoped to .apc so it won't affect your MIS pages. */
+.apc {
+  --apc-ink: #1d2433; --apc-muted: #5a6375; --apc-page: #eef1f5; --apc-sheet: #fff; --apc-rule: #d6dce5;
+  --apc-field-rule: #b9c2cf; --apc-plum: #6b2b5e; --apc-plum-tint: #f4ebf2;
+  --apc-warn-bg: #fff4d6; --apc-warn-ink: #6b4a00; --apc-error-bg: #fbe9e9; --apc-error-ink: #8f1f1f; --apc-focus: #2d6cdf;
+  font: 15px/1.5 "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  color: var(--apc-ink); background: var(--apc-page); padding: 1rem; border-radius: 8px; text-align: left;
+}
+.apc *, .apc *::before, .apc *::after { box-sizing: border-box; }
+.apc [hidden] { display: none !important; }
+.apc :focus-visible { outline: 2px solid var(--apc-focus); outline-offset: 2px; }
+.apc h2, .apc h3 { margin: 0 0 .75rem; line-height: 1.25; color: var(--apc-ink); }
+.apc .apc-h1 { font-size: 1.4rem; font-weight: 600; margin: 0; }
+.apc h3 { font-size: 1.05rem; font-weight: 600; }
+
+/* Layout: header, two columns, other items, quote */
+.apc .apc-form { display: grid; gap: 1rem; margin: 0; }
+.apc .apc-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.apc .apc-col { display: grid; gap: 1rem; min-width: 0; }
+@media (max-width: 1000px) { .apc .apc-cols { grid-template-columns: minmax(0, 1fr); } }
+.apc .apc-panel { background: var(--apc-sheet); border: 1px solid var(--apc-rule); border-radius: 8px; padding: 1.1rem; min-width: 0; }
+.apc .apc-head-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+.apc .apc-hint, .apc .apc-muted { color: var(--apc-muted); }
+.apc .apc-hint { margin: .75rem 0 0; font-size: .875rem; }
+.apc .apc-hint-top { margin: -.4rem 0 .5rem; }
+.apc .apc-details { display: flex; flex-wrap: wrap; gap: .75rem 1rem; align-items: end; }
+.apc .apc-field { display: grid; gap: .25rem; min-width: 140px; flex: 1 1 140px; margin: 0; }
+.apc .apc-wide { flex: 2 1 200px; }
+.apc .apc-field > span, .apc .apc-f > span { font-size: .8125rem; color: var(--apc-muted); font-weight: 400; }
+
+.apc input, .apc select, .apc textarea {
+  font: inherit; color: var(--apc-ink); background: #fff; border: 1px solid var(--apc-field-rule); border-radius: 6px;
+  padding: .4rem .55rem; min-height: 2.25rem; width: 100%; max-width: 100%; margin: 0; box-shadow: none; height: auto;
+}
+.apc input:disabled, .apc select:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Item rows: name, then main fields, then ink boxes */
+.apc .apc-items { display: grid; }
+.apc .apc-item { display: grid; gap: .5rem; padding: .85rem 0; border-top: 1px solid var(--apc-rule); }
+.apc .apc-item:first-child { border-top: 0; padding-top: 0; }
+.apc .apc-name { font-weight: 600; }
+.apc .apc-sub .apc-name { color: var(--apc-muted); }
+.apc .apc-fields { display: flex; flex-wrap: wrap; gap: .5rem .75rem; align-items: end; }
+.apc .apc-note { margin: 0; font-size: .8125rem; color: var(--apc-muted); align-self: center; }
+.apc .apc-f { display: grid; gap: .25rem; width: 7rem; margin: 0; min-width: 0; }
+.apc .apc-f-qty { width: 6rem; }
+.apc .apc-f-small { width: 5rem; }
+.apc .apc-f-select { width: 13rem; }
+.apc .apc-f-ink { width: 10.5rem; }
+.apc .apc-f-name { width: 16rem; }
+.apc .apc-f-addon { width: 100%; flex: 1 1 100%; }
+.apc .apc-f-qty { width: 5.5rem; }
+.apc .apc-f-back > span { color: var(--apc-plum); }
+@media (max-width: 640px) {
+  .apc .apc-f-ink { width: calc(50% - .375rem); }
+  .apc .apc-f-select, .apc .apc-f-name { width: 100%; }
+}
+
+.apc .apc-custom-list { display: grid; gap: .75rem; margin: .5rem 0 .75rem; }
+.apc .apc-custom-row { display: grid; gap: .5rem; padding-bottom: .75rem; border-bottom: 1px dashed var(--apc-rule); }
+
+/* Buttons */
+.apc button { font: inherit; cursor: pointer; }
+.apc .apc-btn1, .apc .apc-btn2 { display: inline-flex; align-items: center; justify-content: center; min-height: 2.5rem; padding: .5rem 1rem; border-radius: 6px; font-weight: 600; }
+.apc .apc-btn1 { background: var(--apc-plum); color: #fff; border: 1px solid var(--apc-plum); width: 100%; min-height: 3rem; font-size: 1.05rem; }
+.apc .apc-btn2 { background: var(--apc-sheet); color: var(--apc-plum); border: 1px solid var(--apc-plum); }
+.apc .apc-btn2:hover { background: var(--apc-plum-tint); }
+.apc .apc-link { background: none; border: 0; color: var(--apc-muted); text-decoration: underline; min-height: 2.25rem; padding: 0 .25rem; }
+.apc .apc-row { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+
+/* Quote */
+.apc .apc-quote { border-top: 4px solid var(--apc-plum); display: grid; gap: 1rem; }
+.apc .apc-quote-grid { display: grid; grid-template-columns: minmax(220px, 340px) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+@media (max-width: 800px) { .apc .apc-quote-grid { grid-template-columns: minmax(0, 1fr); } }
+.apc .apc-totals { margin: 0; display: grid; gap: .35rem; font-variant-numeric: tabular-nums; }
+.apc .apc-totals div { display: flex; justify-content: space-between; gap: 1rem; }
+.apc .apc-totals dt { color: var(--apc-muted); font-weight: 400; }
+.apc .apc-totals dd { margin: 0; }
+.apc .apc-balance { margin-top: .4rem; padding-top: .6rem; border-top: 1px solid var(--apc-rule); align-items: baseline; }
+.apc .apc-balance dt { color: var(--apc-ink) !important; font-weight: 600 !important; }
+.apc .apc-balance dd { font-size: 1.6rem; font-weight: 700; color: var(--apc-plum); }
+.apc .apc-summary-label { display: grid; gap: .35rem; font-size: .8125rem; color: var(--apc-muted); }
+.apc .apc-summary { font: .8125rem/1.55 Consolas, "Cascadia Mono", Menlo, monospace; resize: vertical; white-space: pre-wrap; background: var(--apc-page); color: var(--apc-ink); }
+
+/* Messages */
+.apc .apc-alert { border-radius: 6px; padding: .65rem .85rem; font-size: .9rem; }
+.apc .apc-alert p { margin: 0 0 .25rem; font-weight: 600; }
+.apc .apc-alert ul { margin: 0; padding-left: 1.1rem; }
+.apc .apc-alert-error { background: var(--apc-error-bg); color: var(--apc-error-ink); margin-bottom: 1rem; }
+.apc .apc-alert-warn { background: var(--apc-warn-bg); color: var(--apc-warn-ink); margin-top: 1rem; }
+
+/* ===================== Customer edition (premium look) =====================
+   Grounded in the Arabella Papers wordmark: slate blue, widely spaced serif capitals,
+   crisp white stock on a cool paper-grey ground. The estimate card is the one bold element. */
+.apc.apc-premium {
+  --apc-ink: #1f2a3c; --apc-muted: #5f6b7d; --apc-page: #eef1f5; --apc-sheet: #ffffff; --apc-rule: #dfe4ec;
+  --apc-field-rule: #c7cfdb; --apc-plum: #3e5576; --apc-plum-tint: #eaf0f7;
+  --apc-serif: "Cormorant Garamond", "Cormorant", "Garamond", "EB Garamond", "Baskerville", "Book Antiqua", Georgia, serif;
+  background: var(--apc-page); padding: 2.5rem 1.25rem 3rem; border-radius: 0; font-size: 15px;
+}
+.apc.apc-premium .apc-mast { text-align: center; padding: .5rem 1rem 1.75rem; }
+.apc.apc-premium .apc-wordmark {
+  font-family: var(--apc-serif); font-size: clamp(1.9rem, 4vw, 2.75rem); font-weight: 400; letter-spacing: .32em;
+  margin: 0 0 .5rem; padding-left: .32em; color: var(--apc-plum); line-height: 1.1;
+}
+.apc.apc-premium .apc-mast .apc-h1 {
+  font-family: var(--apc-serif); font-size: 1.35rem; font-weight: 400; font-style: italic; color: var(--apc-ink); margin: 0 0 .4rem;
+}
+.apc.apc-premium .apc-lede { margin: 0 auto; max-width: 34rem; color: var(--apc-muted); }
+.apc.apc-premium .apc-mast::after {
+  content: ""; display: block; width: 4.5rem; height: 1px; background: var(--apc-plum); margin: 1.5rem auto 0; opacity: .6;
+}
+.apc.apc-premium .apc-panel { border: 1px solid var(--apc-rule); border-radius: 4px; padding: 1.5rem 1.6rem; box-shadow: 0 1px 0 rgba(31, 42, 60, .04); }
+.apc.apc-premium h3, .apc.apc-premium .apc-head-title {
+  font-family: var(--apc-serif); font-weight: 500; font-size: 1.45rem; letter-spacing: .01em; color: var(--apc-ink);
+  margin: 0 0 1rem; padding-bottom: .55rem; border-bottom: 1px solid var(--apc-rule);
+}
+.apc.apc-premium .apc-head-row { margin-bottom: .5rem; align-items: flex-end; }
+.apc.apc-premium .apc-head-title { flex: 1; margin-bottom: 0; }
+.apc.apc-premium .apc-head .apc-wide { flex: 2 1 180px; max-width: 22rem; }
+.apc.apc-premium .apc-name { font-family: var(--apc-serif); font-size: 1.15rem; font-weight: 600; color: var(--apc-plum); }
+.apc.apc-premium .apc-item { padding: 1rem 0; }
+.apc.apc-premium .apc-f > span, .apc.apc-premium .apc-field > span { color: var(--apc-muted); font-size: .78rem; }
+.apc.apc-premium .apc-f-back > span { color: var(--apc-plum); font-style: italic; }
+.apc.apc-premium input, .apc.apc-premium select { border-color: var(--apc-field-rule); border-radius: 3px; background: #fbfcfd; }
+.apc.apc-premium input:focus, .apc.apc-premium select:focus { border-color: var(--apc-plum); background: #fff; outline: none; box-shadow: 0 0 0 3px rgba(62, 85, 118, .15); }
+.apc.apc-premium .apc-btn1 {
+  background: var(--apc-plum); border-color: var(--apc-plum); border-radius: 3px; min-height: 3.25rem;
+  font-family: var(--apc-serif); font-size: 1.3rem; font-weight: 500; letter-spacing: .04em;
+}
+.apc.apc-premium .apc-btn1:hover { background: #2f4462; }
+.apc.apc-premium .apc-btn2 { border-radius: 3px; border-color: var(--apc-plum); color: var(--apc-plum); font-weight: 500; }
+
+/* The estimate card */
+.apc.apc-premium .apc-quote { border-top: 1px solid var(--apc-rule); padding: 1.75rem; }
+.apc.apc-premium .apc-quote-grid { grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); margin-top: 1rem; }
+.apc.apc-premium .apc-estimate { margin-top: 1.5rem; }
+.apc.apc-premium .apc-estimate-title { border-bottom: 0; margin-bottom: .25rem; padding-bottom: 0; font-size: 1.75rem; }
+.apc.apc-premium .apc-estimate-for { margin: 0 0 1rem; color: var(--apc-muted); font-style: italic; font-family: var(--apc-serif); font-size: 1.1rem; }
+.apc.apc-premium .apc-lines { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.apc.apc-premium .apc-lines th { text-align: left; font-weight: 500; font-size: .78rem; color: var(--apc-muted); padding: 0 .75rem .5rem 0; border-bottom: 1px solid var(--apc-ink); }
+.apc.apc-premium .apc-lines td { padding: .7rem .75rem .7rem 0; border-bottom: 1px solid var(--apc-rule); vertical-align: top; }
+.apc.apc-premium .apc-lines th:nth-child(n+2), .apc.apc-premium .apc-lines td:nth-child(n+2) { text-align: right; white-space: nowrap; padding-right: 0; padding-left: .75rem; }
+.apc.apc-premium .apc-line-sub { display: block; font-size: .82rem; color: var(--apc-muted); margin-top: .15rem; }
+.apc.apc-premium .apc-quote-grid > .apc-totals { grid-column: 2; grid-row: 1; }
+.apc.apc-premium .apc-quote-grid > div:last-child { grid-column: 2; }
+.apc.apc-premium .apc-balance dt { font-family: var(--apc-serif); font-size: 1.25rem; }
+.apc.apc-premium .apc-balance dd { font-family: var(--apc-serif); font-size: 2.1rem; font-weight: 600; color: var(--apc-plum); }
+@media (max-width: 800px) {
+  .apc.apc-premium .apc-quote-grid > .apc-totals, .apc.apc-premium .apc-quote-grid > div:last-child { grid-column: 1; grid-row: auto; }
+}
+
+/* Printing the estimate: only the wordmark and the estimate card are printed */
+@media print {
+  html:has(.apc-premium), html:has(.apc-premium) body { background: #fff !important; }
+  .apc.apc-premium { background: #fff; padding: 0; }
+  .apc.apc-premium .apc-head, .apc.apc-premium .apc-cols, .apc.apc-premium [data-r="custom"],
+  .apc.apc-premium .apc-btn1, .apc.apc-premium .apc-row, .apc.apc-premium .apc-lede,
+  .apc.apc-premium [data-r="saved"], .apc.apc-premium [data-r="errors"] { display: none !important; }
+  .apc.apc-premium .apc-quote { border: 0; box-shadow: none; padding: 0; }
+  .apc.apc-premium .apc-mast { padding-bottom: 1rem; }
+}
+
+/* Customer cost summary: the same lines as the staff summary, set as a numbered list */
+.apc.apc-premium .apc-sumlines { margin: 0; padding: 0 0 0 1.6rem; border-top: 1px solid var(--apc-ink); font-variant-numeric: tabular-nums; }
+.apc.apc-premium .apc-sumlines li { padding: .7rem 0; border-bottom: 1px solid var(--apc-rule); display: list-item; }
+.apc.apc-premium .apc-sumlines li::marker { color: var(--apc-plum); font-family: var(--apc-serif); font-weight: 600; }
+.apc.apc-premium .apc-sumlines li > span { display: inline; }
+.apc.apc-premium .apc-sum-item { line-height: 1.5; }
+.apc.apc-premium .apc-sum-amt { float: right; margin-left: 1.5rem; color: var(--apc-ink); font-weight: 600; white-space: nowrap; }
+.apc.apc-premium .apc-sumlines li::after { content: ""; display: table; clear: both; }
+
+/* Customer copies: everything in capital letters, with a little extra spacing so it stays easy to read */
+.apc.apc-caps, .apc.apc-caps input, .apc.apc-caps select, .apc.apc-caps button, .apc.apc-caps textarea { text-transform: uppercase; }
+.apc.apc-caps { letter-spacing: .03em; }
+.apc.apc-caps input::placeholder { text-transform: none; }
+.apc.apc-caps h3, .apc.apc-caps .apc-head-title, .apc.apc-caps .apc-name { letter-spacing: .1em; }
+.apc.apc-caps h3, .apc.apc-caps .apc-head-title { font-size: 1.2rem; }
+.apc.apc-caps .apc-name { font-size: .98rem; }
+.apc.apc-caps .apc-mast .apc-h1 { font-style: normal; letter-spacing: .22em; font-size: 1.05rem; }
+.apc.apc-caps .apc-estimate-for { font-style: normal; letter-spacing: .12em; font-size: .95rem; }
+.apc.apc-caps .apc-f-back > span { font-style: normal; }
+.apc.apc-caps .apc-f > span, .apc.apc-caps .apc-field > span { font-size: .72rem; letter-spacing: .08em; }
+.apc.apc-caps .apc-btn1 { letter-spacing: .2em; font-size: 1.1rem; }
+.apc.apc-caps .apc-btn2 { letter-spacing: .1em; font-size: .85rem; }
+.apc.apc-caps .apc-estimate-title { font-size: 1.4rem; letter-spacing: .14em; }
+.apc.apc-caps .apc-sumlines li { font-size: .92rem; }
+.apc.apc-caps .apc-balance dt { letter-spacing: .14em; font-size: 1rem; }
+.apc.apc-caps .apc-lede { font-size: .82rem; letter-spacing: .1em; line-height: 1.8; }

@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/pricing-public/css/pricing-calculator.css">
+<link rel="stylesheet" href="/<%= assets %>/css/pricing-calculator.css">
 <style>
   :root { --ink:#1d1d1d; --gold:#b08a3e; --paper:#faf8f4; --line:#e6e0d4; }
   * { box-sizing: border-box; }
@@ -71,7 +71,10 @@
 </head>
 <body>
 
-<header class="q-head">
+<%# Ours while the gate is up. Once the calculator mounts, the build draws
+    its own masthead and this gets out of the way - two headers on one page
+    is one too many. %>
+<header class="q-head" id="q_head">
   <div class="q-name">ARABELLA PAPERS</div>
   <div class="q-sub">PRICE YOUR ORDER</div>
   <div class="q-brand"><%= brandLabel %></div>
@@ -106,13 +109,15 @@
 
 <footer class="q-foot">Fine Papers &nbsp;·&nbsp; Timeless Celebrations</footer>
 
-<script src="/pricing-public/js/pricing-rates.js"></script>
-<script src="/pricing-public/js/pricing-engine.js"></script>
-<script src="/pricing-public/js/pricing-ui.js"></script>
+<script src="/<%= assets %>/js/pricing-rates.js"></script>
+<script src="/<%= assets %>/js/pricing-engine.js"></script>
+<script src="/<%= assets %>/js/pricing-ui.js"></script>
 <script>
 (function () {
   var BRAND = <%- JSON.stringify(brandCode) %>;
   var SLUG = <%- JSON.stringify(brandSlug) %>;
+  var WORDMARK = <%- JSON.stringify(wordmark) %>;
+  var PAGE_TITLE = <%- JSON.stringify(pageTitle) %>;
   var who = null, lastQuote = null;
 
   window.q_open = function () {
@@ -129,6 +134,7 @@
     document.getElementById('q_whoName').textContent = name;
     document.getElementById('q_whoEmail').textContent = email;
     document.getElementById('gate').hidden = true;
+    document.getElementById('q_head').hidden = true;
     document.getElementById('calc').hidden = false;
     mount();
   };
@@ -137,12 +143,19 @@
     ArabellaPricing.mount(document.getElementById('pricing'), {
       rates: window.ArabellaPricingRates,
       brand: BRAND,
-      store: who.store,
+      // The build's own customer mode, which drops the store name, both
+      // discounts and the rush fee, and puts its masthead at the top. These
+      // are the words from the mount call at the foot of the file the office
+      // sent; they are passed through rather than reworded here.
+      mode: 'customer',
+      wordmark: WORDMARK,
+      title: PAGE_TITLE,
       customer: who.name,
       onQuote: function (quote) { lastQuote = quote; q_note(''); },
     });
 
-    // The module always draws the brand dropdown. The link has already
+    // An older build still draws the brand dropdown; the newer one hides it
+    // itself when the rates carry one brand. Either way the link has already
     // decided the price list, so the whole field goes - hiding only the
     // select would leave a floating "Brand" label above nothing.
     var sel = document.querySelector('#pricing [data-n="brand"]');
