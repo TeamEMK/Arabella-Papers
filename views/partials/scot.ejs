@@ -2,13 +2,11 @@
     S.C.O.T. — THE CALLING LIST
 
     The panel itself: the filters, the table and the script that fills it.
-    Shared by two places, because it is one thing and was about to become
-    two copies of one thing:
 
-      - the Orders Dashboard, where it sits folded inside a collapse for
-        somebody already on that page;
-      - its own tab, for somebody whose job is the calling list and who
-        should not have to open another page to reach it.
+    It used to fold out of the Orders Dashboard as well, which is why it is a
+    partial. Once it had a tab of its own that fold-out was the same list in
+    two places, so it was taken off the dashboard; the partial stays, because
+    one file is still the right home for a thing this size.
 
     The sheet does the thinking. It already works out each client's ordering
     rhythm and when they are due again, and nothing in here recalculates any
@@ -61,16 +59,6 @@ function scot_esc(v) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// Only the dashboard has the collapse. Bootstrap toggles on the same click,
-// so this reads the state BEFORE the toggle: shut now means it is about to
-// open, which is the moment to go and read the sheet.
-function scot_open() {
-  var panel = document.getElementById('scotContent');
-  if (!panel) return;
-  var shut = !panel.classList.contains('show');
-  if (shut && !scot_loaded) scot_load(false);
-}
-
 async function scot_load(fresh) {
   var note = document.getElementById('scot_note');
   if (!note) return;
@@ -89,13 +77,6 @@ async function scot_load(fresh) {
     scot_loaded = true;
     scot_rows = json.list || [];
     document.getElementById('scot_sheetLink').href = json.sheetUrl;
-
-    // The two badges live on the dashboard's fold-out header, which this tab
-    // does not have.
-    var due = document.getElementById('scot_dueBadge');
-    if (due) { due.textContent = json.due; due.classList.toggle('d-none', !json.due); }
-    var soon = document.getElementById('scot_soonBadge');
-    if (soon) { soon.textContent = json.soon; soon.classList.toggle('d-none', !json.soon); }
 
     var tiles = document.getElementById('scot_tiles');
     if (tiles) {
@@ -162,7 +143,6 @@ function scot_download(btn) {
   downloadXlsx('SCOT calling list', cols, rows, btn);
 }
 
-// On its own tab there is nothing to unfold, so it reads the sheet straight
-// away: somebody who opened the calling list came to see the calling list.
-if (!document.getElementById('scotContent')) scot_load(false);
+// Somebody who opened the calling list came to see the calling list.
+scot_load(false);
 </script>
