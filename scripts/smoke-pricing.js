@@ -228,6 +228,28 @@ const check = (name, ok, extra) => {
   check('and records which price list priced it',
     !!json.quote.rates_version, json.quote.rates_version);
 
+  console.log('\nTwo copies of the module');
+  // The staff calculator moves with the office's newer builds; the two public
+  // brand links are frozen until their own code arrives. Each page is priced
+  // by the engine its own browser ran, so they cannot drift apart by accident.
+  const fs = require('fs');
+  const both = require(path.join(ROOT, 'utils/pricing.js'));
+  check('the staff side and the public side are separate instances',
+    both.internal !== both.forPublic);
+  check('and they agree on the arithmetic today',
+    both.internal.price(basket).balance === both.forPublic.price(basket).balance,
+    { staff: both.internal.price(basket).balance, pub: both.forPublic.price(basket).balance });
+  const staffPage = fs.readFileSync(path.join(ROOT, 'views/views/pricing.ejs'), 'utf8');
+  const publicPage = fs.readFileSync(path.join(ROOT, 'views/quote.ejs'), 'utf8');
+  check('the staff page loads the staff copy', staffPage.indexOf('"/pricing/js/') >= 0);
+  check('the public page loads the frozen one', publicPage.indexOf('"/pricing-public/js/') >= 0);
+  check('and nothing of the staff copy is left on it',
+    publicPage.indexOf('"/pricing/') < 0,
+    publicPage.slice(Math.max(0, publicPage.indexOf('"/pricing/') - 40), publicPage.indexOf('"/pricing/') + 40));
+  check('the public route prices with the frozen one',
+    /require\('\.\.\/utils\/pricing'\)\.forPublic/.test(
+      fs.readFileSync(path.join(ROOT, 'routes/quote.js'), 'utf8')));
+
   console.log('\nThe tab is not for everybody');
   const { defaultSectionIds } = require(path.join(ROOT, 'utils/nav.js'));
   // The price list and the standing discount are the tightest thing in here

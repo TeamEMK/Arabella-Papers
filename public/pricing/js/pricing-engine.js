@@ -143,7 +143,8 @@
   function summaryText(result, who) {
     who = who || {};
     var cur = result.currency;
-    var t = "Here is Cost Summary for " + (who.store || "") + (who.customer ? "/" + who.customer : "") + "\n\n";
+    var forWhom = [who.store, who.customer].filter(function (x) { return x; }).join("/");
+    var t = "Here is Cost Summary" + (forWhom ? " for " + forWhom : "") + "\n\n";
     result.lines.forEach(function (l, k) { t += (k + 1) + ". " + l + "\n"; });
     t += "\nTotal= " + cur + " " + money(result.total) + "\n";
     if (result.baseDiscountPercent > 0) t += "Less (" + n(result.baseDiscountPercent) + "%)= " + cur + " " + money(result.baseDiscountAmount) + "\n";

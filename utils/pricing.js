@@ -16,19 +16,37 @@
 //
 // One copy of the arithmetic, used by both sides. Re-implementing the rules
 // here in a second language is how the two start disagreeing.
+//
+// TWO COPIES OF THE MODULE, ON PURPOSE
+//
+// public/pricing        the staff calculator, kept up to date
+// public/pricing-public the two brand links, frozen where they were
+//
+// The office is getting its own build for each brand, and until it arrives
+// the public links must not move under the people using them. The two are
+// the same arithmetic today - the only difference between the versions is
+// the screen - but each page is priced by the engine its own browser ran,
+// so they cannot drift apart without somebody choosing it.
 // ══════════════════════════════════════════════════════
 const path = require('path');
 
-const MODULE_DIR = path.join(__dirname, '..', 'public', 'pricing', 'js');
-const rates = require(path.join(MODULE_DIR, 'pricing-rates.js'));
-const { engine } = require(path.join(MODULE_DIR, 'pricing-engine.js'));
+/** Load one copy of the module and build the server's side of it. */
+function makePricing(folder) {
+  const dir = path.join(__dirname, '..', 'public', folder, 'js');
+  const rates = require(path.join(dir, 'pricing-rates.js'));
+  const { engine } = require(path.join(dir, 'pricing-engine.js'));
+  return { rates, engine };
+}
+
+function build(folder) {
+  const { rates, engine } = makePricing(folder);
 
 // Money is compared to the paisa. The browser and Node both use doubles and
 // both run the same code, so they agree - but a rounding difference in the
 // last place must not be the thing that refuses somebody's quote.
 const EPSILON = 0.01;
 
-const BRANDS = rates.brands.map(b => b[0]);
+  const BRANDS = rates.brands.map(b => b[0]);
 
 /**
  * Work a quote out from its items, here, with no reference to what the
@@ -106,4 +124,12 @@ function summary(result, who) {
   return engine.summaryText(result, who || {});
 }
 
-module.exports = { price, verify, summary, rates, BRANDS, EPSILON };
+  return { price, verify, summary, rates, BRANDS, EPSILON };
+}
+
+// The staff calculator, and the two public brand links frozen where they
+// were until the office sends their own build.
+const internal = build('pricing');
+const forPublic = build('pricing-public');
+
+module.exports = Object.assign({}, internal, { internal, forPublic });

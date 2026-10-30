@@ -88,3 +88,84 @@
 .apc .apc-alert ul { margin: 0; padding-left: 1.1rem; }
 .apc .apc-alert-error { background: var(--apc-error-bg); color: var(--apc-error-ink); margin-bottom: 1rem; }
 .apc .apc-alert-warn { background: var(--apc-warn-bg); color: var(--apc-warn-ink); margin-top: 1rem; }
+
+/* ===================== Customer edition (premium look) =====================
+   Grounded in the Arabella Papers wordmark: slate blue, widely spaced serif capitals,
+   crisp white stock on a cool paper-grey ground. The estimate card is the one bold element. */
+.apc.apc-premium {
+  --apc-ink: #1f2a3c; --apc-muted: #5f6b7d; --apc-page: #eef1f5; --apc-sheet: #ffffff; --apc-rule: #dfe4ec;
+  --apc-field-rule: #c7cfdb; --apc-plum: #3e5576; --apc-plum-tint: #eaf0f7;
+  --apc-serif: "Cormorant Garamond", "Cormorant", "Garamond", "EB Garamond", "Baskerville", "Book Antiqua", Georgia, serif;
+  background: var(--apc-page); padding: 2.5rem 1.25rem 3rem; border-radius: 0; font-size: 15px;
+}
+.apc.apc-premium .apc-mast { text-align: center; padding: .5rem 1rem 1.75rem; }
+.apc.apc-premium .apc-wordmark {
+  font-family: var(--apc-serif); font-size: clamp(1.9rem, 4vw, 2.75rem); font-weight: 400; letter-spacing: .32em;
+  margin: 0 0 .5rem; padding-left: .32em; color: var(--apc-plum); line-height: 1.1;
+}
+.apc.apc-premium .apc-mast .apc-h1 {
+  font-family: var(--apc-serif); font-size: 1.35rem; font-weight: 400; font-style: italic; color: var(--apc-ink); margin: 0 0 .4rem;
+}
+.apc.apc-premium .apc-lede { margin: 0 auto; max-width: 34rem; color: var(--apc-muted); }
+.apc.apc-premium .apc-mast::after {
+  content: ""; display: block; width: 4.5rem; height: 1px; background: var(--apc-plum); margin: 1.5rem auto 0; opacity: .6;
+}
+.apc.apc-premium .apc-panel { border: 1px solid var(--apc-rule); border-radius: 4px; padding: 1.5rem 1.6rem; box-shadow: 0 1px 0 rgba(31, 42, 60, .04); }
+.apc.apc-premium h3, .apc.apc-premium .apc-head-title {
+  font-family: var(--apc-serif); font-weight: 500; font-size: 1.45rem; letter-spacing: .01em; color: var(--apc-ink);
+  margin: 0 0 1rem; padding-bottom: .55rem; border-bottom: 1px solid var(--apc-rule);
+}
+.apc.apc-premium .apc-head-row { margin-bottom: .5rem; align-items: flex-end; }
+.apc.apc-premium .apc-head-title { flex: 1; margin-bottom: 0; }
+.apc.apc-premium .apc-head .apc-wide { flex: 2 1 180px; max-width: 22rem; }
+.apc.apc-premium .apc-name { font-family: var(--apc-serif); font-size: 1.15rem; font-weight: 600; color: var(--apc-plum); }
+.apc.apc-premium .apc-item { padding: 1rem 0; }
+.apc.apc-premium .apc-f > span, .apc.apc-premium .apc-field > span { color: var(--apc-muted); font-size: .78rem; }
+.apc.apc-premium .apc-f-back > span { color: var(--apc-plum); font-style: italic; }
+.apc.apc-premium input, .apc.apc-premium select { border-color: var(--apc-field-rule); border-radius: 3px; background: #fbfcfd; }
+.apc.apc-premium input:focus, .apc.apc-premium select:focus { border-color: var(--apc-plum); background: #fff; outline: none; box-shadow: 0 0 0 3px rgba(62, 85, 118, .15); }
+.apc.apc-premium .apc-btn1 {
+  background: var(--apc-plum); border-color: var(--apc-plum); border-radius: 3px; min-height: 3.25rem;
+  font-family: var(--apc-serif); font-size: 1.3rem; font-weight: 500; letter-spacing: .04em;
+}
+.apc.apc-premium .apc-btn1:hover { background: #2f4462; }
+.apc.apc-premium .apc-btn2 { border-radius: 3px; border-color: var(--apc-plum); color: var(--apc-plum); font-weight: 500; }
+
+/* The estimate card */
+.apc.apc-premium .apc-quote { border-top: 1px solid var(--apc-rule); padding: 1.75rem; }
+.apc.apc-premium .apc-quote-grid { grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); margin-top: 1rem; }
+.apc.apc-premium .apc-estimate { margin-top: 1.5rem; }
+.apc.apc-premium .apc-estimate-title { border-bottom: 0; margin-bottom: .25rem; padding-bottom: 0; font-size: 1.75rem; }
+.apc.apc-premium .apc-estimate-for { margin: 0 0 1rem; color: var(--apc-muted); font-style: italic; font-family: var(--apc-serif); font-size: 1.1rem; }
+.apc.apc-premium .apc-lines { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.apc.apc-premium .apc-lines th { text-align: left; font-weight: 500; font-size: .78rem; color: var(--apc-muted); padding: 0 .75rem .5rem 0; border-bottom: 1px solid var(--apc-ink); }
+.apc.apc-premium .apc-lines td { padding: .7rem .75rem .7rem 0; border-bottom: 1px solid var(--apc-rule); vertical-align: top; }
+.apc.apc-premium .apc-lines th:nth-child(n+2), .apc.apc-premium .apc-lines td:nth-child(n+2) { text-align: right; white-space: nowrap; padding-right: 0; padding-left: .75rem; }
+.apc.apc-premium .apc-line-sub { display: block; font-size: .82rem; color: var(--apc-muted); margin-top: .15rem; }
+.apc.apc-premium .apc-quote-grid > .apc-totals { grid-column: 2; grid-row: 1; }
+.apc.apc-premium .apc-quote-grid > div:last-child { grid-column: 2; }
+.apc.apc-premium .apc-balance dt { font-family: var(--apc-serif); font-size: 1.25rem; }
+.apc.apc-premium .apc-balance dd { font-family: var(--apc-serif); font-size: 2.1rem; font-weight: 600; color: var(--apc-plum); }
+@media (max-width: 800px) {
+  .apc.apc-premium .apc-quote-grid > .apc-totals, .apc.apc-premium .apc-quote-grid > div:last-child { grid-column: 1; grid-row: auto; }
+}
+
+/* Printing the estimate: only the wordmark and the estimate card are printed */
+@media print {
+  html:has(.apc-premium), html:has(.apc-premium) body { background: #fff !important; }
+  .apc.apc-premium { background: #fff; padding: 0; }
+  .apc.apc-premium .apc-head, .apc.apc-premium .apc-cols, .apc.apc-premium [data-r="custom"],
+  .apc.apc-premium .apc-btn1, .apc.apc-premium .apc-row, .apc.apc-premium .apc-lede,
+  .apc.apc-premium [data-r="saved"], .apc.apc-premium [data-r="errors"] { display: none !important; }
+  .apc.apc-premium .apc-quote { border: 0; box-shadow: none; padding: 0; }
+  .apc.apc-premium .apc-mast { padding-bottom: 1rem; }
+}
+
+/* Customer cost summary: the same lines as the staff summary, set as a numbered list */
+.apc.apc-premium .apc-sumlines { margin: 0; padding: 0 0 0 1.6rem; border-top: 1px solid var(--apc-ink); font-variant-numeric: tabular-nums; }
+.apc.apc-premium .apc-sumlines li { padding: .7rem 0; border-bottom: 1px solid var(--apc-rule); display: list-item; }
+.apc.apc-premium .apc-sumlines li::marker { color: var(--apc-plum); font-family: var(--apc-serif); font-weight: 600; }
+.apc.apc-premium .apc-sumlines li > span { display: inline; }
+.apc.apc-premium .apc-sum-item { line-height: 1.5; }
+.apc.apc-premium .apc-sum-amt { float: right; margin-left: 1.5rem; color: var(--apc-ink); font-weight: 600; white-space: nowrap; }
+.apc.apc-premium .apc-sumlines li::after { content: ""; display: table; clear: both; }

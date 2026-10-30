@@ -5,6 +5,9 @@
  *   ArabellaPricing.mount(document.getElementById("pricing"), {
  *     rates: window.ArabellaPricingRates,   // or rates loaded from your MIS
  *     brand: "ARA",                         // optional starting brand
+ *     title: "Arabella Papers price calculator", // optional heading
+ *     mode: "customer",                     // optional: customer copy (no store, discount, rush fee or other items)
+ *     wordmark: "ARABELLA PAPERS",          // optional, customer mode: name shown at the top
  *     store: "Bella Stationery",            // optional, fills Store name
  *     customer: "Priya",                    // optional, fills Customer name
  *     onQuote: function (quote) { ... },    // optional, called after each Calculate quote
@@ -51,13 +54,12 @@
   var LEFT = [
     ["Invitation and cards", [0, 4, 6, 10]],
     ["Enclosure cards", [9, 20, 21, 11]],
-    ["Folder, tags and belly band", [8, 13, 12]],
-    ["Reception stationery", [16, 17]]
+    ["Folder, tags and belly band", [8, 13, 12]]
   ];
   var RIGHT = [
     ["Envelopes", [1, 2, 5, 7]],
     ["Escort envelope", [22]],
-    ["Program and menu cards", [18, 19]],
+    ["Reception stationery", [16, 17, 18, 19]],
     ["Add-ons and edges", "ADDONS"]
   ];
 
@@ -130,36 +132,50 @@
       return '<option value="' + b[0] + '"' + (b[0] === (opts.brand || rates.brands[0][0]) ? " selected" : "") + ">" + esc(b[1]) + "</option>";
     }).join("");
 
+    var isCustomer = opts.mode === "customer";
+    var isPremium = isCustomer || opts.premium === true;   // premium look (masthead, serif headings, itemised summary)
     root.classList.add("apc");
     root.innerHTML =
       '<form class="apc-form" novalidate>' +
+        (isPremium
+          ? '<header class="apc-mast"><p class="apc-wordmark">' + esc(opts.wordmark || "") + '</p>' +
+              '<h2 class="apc-h1">' + esc(opts.title || (isCustomer ? "Price estimate" : "Pricing calculator")) + "</h2>" +
+              '<p class="apc-lede">' + esc(opts.lede || (isCustomer ? "Choose the pieces for your stationery suite and see an estimate straight away."
+                                                                      : "Price a quote from the ARB or KPC price list.")) + "</p></header>"
+          : "") +
         '<section class="apc-panel apc-head">' +
-          '<div class="apc-head-row"><h2 class="apc-h1">Price a quote</h2>' +
-            '<button type="button" class="apc-btn2" data-a="new">Start a new quote</button></div>' +
+          '<div class="apc-head-row">' + (isPremium ? '<h3 class="apc-head-title">' + (isCustomer ? "Your details" : "Quote details") + "</h3>" : '<h2 class="apc-h1">' + esc(opts.title || "Price a quote") + "</h2>") +
+            '<button type="button" class="apc-btn2" data-a="new">' + (isCustomer ? "Start a new estimate" : "Start a new quote") + "</button></div>" +
           '<div class="apc-alert apc-alert-error" data-r="errors" role="alert" hidden></div>' +
           '<div class="apc-details">' +
-            '<label class="apc-field"><span>Brand</span><select data-n="brand">' + brandOpts + "</select></label>" +
-            '<label class="apc-field apc-wide"><span>Store name</span><input type="text" data-n="store" autocomplete="off"></label>' +
-            '<label class="apc-field apc-wide"><span>Customer name</span><input type="text" data-n="customer" autocomplete="off"></label>' +
+            // With only one brand in the rates (a customer copy), the Brand box is hidden.
+            '<label class="apc-field"' + (rates.brands.length < 2 ? " hidden" : "") + '><span>Brand</span><select data-n="brand">' + brandOpts + "</select></label>" +
+            (isCustomer ? "" : '<label class="apc-field apc-wide"><span>Store name</span><input type="text" data-n="store" autocomplete="off"></label>') +
+            '<label class="apc-field apc-wide"><span>' + (isCustomer ? "Your name" : "Customer name") + '</span><input type="text" data-n="customer" autocomplete="off"></label>' +
+            (isCustomer ? "" :
             '<label class="apc-field"><span>Additional discount (%)</span><input type="number" data-n="addDisc" min="0" max="100" step="any" inputmode="decimal"></label>' +
-            '<label class="apc-field"><span>Additional rush fee (%)</span><input type="number" data-n="rush" min="0" max="100" step="any" inputmode="decimal"></label>' +
+            '<label class="apc-field"><span>Additional rush fee (%)</span><input type="number" data-n="rush" min="0" max="100" step="any" inputmode="decimal"></label>') +
           "</div>" +
-          (rates.baseDiscount > 0 ? '<p class="apc-hint">A base discount of ' + n(rates.baseDiscount) + "% is taken off every quote after the total, then any additional discount. A rush fee is added on the discounted amount.</p>" : "") +
+          (rates.baseDiscount > 0 && !isCustomer ? '<p class="apc-hint">A base discount of ' + n(rates.baseDiscount) + "% is taken off every quote after the total, then any additional discount. A rush fee is added on the discounted amount.</p>" : "") +
         "</section>" +
         '<div class="apc-cols">' +
           '<div class="apc-col">' + LEFT.map(panelHtml).join("") + "</div>" +
           '<div class="apc-col">' + RIGHT.map(panelHtml).join("") + "</div>" +
         "</div>" +
+        (isCustomer ? '<div data-r="custom" hidden></div>' :
         '<section class="apc-panel"><h3>Other items</h3><p class="apc-hint apc-hint-top">For anything not listed above.</p>' +
           '<div class="apc-custom-list" data-r="custom"></div>' +
-          '<button type="button" class="apc-btn2" data-a="add-custom">Add another item</button></section>' +
+          '<button type="button" class="apc-btn2" data-a="add-custom">Add another item</button></section>') +
         '<section class="apc-panel apc-quote" aria-live="polite">' +
-          '<button type="submit" class="apc-btn1">Calculate quote</button>' +
+          '<button type="submit" class="apc-btn1">' + (isCustomer ? "Calculate estimate" : "Calculate quote") + "</button>" +
           '<div data-r="result" hidden>' +
+            (isPremium ? '<div class="apc-estimate"><h3 class="apc-estimate-title">Cost summary</h3><p class="apc-estimate-for" data-r="for"></p>' +
+              '<ol class="apc-sumlines" data-r="lines"></ol></div>' : "") +
             '<div class="apc-quote-grid">' +
               '<dl class="apc-totals" data-r="totals"></dl>' +
-              '<div><label class="apc-summary-label">Summary to send<textarea class="apc-summary" data-r="summary" readonly rows="12"></textarea></label>' +
+              '<div><label class="apc-summary-label"' + (isPremium ? " hidden" : "") + '>Summary to send<textarea class="apc-summary" data-r="summary" readonly rows="12"></textarea></label>' +
                 '<div class="apc-row"><button type="button" class="apc-btn2" data-a="copy">Copy summary</button>' +
+                  (isPremium ? '<button type="button" class="apc-btn2" data-a="print">Print or save as PDF</button>' : "") +
                   (opts.onSave ? '<button type="button" class="apc-btn2" data-a="save">' + esc(opts.saveLabel || "Save quote") + "</button>" : "") +
                 '</div><p class="apc-hint" data-r="saved" hidden></p></div>' +
             "</div>" +
@@ -169,13 +185,14 @@
       "</form>";
 
     var form = root.querySelector("form");
+    if (isPremium) root.classList.add("apc-premium");
     function el(name) { return root.querySelector('[data-n="' + name + '"]'); }
     function part(name) { return root.querySelector('[data-r="' + name + '"]'); }
     function val(name) { var e = el(name); return e && e.value !== "" && !e.disabled ? Number(e.value) : 0; }
     function sv(name) { var e = el(name); return e && !e.disabled ? e.value : ""; }
     function inks(prefix, list) { return list.map(function (k) { return sv(prefix + "-" + k); }).filter(Boolean); }
 
-    if (opts.store) el("store").value = opts.store;
+    if (opts.store && el("store")) el("store").value = opts.store;
     if (opts.customer) el("customer").value = opts.customer;
 
     // Liner inks: available for all three liner types, once a liner is chosen.
@@ -300,11 +317,27 @@
         (r.additionalDiscountPercent > 0 ? "<div><dt>Less " + n(r.additionalDiscountPercent) + "%</dt><dd>− " + cur + " " + moneyGrouped(r.additionalDiscountAmount) + "</dd></div>" : "") +
         (r.rushFeePercent > 0 ? "<div><dt>Rush fee " + n(r.rushFeePercent) + "%</dt><dd>+ " + cur + " " + moneyGrouped(r.rushFeeAmount) + "</dd></div>" : "") +
         '<div class="apc-balance"><dt>Balance</dt><dd>' + cur + " " + moneyGrouped(r.balance) + "</dd></div>";
+      var noAdjustments = !r.baseDiscountPercent && !r.additionalDiscountPercent && !r.rushFeePercent;
+      if (isCustomer && noAdjustments) {
+        // Retail-only customer copy: just the total.
+        part("totals").innerHTML = '<div class="apc-balance"><dt>Total</dt><dd>' + cur + " " + moneyGrouped(r.total) + "</dd></div>";
+      }
       var w = part("warnings");
       w.hidden = !r.warnings.length;
       w.innerHTML = r.warnings.length ? "<p>Check these lines:</p><ul>" + r.warnings.map(function (m) { return "<li>" + esc(m) + "</li>"; }).join("") + "</ul>" : "";
-      var who = { store: el("store").value.trim(), customer: el("customer").value.trim() };
+      var who = { store: el("store") ? el("store").value.trim() : "", customer: el("customer").value.trim() };
+      if (isPremium) {
+        // Same cost summary lines as the staff calculator: item, layers/ply, printing, price each x qty = amount.
+        var forWhom = [who.store, who.customer].filter(Boolean).join(" / ");
+        part("for").textContent = forWhom ? "Prepared for " + forWhom : "";
+        part("lines").innerHTML = r.lines.map(function (line) {
+          var cut = line.lastIndexOf(" = ");
+          var left = cut > 0 ? line.slice(0, cut) : line, right = cut > 0 ? line.slice(cut + 3) : "";
+          return "<li><span class=\"apc-sum-item\">" + esc(left) + "</span><span class=\"apc-sum-amt\">" + (right ? "= " + esc(right) : "") + "</span></li>";
+        }).join("");
+      }
       var summary = engine.summaryText(r, who);
+      if (isCustomer && noAdjustments) summary = summary.replace(/\n\nBalance= .*$/, "");
       part("summary").value = summary;
       part("result").hidden = false; part("saved").hidden = true;
       lastQuote = { brand: r.brand, store: who.store, customer: who.customer, result: r, summary: summary, order: c.order };
@@ -337,10 +370,12 @@
         }, function (err) {
           msg.textContent = "Couldn’t save the quote" + (err && err.message ? ": " + err.message : "."); msg.hidden = false;
         });
+      } else if (a === "print") {
+        window.print();
       } else if (a === "new") {
         var keepBrand = el("brand").value;
         form.reset(); el("brand").value = keepBrand;
-        if (opts.store) el("store").value = opts.store;
+        if (opts.store && el("store")) el("store").value = opts.store;
         if (opts.customer) el("customer").value = opts.customer;
         customList.innerHTML = ""; addCustom(); addonList.innerHTML = ""; addAddon(); syncLiner();
         part("result").hidden = true; part("errors").hidden = true;
@@ -351,7 +386,7 @@
 
     return {
       getQuote: function () { return lastQuote; },
-      setCustomer: function (store, customer) { if (store != null) el("store").value = store; if (customer != null) el("customer").value = customer; }
+      setCustomer: function (store, customer) { if (store != null && el("store")) el("store").value = store; if (customer != null) el("customer").value = customer; }
     };
   }
 

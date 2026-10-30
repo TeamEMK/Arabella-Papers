@@ -1,7 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
-const pricing = require('../utils/pricing');
+// The frozen copy of the module, not the staff one. The office is sending
+// its own build for each brand; until it arrives these links must not move
+// under the people using them.
+const pricing = require('../utils/pricing').forPublic;
 const { buildQuotePdf } = require('../utils/quotePdf');
 const { sendMail } = require('../utils/mailer');
 const { TRADING_NAME } = require('../utils/office');
