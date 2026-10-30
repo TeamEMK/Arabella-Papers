@@ -301,7 +301,7 @@
             <div class="file-box text-center">
               <i class="fas fa-cloud-upload-alt upload-icon"></i>
               <div class="file-text" id="fileText">Click or Drag files here</div>
-              <input type="file" id="fileInput" multiple accept=".pdf,.jpg,.jpeg,.png"/>
+              <input type="file" id="fileInput" multiple accept="<%= designFiles %>"/>
             </div>
           </div>
           <div class="col-12">
@@ -353,7 +353,7 @@
         </div>
         <div class="mb-3">
           <label class="form-label text-dark fw-bold">Upload File</label>
-          <input class="form-control" type="file" id="fileUpload" accept="image/*,application/pdf"/>
+          <input class="form-control" type="file" id="fileUpload" accept="<%= designFiles %>"/>
           <small class="text-muted">Max file size: 10MB</small>
         </div>
         <!-- Asked for by the office: at the moment an order is taken the
@@ -442,7 +442,7 @@
           </div>
           <div class="col-12">
             <label class="form-label fw-bold">Initial File (Replace)</label>
-            <input type="file" id="ed_File" class="form-control" accept=".pdf,.jpg,.jpeg,.png"/>
+            <input type="file" id="ed_File" class="form-control" accept="<%= designFiles %>"/>
           </div>
           <div class="col-12">
             <label class="form-label fw-bold">Remarks</label>
@@ -1488,7 +1488,7 @@ function openBulkUpdateModal() {
               <option value="Cancelled">Cancelled</option>
             </select>
           </td>
-          <td><input type="file" class="form-control form-control-sm bulk-file" accept="image/*,application/pdf"></td>
+          <td><input type="file" class="form-control form-control-sm bulk-file" accept="<%= designFiles %>"></td>
           <td><input type="text" class="form-control form-control-sm bulk-remark" placeholder="Enter remark..."></td>
         </tr>`);
     }

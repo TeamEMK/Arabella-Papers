@@ -177,6 +177,43 @@ const check = (name, ok, extra) => {
   r = await bulkApprove([{ id: 'G-1', status: 'Proofing Done' }]);
   check('still refused there too', r.status === 400, r);
 
+  console.log('\nThe file picker offers the artwork');
+  // A rule that cannot be satisfied is worse than no rule: five of the six
+  // upload boxes used to refuse .ai, so somebody holding the vector file
+  // clicked Choose and it was not there to pick - while the logout gate held
+  // them for not having uploaded it.
+  const pages = {
+    tillApproval: fs.readFileSync(path.join(ROOT, 'views/views/tillApproval.ejs'), 'utf8'),
+    dashboard: fs.readFileSync(path.join(ROOT, 'views/views/dashboard.ejs'), 'utf8'),
+  };
+  const ejs = require('ejs');
+  const types = require(path.join(ROOT, 'utils/uploadTypes.js'));
+  const locals = {
+    user: { username: 'A', role: 'SuperAdmin', domain: 'Head', email: 'a@b.c' },
+    archive: false, designFiles: types.DESIGN_FILES, vectorFiles: types.VECTOR_FILES,
+  };
+
+  for (const name of Object.keys(pages)) {
+    const html = await new Promise((resolve, reject) =>
+      ejs.renderFile(path.join(ROOT, 'views/views/' + name + '.ejs'), locals, {},
+        (e, h) => (e ? reject(e) : resolve(h))));
+    // The bulk data importer takes spreadsheets and is not one of these.
+    const filters = [...html.matchAll(/accept="([^"]*)"/g)].map(m => m[1])
+      .filter(a => !/csv|xlsx/.test(a));
+    check(name + ': every upload box offers .ai',
+      filters.length > 0 && filters.every(a => a.split(',').includes('.ai')),
+      filters.filter(a => !a.split(',').includes('.ai')));
+    check(name + ': and .eps and .cdr with it',
+      filters.every(a => a.includes('.eps') && a.includes('.cdr')), filters);
+  }
+
+  // Extensions, not types: Windows calls a .ai file application/postscript,
+  // macOS calls it application/illustrator, and a modern one is a PDF inside.
+  check('the lists name extensions rather than guessing at MIME types',
+    !/[a-z]+\//.test(types.DESIGN_FILES + types.VECTOR_FILES), types.DESIGN_FILES);
+  check('and the vector box asks for artwork, not photographs',
+    !types.VECTOR_FILES.includes('.jpg'), types.VECTOR_FILES);
+
   server.close();
   await db.end().catch(() => {});
   await admin.query('DROP DATABASE `' + TEST_DB + '`');

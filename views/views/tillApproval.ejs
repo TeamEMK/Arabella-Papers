@@ -113,11 +113,11 @@ document.getElementById('tillApprovalRoot').innerHTML = `
       <div class="mb-3">
         <label class="form-label text-dark fw-bold">Vector File</label>
         <input class="form-control" type="file" id="ta_vectorUpload"
-               accept=".ai,.eps,.cdr,.svg,.pdf,application/pdf,application/postscript,image/svg+xml"
+               accept="<%= vectorFiles %>"
                onchange="ta_vectorPicked()">
         <div class="form-text" id="ta_vectorNote">Checking...</div>
       </div>
-      <div class="mb-3"><label class="form-label text-dark fw-bold">Final Approval Upload</label><input class="form-control" type="file" id="ta_fileUpload" accept="image/*,application/pdf"></div>
+      <div class="mb-3"><label class="form-label text-dark fw-bold">Final Approval Upload</label><input class="form-control" type="file" id="ta_fileUpload" accept="<%= designFiles %>"></div>
       <div class="mb-3"><label class="form-label text-dark fw-bold">Remark</label><textarea class="form-control" id="ta_remark" rows="2" placeholder="Enter remark..."></textarea></div>
     </div>
     <div class="modal-footer">
@@ -640,7 +640,7 @@ function openBulkApprovalModal() {
         <option value="Sample">Sample</option>
         <option value="Cancel Order">Cancel Order</option>
       </select></td>
-      <td><input type="file" class="form-control form-control-sm ta_bulk_file" accept="image/*,application/pdf"></td>
+      <td><input type="file" class="form-control form-control-sm ta_bulk_file" accept="<%= designFiles %>"></td>
       <td><input type="text" class="form-control form-control-sm ta_bulk_remark" placeholder="Remark..."></td>
     </tr>`);
   });

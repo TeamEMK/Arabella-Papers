@@ -3,6 +3,8 @@ const router = express.Router();
 const { requireLogin } = require('../middleware/auth');
 const { SECTION_IDS } = require('../utils/nav');
 const { canSee } = require('../utils/access');
+// What the file pickers offer, in one place - see utils/uploadTypes.js.
+const uploadTypes = require('../utils/uploadTypes');
 
 // GET /views/:page — returns rendered dashboard HTML
 router.get('/:page', requireLogin, async (req, res) => {
@@ -28,7 +30,12 @@ router.get('/:page', requireLogin, async (req, res) => {
   const ARCHIVE_OF = { oldProduction: 'productionBD', oldDispatch: 'dispatchBD' };
   const template = ARCHIVE_OF[page] || page;
 
-  res.render(`views/${template}`, { user: req.session.user, archive: !!ARCHIVE_OF[page] }, (err, html) => {
+  res.render(`views/${template}`, {
+    user: req.session.user,
+    archive: !!ARCHIVE_OF[page],
+    designFiles: uploadTypes.DESIGN_FILES,
+    vectorFiles: uploadTypes.VECTOR_FILES,
+  }, (err, html) => {
     if (err) {
       console.error('View render error:', err);
       return res.status(500).send('<div class="alert alert-danger m-3">Error rendering view.</div>');
