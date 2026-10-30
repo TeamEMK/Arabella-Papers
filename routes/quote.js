@@ -45,7 +45,7 @@ const BRANDS = {
   },
   kpc: {
     code: 'KPC', label: 'KPC',
-    assets: 'pricing-public', pricing: pricing.forPublic,
+    assets: 'pricing-kpc', pricing: pricing.forKpc,
     wordmark: 'KPC',
     title: 'Wedding stationery price estimate',
   },

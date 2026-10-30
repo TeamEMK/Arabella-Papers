@@ -17,16 +17,7 @@
 // One copy of the arithmetic, used by both sides. Re-implementing the rules
 // here in a second language is how the two start disagreeing.
 //
-// TWO COPIES OF THE MODULE, ON PURPOSE
-//
-// public/pricing        the staff calculator, kept up to date
-// public/pricing-public the two brand links, frozen where they were
-//
-// The office is getting its own build for each brand, and until it arrives
-// the public links must not move under the people using them. The two are
-// the same arithmetic today - the only difference between the versions is
-// the screen - but each page is priced by the engine its own browser ran,
-// so they cannot drift apart without somebody choosing it.
+// THREE COPIES OF THE MODULE, ON PURPOSE - see the list further down.
 // ══════════════════════════════════════════════════════
 const path = require('path');
 
@@ -129,19 +120,18 @@ function summary(result, who) {
 
 // THE COPIES
 //
-//   pricing            the staff calculator
-//   pricing-arabella   the Arabella customer link, the office's own build
-//   pricing-public     the KPC link, frozen until its build arrives
+//   pricing            the staff calculator, both brands, discount and all
+//   pricing-arabella   the Arabella customer link
+//   pricing-kpc        the KPC customer link
 //
-// These are not the same price list. The customer build carries
-// baseDiscount 0 and the staff one carries 50, so the same basket is US$ 615
-// on the public Arabella link and US$ 307.50 in the office. That is the
-// office's decision - customers are shown list price - and it is exactly why
-// each page has to be re-priced by its OWN copy. One shared engine would
-// have refused every public quote as tampered with, because the server would
-// have taken half off a total the browser never did.
+// The two customer builds came from the office, one per brand, and they are
+// not the staff price list: both carry baseDiscount 0, so a customer is
+// shown list price while the office quotes half of it. That is their
+// decision, and it is exactly why each link has to be re-priced by its OWN
+// copy - one shared engine would take half off a total the customer's
+// browser never did, and refuse every public quote as tampered with.
 const internal = build('pricing');
 const forArabella = build('pricing-arabella');
-const forPublic = build('pricing-public');
+const forKpc = build('pricing-kpc');
 
-module.exports = Object.assign({}, internal, { internal, forArabella, forPublic });
+module.exports = Object.assign({}, internal, { internal, forArabella, forKpc });

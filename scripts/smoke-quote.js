@@ -76,7 +76,7 @@ const check = (name, ok, extra) => {
   // still on carries 50. Pricing a fixture with the wrong copy would make
   // every check here fail for a reason that is not the thing being checked.
   const ara = pricing.forArabella.price({ brand: 'ARA', additionalDiscount: 0, items: ITEMS });
-  const kpc = pricing.forPublic.price({ brand: 'KPC', additionalDiscount: 0, items: ITEMS });
+  const kpc = pricing.forKpc.price({ brand: 'KPC', additionalDiscount: 0, items: ITEMS });
   const WHO = { name: 'Sarah Mitchell', email: 'sarah@example.com', store: 'Mitchell Paper' };
 
   console.log('The pages, with nobody logged in');
@@ -126,7 +126,7 @@ const check = (name, ok, extra) => {
   const all = require(path.join(ROOT, 'utils/pricing.js'));
   check('the Arabella link has its own copy', !!all.forArabella);
   check('and it is not the staff one', all.forArabella !== all.internal);
-  check('nor the one KPC is on', all.forArabella !== all.forPublic);
+  check('nor the one KPC is on', all.forArabella !== all.forKpc);
   const araCust = all.forArabella.price({ brand: 'ARA', items: ITEMS });
   check('the customer build shows list price, no discount',
     araCust.baseDiscountPercent === 0 && araCust.balance === araCust.total, araCust.balance);
@@ -153,10 +153,11 @@ const check = (name, ok, extra) => {
   r = await get('/quote/arabella');
   html = await r.text();
   check('the page loads the Arabella build', /\/pricing-arabella\/js\//.test(html));
-  check('and nothing of the other one', !/\/pricing-public\//.test(html));
+  check('and nothing of the other brand', !/\/pricing-kpc\//.test(html));
   r = await get('/quote/kpc');
   html = await r.text();
-  check('and the KPC link stays where it was', /\/pricing-public\/js\//.test(html));
+  check('and the KPC link has its own build too', /\/pricing-kpc\/js\//.test(html));
+  check('with nothing of the Arabella one on it', !/\/pricing-arabella\//.test(html));
 
   console.log('\nWho is asking');
   check('no name is refused',

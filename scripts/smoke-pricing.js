@@ -235,9 +235,9 @@ const check = (name, ok, extra) => {
   const fs = require('fs');
   const both = require(path.join(ROOT, 'utils/pricing.js'));
   check('the staff side and the public side are separate instances',
-    both.internal !== both.forPublic);
+    both.internal !== both.forArabella);
   check('and the Arabella customer build is a third, again separate',
-    both.forArabella !== both.internal && both.forArabella !== both.forPublic);
+    both.forKpc !== both.internal && both.forKpc !== both.forArabella);
   // They are deliberately NOT the same price list any more: the customer
   // build shows list price and the staff one takes half off.
   check('the staff copy still discounts',
@@ -259,7 +259,7 @@ const check = (name, ok, extra) => {
   check('the route gives Arabella its own build',
     /assets: 'pricing-arabella', pricing: pricing\.forArabella/.test(publicRoute));
   check('and leaves KPC where it was',
-    /assets: 'pricing-public', pricing: pricing\.forPublic/.test(publicRoute));
+    /assets: 'pricing-kpc', pricing: pricing\.forKpc/.test(publicRoute));
   check('and prices each quote with the link’s own copy',
     /brand\.pricing\.verify\(/.test(publicRoute));
 
