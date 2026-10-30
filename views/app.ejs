@@ -949,6 +949,52 @@
 
   window.addEventListener('beforeunload', vd_warn);
 
+  // ── A FILE TOO BIG TO SEND ──
+  //
+  // Nine thousand design files have gone up without trouble - they are
+  // proofs, a megabyte or two. Not one vector file ever has, because
+  // Illustrator artwork is routinely twenty times that, and a request body
+  // over 4.5MB is refused by the platform before it reaches any of our code.
+  // What came back was an HTML page, so `res.json()` threw in the browser and
+  // every upload screen fell into its catch and said "Server error." - which
+  // tells somebody holding a 12MB file nothing whatsoever.
+  //
+  // So it is said here instead, the moment the file is chosen, with the size
+  // in it. One listener on the shell rather than a check in six boxes: a new
+  // upload box gets this for free, which is the only way it stays true.
+  //
+  // This is a message, not a cure. The cure is uploading straight to Drive
+  // from the browser so the file never goes through a request at all.
+  var UPLOAD_CAP = <%= maxUploadBytes %>;
+
+  function vd_mb(n) { return (n / 1024 / 1024).toFixed(1) + ' MB'; }
+
+  document.addEventListener('change', function (e) {
+    var el = e.target;
+    if (!el || el.type !== 'file' || !el.files || !el.files.length) return;
+
+    var tooBig = Array.prototype.filter.call(el.files, function (f) { return f.size > UPLOAD_CAP; });
+    if (!tooBig.length) return;
+
+    // Cleared, because leaving it in the box lets somebody press Save and
+    // wait for a failure we already know is coming.
+    el.value = '';
+    var one = tooBig.length === 1;
+    Swal.fire({
+      icon: 'warning',
+      title: one ? 'That file is too large to send' : 'Those files are too large to send',
+      html: '<p>' + (one
+          ? tooBig[0].name + ' is <b>' + vd_mb(tooBig[0].size) + '</b>.'
+          : tooBig.length + ' of them are over the limit.')
+        + '</p><p>The most that can go through this screen is <b>'
+        + vd_mb(UPLOAD_CAP) + '</b> per file.</p>'
+        + '<p class="text-muted" style="font-size:13px">'
+        + 'Send a flattened PDF or a compressed copy, or share the artwork by Drive link'
+        + ' and put the link in the remark.</p>',
+      confirmButtonColor: '#0d6efd',
+    });
+  }, true);
+
   (function () {
     vd_refresh().then(function (json) {
       // Sent here by a logout that was refused without JavaScript, or by the

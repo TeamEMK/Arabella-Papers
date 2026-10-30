@@ -37,4 +37,21 @@ const DESIGN_FILES = [...new Set([...ARTWORK, ...PICTURES])].join(',');
 /** The vector box, which is for artwork and says so. */
 const VECTOR_FILES = ARTWORK.join(',');
 
-module.exports = { ARTWORK, PICTURES, DESIGN_FILES, VECTOR_FILES };
+/**
+ * The most that can be sent, and why.
+ *
+ * Multer is set to 4MB, but the real ceiling is the platform's: Vercel
+ * refuses a request body over 4.5MB before it reaches this code at all. That
+ * refusal is an HTML page, not JSON, so the browser's `res.json()` throws and
+ * every one of our upload screens falls into its catch and says "Server
+ * error." - which tells somebody holding a 12MB Illustrator file nothing at
+ * all about what went wrong.
+ *
+ * Nine thousand design files have gone up fine; they are proofs, a megabyte
+ * or two. Not one vector file ever has. This is why.
+ *
+ * Raising the multer limit would not help - the platform refuses first.
+ */
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
+module.exports = { ARTWORK, PICTURES, DESIGN_FILES, VECTOR_FILES, MAX_UPLOAD_BYTES };

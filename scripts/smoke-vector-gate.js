@@ -214,6 +214,31 @@ const check = (name, ok, extra) => {
   check('and the vector box asks for artwork, not photographs',
     !types.VECTOR_FILES.includes('.jpg'), types.VECTOR_FILES);
 
+  console.log('\nA file too big to send');
+  // Picking the file was only half of it. Artwork runs to tens of megabytes
+  // and a body over 4.5MB is refused by the platform before this code runs -
+  // as an HTML page, so the browser's res.json() threw and every upload
+  // screen said "Server error." A designer held by the logout gate was being
+  // told nothing about why the upload would not go.
+  const shell = fs.readFileSync(path.join(ROOT, 'views/app.ejs'), 'utf8');
+  check('the shell is told the limit rather than carrying its own number',
+    /var UPLOAD_CAP = <%= maxUploadBytes %>;/.test(shell));
+  check('and the route hands it over',
+    /maxUploadBytes: MAX_UPLOAD_BYTES/.test(
+      fs.readFileSync(path.join(ROOT, 'routes/index.js'), 'utf8')));
+  // One listener on the shell, so a new upload box gets this for free.
+  check('one listener covers every file box, rather than six copies',
+    (shell.match(/el\.type !== 'file'/g) || []).length === 1, shell.match(/el\.type !== 'file'/g));
+  check('an oversized file is cleared, not left to be submitted',
+    /el\.value = '';/.test(shell));
+  check('the limit the server enforces is the one the shell shows',
+    types.MAX_UPLOAD_BYTES === 4 * 1024 * 1024, types.MAX_UPLOAD_BYTES);
+  // Multer is set to the same number; the platform's 4.5MB is the real wall,
+  // so raising either alone would only move the failure, not remove it.
+  const dash = fs.readFileSync(path.join(ROOT, 'routes/api/dashboards.js'), 'utf8');
+  check('and multer is set to the same number',
+    /fileSize: 4 \* 1024 \* 1024/.test(dash));
+
   server.close();
   await db.end().catch(() => {});
   await admin.query('DROP DATABASE `' + TEST_DB + '`');
