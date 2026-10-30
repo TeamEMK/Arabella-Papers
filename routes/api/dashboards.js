@@ -12,6 +12,7 @@ const { raiseRemake, rootOrderId } = require('../../utils/remake');
 // The three fault labels, from the page that owns them.
 const { FAULTS } = require('./corrections');
 const { requireLogin } = require('../../middleware/auth');
+const vectorGate = require('../../utils/vectorGate');
 // The board a request is asking for is the same thing the side panel decides
 // whether to show - role rule plus whatever was granted on the Access Control
 // page. Asking the role string here instead is what made a granted tab open
@@ -478,22 +479,12 @@ router.put('/till-approval/:id',
     const approvalUpload = (req.files && req.files.file && req.files.file[0]) || null;
     const vectorUpload = (req.files && req.files.vectorFile && req.files.vectorFile[0]) || null;
 
-    // Proofing Done cannot be claimed before the artwork exists.
-    //
-    // The office asked for this and it belongs here rather than only on the
-    // radio button: the status is a form field, and a disabled radio stops
-    // nobody who sends the request directly. A file arriving in this same
-    // submission counts - that is the ordinary way it will happen, somebody
-    // attaching the vector and marking it done in one go.
-    if (approvalStatus === 'Proofing Done' && !vectorUpload) {
-      const [[had]] = await db.query(
-        'SELECT COUNT(*) AS n FROM order_vector_files WHERE order_id = ?', [orderId]);
-      if (!had.n) {
-        return res.status(400).json({
-          success: false,
-          error: 'Upload the vector file first — Proofing Done cannot be set without it.',
-        });
-      }
+    // Proofing Done cannot be claimed before the artwork exists. The rule
+    // lives in utils/vectorGate.js because four routes can write this status
+    // and only this one used to check.
+    if (approvalStatus === 'Proofing Done') {
+      const refuse = await vectorGate.blockProofing(orderId, !!vectorUpload);
+      if (refuse) return res.status(400).json({ success: false, error: refuse });
     }
 
     let fileUrl = null;
@@ -597,27 +588,10 @@ router.post('/till-approval/bulk', requireLogin, async (req, res) => {
 
     // The same rule the single box enforces, or this is simply the way round
     // it: tick fifty orders, choose Proofing Done, and every one of them gets
-    // the status without any artwork existing. There is nowhere to attach a
-    // file in a bulk update, so these are refused by name rather than blocked
-    // silently - the office needs to know which orders to go and open.
-    const wantProofing = updates.filter(u => u.status === 'Proofing Done').map(u => u.id);
-    if (wantProofing.length) {
-      const [withFiles] = await db.query(
-        `SELECT DISTINCT order_id FROM order_vector_files WHERE order_id IN (?)`,
-        [wantProofing],
-      );
-      const have = new Set(withFiles.map(r => r.order_id));
-      const missing = wantProofing.filter(id => !have.has(id));
-      if (missing.length) {
-        return res.status(400).json({
-          success: false,
-          error: 'These have no vector file yet, so Proofing Done cannot be set on them: '
-            + missing.slice(0, 10).join(', ')
-            + (missing.length > 10 ? ` and ${missing.length - 10} more` : '')
-            + '. Open each one and attach the vector file.',
-        });
-      }
-    }
+    // the status without any artwork existing.
+    const refuse = await vectorGate.blockProofingMany(
+      updates.filter(u => u.status === 'Proofing Done').map(u => u.id));
+    if (refuse) return res.status(400).json({ success: false, error: refuse });
 
     let count = 0;
     let sentBack = 0;

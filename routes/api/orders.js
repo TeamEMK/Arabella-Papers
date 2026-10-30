@@ -10,6 +10,7 @@ const { logOrderUpdate, logOrderEvent } = require('../../utils/auditlog');
 const pmsEngine = require('../../utils/pms/engine');
 const { recordPunchedOrder } = require('../../utils/scot');
 const { requireLogin } = require('../../middleware/auth');
+const vectorGate = require('../../utils/vectorGate');
 // Dates are stored as IST wall-clock and read back through a +05:30
 // connection. Vercel runs the server in UTC, so without naming the zone here
 // every timestamp rendered 5:30 earlier than the sheet said.
@@ -316,6 +317,17 @@ router.put('/:id/status', requireLogin, upload.single('file'), async (req, res) 
     const [rows] = await db.query('SELECT * FROM orders WHERE order_id = ?', [orderId]);
     if (!rows.length) return res.json({ success: false, error: 'Order not found' });
 
+    // The same rule as Till Approval. This box is on the Orders Dashboard,
+    // which is where most of the office works, and it had no check at all -
+    // so Proofing Done went on perfectly happily with no artwork anywhere.
+    //
+    // The file on this route is the design proof, not the vector, so there is
+    // nothing arriving here that can stand in for one.
+    if (designStatus === 'Proofing Done') {
+      const refuse = await vectorGate.blockProofing(orderId, false);
+      if (refuse) return res.status(400).json({ success: false, error: refuse });
+    }
+
     const order = rows[0];
     let fileUrl = null;
     const newRev = (order.no_of_design_revision || 0) + 1;
@@ -324,16 +336,26 @@ router.put('/:id/status', requireLogin, upload.single('file'), async (req, res) 
       fileUrl = await uploadToDrive(req.file.buffer, req.file.originalname, req.file.mimetype);
     }
 
-    const clientStatus = designStatus !== 'Cancelled' ? 'Proofing Done' : '';
-
+    // Every design status except Cancelled used to push the CLIENT's field
+    // to "Proofing Done" as well - so picking "Fresh Design" quietly claimed
+    // the client had a proof, with no artwork behind it. The gate above only
+    // watches the Proofing Done button, and this was the way past it.
+    //
+    // Now that field is only written when the proof is really done and the
+    // artwork exists. Otherwise it is left exactly as it was, rather than
+    // being blanked: what the client last said is not this route's to erase.
     const updates = {
       design_status: designStatus,
       remarks: remark,
       actual_1: new Date(),
       doer_id: userEmail,
       no_of_design_revision: newRev,
-      design_approval_status_from_client: clientStatus,
     };
+    if (designStatus === 'Cancelled') {
+      updates.design_approval_status_from_client = '';
+    } else if (designStatus === 'Proofing Done') {
+      updates.design_approval_status_from_client = 'Proofing Done';
+    }
 
     if (fileUrl) {
       if (newRev > 1) updates.revision_design_upload = fileUrl;
@@ -483,20 +505,32 @@ router.post('/bulk-status', requireLogin, async (req, res) => {
     const { updates } = req.body; // [{id, status, remark, userEmail}]
     if (!Array.isArray(updates)) return res.json({ success: false, error: 'Invalid data' });
 
+    // Fifty orders at once is the easiest way round a rule that only guards
+    // the single box, so it is refused here the same way - by name, since
+    // there is nowhere to attach a file in a bulk update.
+    const refuse = await vectorGate.blockProofingMany(
+      updates.filter(u => u.status === 'Proofing Done').map(u => u.id));
+    if (refuse) return res.status(400).json({ success: false, error: refuse });
+
     let count = 0;
     for (const u of updates) {
       const [rows] = await db.query('SELECT no_of_design_revision FROM orders WHERE order_id = ?', [u.id]);
       if (!rows.length) continue;
 
       const newRev = (rows[0].no_of_design_revision || 0) + 1;
-      const clientStatus = u.status !== 'Cancelled' ? 'Proofing Done' : '';
 
-      await logOrderUpdate(u.id, {
+      // Same rule as the single box: the client's field is only written when
+      // the proof is really done, or when the order is cancelled. Anything
+      // else leaves it as it was rather than claiming a proof nobody made.
+      const touchClient = u.status === 'Cancelled' || u.status === 'Proofing Done';
+      const clientStatus = u.status === 'Cancelled' ? '' : 'Proofing Done';
+
+      await logOrderUpdate(u.id, Object.assign({
         design_status: u.status,
         remarks: u.remark,
         no_of_design_revision: newRev,
-        design_approval_status_from_client: clientStatus,
-      }, req.session.user);
+      }, touchClient ? { design_approval_status_from_client: clientStatus } : {}),
+      req.session.user);
 
       await db.query(`
         UPDATE orders SET
@@ -505,9 +539,10 @@ router.post('/bulk-status', requireLogin, async (req, res) => {
           actual_1 = NOW(),
           doer_id = ?,
           no_of_design_revision = ?,
-          design_approval_status_from_client = ?
+          design_approval_status_from_client =
+            CASE WHEN ? THEN ? ELSE design_approval_status_from_client END
         WHERE order_id = ?
-      `, [u.status, u.remark, u.userEmail, newRev, clientStatus, u.id]);
+      `, [u.status, u.remark, u.userEmail, newRev, touchClient ? 1 : 0, clientStatus, u.id]);
 
       count++;
     }
