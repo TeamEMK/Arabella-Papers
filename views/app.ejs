@@ -776,21 +776,59 @@
     if (!document.hidden) refreshCorrectionCount();
   });
 
-  // ── INIT: Load first allowed tab ──
-  (function() {
-    if (NAV_MENU.length > 0) {
-      const lastTab = localStorage.getItem('activeTab_arabella');
-      const isAllowed = NAV_MENU.some(t => t.id === lastTab);
-      loadPage(isAllowed ? lastTab : NAV_MENU[0].id);
-    }
-  })();
+  // ── THE ADDRESS BAR FOLLOWS THE TAB ──
+  //
+  // Every page is fetched into the same shell, so the address never changed:
+  // every tab in the app was mis.arabellapapers.com and nothing else. That
+  // meant a tab could not be sent to anybody, could not be bookmarked, and
+  // the browser's Back button went out of the app rather than to the page
+  // before.
+  //
+  // ?tab=<id> on the root, rather than a path like /prospects: a path needs
+  // the server to answer for it on a refresh, and the server already answers
+  // for /track, /catalogue and /quote, which are different things entirely.
+  //
+  // Other parameters are kept. ?vectors=due arrives on a held logout and is
+  // read after this runs.
+  function tabUrl(page) {
+    const u = new URL(window.location.href);
+    u.pathname = '/';
+    u.searchParams.set('tab', page);
+    return u.pathname + u.search + u.hash;
+  }
 
-  // Save active tab on load
   const _origLoadPage = loadPage;
-  window.loadPage = function(page) {
+  window.loadPage = function(page, opts) {
     localStorage.setItem('activeTab_arabella', page);
+    // `replace` on the first load and when coming back through history, so
+    // the Back button does not have to be pressed twice to leave.
+    if (window.history && history.pushState) {
+      const url = tabUrl(page);
+      if (opts && opts.replace) history.replaceState({ tab: page }, '', url);
+      else if (new URL(url, location.origin).search !== location.search) {
+        history.pushState({ tab: page }, '', url);
+      }
+    }
     _origLoadPage(page);
   };
+
+  window.addEventListener('popstate', function (e) {
+    const page = (e.state && e.state.tab)
+      || new URLSearchParams(location.search).get('tab');
+    if (page && NAV_MENU.some(t => t.id === page)) loadPage(page, { replace: true });
+  });
+
+  // ── INIT: the tab in the address, then the last one used, then the first ──
+  (function() {
+    if (!NAV_MENU.length) return;
+    const allowed = (id) => id && NAV_MENU.some(t => t.id === id);
+    const asked = new URLSearchParams(location.search).get('tab');
+    const last = localStorage.getItem('activeTab_arabella');
+    // A tab somebody was sent wins over whatever they had open last - that is
+    // the whole point of the link.
+    loadPage(allowed(asked) ? asked : (allowed(last) ? last : NAV_MENU[0].id),
+      { replace: true });
+  })();
 
   // Where this person is, asked once a session and never waited for.
   //
@@ -916,6 +954,14 @@
       // Sent here by a logout that was refused without JavaScript, or by the
       // link in the mail.
       if (json && json.count && /[?&]vectors=due/.test(location.search)) {
+        // Taken out of the address once it has been acted on. Now that the
+        // tab is in the URL too, the flag would otherwise ride along on
+        // every tab and raise this box again on every refresh.
+        try {
+          var u = new URL(location.href);
+          u.searchParams.delete('vectors');
+          history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+        } catch (e) { /* the box matters more than the address */ }
         Swal.fire({
           icon: 'warning',
           title: json.count + ' vector file' + (json.count === 1 ? '' : 's') + ' still to upload',
