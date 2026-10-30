@@ -54,6 +54,8 @@ const COLUMN_MIGRATIONS = [
   // been deployed, and CREATE TABLE IF NOT EXISTS does not add a column to a
   // table that is already there.
   { table: 'pricing_quotes', column: 'rush_fee_percent', type: 'DECIMAL(6,2) DEFAULT 0' },
+  { table: 'pricing_quotes', column: 'source', type: "VARCHAR(20) DEFAULT 'internal'" },
+  { table: 'pricing_quotes', column: 'customer_email', type: 'VARCHAR(255) DEFAULT NULL' },
   { table: 'pricing_quotes', column: 'rush_fee_amount', type: 'DECIMAL(18,2) DEFAULT 0' },
   { table: 'orders', column: 'printing_type', type: 'VARCHAR(60)' },
   { table: 'orders', column: 'production_archived_at', type: 'DATETIME NULL' },

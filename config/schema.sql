@@ -737,8 +737,14 @@ CREATE TABLE IF NOT EXISTS pricing_quotes (
   quote_json MEDIUMTEXT,
   rates_version VARCHAR(20) DEFAULT NULL,
   created_by VARCHAR(150) DEFAULT NULL,
+  -- Where the quote was priced. "internal" is somebody on the Pricing tab;
+  -- "public" is a customer on one of the two brand links, who gave a name
+  -- and an address before the calculator would open.
+  source VARCHAR(20) DEFAULT 'internal',
+  customer_email VARCHAR(255) DEFAULT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_pricing_order (order_id, created_at),
+  INDEX idx_pricing_source (source, created_at),
   INDEX idx_pricing_when (created_at)
 );
 

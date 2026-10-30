@@ -11,6 +11,7 @@ const { injectUser } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const trackRoutes = require('./routes/track');
 const catalogueRoutes = require('./routes/catalogue');
+const quoteRoutes = require('./routes/quote');
 const catalogueApi = require('./routes/api/catalogue');
 const indexRoutes = require('./routes/index');
 const viewsRoutes = require('./routes/views');
@@ -99,6 +100,8 @@ app.set('views', path.join(__dirname, 'views'));
 // routes so nothing downstream can decide it needs one.
 app.use('/track', trackRoutes);
 app.use('/catalogue', catalogueRoutes);
+// Two public links, one per brand - see routes/quote.js.
+app.use('/quote', quoteRoutes);
 app.use('/', authRoutes);
 app.use('/', indexRoutes);
 app.use('/views', viewsRoutes);

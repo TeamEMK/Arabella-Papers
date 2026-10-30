@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Price your order — <%= brandLabel %></title>
+<%#
+  THE PUBLIC CALCULATOR
+
+  One of two pages, one per brand. The brand is fixed by the link and the
+  dropdown the module draws is hidden, so nobody sent the Arabella link can
+  put themselves on the other price list.
+
+  A name and an address are asked for before the calculator opens. It is a
+  gate rather than a form at the bottom on purpose: asked afterwards, the
+  people who already have their number walk away, and the office learns
+  nothing about who was pricing what.
+%>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/pricing/css/pricing-calculator.css">
+<style>
+  :root { --ink:#1d1d1d; --gold:#b08a3e; --paper:#faf8f4; --line:#e6e0d4; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink);
+         font-family:'Jost',system-ui,sans-serif; }
+  .wrap { max-width:1320px; margin:0 auto; padding:0 16px 48px; }
+
+  header.q-head { text-align:center; padding:34px 16px 24px; }
+  .q-name { font-family:'Cormorant Garamond',serif; font-size:30px; letter-spacing:.22em; }
+  .q-sub { font-size:11px; letter-spacing:.3em; color:var(--gold); margin-top:6px; }
+  .q-brand { margin-top:14px; display:inline-block; border:1px solid var(--line);
+             border-radius:999px; padding:5px 16px; font-size:11px; letter-spacing:.18em;
+             color:#6b6b6b; background:#fff; }
+
+  /* The gate */
+  .gate { max-width:430px; margin:10px auto 0; background:#fff; border:1px solid var(--line);
+          border-radius:10px; padding:26px; }
+  .gate h2 { font-family:'Cormorant Garamond',serif; font-weight:600; font-size:22px;
+             margin:0 0 4px; }
+  .gate p  { margin:0 0 18px; color:#6b6b6b; font-size:13.5px; line-height:1.5; }
+  .gate label { display:block; font-size:10.5px; letter-spacing:.14em; text-transform:uppercase;
+                color:#8a8a8a; margin-bottom:5px; }
+  .gate input { width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:6px;
+                font:inherit; font-size:14px; margin-bottom:14px; background:#fff; color:var(--ink); }
+  .gate input:focus { outline:none; border-color:var(--gold); }
+  .gate button { width:100%; padding:12px; border:0; border-radius:999px; cursor:pointer;
+                 background:var(--gold); color:#fff; font:inherit; font-size:12px;
+                 letter-spacing:.18em; text-transform:uppercase; }
+  .gate .err { color:#b02a37; font-size:13px; margin:-8px 0 12px; display:none; }
+
+  /* The module draws a brand dropdown; the link already decided it. */
+  #pricing .apc-field:has(> span) { }
+  #pricing [data-n="brand"] { display:none; }
+  #pricing .apc-brand-hidden { display:none !important; }
+
+  .q-who { text-align:center; font-size:13px; color:#6b6b6b; margin:0 0 14px; }
+  .q-who b { color:var(--ink); }
+  .q-actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:14px; }
+  .q-actions button { padding:11px 22px; border-radius:999px; border:1px solid var(--gold);
+                      background:#fff; color:var(--gold); font:inherit; font-size:12px;
+                      letter-spacing:.14em; text-transform:uppercase; cursor:pointer; }
+  .q-actions button.solid { background:var(--gold); color:#fff; }
+  .q-actions button[disabled] { opacity:.5; cursor:default; }
+  .q-note { text-align:center; font-size:13px; color:#6b6b6b; margin-top:12px; min-height:20px; }
+  footer.q-foot { text-align:center; font-size:10px; letter-spacing:.24em; color:#b9b1a2;
+                  padding:30px 16px 10px; text-transform:uppercase; }
+  @media (max-width:640px) { .q-name { font-size:24px; } }
+</style>
+</head>
+<body>
+
+<header class="q-head">
+  <div class="q-name">ARABELLA PAPERS</div>
+  <div class="q-sub">PRICE YOUR ORDER</div>
+  <div class="q-brand"><%= brandLabel %></div>
+</header>
+
+<div class="wrap">
+
+  <div class="gate" id="gate">
+    <h2>Before we begin</h2>
+    <p>Tell us who you are, and we will email your cost summary when you are done.</p>
+    <label for="g_name">Your name</label>
+    <input type="text" id="g_name" autocomplete="name" placeholder="e.g. Sarah Mitchell">
+    <label for="g_email">Email</label>
+    <input type="email" id="g_email" autocomplete="email" placeholder="you@example.com">
+    <label for="g_store">Company <span style="text-transform:none;letter-spacing:0;">(optional)</span></label>
+    <input type="text" id="g_store" autocomplete="organization" placeholder="Your shop or studio">
+    <div class="err" id="g_err"></div>
+    <button type="button" onclick="q_open()">Open the calculator</button>
+  </div>
+
+  <div id="calc" hidden>
+    <p class="q-who">Pricing for <b id="q_whoName"></b> · <span id="q_whoEmail"></span></p>
+    <div id="pricing"></div>
+    <div class="q-actions">
+      <button type="button" id="q_copy" onclick="q_send('copy', this)">Copy the quote</button>
+      <button type="button" class="solid" id="q_pdf" onclick="q_send('pdf', this)">Download PDF</button>
+    </div>
+    <div class="q-note" id="q_note">Fill in your quantities, choose <b>Calculate quote</b>, then take it away.</div>
+  </div>
+
+</div>
+
+<footer class="q-foot">Fine Papers &nbsp;·&nbsp; Timeless Celebrations</footer>
+
+<script src="/pricing/js/pricing-rates.js"></script>
+<script src="/pricing/js/pricing-engine.js"></script>
+<script src="/pricing/js/pricing-ui.js"></script>
+<script>
+(function () {
+  var BRAND = <%- JSON.stringify(brandCode) %>;
+  var SLUG = <%- JSON.stringify(brandSlug) %>;
+  var who = null, lastQuote = null;
+
+  window.q_open = function () {
+    var name = (document.getElementById('g_name').value || '').trim();
+    var email = (document.getElementById('g_email').value || '').trim();
+    var store = (document.getElementById('g_store').value || '').trim();
+    var err = document.getElementById('g_err');
+    err.style.display = 'none';
+    if (!name) { err.textContent = 'Please tell us your name.'; err.style.display = 'block'; return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      err.textContent = 'That email address does not look right.'; err.style.display = 'block'; return;
+    }
+    who = { name: name, email: email, store: store };
+    document.getElementById('q_whoName').textContent = name;
+    document.getElementById('q_whoEmail').textContent = email;
+    document.getElementById('gate').hidden = true;
+    document.getElementById('calc').hidden = false;
+    mount();
+  };
+
+  function mount() {
+    ArabellaPricing.mount(document.getElementById('pricing'), {
+      rates: window.ArabellaPricingRates,
+      brand: BRAND,
+      store: who.store,
+      customer: who.name,
+      onQuote: function (quote) { lastQuote = quote; q_note(''); },
+    });
+
+    // The module always draws the brand dropdown. The link has already
+    // decided the price list, so the whole field goes - hiding only the
+    // select would leave a floating "Brand" label above nothing.
+    var sel = document.querySelector('#pricing [data-n="brand"]');
+    if (sel) {
+      sel.value = BRAND;
+      var field = sel.closest('label') || sel.parentNode;
+      if (field) field.classList.add('apc-brand-hidden');
+    }
+  }
+
+  function q_note(msg, bad) {
+    var el = document.getElementById('q_note');
+    el.innerHTML = msg || '';
+    el.style.color = bad ? '#b02a37' : '#6b6b6b';
+  }
+
+  /** @returns {Promise<boolean>} whether it actually reached the clipboard */
+  async function q_copyText(s) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(s);
+        return true;
+      }
+    } catch (e) { /* fall through to the old way */ }
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = s;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:-1000px;left:-1000px;';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand('copy');
+      ta.remove();
+      return !!ok;
+    } catch (e) { return false; }
+  }
+
+  // Whatever the browser allows, the words themselves are never withheld.
+  function q_showText(s) {
+    var box = document.getElementById('q_text');
+    if (!box) {
+      box = document.createElement('textarea');
+      box.id = 'q_text';
+      box.readOnly = true;
+      box.style.cssText = 'width:100%;max-width:620px;margin:14px auto 0;display:block;'
+        + 'height:190px;padding:12px;border:1px solid var(--line);border-radius:8px;'
+        + 'font:13px/1.5 monospace;background:#fff;color:var(--ink);';
+      document.getElementById('q_note').after(box);
+    }
+    box.value = s;
+    box.select();
+  }
+
+  // Copy and Download do the same three things - price it on the server,
+  // keep it, email it - and differ only in what happens with the answer.
+  window.q_send = async function (what, btn) {
+    if (!lastQuote) {
+      q_note('Choose <b>Calculate quote</b> first, then this will be ready.', true);
+      return;
+    }
+    var buttons = [document.getElementById('q_copy'), document.getElementById('q_pdf')];
+    buttons.forEach(function (b) { b.disabled = true; });
+    q_note('One moment…');
+    try {
+      var res = await fetch('/quote/' + SLUG + '/api/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: who.name, email: who.email, store: who.store,
+          additionalDiscount: lastQuote.result.additionalDiscountPercent,
+          rushFee: lastQuote.result.rushFeePercent || 0,
+          items: lastQuote.order.items,
+          totals: {
+            total: lastQuote.result.total,
+            balance: lastQuote.result.balance,
+            baseDiscount: lastQuote.result.baseDiscountAmount,
+            additionalDiscount: lastQuote.result.additionalDiscountAmount,
+            rushFee: lastQuote.result.rushFeeAmount || 0,
+          },
+        }),
+      });
+      var json = await res.json();
+      if (!json.success) { q_note(json.error || 'Something went wrong.', true); return; }
+
+      if (what === 'pdf') {
+        var bytes = atob(json.pdf);
+        var buf = new Uint8Array(bytes.length);
+        for (var i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+        var url = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'Arabella-Quote-' + json.id + '.pdf';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      }
+
+      // The clipboard refuses more often than it looks: a browser that has
+      // not been given permission, a page that is not focused, anything not
+      // on https. Its failure must not read as the quote having failed -
+      // by this point the quote is priced, saved and emailed.
+      var copied = true;
+      if (what === 'copy') copied = await q_copyText(json.summary);
+
+      q_note((json.emailed
+        ? 'Done — a copy is on its way to <b>' + who.email + '</b>.'
+        : 'Done. We could not email it just now, but you have it here.')
+        + (copied === false
+          ? ' Your browser would not let us copy it, so it is below to select.'
+          : ''));
+      if (copied === false) q_showText(json.summary);
+    } catch (e) {
+      q_note('Something went wrong. Please try again.', true);
+    } finally {
+      buttons.forEach(function (b) { b.disabled = false; });
+    }
+  };
+})();
+</script>
+</body>
+</html>
