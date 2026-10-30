@@ -215,6 +215,9 @@
   </div></div>
 </div>
 
+<%# The order-number rule, straight from utils/orderId.js, so the preview
+    answers with exactly what the server will raise. %>
+<script src="/js/orderId.js"></script>
 <script>
 // ══════════════════════════════════════════════════════
 // CORRECTIONS
@@ -571,28 +574,12 @@ function cr_openRaise() {
   new bootstrap.Modal(document.getElementById('cr_raiseModal')).show();
 }
 
-// The typed box into a list of order numbers, the same way the server splits
-// it — commas, spaces, semicolons or line breaks, repeats dropped.
-//
-// A stray space inside one number is not two numbers. "k- 160190" and
-// "k -160190" are K-160190 typed in a hurry, and splitting them left two
-// halves and "no order with that number" twice. The hyphen is pulled back
-// onto what sits either side of it when a digit follows - so -R1 on a repeat
-// survives too, while "K-160190 - K-160191" stays the two orders it is.
-//
-// This rule and the split below have to match routes/api/corrections.js, or
-// the preview will disagree with what is actually raised.
+// The typed box into a list of order numbers — the server's own rule, not a
+// copy of it. utils/orderId.js is served at /js/orderId.js and loaded below,
+// so the preview and what is raised cannot drift apart.
 function cr_ids() {
-  const out = [], seen = new Set();
-  const typed = (document.getElementById('cr_orderId').value || '')
-    .replace(/([A-Za-z0-9])\s*-\s*([A-Za-z]?\d)/g, '$1-$2');
-  for (const piece of typed.split(/[\s,;]+/)) {
-    const id = piece.trim();
-    if (!id || seen.has(id.toLowerCase())) continue;
-    seen.add(id.toLowerCase());
-    out.push(id);
-  }
-  return out;
+  return window.ArabellaOrderId.parseOrderIds(
+    document.getElementById('cr_orderId').value);
 }
 
 // Looked up as the numbers are typed, but not on every keystroke — an order

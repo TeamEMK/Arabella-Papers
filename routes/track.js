@@ -63,16 +63,11 @@ function callerIp(req) {
   return (chain[0] || '').trim() || req.socket?.remoteAddress || 'unknown';
 }
 
-// "k- 160190" is the same order as "K-160190". The space-after-the-dash is a
-// slip this office already knows well - it broke the Corrections lookup - and
-// refusing a customer over it helps nobody.
-function tidyOrderId(v) {
-  return String(v || '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/([A-Za-z0-9])\s*-\s*([A-Za-z]?\d)/g, '$1-$2')
-    .replace(/\s/g, '');
-}
+// "k- 160190" and "k160190" are both K-160190. The shared rule, because a
+// customer reading a number off a confirmation mail should not be refused
+// over punctuation, and the office's own staff were being refused over the
+// same thing in the Corrections box.
+const { tidyOrderId } = require('../utils/orderId');
 
 // Names are typed from memory, so this is forgiving on purpose: case, extra
 // spaces and punctuation are ignored, and giving part of the name is enough.

@@ -211,29 +211,10 @@ router.get('/order/:id', requireLogin, async (req, res) => {
  * Repeats are dropped rather than refused: pasting the same number twice is a
  * slip, and raising two identical corrections would be the wrong answer to it.
  */
-// A stray space inside one number is not two numbers. "k- 160190" and
-// "k -160190" are K-160190 typed in a hurry, and splitting them left two
-// halves and "no order with that number" twice. The hyphen is pulled back
-// onto what sits either side of it when a digit follows - so -R1 on a repeat
-// survives too, while "K-160190 - K-160191" stays the two orders it is.
-//
-// This rule and the split below have to match views/views/corrections.ejs, or
-// the preview will disagree with what is actually raised.
-function parseOrderIds(input) {
-  const typed = String(input || '').replace(/([A-Za-z0-9])\s*-\s*([A-Za-z]?\d)/g, '$1-$2');
-  const raw = Array.isArray(input) ? input : typed.split(/[\s,;]+/);
-  const out = [];
-  const seen = new Set();
-  for (const piece of raw) {
-    const id = String(piece || '').trim();
-    if (!id) continue;
-    const key = id.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(id);
-  }
-  return out;
-}
+// The rule for what a typed order number means lives in utils/orderId.js,
+// and the Corrections box loads the same file in the browser - so the
+// preview cannot disagree with what is actually raised.
+const { parseOrderIds } = require('../../utils/orderId');
 
 // One correction is one order, but they are raised a batch at a time, and a
 // cap keeps a stray paste from turning into a thousand rows nobody meant.

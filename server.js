@@ -70,6 +70,16 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// One copy of the order-number rule, read by the server and sent to the
+// browser. utils/orderId.js is required below as well, so the bundler keeps
+// the file on disk for this to serve.
+require('./utils/orderId');
+app.get('/js/orderId.js', (req, res) => {
+  res.type('application/javascript');
+  res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=86400');
+  res.sendFile(path.join(__dirname, 'utils', 'orderId.js'));
+});
+
 // Build the schema on the first request against an empty database. Runs before
 // the session middleware so the store is not querying tables that don't exist.
 app.use((req, res, next) => {
