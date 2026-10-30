@@ -37,6 +37,7 @@ const scotApi = require('./routes/api/scot');
 const cronApi = require('./routes/api/cron');
 const pricingApi = require('./routes/api/pricing');
 const prospectsApi = require('./routes/api/prospects');
+const ccProspectsApi = require('./routes/api/ccProspects');
 const pmsApi = require('./routes/api/pms');
 
 const app = express();
@@ -143,6 +144,7 @@ app.use('/api/scot', scotApi);
 app.use('/api/cron', cronApi);
 app.use('/api/pricing', pricingApi);
 app.use('/api/prospects', prospectsApi);
+app.use('/api/cc-prospects', ccProspectsApi);
 
 // ── 404 FALLBACK ──
 app.use((req, res) => {

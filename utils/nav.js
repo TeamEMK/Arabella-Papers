@@ -75,6 +75,15 @@ const SECTIONS = [
     id: 'prospects', group: 'ASMP', name: 'Prospects', icon: 'fa-address-book',
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
   },
+  // The shops that already sell a competitor's wedding stationery - 7,041 of
+  // them, read off a public find-a-retailer page. Beside Prospects because it
+  // is the same job one step earlier: these are names nobody has touched yet.
+  //
+  // Contact details for seven thousand businesses, so not on offer to the floor.
+  {
+    id: 'ccProspects', group: 'ASMP', name: 'CC Prospects', icon: 'fa-store',
+    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
+  },
   {
     // 'Production & Dispatch' is named in full rather than caught by an
     // includes() on 'Production': a role matched by a fragment is a trap for

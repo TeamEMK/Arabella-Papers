@@ -699,6 +699,50 @@ CREATE TABLE IF NOT EXISTS prospects (
 );
 
 -- =============================================
+-- CARLSON CRAFT RETAILERS
+-- The 7,041 shops that already sell a competitor's stationery, by state.
+-- Somebody who stocks wedding invitations is a shop that could stock these,
+-- and the list came in as fifty-two spreadsheets taken off their own
+-- find-a-retailer page.
+--
+-- Its own table, not `prospects`. That one is the 930 companies the office
+-- has been working on for years, with its own status words and its own
+-- record of what was sent and what bounced. These are untouched names off a
+-- public page: the two lists mean different things, and mixing them would
+-- lose which is which.
+--
+-- No status column yet. Nothing has been done with any of these, and a
+-- column of blanks invites somebody to invent a workflow nobody asked for.
+-- =============================================
+CREATE TABLE IF NOT EXISTS cc_prospects (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  retailer VARCHAR(255) NOT NULL,
+  state VARCHAR(80) NOT NULL,
+  state_code VARCHAR(4) DEFAULT NULL,
+  -- The source groups each state into areas by ZIP - "Birmingham & Central
+  -- Alabama" - which is how a rep would divide up a calling round. 328 of
+  -- them across the fifty states.
+  region VARCHAR(160) DEFAULT NULL,
+  city VARCHAR(120) DEFAULT NULL,
+  address VARCHAR(400) DEFAULT NULL,
+  suite VARCHAR(120) DEFAULT NULL,
+  zip VARCHAR(20) DEFAULT NULL,
+  phone VARCHAR(60) DEFAULT NULL,
+  email VARCHAR(255) DEFAULT NULL,
+  website VARCHAR(400) DEFAULT NULL,
+  -- "Store" or "Online only". 359 of them have no shop to walk into.
+  store_type VARCHAR(40) DEFAULT NULL,
+  notes TEXT,
+  -- The row it came from in the workbook, so a question about one can be
+  -- traced back to the sheet.
+  source_row INT DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_cc_state (state, city),
+  INDEX idx_cc_region (region),
+  INDEX idx_cc_name (retailer)
+);
+
+-- =============================================
 -- PRICING QUOTES
 -- What a job was quoted at, kept rather than retyped.
 --
