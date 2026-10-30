@@ -15,7 +15,7 @@ const { requireLogin } = require('../../middleware/auth');
 const { logOrderEvent } = require('../../utils/auditlog');
 // A number typed here names the job, and a job can have been made more than
 // once. This turns it into the run that is on the floor now.
-const { liveRunFor, rootOrderId } = require('../../utils/remake');
+const { liveRunFor, liveRunsFor, rootOrderId } = require('../../utils/remake');
 
 const IST = { timeZone: 'Asia/Kolkata', hour12: true };
 const stamp = d => (d ? new Date(d).toLocaleString('en-GB', IST) : '');
@@ -234,14 +234,17 @@ router.post('/lookup', requireLogin, async (req, res) => {
     const typed = parseOrderIds(req.body.orderIds);
     if (!typed.length) return res.json({ success: true, data: [] });
 
+    // Counted before anything is asked of the database, so a stray paste of a
+    // thousand numbers is refused rather than turned into a thousand-item
+    // query first.
+    if (typed.length > MAX_AT_ONCE) {
+      return res.json({ success: false, error: `That is ${typed.length} orders — ${MAX_AT_ONCE} at a time is the limit.` });
+    }
+
     // Every run of a job carries the same number, so a number typed here means
     // the run being made now - not the one that shipped months ago. The
     // correction is about work in front of somebody, and that is the open run.
-    const ids = [];
-    for (const t of typed) ids.push(await liveRunFor(t));
-    if (ids.length > MAX_AT_ONCE) {
-      return res.json({ success: false, error: `That is ${ids.length} orders — ${MAX_AT_ONCE} at a time is the limit.` });
-    }
+    const ids = await liveRunsFor(typed);
 
     // Two queries for the whole list rather than two per order.
     const marks = ids.map(() => '?').join(', ');
@@ -379,14 +382,13 @@ router.post('/', requireLogin, async (req, res) => {
     // Onto the run being made now, the same as the lookup that listed them.
     // Idempotent, so it makes no difference whether the screen sent back the
     // number somebody typed or the one the lookup resolved it to.
-    const ids = [];
-    for (const t of typed) ids.push(await liveRunFor(t));
-    if (ids.length > MAX_AT_ONCE) {
+    if (typed.length > MAX_AT_ONCE) {
       return res.status(400).json({
         success: false,
-        error: `That is ${ids.length} orders — ${MAX_AT_ONCE} at a time is the limit.`,
+        error: `That is ${typed.length} orders — ${MAX_AT_ONCE} at a time is the limit.`,
       });
     }
+    const ids = await liveRunsFor(typed);
 
     const marks = ids.map(() => '?').join(', ');
     const [orders] = await db.query(

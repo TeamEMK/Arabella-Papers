@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const pmsEngine = require('../utils/pms/engine');
@@ -160,10 +161,24 @@ const COLUMN_MIGRATIONS = [
 ];
 
 async function addMissingColumns() {
+  // One question for the whole list, not one per entry. A SHOW COLUMNS each
+  // was 33 round trips, and the server is far enough from the database that a
+  // round trip costs about a quarter of a second - so the check alone was
+  // adding eight seconds to every cold start, and another quarter-second each
+  // time somebody added a column here.
+  const tables = [...new Set(COLUMN_MIGRATIONS.map(m => m.table))];
+  const [rows] = await db.query(
+    `SELECT TABLE_NAME AS t, COLUMN_NAME AS c
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME IN (${tables.map(() => '?').join(', ')})`,
+    tables,
+  );
+  const have = new Set(rows.map(r => String(r.t).toLowerCase() + '.' + String(r.c).toLowerCase()));
+
   const added = [];
   for (const m of COLUMN_MIGRATIONS) {
-    const [cols] = await db.query('SHOW COLUMNS FROM ?? LIKE ?', [m.table, m.column]);
-    if (cols.length) continue;
+    if (have.has(m.table.toLowerCase() + '.' + m.column.toLowerCase())) continue;
     await db.query(`ALTER TABLE \`${m.table}\` ADD COLUMN \`${m.column}\` ${m.type}`);
     if (m.after) await db.query(m.after);
     added.push(`${m.table}.${m.column}`);
@@ -278,14 +293,47 @@ async function seedApprovalHistory() {
   return res.affectedRows || 0;
 }
 
-async function run() {
+/**
+ * What this build of the app expects the database to look like.
+ *
+ * Everything below changes the schema or the seeds; anything else does not.
+ * If the database already carries this fingerprint, the whole build is work
+ * that has already been done, and the only thing it can produce is delay.
+ */
+function fingerprint(sql) {
+  // The statements, not the file: editing a comment in schema.sql changes
+  // nothing about the database, and should not cost the next cold start
+  // twenty seconds to prove it.
+  return crypto.createHash('sha1').update(JSON.stringify([
+    statementsFrom(sql), COLUMN_MIGRATIONS, GNA_SEED, ADD_ON_SEED, SETTING_SEED,
+  ])).digest('hex').slice(0, 16);
+}
+
+const STAMP = 'schema_fingerprint';
+
+/**
+ * Has this database already been built by this build of the app?
+ *
+ * One query, and it answers for all seventy-odd below. A fresh database has
+ * neither the table nor the row, and both come back as "no".
+ */
+async function alreadyBuilt(want) {
+  try {
+    const [[row]] = await db.query('SELECT value FROM app_settings WHERE name = ? LIMIT 1', [STAMP]);
+    return !!row && row.value === want;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function build() {
   const [existing] = await db.query("SHOW TABLES LIKE 'users'");
   const created = !existing.length;
 
-  // Run every time, not only on an empty database. Each statement is a
-  // CREATE TABLE IF NOT EXISTS, so an existing database keeps what it has and
-  // a table added since it was set up - order_logs was one - arrives on its
-  // own instead of being created by hand.
+  // Run every time the fingerprint has moved, not only on an empty database.
+  // Each statement is a CREATE TABLE IF NOT EXISTS, so an existing database
+  // keeps what it has and a table added since it was set up - order_logs was
+  // one - arrives on its own instead of being created by hand.
   const sql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   for (const statement of statementsFrom(sql)) {
     await db.query(statement);
@@ -295,6 +343,8 @@ async function run() {
 
   // Checked even when the tables already exist, so a database that lost its
   // users can still be recovered by setting ADMIN_PASSWORD and restarting.
+  // That recovery now needs FORCE_SCHEMA_CHECK=1 as well, because an unchanged
+  // schema is otherwise skipped - see ensureSchema.
   const admin = await seedAdmin();
   const gna = await seedGnaDesigners();
   const addOns = await seedAddOns();
@@ -305,6 +355,38 @@ async function run() {
   // boot - see seedSteps.
   const pmsSteps = await pmsEngine.seedSteps();
   return { created, admin, columns, gna, addOns, settings, approvals, pmsSteps };
+}
+
+/**
+ * Build the schema, unless the database says it is already this one.
+ *
+ * THE REASON THIS EXISTS. The build is about seventy-seven queries run one
+ * after another, and on the live site a single query to the database and back
+ * costs roughly a quarter of a second - the function and the database are not
+ * near each other. That is some twenty seconds, paid by whoever happens to be
+ * the first person to touch a newly started instance. Vercel starts instances
+ * often, so that was not a rare event: it was the office watching a screen
+ * think, several times a day, for work that had been finished months ago.
+ *
+ * So: one query to ask, and the rest only when the answer has moved. The
+ * stamp is written last, after everything it vouches for has succeeded, so a
+ * build that falls over halfway is retried rather than remembered.
+ */
+async function run() {
+  const sql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+  const want = fingerprint(sql);
+
+  if (!process.env.FORCE_SCHEMA_CHECK && await alreadyBuilt(want)) {
+    return { skipped: true, fingerprint: want };
+  }
+
+  const out = await build();
+  await db.query(
+    `INSERT INTO app_settings (name, value, updated_by) VALUES (?, ?, 'setup')
+       ON DUPLICATE KEY UPDATE value = VALUES(value), updated_by = 'setup'`,
+    [STAMP, want],
+  );
+  return Object.assign({ fingerprint: want }, out);
 }
 
 let ready = null;

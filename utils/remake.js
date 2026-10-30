@@ -242,6 +242,37 @@ async function liveRunFor(orderId) {
 }
 
 /**
+ * The same, for a whole pasted list, in one question instead of one each.
+ *
+ * The Corrections box is filled by pasting a column out of a sheet, and a
+ * query per number meant the box sat on "Looking..." for a quarter of a
+ * second times however many were pasted - the server and the database are not
+ * near each other. Order is kept, because the list on screen has to read the
+ * way the paste did.
+ */
+async function liveRunsFor(orderIds) {
+  const ids = Array.isArray(orderIds) ? orderIds : [];
+  if (!ids.length) return [];
+
+  const roots = [...new Set(ids.map(rootOrderId).filter(Boolean))];
+  if (!roots.length) return ids.slice();
+
+  const [rows] = await db.query(
+    `SELECT order_id, remake_of FROM orders
+      WHERE remake_of IN (${roots.map(() => '?').join(', ')}) AND is_deleted = 0
+        AND IFNULL(status_4, '') = '' AND actual_4 IS NULL
+      ORDER BY id ASC`,
+    roots,
+  );
+  // Ascending, so the last row written for a root is the one left standing -
+  // the same run "ORDER BY id DESC LIMIT 1" picks one at a time.
+  const open = new Map();
+  for (const r of rows) open.set(String(r.remake_of), r.order_id);
+
+  return ids.map(id => open.get(String(rootOrderId(id))) || id);
+}
+
+/**
  * The dates of the run before this one, for the repeat to print under its own.
  *
  * Asked for so a repeat carries its history on its face: the floor should not
@@ -258,5 +289,5 @@ async function previousRun(remakeOf) {
 
 module.exports = {
   raiseRemake, isRemakeStatus, SPLIT_STATUSES, LABELS,
-  liveRunFor, previousRun, rootOrderId,
+  liveRunFor, liveRunsFor, previousRun, rootOrderId,
 };
