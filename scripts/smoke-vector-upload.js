@@ -142,7 +142,7 @@ const check = (name, ok, extra) => {
   check('a 40MB file is allowed - the old ceiling was 4MB', big.json && big.json.success === true, big.json);
   check('and the browser is given somewhere to send it', !!(big.json && big.json.sessionUrl));
   check('and a ticket to come back with', !!(big.json && big.json.token));
-  check('the page\'s own origin reaches Google, or the upload dies on CORS',
+  check('the page\'s own origin is passed to Google, as its browser-upload docs ask',
     !!lastSession().origin && /^https?:\/\//.test(lastSession().origin), lastSession().origin);
   check('and Google is told how big it is, so it can refuse early',
     lastSession().size === 40 * 1048576);

@@ -82,10 +82,14 @@ async function uploadToDrive(buffer, fileName, mimeType) {
 // folder. It is still short-lived and specific, so it is handed out per file,
 // per order, to somebody already logged in.
 //
-// THE ORIGIN HAS TO BE SENT WHEN THE SESSION IS OPENED. Google decides then
-// which page is allowed to PUT to the session address, and it decides from
-// the Origin header on this request. Leave it off and the browser's upload is
-// refused by CORS with nothing useful in the message.
+// THE ORIGIN IS SENT WHEN THE SESSION IS OPENED, because Google's own
+// instructions for uploading from a browser say to. Measured against the real
+// folder: the session address answers the browser's preflight with
+// Allow-Origin: our site and Allow-Methods: PUT, and the upload itself comes
+// back 200 with the same header - and it did so whether or not the Origin was
+// passed on the opening request. So this is the documented way round rather
+// than the load-bearing one. It is kept because Google is free to start
+// enforcing what it documents, and a header costs nothing.
 // ══════════════════════════════════════════════════════
 
 const RESUMABLE = 'https://www.googleapis.com/upload/drive/v3/files'
@@ -116,8 +120,8 @@ async function startResumableUpload({ fileName, mimeType, size, origin }) {
     'X-Upload-Content-Type': mimeType || 'application/octet-stream',
   };
   if (size) headers['X-Upload-Content-Length'] = String(size);
-  // Not optional: this is what decides whether the office's browser is
-  // allowed to talk to the address we are about to hand it.
+  // The page that will do the uploading, as Google's browser-upload
+  // instructions ask for. See the note above on what was measured.
   if (origin) headers.Origin = origin;
 
   const res = await fetch(RESUMABLE, {
