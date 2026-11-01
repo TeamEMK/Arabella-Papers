@@ -113,7 +113,7 @@ document.getElementById('tillApprovalRoot').innerHTML = `
       <div class="mb-3">
         <label class="form-label text-dark fw-bold">Vector File</label>
         <input class="form-control" type="file" id="ta_vectorUpload"
-               accept="<%= vectorFiles %>"
+               accept="<%= vectorFiles %>" data-direct="drive"
                onchange="ta_vectorPicked()">
         <div class="form-text" id="ta_vectorNote">Checking...</div>
       </div>
@@ -561,11 +561,80 @@ function ta_lockProofing() {
   }
 }
 
+// ──────────────────────────────────────────────
+// THE VECTOR FILE GOES TO DRIVE, NOT THROUGH US
+//
+// Everything else on this screen is posted to our own server. This one is
+// not, and cannot be: the server is on Vercel, which refuses a request body
+// over 4.5MB, and print-ready artwork is routinely ten times that. For
+// months this box looked like it worked and had never once succeeded.
+//
+// Three steps. We ask our server to open an upload, the browser sends the
+// bytes straight to the address it gets back, and then it tells our server
+// the id so the file can be filed against the order. Only the first and
+// third touch us, and both are a few hundred bytes.
+//
+// XMLHttpRequest rather than fetch, for the one thing fetch still cannot do:
+// tell somebody how far a fifty-megabyte upload has got.
+// ──────────────────────────────────────────────
+function ta_putToDrive(url, file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url, true);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch (e) { reject(new Error('Drive finished but said something unexpected.')); }
+      } else {
+        reject(new Error('Drive refused the upload (' + xhr.status + ').'));
+      }
+    };
+    // There is no status code on a CORS refusal or a dropped connection, so
+    // there is nothing to report but the fact of it.
+    xhr.onerror = () => reject(new Error('The upload could not reach Drive. Check the connection and try again.'));
+    xhr.onabort = () => reject(new Error('The upload was stopped.'));
+    xhr.send(file);
+  });
+}
+
+async function ta_sendVector(orderId, file, say) {
+  const base = '/api/dashboards/till-approval/' + encodeURIComponent(orderId);
+
+  say('Preparing ' + file.name + '...');
+  const opened = await fetch(base + '/vector-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileName: file.name, mimeType: file.type, size: file.size }),
+  }).then(r => r.json());
+  if (!opened.success) throw new Error(opened.error || 'The upload could not be started.');
+
+  const mb = (file.size / 1048576).toFixed(1);
+  const drive = await ta_putToDrive(opened.sessionUrl, file, (done) => {
+    say('Uploading ' + file.name + ' — ' + Math.round(done * 100) + '% of ' + mb + ' MB');
+  });
+
+  say('Filing it against the order...');
+  const filed = await fetch(base + '/vector-claim', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: opened.token, fileId: drive.id }),
+  }).then(r => r.json());
+  if (!filed.success) throw new Error(filed.error || 'The upload could not be filed.');
+  return filed;
+}
+
 function ta_vectorPicked() {
   ta_lockProofing();
   const note = document.getElementById('ta_vectorNote');
   const f = document.getElementById('ta_vectorUpload').files[0];
-  if (f) note.textContent = 'Will be saved as v' + (ta_vectorCount + 1) + ': ' + f.name;
+  if (f) {
+    note.textContent = 'Will be saved as v' + (ta_vectorCount + 1) + ': ' + f.name
+      + ' (' + (f.size / 1048576).toFixed(1) + ' MB)';
+  }
 }
 function ta_orderType() {
   return document.querySelector('input[name="ta_orderType"]:checked')?.value || '';
@@ -596,8 +665,28 @@ async function taHandleApprovalSubmit() {
   }
   formData.append('userEmail', APP_USER.email);
   if(file) formData.append('file', file);
+
+  // The artwork first, and on its own: it does not go in this form and it
+  // does not come through our server at all. Done before the status is saved
+  // rather than after, so the order is never marked Proofing Done by a save
+  // whose artwork then failed to arrive.
   const vector = document.getElementById('ta_vectorUpload').files[0];
-  if(vector) formData.append('vectorFile', vector);
+  if (vector) {
+    const note = document.getElementById('ta_vectorNote');
+    const say = (m) => { note.textContent = m; };
+    try {
+      const filed = await ta_sendVector(ta_editId, vector, say);
+      say('Saved as v' + filed.version + ': ' + filed.name);
+      document.getElementById('ta_vectorUpload').value = '';
+      ta_vectorCount = filed.version;
+      ta_lockProofing();
+    } catch (e) {
+      say('That file was not uploaded.');
+      showToast('error', e.message);
+      return;
+    }
+  }
+
   showLoading(true);
   try {
     const res = await fetch(`/api/dashboards/till-approval/${ta_editId}`, {method:'PUT', body:formData});

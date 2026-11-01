@@ -116,6 +116,26 @@ CREATE TABLE IF NOT EXISTS order_vector_files (
   UNIQUE KEY uq_vector_version (order_id, version)
 );
 
+-- One row per upload the browser was invited to make straight to Drive.
+--
+-- The browser comes back afterwards saying "file <id> is yours". It is the
+-- only thing that can tell us, and it is also the only thing we cannot take
+-- at its word, so the name we issued is kept here and the finished file has
+-- to match it. A ticket is spent once; a second attempt with the same one is
+-- refused rather than filed as another version.
+CREATE TABLE IF NOT EXISTS vector_upload_tickets (
+  token CHAR(48) NOT NULL PRIMARY KEY,
+  order_id VARCHAR(50) NOT NULL,
+  -- The name we gave Drive, which the browser never sees.
+  drive_name VARCHAR(300) NOT NULL,
+  -- The name the designer sees, which is what goes on the order.
+  file_name VARCHAR(255) NOT NULL,
+  requested_by VARCHAR(150) DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  used_at DATETIME DEFAULT NULL,
+  INDEX idx_vut_order (order_id)
+);
+
 -- =============================================
 -- ORDER LOGS TABLE
 -- Who changed what on an order, and when. One row per field that actually

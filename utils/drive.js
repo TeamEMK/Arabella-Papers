@@ -1,16 +1,31 @@
 const { google } = require('googleapis');
 const { Readable } = require('stream');
 
-function getDriveClient() {
-  const auth = new google.auth.GoogleAuth({
+function getAuth() {
+  return new google.auth.GoogleAuth({
     credentials: {
       client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+      private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\n/g, '\n'),
     },
     scopes: ['https://www.googleapis.com/auth/drive'],
   });
-  return google.drive({ version: 'v3', auth });
 }
+
+function getDriveClient() {
+  return google.drive({ version: 'v3', auth: getAuth() });
+}
+
+/** Anyone with the link can read it, which is how every file here is shared. */
+async function shareWithAnyone(drive, fileId) {
+  await drive.permissions.create({
+    fileId,
+    requestBody: { role: 'reader', type: 'anyone' },
+    supportsAllDrives: true,
+  });
+}
+
+const linkFor = (file) =>
+  file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`;
 
 /**
  * Upload a file buffer to Google Drive
@@ -23,33 +38,123 @@ async function uploadToDrive(buffer, fileName, mimeType) {
   const drive = getDriveClient();
   const folderId = process.env.DRIVE_FOLDER_ID;
 
-  const stream = Readable.from(buffer);
-
-  const fileMetadata = {
-    name: `${Date.now()}_${fileName}`,
-    parents: folderId ? [folderId] : [],
-  };
-
-  const media = {
-    mimeType: mimeType,
-    body: stream,
-  };
-
   const response = await drive.files.create({
-    requestBody: fileMetadata,
-    media: media,
+    requestBody: {
+      name: `${Date.now()}_${fileName}`,
+      parents: folderId ? [folderId] : [],
+    },
+    media: { mimeType, body: Readable.from(buffer) },
     fields: 'id, webViewLink',
     supportsAllDrives: true,
   });
 
-  // Make file publicly viewable
-  await drive.permissions.create({
-    fileId: response.data.id,
-    requestBody: { role: 'reader', type: 'anyone' },
+  await shareWithAnyone(drive, response.data.id);
+  return linkFor(response.data);
+}
+
+// ══════════════════════════════════════════════════════
+// STRAIGHT FROM THE BROWSER, FOR THE BIG ONES
+//
+// Everything above goes through this server, and this server is on Vercel,
+// which refuses any request body over 4.5MB before a line of our code runs.
+// Print-ready Illustrator artwork is routinely ten times that, so the vector
+// file - the one thing the office is now required to attach - was the one
+// thing that could not be sent.
+//
+// So it is not sent here. We ask Google for a resumable upload session, hand
+// the browser the session address, and the file goes from the designer's
+// machine to Drive without passing through us. Nothing we run has to hold
+// fifty megabytes, and there is no size limit left to hit.
+//
+// THE SESSION ADDRESS IS THE CREDENTIAL. It carries its own authorisation for
+// that one upload and nothing else - no token of ours reaches the browser,
+// and the address is useless for reading or writing anything already in the
+// folder. It is still short-lived and specific, so it is handed out per file,
+// per order, to somebody already logged in.
+//
+// THE ORIGIN HAS TO BE SENT WHEN THE SESSION IS OPENED. Google decides then
+// which page is allowed to PUT to the session address, and it decides from
+// the Origin header on this request. Leave it off and the browser's upload is
+// refused by CORS with nothing useful in the message.
+// ══════════════════════════════════════════════════════
+
+const RESUMABLE = 'https://www.googleapis.com/upload/drive/v3/files'
+  + '?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink,size,parents';
+
+/**
+ * Open an upload the browser will finish.
+ *
+ * @param {object} o {fileName, mimeType, size, origin}
+ * @returns {Promise<{sessionUrl: string, driveName: string}>}
+ */
+async function startResumableUpload({ fileName, mimeType, size, origin }) {
+  const auth = getAuth();
+  const client = await auth.getClient();
+  const { token } = await client.getAccessToken();
+  if (!token) throw new Error('Google would not issue an access token.');
+
+  const folderId = process.env.DRIVE_FOLDER_ID;
+  // The name is ours, not theirs, and it is how the finished file is
+  // recognised when the browser comes back to say it is done - see
+  // claimUpload. A name we invented and nobody else knows cannot be guessed
+  // at, so a made-up file id is caught.
+  const driveName = `${Date.now()}_${fileName}`;
+
+  const headers = {
+    Authorization: 'Bearer ' + token,
+    'Content-Type': 'application/json; charset=UTF-8',
+    'X-Upload-Content-Type': mimeType || 'application/octet-stream',
+  };
+  if (size) headers['X-Upload-Content-Length'] = String(size);
+  // Not optional: this is what decides whether the office's browser is
+  // allowed to talk to the address we are about to hand it.
+  if (origin) headers.Origin = origin;
+
+  const res = await fetch(RESUMABLE, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ name: driveName, parents: folderId ? [folderId] : [] }),
+  });
+
+  if (!res.ok) {
+    const why = await res.text().catch(() => '');
+    throw new Error('Google refused the upload session (' + res.status + '): ' + why.slice(0, 300));
+  }
+  const sessionUrl = res.headers.get('location');
+  if (!sessionUrl) throw new Error('Google gave no upload address back.');
+
+  return { sessionUrl, driveName };
+}
+
+/**
+ * Take delivery of a file the browser uploaded.
+ *
+ * The browser tells us an id. An id is a claim, not a fact, so the file is
+ * read back and checked: it has to be the name we issued, and it has to be in
+ * our folder. Either way round, somebody passing the id of a file they do not
+ * own gets nothing - the name was never theirs to know.
+ *
+ * @returns {Promise<{url: string, name: string, size: number}>}
+ */
+async function claimUpload(fileId, expectedName) {
+  const drive = getDriveClient();
+  const folderId = process.env.DRIVE_FOLDER_ID;
+
+  const { data } = await drive.files.get({
+    fileId,
+    fields: 'id, name, size, parents, webViewLink',
     supportsAllDrives: true,
   });
 
-  return response.data.webViewLink || `https://drive.google.com/file/d/${response.data.id}/view`;
+  if (data.name !== expectedName) {
+    throw new Error('That file is not the one this upload was opened for.');
+  }
+  if (folderId && !(data.parents || []).includes(folderId)) {
+    throw new Error('That file is not in this app\'s Drive folder.');
+  }
+
+  await shareWithAnyone(drive, data.id);
+  return { url: linkFor(data), name: data.name, size: Number(data.size || 0) };
 }
 
-module.exports = { uploadToDrive };
+module.exports = { uploadToDrive, startResumableUpload, claimUpload };

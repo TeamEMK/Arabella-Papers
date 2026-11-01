@@ -2,7 +2,9 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
-const { uploadToDrive } = require('../../utils/drive');
+const { uploadToDrive, startResumableUpload, claimUpload } = require('../../utils/drive');
+const crypto = require('crypto');
+const { ARTWORK, MAX_VECTOR_BYTES } = require('../../utils/uploadTypes');
 const { logOrderUpdate, logOrderEvent, logApproval } = require('../../utils/auditlog');
 const { notifyClientDispatched } = require('../../utils/notify');
 // A Re-print or a Re-order on an order that has already gone out opens a new
@@ -466,48 +468,161 @@ router.get('/till-approval/:id/vectors', requireLogin, async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════
+// THE VECTOR FILE GOES STRAIGHT TO DRIVE
+//
+// Two short calls around an upload that does not come through this server at
+// all - see utils/drive.js for why it cannot. The first opens the upload and
+// hands the browser somewhere to send the bytes; the second takes delivery
+// once they have arrived.
+//
+// Everything that decides whether this is allowed happens in the first call,
+// while there is still nothing uploaded to argue about: who is asking, which
+// order, what the file is called, how big it says it is.
+// ═══════════════════════════════════════════════
+
+const extensionOf = (name) => {
+  const m = /\.[A-Za-z0-9]+$/.exec(String(name || '').trim());
+  return m ? m[0].toLowerCase() : '';
+};
+
+// POST /api/dashboards/till-approval/:id/vector-session
+router.post('/till-approval/:id/vector-session', requireLogin, express.json(), async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const fileName = String((req.body && req.body.fileName) || '').trim().slice(0, 255);
+    const mimeType = String((req.body && req.body.mimeType) || '').trim().slice(0, 150);
+    const size = Number((req.body && req.body.size) || 0);
+
+    if (!fileName) return res.status(400).json({ success: false, error: 'No file was chosen.' });
+
+    // The picker's `accept` is a hint and nothing more, so the list is
+    // enforced here, where it cannot be clicked past.
+    if (!ARTWORK.includes(extensionOf(fileName))) {
+      return res.status(400).json({
+        success: false,
+        error: 'The vector file has to be one of: ' + ARTWORK.join(', ') + '.',
+      });
+    }
+    if (!Number.isFinite(size) || size <= 0) {
+      return res.status(400).json({ success: false, error: 'That file appears to be empty.' });
+    }
+    if (size > MAX_VECTOR_BYTES) {
+      return res.status(400).json({
+        success: false,
+        error: 'That file is ' + (size / 1048576).toFixed(0) + ' MB. The limit is '
+          + (MAX_VECTOR_BYTES / 1048576) + ' MB.',
+      });
+    }
+
+    const [[order]] = await db.query(
+      'SELECT order_id FROM orders WHERE order_id = ? AND is_deleted = 0 LIMIT 1', [orderId]);
+    if (!order) return res.status(404).json({ success: false, error: 'No order with that number.' });
+
+    // Google decides from this which page may upload to the address it gives
+    // back. Taken from the request rather than configured, so a preview
+    // deployment works without anybody remembering to add its name.
+    const origin = req.headers.origin
+      || (req.headers.host ? (req.protocol === 'http' ? 'http://' : 'https://') + req.headers.host : '');
+
+    const { sessionUrl, driveName } = await startResumableUpload({ fileName, mimeType, size, origin });
+
+    const token = crypto.randomBytes(24).toString('hex');
+    await db.query(
+      `INSERT INTO vector_upload_tickets (token, order_id, drive_name, file_name, requested_by)
+       VALUES (?,?,?,?,?)`,
+      [token, order.order_id, driveName, fileName, req.session.user.email || ''],
+    );
+
+    res.json({ success: true, token, sessionUrl });
+  } catch (err) {
+    console.error('Vector upload session failed:', err);
+    res.status(500).json({ success: false, error: 'Could not start the upload: ' + err.message });
+  }
+});
+
+// POST /api/dashboards/till-approval/:id/vector-claim
+router.post('/till-approval/:id/vector-claim', requireLogin, express.json(), async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const token = String((req.body && req.body.token) || '').trim();
+    const fileId = String((req.body && req.body.fileId) || '').trim();
+    if (!token || !fileId) {
+      return res.status(400).json({ success: false, error: 'That upload cannot be matched to an order.' });
+    }
+
+    // Spent on the way in, not on the way out: two claims racing on one
+    // ticket both read "unused" if the reading and the marking are apart, and
+    // the order ends up with the same artwork filed as two versions.
+    const [spend] = await db.query(
+      `UPDATE vector_upload_tickets SET used_at = NOW()
+        WHERE token = ? AND order_id = ? AND used_at IS NULL`,
+      [token, orderId],
+    );
+    if (!spend.affectedRows) {
+      return res.status(400).json({ success: false, error: 'That upload has already been filed.' });
+    }
+    const [[ticket]] = await db.query(
+      'SELECT drive_name, file_name, requested_by FROM vector_upload_tickets WHERE token = ?', [token]);
+
+    let file;
+    try {
+      file = await claimUpload(fileId, ticket.drive_name);
+    } catch (err) {
+      // Nothing was filed, so the ticket goes back rather than being burnt on
+      // a failure that was not the designer's doing.
+      await db.query('UPDATE vector_upload_tickets SET used_at = NULL WHERE token = ?', [token]);
+      throw err;
+    }
+
+    const [[last]] = await db.query(
+      'SELECT IFNULL(MAX(version), 0) AS v FROM order_vector_files WHERE order_id = ?', [orderId]);
+    const version = last.v + 1;
+    await db.query(
+      `INSERT INTO order_vector_files (order_id, version, file_url, file_name, uploaded_by)
+       VALUES (?,?,?,?,?)`,
+      [orderId, version, file.url, ticket.file_name.slice(0, 255),
+       req.session.user.email || ticket.requested_by],
+    );
+    await logOrderEvent(orderId, 'Vector file',
+      'v' + version + ' — ' + ticket.file_name, req.session.user).catch(() => {});
+
+    res.json({ success: true, version, url: file.url, name: ticket.file_name });
+  } catch (err) {
+    console.error('Vector claim failed:', err);
+    res.status(500).json({ success: false, error: 'The upload finished but could not be filed: ' + err.message });
+  }
+});
+
 // PUT /api/dashboards/till-approval/:id
 router.put('/till-approval/:id',
   requireLogin,
-  // Two files now, each with its own meaning: `file` is the client's approval
-  // upload as before, `vectorFile` is the print-ready artwork.
-  upload.fields([{ name: 'file', maxCount: 1 }, { name: 'vectorFile', maxCount: 1 }]),
+  // Only the approval upload comes through here now. The vector file does
+  // not: it goes browser-to-Drive through the two routes above, because it
+  // is the one file in this app that is routinely larger than a request on
+  // this platform is allowed to be.
+  upload.fields([{ name: 'file', maxCount: 1 }]),
   async (req, res) => {
   try {
     const { approvalStatus, remark, userEmail } = req.body;
     const orderId = req.params.id;
     const approvalUpload = (req.files && req.files.file && req.files.file[0]) || null;
-    const vectorUpload = (req.files && req.files.vectorFile && req.files.vectorFile[0]) || null;
 
     // Proofing Done cannot be claimed before the artwork exists. The rule
     // lives in utils/vectorGate.js because four routes can write this status
     // and only this one used to check.
+    //
+    // Nothing is "arriving with" this save any more - the screen files the
+    // artwork first and only then saves the status - so this asks the plain
+    // question: is there a vector file on this order or not.
     if (approvalStatus === 'Proofing Done') {
-      const refuse = await vectorGate.blockProofing(orderId, !!vectorUpload);
+      const refuse = await vectorGate.blockProofing(orderId, false);
       if (refuse) return res.status(400).json({ success: false, error: refuse });
     }
 
     let fileUrl = null;
     if (approvalUpload) {
       fileUrl = await uploadToDrive(approvalUpload.buffer, approvalUpload.originalname, approvalUpload.mimetype);
-    }
-
-    // Kept as its own version rather than overwriting, so "go back to version
-    // 7" stays answerable. The number is worked out from what is already
-    // there, so versions read 1, 2, 3 per order however many orders there are.
-    if (vectorUpload) {
-      const vectorUrl = await uploadToDrive(
-        vectorUpload.buffer, vectorUpload.originalname, vectorUpload.mimetype);
-      const [[last]] = await db.query(
-        'SELECT IFNULL(MAX(version), 0) AS v FROM order_vector_files WHERE order_id = ?', [orderId]);
-      await db.query(
-        `INSERT INTO order_vector_files (order_id, version, file_url, file_name, uploaded_by)
-         VALUES (?,?,?,?,?)`,
-        [orderId, last.v + 1, vectorUrl, vectorUpload.originalname.slice(0, 255),
-         userEmail || req.session.user.email],
-      );
-      await logOrderEvent(orderId, 'Vector file',
-        'v' + (last.v + 1) + ' — ' + vectorUpload.originalname, req.session.user).catch(() => {});
     }
 
     // Made again, and the last one has already gone out: that is a new job on

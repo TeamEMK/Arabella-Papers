@@ -972,6 +972,11 @@
   document.addEventListener('change', function (e) {
     var el = e.target;
     if (!el || el.type !== 'file' || !el.files || !el.files.length) return;
+    // A box that uploads straight to Drive has no request body to overflow,
+    // so the platform's limit is not its limit and this warning would be a
+    // lie - and worse, it clears the box, which would make the one screen
+    // that CAN take a large file the one that refuses to.
+    if (el.dataset && el.dataset.direct) return;
 
     var tooBig = Array.prototype.filter.call(el.files, function (f) { return f.size > UPLOAD_CAP; });
     if (!tooBig.length) return;

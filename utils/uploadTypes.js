@@ -54,4 +54,18 @@ const VECTOR_FILES = ARTWORK.join(',');
  */
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
-module.exports = { ARTWORK, PICTURES, DESIGN_FILES, VECTOR_FILES, MAX_UPLOAD_BYTES };
+/**
+ * The most a vector file may be - which is a different number, because a
+ * vector file no longer comes through here.
+ *
+ * It goes from the designer's machine to Drive directly, so the platform's
+ * 4.5MB has nothing to do with it. This is only here to stop somebody
+ * emptying the Drive by accident: a quarter of a gigabyte is far past any
+ * artwork the office has ever sent and well short of a problem.
+ */
+const MAX_VECTOR_BYTES = 256 * 1024 * 1024;
+
+module.exports = {
+  ARTWORK, PICTURES, DESIGN_FILES, VECTOR_FILES,
+  MAX_UPLOAD_BYTES, MAX_VECTOR_BYTES,
+};
