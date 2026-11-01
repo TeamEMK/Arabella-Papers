@@ -29,6 +29,11 @@ process.env.VERCEL = '1';
 process.env.ADMIN_EMAIL = 'probe@test.local';
 process.env.ADMIN_PASSWORD = 'probe-pass-123';
 
+// Held on to before the stub goes into the cache below, because one thing in
+// here can be checked without Google on the other end: which folder the
+// artwork is filed in.
+const realDrive = require(path.join(ROOT, 'utils/drive.js'));
+
 // ── The stub stands in for Google, and remembers what it was asked ──
 const drive = {
   sessions: [],     // every session opened
@@ -204,6 +209,19 @@ const check = (name, ok, extra) => {
   const gate = require(path.join(ROOT, 'utils/vectorGate.js'));
   check('V-1 may now be called Proofing Done', (await gate.blockProofing('V-1', false)) === null);
   check('V-2 still may not', typeof (await gate.blockProofing('V-2', false)) === 'string');
+
+  console.log('\nWhere it lands in Drive');
+  // Getting this wrong means artwork filed in among nine thousand proofs.
+  const keepVector = process.env.VECTOR_DRIVE_FOLDER_ID;
+  const keepDesign = process.env.DRIVE_FOLDER_ID;
+  process.env.DRIVE_FOLDER_ID = 'the-proofs-folder';
+  process.env.VECTOR_DRIVE_FOLDER_ID = 'the-artwork-folder';
+  check('artwork goes to its own folder', realDrive.vectorFolder() === 'the-artwork-folder');
+  process.env.VECTOR_DRIVE_FOLDER_ID = '';
+  check('and to the old one if nobody has set it yet, rather than nowhere',
+    realDrive.vectorFolder() === 'the-proofs-folder');
+  process.env.VECTOR_DRIVE_FOLDER_ID = keepVector;
+  process.env.DRIVE_FOLDER_ID = keepDesign;
 
   console.log('\nThe screen matches the server');
   const fs = require('fs');

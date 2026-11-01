@@ -15,6 +15,16 @@ function getDriveClient() {
   return google.drive({ version: 'v3', auth: getAuth() });
 }
 
+/**
+ * Where the print-ready artwork goes.
+ *
+ * Its own folder, not the one the proofs land in: nine thousand JPEGs and a
+ * few hundred pieces of artwork in one place is not somewhere anybody can
+ * find anything. Falls back to the old folder so a deployment without the
+ * new setting still works rather than failing at the first upload.
+ */
+const vectorFolder = () => process.env.VECTOR_DRIVE_FOLDER_ID || process.env.DRIVE_FOLDER_ID;
+
 /** Anyone with the link can read it, which is how every file here is shared. */
 async function shareWithAnyone(drive, fileId) {
   await drive.permissions.create({
@@ -93,7 +103,7 @@ async function startResumableUpload({ fileName, mimeType, size, origin }) {
   const { token } = await client.getAccessToken();
   if (!token) throw new Error('Google would not issue an access token.');
 
-  const folderId = process.env.DRIVE_FOLDER_ID;
+  const folderId = vectorFolder();
   // The name is ours, not theirs, and it is how the finished file is
   // recognised when the browser comes back to say it is done - see
   // claimUpload. A name we invented and nobody else knows cannot be guessed
@@ -138,7 +148,7 @@ async function startResumableUpload({ fileName, mimeType, size, origin }) {
  */
 async function claimUpload(fileId, expectedName) {
   const drive = getDriveClient();
-  const folderId = process.env.DRIVE_FOLDER_ID;
+  const folderId = vectorFolder();
 
   const { data } = await drive.files.get({
     fileId,
@@ -153,8 +163,19 @@ async function claimUpload(fileId, expectedName) {
     throw new Error('That file is not in this app\'s Drive folder.');
   }
 
-  await shareWithAnyone(drive, data.id);
+  // Not fatal here, unlike on the way in above. The bytes are already in
+  // Drive by this point - fifty megabytes of somebody's afternoon - and
+  // throwing them away because a sharing policy said no would be the wrong
+  // trade. The folder is already readable by the office, so the link works
+  // for the people who need it either way; what would be lost is opening it
+  // from outside, and that is worth a line in the log, not the upload.
+  try {
+    await shareWithAnyone(drive, data.id);
+  } catch (err) {
+    console.error('[drive] uploaded but could not be shared by link:', err.message);
+  }
+
   return { url: linkFor(data), name: data.name, size: Number(data.size || 0) };
 }
 
-module.exports = { uploadToDrive, startResumableUpload, claimUpload };
+module.exports = { uploadToDrive, startResumableUpload, claimUpload, vectorFolder };
