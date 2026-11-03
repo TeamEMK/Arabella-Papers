@@ -1914,6 +1914,67 @@ router.put('/settings/:name', requireLogin, async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════
+// THE VECTOR FILE RULE - ONE SWITCH FOR BOTH HALVES
+//
+// The rule has two halves: nobody logs out owing artwork, and nobody calls a
+// design proofed without it. They now read the same setting, so this is the
+// only place either of them is turned on or off.
+//
+// Empty means off. Off is a real answer the office needs: while the upload
+// box could not take a large file, the rule was demanding something that
+// could not be supplied, and there was nowhere to say so.
+// ═══════════════════════════════════════════════
+
+const { startDate: vectorRuleFrom, SETTING: VECTOR_RULE_SETTING } = require('../../utils/vectorDuty');
+
+// GET /api/dashboards/vector-rule
+router.get('/vector-rule', requireLogin, async (req, res) => {
+  try {
+    const from = await vectorRuleFrom();
+    // What it would be biting on right now, so switching it on is not a guess.
+    let owing = 0;
+    if (from) {
+      const [[row]] = await db.query(
+        `SELECT COUNT(*) AS n FROM orders o
+          WHERE o.is_deleted = 0 AND DATE(o.timestamp) >= ?
+            AND NOT EXISTS (SELECT 1 FROM order_vector_files v WHERE v.order_id = o.order_id)`,
+        [from]);
+      owing = Number(row.n);
+    }
+    res.json({ success: true, startDate: from || '', owing });
+  } catch (err) {
+    console.error('[vector-rule] read:', err.message);
+    res.status(500).json({ success: false, error: 'Could not read the vector file rule.' });
+  }
+});
+
+// PUT /api/dashboards/vector-rule
+router.put('/vector-rule', requireLogin, express.json(), async (req, res) => {
+  try {
+    if (!canEditMaster(req.session.user)) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    const v = String((req.body && req.body.startDate) || '').trim();
+    // Empty switches it off. Anything else has to be a real date, or the
+    // rule would quietly stop applying to everything.
+    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Use a date like 2026-11-03, or leave it empty to switch the rule off.',
+      });
+    }
+    await db.query(
+      `INSERT INTO app_settings (name, value, updated_by) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE value = VALUES(value), updated_by = VALUES(updated_by)`,
+      [VECTOR_RULE_SETTING, v, req.session.user.email || '']);
+    res.json({ success: true, startDate: v });
+  } catch (err) {
+    console.error('[vector-rule] save:', err.message);
+    res.status(500).json({ success: false, error: 'Could not save the vector file rule.' });
+  }
+});
+
 // POST /api/dashboards/dealers
 router.post('/dealers', requireLogin, async (req, res) => {
   try {

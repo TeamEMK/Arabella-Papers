@@ -37,6 +37,31 @@
     </div>
   </div>
 
+  <!-- The vector file rule. Two things hang off one date: whether somebody
+       can log out owing artwork, and whether a design can be called proofed
+       without it. They used to be separate, and only one of them could be
+       switched off. -->
+  <div class="card shadow smooth-ui mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+          <h6 class="fw-bold mb-1"><i class="fas fa-file-pen me-2"></i>Vector file rule</h6>
+          <div class="text-muted small" style="max-width:48rem;">
+            For orders punched <b>on or after</b> this day: the designer cannot log out
+            while the artwork is missing, and the order cannot be marked
+            <b>Proofing Done</b> without it. Older orders are left alone.
+            <b>Leave it empty to switch the rule off</b> — nobody is held and nothing is refused.
+          </div>
+          <div class="small mt-1" id="pa_vecState"></div>
+        </div>
+        <div class="d-flex gap-2 align-items-start">
+          <input type="date" class="form-control form-control-sm" style="width:11rem;" id="pa_vecStart">
+          <button class="btn btn-sm btn-success smooth-ui" onclick="pa_saveVector(this)">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="alert alert-warning d-none" id="pa_warn">
     <i class="fas fa-triangle-exclamation me-1"></i>
     <b id="pa_missing"></b>
@@ -180,8 +205,51 @@ async function pa_saveStart(btn) {
   btn.disabled = false; btn.innerHTML = old;
 }
 
+async function pa_loadVector() {
+  try {
+    var r = await fetch('/api/dashboards/vector-rule');
+    var j = await r.json();
+    if (!j.success) return;
+    document.getElementById('pa_vecStart').value = j.startDate || '';
+    document.getElementById('pa_vecState').innerHTML = j.startDate
+      ? '<span class="badge bg-success-subtle text-success-emphasis">Rule is on</span>'
+        + ' <span class="text-muted">from ' + pa_esc(j.startDate) + ' · '
+        + j.owing + ' order(s) owing artwork right now</span>'
+      : '<span class="badge bg-secondary">Rule is off</span>'
+        + ' <span class="text-muted">nobody is held and Proofing Done is not refused</span>';
+  } catch (e) { /* the catalogue below still matters */ }
+}
+
+async function pa_saveVector(btn) {
+  var v = document.getElementById('pa_vecStart').value;
+  var BREAK = String.fromCharCode(10);
+  var ask = v
+    ? 'Orders punched on or after ' + v + ' will need the vector file before'
+      + BREAK + 'Proofing Done, and before their designer can log out.'
+      + BREAK + BREAK + 'Continue?'
+    : 'Switch the vector file rule OFF?'
+      + BREAK + BREAK + 'Designers will be able to log out without uploading'
+      + BREAK + 'artwork, and Proofing Done will no longer ask for it.';
+  if (!window.confirm(ask)) return;
+  var old = btn.innerHTML;
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    var r = await fetch('/api/dashboards/vector-rule', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startDate: v }),
+    });
+    var j = await r.json();
+    if (!j.success) throw new Error(j.error || 'Could not save.');
+    await pa_loadVector();
+  } catch (e) {
+    alert(e.message || 'Could not save.');
+  }
+  btn.disabled = false; btn.innerHTML = old;
+}
+
 async function pa_load() {
   await pa_loadStart();
+  await pa_loadVector();
   try {
     var r = await fetch('/api/pms/steps');
     var j = await r.json();

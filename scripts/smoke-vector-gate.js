@@ -239,6 +239,58 @@ const check = (name, ok, extra) => {
   check('and multer is set to the same number',
     /fileSize: 4 \* 1024 \* 1024/.test(dash));
 
+  // ── THE SWITCH ──
+  //
+  // The rule has two halves - no logout owing artwork, no Proofing Done
+  // without it - and until now only the logout half could be turned off. So
+  // there was no way to relax it, which mattered: while the upload box could
+  // not take a large file, the rule was demanding something nobody could
+  // supply. Both halves read one setting now, and these say so.
+  console.log('\nThe switch, and what it covers');
+  const gate = require(path.join(ROOT, 'utils/vectorGate.js'));
+  const duty = require(path.join(ROOT, 'utils/vectorDuty.js'));
+  const setRule = (v) => db.query(
+    `INSERT INTO app_settings (name, value, updated_by) VALUES (?, ?, 'probe')
+       ON DUPLICATE KEY UPDATE value = VALUES(value)`, [duty.SETTING, v]);
+
+  // G-1 has no vector file; it was refused above with the rule on.
+  check('with the rule on, an order with no artwork is still refused',
+    typeof (await gate.blockProofing('G-1', false)) === 'string');
+
+  await setRule('');
+  check('with the rule switched off, the same order is allowed',
+    (await gate.blockProofing('G-1', false)) === null);
+  check('and a whole batch of them is allowed',
+    (await gate.blockProofingMany(['G-1', 'G-3', 'G-5'])) === null);
+  check('and nobody is held back from logging out',
+    (await duty.pendingFor({ username: 'Rakesh' })).count === 0);
+
+  // On again, but starting tomorrow: today's orders predate it.
+  const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  await setRule(tomorrow);
+  check('an order punched before the start date is not the rule\'s business',
+    (await gate.blockProofing('G-1', false)) === null);
+  check('nor is a batch of them',
+    (await gate.blockProofingMany(['G-1', 'G-3', 'G-5'])) === null);
+
+  await setRule(duty.todayIST());
+  check('from today, today\'s orders are refused again',
+    typeof (await gate.blockProofing('G-1', false)) === 'string');
+  check('and an order that HAS artwork is still allowed',
+    (await gate.blockProofing('G-2', false)) === null);
+
+  // The office has to be able to reach the switch, or it is not a switch.
+  const dashSrc = fs.readFileSync(path.join(ROOT, 'routes/api/dashboards.js'), 'utf8');
+  check('there is a route to read and set it',
+    /router\.get\('\/vector-rule'/.test(dashSrc) && /router\.put\('\/vector-rule'/.test(dashSrc));
+  check('only an admin may set it',
+    /\/vector-rule'[\s\S]{0,400}canEditMaster/.test(dashSrc));
+  const settingsView = fs.readFileSync(path.join(ROOT, 'views/views/pmsAdmin.ejs'), 'utf8');
+  check('and a control for it on Step Settings, where the other switch lives',
+    /Vector file rule/.test(settingsView) && /vector-rule/.test(settingsView));
+  check('whose empty value is spelled out as "off" rather than left to be guessed',
+    /empty to switch the rule off/i.test(settingsView));
+
   server.close();
   await db.end().catch(() => {});
   await admin.query('DROP DATABASE `' + TEST_DB + '`');
