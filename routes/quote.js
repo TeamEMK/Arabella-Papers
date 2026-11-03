@@ -34,6 +34,12 @@ const { TRADING_NAME } = require('../utils/office');
 //
 // The copy is part of the link, not a setting, so a page cannot be drawn by
 // one engine and priced by another.
+// `code` and `label` are the price list - what the quote is recorded against
+// and what the office calls it. `wordmark` is what the CUSTOMER reads, and on
+// the KPC link they are deliberately not the same: the office asked for that
+// page to be priced from the KPC rates and signed Arabella Papers, with the
+// link itself still /quote/kpc. So nothing a customer sees names KPC, and
+// nothing in the record forgets it.
 const BRANDS = {
   arabella: {
     code: 'ARA', label: 'ARABELLA (ARB)',
@@ -46,7 +52,12 @@ const BRANDS = {
   kpc: {
     code: 'KPC', label: 'KPC',
     assets: 'pricing-kpc', pricing: pricing.forKpc,
-    wordmark: 'KPC',
+    // The office asked for the heading to read Arabella Papers on this link
+    // too, while the link itself stays /quote/kpc. So the brand decides the
+    // price list and nothing else: this page is priced from the KPC rates
+    // and signed Arabella Papers, which is deliberate and is the whole of
+    // the difference between the two links.
+    wordmark: 'ARABELLA PAPERS',
     title: 'Wedding stationery price estimate',
   },
 };
@@ -91,7 +102,7 @@ router.get('/:brand', (req, res, next) => {
   if (!brand) return next();
   res.render('quote', {
     brandCode: brand.code,
-    brandLabel: brand.label,
+    brandLabel: brand.wordmark,
     brandSlug: String(req.params.brand).toLowerCase(),
     assets: brand.assets,
     wordmark: brand.wordmark,
@@ -173,7 +184,7 @@ router.post('/:brand/api/send', express.json({ limit: '256kb' }), async (req, re
     countSend(ip);
 
     const pdf = await buildQuotePdf(r, {
-      name, email, store: who.store, brandLabel: brand.label,
+      name, email, store: who.store, brandLabel: brand.wordmark,
     });
 
     // To the customer only. The office reads these off the saved quotes
@@ -181,7 +192,7 @@ router.post('/:brand/api/send', express.json({ limit: '256kb' }), async (req, re
     const mail = await sendMail({
       to: email,
       subject: `Your cost summary from ${TRADING_NAME}`,
-      html: mailHtml(r, name, brand.label),
+      html: mailHtml(r, name, brand.wordmark),
       text: summary,
       attachments: [{ filename: 'Arabella-Quote-' + out.insertId + '.pdf', content: pdf }],
     }).catch(err => {

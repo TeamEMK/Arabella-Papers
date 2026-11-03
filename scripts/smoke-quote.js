@@ -84,12 +84,25 @@ const check = (name, ok, extra) => {
   check('the Arabella link opens', r.status === 200, r.status);
   let html = await r.text();
   check('and is not a redirect to the login', !/name="password"/.test(html));
-  check('it names its own price list', /ARABELLA \(ARB\)/.test(html));
+  check('it is signed Arabella Papers, not the internal code ARB',
+    /ARABELLA PAPERS/.test(html) && !/ARABELLA \(ARB\)/.test(html));
   check('and asks who you are before anything else', /id="gate"/.test(html) && /g_email/.test(html));
 
   r = await get('/quote/kpc');
   html = await r.text();
-  check('the KPC link opens on the KPC list', r.status === 200 && /KPC/.test(html), r.status);
+  check('the KPC link opens', r.status === 200, r.status);
+  // The office asked for this page to be signed Arabella Papers while the
+  // link stays /quote/kpc. So the brand now decides the PRICE LIST and
+  // nothing else, and these two checks are the whole of that arrangement:
+  // nothing a customer reads says KPC, and the rates behind it still do.
+  const visible = html
+    .replace(/<script[\s\S]*?<\/script>/g, '')
+    .replace(/<link[^>]*>/g, '')
+    .replace(/<%[\s\S]*?%>/g, '');
+  check('and is signed Arabella Papers, like the other one',
+    /ARABELLA PAPERS/.test(html) && !/KPC/.test(visible), (visible.match(/KPC/g) || []).length);
+  check('while still being priced from the KPC list',
+    /pricing-kpc\/js\//.test(html));
 
   r = await get('/quote/somethingelse');
   check('an invented brand is not a page', r.status === 404, r.status);
@@ -181,6 +194,9 @@ const check = (name, ok, extra) => {
   }));
   check('a quote comes back', r.json && r.json.success === true, r.json);
   check('with the summary to paste', /Cost Summary/.test(r.json.summary || ''));
+  // Still built, though the button is gone: it is what gets attached to the
+  // mail the customer receives. Taking the download away was a change to the
+  // page, not to what the customer ends up holding.
   check('and a PDF', !!r.json.pdf && r.json.pdf.length > 1000, (r.json.pdf || '').length);
   const pdf = Buffer.from(r.json.pdf, 'base64');
   check('that really is a PDF', pdf.slice(0, 5).toString() === '%PDF-', pdf.slice(0, 8).toString());
@@ -190,8 +206,8 @@ const check = (name, ok, extra) => {
   const words = pdfText(pdf);
   check('it names the office by its trading name',
     /ARABELLA PAPERS/.test(words) && !/PVT|Private Limited/i.test(words), words.slice(0, 80));
-  check('and the price list it was quoted from',
-    words.indexOf('ARABELLA (ARB) price list') >= 0, words.slice(0, 160));
+  check('and the price list it was quoted from, in the customer\'s words',
+    words.indexOf('ARABELLA PAPERS price list') >= 0, words.slice(0, 160));
   check('it carries who it is for', words.indexOf(WHO.name) >= 0 && words.indexOf(WHO.email) >= 0);
   check('every line of the quote', (r.json.summary.match(/^d+./gm) || []).length
     === (words.match(/^d+.s/gm) || []).length);
@@ -238,6 +254,20 @@ const check = (name, ok, extra) => {
     (await send('kpc', Object.assign({}, WHO, {
       items: ITEMS, totals: { total: kpc.total, balance: kpc.balance },
     }), '198.51.100.7')).json.success === true);
+
+  console.log('\nThe buttons the customer is offered');
+  for (const slug of ['arabella', 'kpc']) {
+    const page = await (await get('/quote/' + slug)).text();
+    check(slug + ': the Download PDF button is gone', !/id="q_pdf"/.test(page));
+    check(slug + ': Copy the quote is still there', /id="q_copy"/.test(page));
+  }
+  // The button list is built from what is actually on the page. Naming a
+  // button that was removed puts a null in it, disabling a null throws, and
+  // the customer is told "Something went wrong" about a quote that was never
+  // attempted - which is exactly how a tidy-up turns into a bug report.
+  const page = await (await get('/quote/kpc')).text();
+  check('and the code does not reach for a button that is not there',
+    /\.filter\(Boolean\)/.test(page) && !/getElementById\('q_pdf'\)\]/.test(page));
 
   console.log('\nIt does not disturb the internal tab');
   const [[internal]] = await db.query(

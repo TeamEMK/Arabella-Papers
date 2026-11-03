@@ -175,11 +175,21 @@ if (!isServerless) {
     // broken database.
     ensureSchema().then(
       r => {
+        // A database already built by this exact build reports nothing but
+        // the fingerprint - there is no seed result to print, because
+        // nothing was seeded. Reading r.admin regardless took the whole
+        // server down on boot the moment that skip started happening.
+        if (r.skipped) {
+          console.log(`   Database: already built (${r.fingerprint})`);
+          return;
+        }
         console.log(`   Database: ${r.created ? 'schema created' : 'schema already present'}`);
         if (r.columns && r.columns.length) console.log(`   Migrated: ${r.columns.join(', ')}`);
-        console.log(r.admin.seeded
-          ? `   Admin:    created ${r.admin.email}`
-          : `   Admin:    not created (${r.admin.reason})`);
+        if (r.admin) {
+          console.log(r.admin.seeded
+            ? `   Admin:    created ${r.admin.email}`
+            : `   Admin:    not created (${r.admin.reason})`);
+        }
       },
       err => console.error('   Database: schema setup FAILED —', err.message),
     );

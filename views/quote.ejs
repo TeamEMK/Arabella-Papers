@@ -99,8 +99,13 @@
     <p class="q-who">Pricing for <b id="q_whoName"></b> · <span id="q_whoEmail"></span></p>
     <div id="pricing"></div>
     <div class="q-actions">
-      <button type="button" id="q_copy" onclick="q_send('copy', this)">Copy the quote</button>
-      <button type="button" class="solid" id="q_pdf" onclick="q_send('pdf', this)">Download PDF</button>
+      <%# Download PDF was taken off both links at the office's request. The
+          customer still gets the PDF - it is attached to the mail that goes
+          out when they take the quote - and the module's own "Print or save
+          as PDF" is still on the panel above for anyone who wants it on
+          screen. The server side of it is untouched, so putting the button
+          back is one line. %>
+      <button type="button" class="solid" id="q_copy" onclick="q_send('copy', this)">Copy the quote</button>
     </div>
     <div class="q-note" id="q_note">Fill in your quantities, choose <b>Calculate quote</b>, then take it away.</div>
   </div>
@@ -216,7 +221,13 @@
       q_note('Choose <b>Calculate quote</b> first, then this will be ready.', true);
       return;
     }
-    var buttons = [document.getElementById('q_copy'), document.getElementById('q_pdf')];
+    // Whichever of them this page has. Listing a button that is not on the
+    // page puts a null in here, and disabling a null throws - which lands in
+    // the catch at the bottom and tells the customer "Something went wrong"
+    // about a quote that was never attempted.
+    var buttons = ['q_copy', 'q_pdf']
+      .map(function (id) { return document.getElementById(id); })
+      .filter(Boolean);
     buttons.forEach(function (b) { b.disabled = true; });
     q_note('One moment…');
     try {
