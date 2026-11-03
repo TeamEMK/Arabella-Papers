@@ -8,68 +8,12 @@
 // service-account JSON in a file (local) or in GOOGLE_CREDENTIALS, and the
 // email/key pair Vercel already holds for Drive.
 // ══════════════════════════════════════════════════════
-const path = require('path');
-const fs = require('fs');
+// Finding the service account is shared with the Drive upload, because it
+// is one account and was being looked for in two different ways.
+const { loadCredentials, parseServiceAccountJson } = require('./googleCreds');
 
 let _readClient = null;
 let _writeClient = null;
-
-/**
- * A service-account JSON pasted into an environment variable arrives damaged
- * more often than not — a byte-order mark, wrapping quotes, or the private
- * key's \n escapes turned into real line breaks, which JSON.parse rejects.
- * Repair the usual damage rather than failing every sheet feature at once with
- * a bare syntax error.
- */
-function parseServiceAccountJson(raw) {
-  let text = String(raw).trim();
-  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-  const wrapped = (text.startsWith("'") && text.endsWith("'"))
-    || (text.startsWith('"') && text.endsWith('"') && !text.startsWith('{"'));
-  if (wrapped) text = text.slice(1, -1);
-
-  try { return JSON.parse(text); } catch (_) { /* fall through to the repair */ }
-
-  // Escape line breaks that fall INSIDE a string. Breaks between tokens are
-  // legal whitespace, so this tracks the quoting rather than replacing blindly.
-  let out = '';
-  let inString = false;
-  let escaped = false;
-  for (const ch of text) {
-    if (escaped) { out += ch; escaped = false; continue; }
-    if (ch === '\\') { out += ch; escaped = inString; continue; }
-    if (ch === '"') { inString = !inString; out += ch; continue; }
-    if (inString && ch === '\n') { out += '\\n'; continue; }
-    if (inString && ch === '\r') { out += '\\r'; continue; }
-    out += ch;
-  }
-
-  try { return JSON.parse(out); } catch (e) {
-    throw new Error(
-      `GOOGLE_CREDENTIALS is set but is not valid JSON (${e.message}). It must be the `
-      + 'contents of the service-account .json file, on one line, with the private key\'s '
-      + 'line breaks written as \\n.');
-  }
-}
-
-/**
- * Whichever of the two forms this deployment has. The file wins when it is
- * there: it is the whole key, and it is what a developer just downloaded.
- */
-function loadCredentials() {
-  const file = path.join(__dirname, '..', 'credentials.json');
-  if (fs.existsSync(file)) return require(file);
-
-  if (process.env.GOOGLE_CREDENTIALS) return parseServiceAccountJson(process.env.GOOGLE_CREDENTIALS);
-
-  const client_email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const private_key = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
-  if (client_email && private_key) return { client_email, private_key };
-
-  throw new Error(
-    'No Google credentials. Put credentials.json at the project root, or set '
-    + 'GOOGLE_CREDENTIALS, or GOOGLE_SERVICE_ACCOUNT_EMAIL with GOOGLE_PRIVATE_KEY.');
-}
 
 const READ_SCOPE = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 const WRITE_SCOPE = ['https://www.googleapis.com/auth/spreadsheets'];

@@ -1,12 +1,15 @@
 const { google } = require('googleapis');
 const { Readable } = require('stream');
+const { loadCredentials } = require('./googleCreds');
 
 function getAuth() {
+  // The same loader Sheets uses. This used to read one pair of variables
+  // directly, and production does not have that pair - it holds the whole
+  // service-account JSON in GOOGLE_CREDENTIALS. Two ways of finding one
+  // service account is one way too many, and this was the half that was
+  // looking in the wrong place.
   return new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\n/g, '\n'),
-    },
+    credentials: loadCredentials(),
     scopes: ['https://www.googleapis.com/auth/drive'],
   });
 }

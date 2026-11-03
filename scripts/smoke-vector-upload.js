@@ -210,6 +210,67 @@ const check = (name, ok, extra) => {
   check('V-1 may now be called Proofing Done', (await gate.blockProofing('V-1', false)) === null);
   check('V-2 still may not', typeof (await gate.blockProofing('V-2', false)) === 'string');
 
+  console.log('\nFinding the service account');
+  // Drive used to look for the credentials its own way, reading one pair of
+  // variables directly, while Sheets accepted all three shapes. Production
+  // holds the whole JSON in GOOGLE_CREDENTIALS. One loader now, and these
+  // check it answers for each of the three places the key actually lives.
+  const creds = require(path.join(ROOT, 'utils/googleCreds.js'));
+  const fsq = require('fs');
+  const realExists = fsq.existsSync;
+  const hide = () => { fsq.existsSync = (f) => String(f).endsWith('credentials.json') ? false : realExists(f); };
+  const unhide = () => { fsq.existsSync = realExists; };
+  const keep = {
+    json: process.env.GOOGLE_CREDENTIALS,
+    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    key: process.env.GOOGLE_PRIVATE_KEY,
+  };
+  const FAKE = { client_email: 'probe@iam.gserviceaccount.com', private_key: '-----BEGIN-----\nabc\n-----END-----\n' };
+  try {
+    hide();
+    // The shape production has: the whole JSON on one line, line breaks in
+    // the key written as the two characters backslash and n.
+    process.env.GOOGLE_CREDENTIALS = JSON.stringify(FAKE);
+    delete process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    delete process.env.GOOGLE_PRIVATE_KEY;
+    check('GOOGLE_CREDENTIALS is accepted - this is what production holds',
+      creds.loadCredentials().client_email === FAKE.client_email
+      && creds.credentialSource() === 'GOOGLE_CREDENTIALS');
+
+    // The same JSON after a paste has turned the key's escapes into real
+    // newlines, which is how it usually arrives damaged.
+    process.env.GOOGLE_CREDENTIALS = JSON.stringify(FAKE).replace(/\\n/g, '\n');
+    check('and still accepted when a paste broke the key across lines',
+      creds.loadCredentials().private_key.includes('BEGIN'));
+
+    delete process.env.GOOGLE_CREDENTIALS;
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL = FAKE.client_email;
+    process.env.GOOGLE_PRIVATE_KEY = '-----BEGIN-----\\nabc\\n-----END-----';
+    const pair = creds.loadCredentials();
+    check('the email and key pair is accepted too', pair.client_email === FAKE.client_email);
+    // The bug this replaced: written as a plain \n the replace is a no-op,
+    // the key keeps its literal backslash-n, and Google refuses it as an
+    // invalid PEM - a long way from here, with nothing pointing back.
+    check('and the key\'s \\n escapes become real line breaks',
+      pair.private_key.split('\n').length === 3 && !pair.private_key.includes('\\n'),
+      JSON.stringify(pair.private_key));
+
+    delete process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    delete process.env.GOOGLE_PRIVATE_KEY;
+    let said = '';
+    try { creds.loadCredentials(); } catch (e) { said = e.message; }
+    check('and with none of them, it says which three to set',
+      /GOOGLE_CREDENTIALS/.test(said) && /credentials\.json/.test(said), said);
+  } finally {
+    unhide();
+    process.env.GOOGLE_CREDENTIALS = keep.json || '';
+    if (keep.email) process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL = keep.email;
+    if (keep.key) process.env.GOOGLE_PRIVATE_KEY = keep.key;
+  }
+  check('and Drive asks that one loader rather than the environment itself',
+    /loadCredentials\(\)/.test(fsq.readFileSync(path.join(ROOT, 'utils/drive.js'), 'utf8'))
+    && !/process\.env\.GOOGLE_PRIVATE_KEY/.test(fsq.readFileSync(path.join(ROOT, 'utils/drive.js'), 'utf8')));
+
   console.log('\nWhere it lands in Drive');
   // Getting this wrong means artwork filed in among nine thousand proofs.
   const keepVector = process.env.VECTOR_DRIVE_FOLDER_ID;
