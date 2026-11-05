@@ -46,6 +46,10 @@ const drive = {
   require.cache[p] = {
     id: p, filename: p, loaded: true,
     exports: {
+      // The real ones: these read the environment and have no network in
+      // them, and which folder a file lands in is checked below.
+      vectorFolder: realDrive.vectorFolder,
+      designFolder: realDrive.designFolder,
       uploadToDrive: async () => 'https://drive.test/file',
       startResumableUpload: async ({ fileName, mimeType, size, origin }) => {
         const driveName = Date.now() + '_' + fileName;

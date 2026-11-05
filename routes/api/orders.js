@@ -2,7 +2,11 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
-const { uploadToDrive } = require('../../utils/drive');
+// No uploadToDrive here any more. The design files do not come through this
+// server at all - the browser puts them in Drive itself and sends back a
+// token, which is the only thing a form is trusted to carry. See
+// utils/uploadSession.js.
+const { resolve: resolveUploads, resolveOne } = require('../../utils/uploadSession');
 const { generateOrderId } = require('../../utils/idgen');
 const { rootOrderId } = require('../../utils/remake');
 const { notifyDesignerAssigned } = require('../../utils/notify');
@@ -238,14 +242,14 @@ router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
     // Update Order Status box instead: see PUT /:id/status below.
     const orderId = await generateOrderId();
 
-    // Upload files to Drive
-    let fileLinks = [];
-    if (req.files && req.files.length > 0) {
-      for (const f of req.files) {
-        const url = await uploadToDrive(f.buffer, f.originalname, f.mimetype);
-        fileLinks.push(url);
-      }
-    }
+    // The files are already in Drive by the time this runs - the browser put
+    // them there and sent the tickets. All that is left is to read the URLs
+    // out of the tickets, which is the only place they are trusted from.
+    let fileTokens = [];
+    try { fileTokens = JSON.parse(req.body.fileTokens || '[]'); }
+    catch (e) { fileTokens = []; }
+    const uploaded = await resolveUploads(fileTokens, req.session.user.email || '');
+    const fileLinks = uploaded.map(u => u.url);
     const finalLinks = fileLinks.length > 0 ? fileLinks.join('\n') : 'No Files';
 
     // Fetch dealer email
@@ -332,9 +336,8 @@ router.put('/:id/status', requireLogin, upload.single('file'), async (req, res) 
     let fileUrl = null;
     const newRev = (order.no_of_design_revision || 0) + 1;
 
-    if (req.file) {
-      fileUrl = await uploadToDrive(req.file.buffer, req.file.originalname, req.file.mimetype);
-    }
+    const picked = await resolveOne(req.body.fileToken, req.session.user.email || '');
+    if (picked) fileUrl = picked.url;
 
     // Every design status except Cancelled used to push the CLIENT's field
     // to "Proofing Done" as well - so picking "Fresh Design" quietly claimed
@@ -444,10 +447,8 @@ router.put('/:id/edit', requireLogin, upload.single('file'), async (req, res) =>
     else if (order.overseas_designer) updates.overseas_designer = designerName;
     else updates.india_designer = designerName;
 
-    if (req.file) {
-      const fileUrl = await uploadToDrive(req.file.buffer, req.file.originalname, req.file.mimetype);
-      updates.upload_design_file = fileUrl;
-    }
+    const picked = await resolveOne(req.body.fileToken, req.session.user.email || '');
+    if (picked) updates.upload_design_file = picked.url;
 
     await logOrderUpdate(orderId, updates, req.session.user);
 

@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
-const { uploadToDrive, startResumableUpload, claimUpload } = require('../../utils/drive');
+const { startResumableUpload, claimUpload, vectorFolder } = require('../../utils/drive');
+const { resolveOne } = require('../../utils/uploadSession');
 const crypto = require('crypto');
 const { ARTWORK, MAX_VECTOR_BYTES } = require('../../utils/uploadTypes');
 const { logOrderUpdate, logOrderEvent, logApproval } = require('../../utils/auditlog');
@@ -482,7 +483,11 @@ router.post('/till-approval/:id/vector-session', requireLogin, express.json(), a
     const origin = req.headers.origin
       || (req.headers.host ? (req.protocol === 'http' ? 'http://' : 'https://') + req.headers.host : '');
 
-    const { sessionUrl, driveName } = await startResumableUpload({ fileName, mimeType, size, origin });
+    // Named, not defaulted. Artwork and proofs live in different folders and
+    // the difference used to be invisible from outside this call.
+    const { sessionUrl, driveName } = await startResumableUpload({
+      fileName, mimeType, size, origin, folderId: vectorFolder(),
+    });
 
     const token = crypto.randomBytes(24).toString('hex');
     await db.query(
@@ -524,7 +529,7 @@ router.post('/till-approval/:id/vector-claim', requireLogin, express.json(), asy
 
     let file;
     try {
-      file = await claimUpload(fileId, ticket.drive_name);
+      file = await claimUpload(fileId, ticket.drive_name, vectorFolder());
     } catch (err) {
       // Nothing was filed, so the ticket goes back rather than being burnt on
       // a failure that was not the designer's doing.
@@ -554,16 +559,18 @@ router.post('/till-approval/:id/vector-claim', requireLogin, express.json(), asy
 // PUT /api/dashboards/till-approval/:id
 router.put('/till-approval/:id',
   requireLogin,
-  // Only the approval upload comes through here now. The vector file does
-  // not: it goes browser-to-Drive through the two routes above, because it
-  // is the one file in this app that is routinely larger than a request on
-  // this platform is allowed to be.
+  // Nothing comes through here now. The vector file goes browser-to-Drive
+  // through the two routes above, and so does the approval upload - an .ai
+  // handed in as a final approval is the same sixty megabytes it was when it
+  // was handed in as artwork, and this box used to stop it at four.
+  //
+  // multer stays only to read the ordinary form fields out of the multipart
+  // body; there is no file left for it to hold.
   upload.fields([{ name: 'file', maxCount: 1 }]),
   async (req, res) => {
   try {
     const { approvalStatus, remark, userEmail } = req.body;
     const orderId = req.params.id;
-    const approvalUpload = (req.files && req.files.file && req.files.file[0]) || null;
 
     // Proofing Done cannot be claimed before the artwork exists. The rule
     // lives in utils/vectorGate.js because four routes can write this status
@@ -577,10 +584,9 @@ router.put('/till-approval/:id',
       if (refuse) return res.status(400).json({ success: false, error: refuse });
     }
 
-    let fileUrl = null;
-    if (approvalUpload) {
-      fileUrl = await uploadToDrive(approvalUpload.buffer, approvalUpload.originalname, approvalUpload.mimetype);
-    }
+    // Already in Drive; the form carries the ticket, never the URL.
+    const approvalUpload = await resolveOne(req.body.fileToken, req.session.user.email || '');
+    const fileUrl = approvalUpload ? approvalUpload.url : null;
 
     // Made again, and the last one has already gone out: that is a new job on
     // a new row. The order in front of us is left exactly as it was - its

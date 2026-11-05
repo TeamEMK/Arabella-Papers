@@ -28,6 +28,15 @@ function getDriveClient() {
  */
 const vectorFolder = () => process.env.VECTOR_DRIVE_FOLDER_ID || process.env.DRIVE_FOLDER_ID;
 
+/**
+ * Where everything that is not a vector file goes - proofs, approvals, the
+ * design uploads. It is the folder `uploadToDrive` has always used, named
+ * here so a direct upload lands in the same place as the ones that went
+ * through the server, and a file does not move house because the route it
+ * took changed.
+ */
+const designFolder = () => process.env.DRIVE_FOLDER_ID;
+
 /** Anyone with the link can read it, which is how every file here is shared. */
 async function shareWithAnyone(drive, fileId) {
   await drive.permissions.create({
@@ -104,13 +113,16 @@ const RESUMABLE = 'https://www.googleapis.com/upload/drive/v3/files'
  * @param {object} o {fileName, mimeType, size, origin}
  * @returns {Promise<{sessionUrl: string, driveName: string}>}
  */
-async function startResumableUpload({ fileName, mimeType, size, origin }) {
+async function startResumableUpload({ fileName, mimeType, size, origin, folderId: wantFolder }) {
   const auth = getAuth();
   const client = await auth.getClient();
   const { token } = await client.getAccessToken();
   if (!token) throw new Error('Google would not issue an access token.');
 
-  const folderId = vectorFolder();
+  // The caller names the folder; a vector file and a proof do not live in
+  // the same one. Undefined rather than empty means "not said", so an
+  // explicit choice is never mistaken for the default.
+  const folderId = wantFolder === undefined ? vectorFolder() : wantFolder;
   // The name is ours, not theirs, and it is how the finished file is
   // recognised when the browser comes back to say it is done - see
   // claimUpload. A name we invented and nobody else knows cannot be guessed
@@ -153,9 +165,9 @@ async function startResumableUpload({ fileName, mimeType, size, origin }) {
  *
  * @returns {Promise<{url: string, name: string, size: number}>}
  */
-async function claimUpload(fileId, expectedName) {
+async function claimUpload(fileId, expectedName, wantFolder) {
   const drive = getDriveClient();
-  const folderId = vectorFolder();
+  const folderId = wantFolder === undefined ? vectorFolder() : wantFolder;
 
   const { data } = await drive.files.get({
     fileId,
@@ -185,4 +197,4 @@ async function claimUpload(fileId, expectedName) {
   return { url: linkFor(data), name: data.name, size: Number(data.size || 0) };
 }
 
-module.exports = { uploadToDrive, startResumableUpload, claimUpload, vectorFolder };
+module.exports = { uploadToDrive, startResumableUpload, claimUpload, vectorFolder, designFolder };

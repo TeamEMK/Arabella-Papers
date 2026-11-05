@@ -137,6 +137,35 @@ CREATE TABLE IF NOT EXISTS vector_upload_tickets (
 );
 
 -- =============================================
+-- DESIGN UPLOAD TICKETS
+-- The vector box's trick, for every other design file box. One row per file
+-- a browser is uploading straight to Drive: opened when the upload starts,
+-- given its URL when the bytes land, and spent when a form names it.
+--
+-- No order_id. A ticket is opened before the form is saved - on a NEW order
+-- there is no number yet - so what it is attached to is decided later, by
+-- whichever form sends the token back.
+-- =============================================
+CREATE TABLE IF NOT EXISTS design_upload_tickets (
+  token CHAR(48) NOT NULL PRIMARY KEY,
+  -- The name we gave Drive, which the browser never sees. An id is a claim;
+  -- this is what proves the claim.
+  drive_name VARCHAR(300) NOT NULL,
+  -- The name the designer sees.
+  file_name VARCHAR(255) NOT NULL,
+  -- Filled in once the file is actually in Drive. NULL means the upload was
+  -- opened and never finished.
+  file_url VARCHAR(500) DEFAULT NULL,
+  requested_by VARCHAR(150) DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  used_at DATETIME DEFAULT NULL,
+  -- Set when a form has attached it, so one upload cannot be filed twice by
+  -- pressing Save twice.
+  filed_at DATETIME DEFAULT NULL,
+  INDEX idx_dut_created (created_at)
+);
+
+-- =============================================
 -- ORDER LOGS TABLE
 -- Who changed what on an order, and when. One row per field that actually
 -- changed, so a saved-but-untouched form leaves nothing behind.
