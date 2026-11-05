@@ -753,6 +753,15 @@ CREATE TABLE IF NOT EXISTS cc_prospects (
   -- "Store" or "Online only". 359 of them have no shop to walk into.
   store_type VARCHAR(40) DEFAULT NULL,
   notes TEXT,
+  -- What the office has decided about this shop. Deliberately NULL to start:
+  -- nobody has looked at 7,041 of these, and seeding them all "Active" would
+  -- be the app inventing an opinion it does not have. Blank reads as "not
+  -- looked at yet", which is the truth.
+  status VARCHAR(20) DEFAULT NULL,
+  -- Whatever the person working the list needs to remember about it.
+  remark TEXT,
+  status_updated_by VARCHAR(150) DEFAULT '',
+  status_updated_at DATETIME DEFAULT NULL,
   -- The row it came from in the workbook, so a question about one can be
   -- traced back to the sheet.
   source_row INT DEFAULT NULL,

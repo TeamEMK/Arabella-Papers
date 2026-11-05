@@ -104,7 +104,11 @@ const check = (name, ok, extra) => {
   check('the floor is not offered the tab',
     !defaultSectionIds('India Designer', '').includes('prospects'));
   check('nor dispatch', !defaultSectionIds('Production & Dispatch', '').includes('prospects'));
-  check('a head of department is', defaultSectionIds('Accounts', 'Head').includes('prospects'));
+  // Not a head of department either, since the office asked for the whole
+  // ASMP group to be SuperAdmin's. Access Control can still grant it to a
+  // named person; the rule is the floor, not the ceiling.
+  check('nor a head of department', !defaultSectionIds('Accounts', 'Head').includes('prospects'));
+  check('a SuperAdmin is', defaultSectionIds('SuperAdmin', 'Head').includes('prospects'));
 
   console.log('\nThe list');
   let j = await get('/api/prospects');

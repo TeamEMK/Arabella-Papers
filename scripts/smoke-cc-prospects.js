@@ -184,6 +184,96 @@ const check = (name, ok, extra) => {
   check('online only', (await get('/api/cc-prospects?type=online')).total === 1);
   check('somewhere to walk into', (await get('/api/cc-prospects?type=store')).total === 5);
 
+  // ── WORKING THE LIST ──
+  //
+  // Status and remark are the only two things this screen may write. The rest
+  // of the row came out of the source workbook and is traceable back to it by
+  // source_row, so letting the screen edit a retailer's own name or address
+  // would quietly break that trace - and nothing on the page offers to.
+  console.log('\nMarking a shop');
+  const put = async (url, body) => {
+    const r = await go(url, {
+      method: 'PUT',
+      headers: { cookie: jar, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return { status: r.status, json: await r.json().catch(() => null) };
+  };
+  const [[one]] = await db.query("SELECT id FROM cc_prospects ORDER BY id LIMIT 1");
+  const read = async (id) => (await db.query(
+    'SELECT status, remark, status_updated_by FROM cc_prospects WHERE id = ?', [id]))[0][0];
+
+  check('nothing starts with a status - nobody has looked at them',
+    (await db.query("SELECT COUNT(*) n FROM cc_prospects WHERE IFNULL(status,'') <> ''"))[0][0].n === 0);
+
+  let w = await put('/api/cc-prospects/' + one.id, { status: 'active', remark: 'Rang them, call back Tuesday.' });
+  check('it saves', w.json && w.json.success === true, w.json);
+  let row = await read(one.id);
+  check('the status is on the row', row.status === 'active', row.status);
+  check('and the remark', /call back Tuesday/.test(row.remark || ''), row.remark);
+  check('and who did it', row.status_updated_by === process.env.ADMIN_EMAIL, row.status_updated_by);
+
+  w = await put('/api/cc-prospects/' + one.id, { status: 'Maybe', remark: 'x' });
+  check('a status nobody agreed to is refused', w.json && w.json.success === false, w.json);
+  check('and the row is left as it was', (await read(one.id)).status === 'active');
+
+  w = await put('/api/cc-prospects/' + one.id, { status: '', remark: 'Rang them, call back Tuesday.' });
+  check('clearing it is allowed, so a mis-click is not permanent',
+    w.json.success === true && (await read(one.id)).status === null);
+
+  w = await put('/api/cc-prospects/999999', { status: 'active' });
+  check('a row that does not exist is a 404', w.status === 404, w.status);
+
+  console.log('\nMarking a batch');
+  const [all] = await db.query('SELECT id FROM cc_prospects ORDER BY id');
+  const half = all.slice(0, 3).map(r => r.id);
+  await put('/api/cc-prospects/' + half[0], { status: 'active', remark: 'keep me' });
+  w = await put('/api/cc-prospects/bulk/status', { ids: half, status: 'inactive' });
+  check('three at once', w.json && w.json.success === true && w.json.changed === 3, w.json);
+  check('all three carry it',
+    (await db.query("SELECT COUNT(*) n FROM cc_prospects WHERE status = 'inactive'"))[0][0].n === 3);
+  // One note is about one shop. Writing the same sentence onto two hundred
+  // rows would destroy whatever each of them already said.
+  check('and the remarks are untouched', (await read(half[0])).remark === 'keep me');
+  check('the rest of the list is untouched',
+    (await db.query("SELECT COUNT(*) n FROM cc_prospects WHERE IFNULL(status,'') = ''"))[0][0].n
+      === all.length - 3);
+
+  w = await put('/api/cc-prospects/bulk/status', { ids: [], status: 'active' });
+  check('an empty selection is refused rather than rewriting everything',
+    w.json && w.json.success === false, w.json);
+  w = await put('/api/cc-prospects/bulk/status', { ids: half, status: 'nonsense' });
+  check('and so is a status nobody agreed to', w.json && w.json.success === false, w.json);
+
+  console.log('\nFinding them again');
+  check('by inactive', (await get('/api/cc-prospects?status=inactive')).total === 3);
+  check('by active', (await get('/api/cc-prospects?status=active')).total === 0);
+  // The useful one on a list of seven thousand: the pile nobody has been
+  // through yet.
+  check('and the ones nobody has touched',
+    (await get('/api/cc-prospects?status=none')).total === all.length - 3);
+  check('the list carries the status and the remark',
+    (await get('/api/cc-prospects?status=inactive')).rows.every(r => 'status' in r && 'remark' in r));
+
+  console.log('\nThe screen');
+  const view = require('fs').readFileSync(path.join(ROOT, 'views/views/ccProspects.ejs'), 'utf8');
+  check('the "by state" subtitle is gone', !/Carlson Craft retailers, by state/.test(view));
+  check('Status and Remark are columns', />Status</.test(view) && />Remark</.test(view));
+  check('there is a way to edit one', /cc_edit\(/.test(view) && /cc_saveEdit/.test(view));
+  check('and a way to do a batch', /cc_bulk\(/.test(view) && /bulk\/status/.test(view));
+  check('selection survives the list being refetched, because it is held by id',
+    /PICKS = new Set\(\)/.test(view) && /PICKS\.has\(r\.id\)/.test(view));
+  check('the export carries the office\'s own work, not just the source file',
+    /'Status', 'Remark'/.test(view));
+  // Ten columns now, so the pen sits off the right-hand edge until somebody
+  // scrolls to it. The row opens the editor too - and a click on a phone
+  // number, an email or the tick box still means that thing.
+  check('the row itself opens the editor, because the pen is off-screen',
+    view.includes("getElementById('cc_body').addEventListener('click'")
+    && view.includes("closest('tr.cc-row')"));
+  check('and a link or a tick box inside it is left alone',
+    view.includes("closest('a, button, input, label')"));
+
   console.log('\nIt is a separate list');
   // `prospects` is the office's own 930, worked for years. Mixing the two
   // would lose which is which.

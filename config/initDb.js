@@ -58,6 +58,13 @@ const COLUMN_MIGRATIONS = [
   { table: 'pricing_quotes', column: 'source', type: "VARCHAR(20) DEFAULT 'internal'" },
   { table: 'pricing_quotes', column: 'customer_email', type: 'VARCHAR(255) DEFAULT NULL' },
   { table: 'pricing_quotes', column: 'rush_fee_amount', type: 'DECIMAL(18,2) DEFAULT 0' },
+  // The office works the Carlson Craft list by marking shops active or
+  // inactive and writing a note on them. The table was imported before any of
+  // that was asked for, so it arrives this way.
+  { table: 'cc_prospects', column: 'status', type: 'VARCHAR(20) DEFAULT NULL' },
+  { table: 'cc_prospects', column: 'remark', type: 'TEXT' },
+  { table: 'cc_prospects', column: 'status_updated_by', type: "VARCHAR(150) DEFAULT ''" },
+  { table: 'cc_prospects', column: 'status_updated_at', type: 'DATETIME DEFAULT NULL' },
   { table: 'orders', column: 'printing_type', type: 'VARCHAR(60)' },
   { table: 'orders', column: 'production_archived_at', type: 'DATETIME NULL' },
   // Which production board this order is pinned to, overriding the cutoff

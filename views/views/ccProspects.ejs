@@ -14,7 +14,6 @@
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
     <h4 class="mb-0 fw-bold">
       <i class="fas fa-store me-2 text-primary"></i>CC Prospects
-      <span class="text-muted fw-normal fs-6 ms-2">Carlson Craft retailers, by state</span>
     </h4>
     <button class="btn btn-sm btn-outline-dark" onclick="cc_boot()">
       <i class="fas fa-sync-alt me-1"></i>Refresh
@@ -61,25 +60,85 @@
             <option value="store">A shop</option>
             <option value="online">Online only</option>
           </select>
+          <%# "Not set yet" is the useful one on a list this long: it is the
+              pile nobody has been through. %>
+          <select id="cc_status" class="form-select form-select-sm" style="max-width:160px" onchange="cc_list()">
+            <option value="">Any status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="none">Not set yet</option>
+          </select>
           <button class="btn btn-sm btn-outline-success" onclick="cc_excel(this)">
             <i class="fas fa-file-excel me-1"></i>Excel
           </button>
         </div>
       </div>
+      <%# Only ever on screen when something is ticked. A bar that is always
+          there is a bar people stop reading. %>
+      <div class="alert alert-primary py-2 px-3 d-none align-items-center gap-2 flex-wrap" id="cc_bulkBar">
+        <span><b id="cc_bulkCount">0</b> selected</span>
+        <span class="text-muted small">set the status on all of them:</span>
+        <button class="btn btn-sm btn-success" onclick="cc_bulk('active', this)">Active</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="cc_bulk('inactive', this)">Inactive</button>
+        <button class="btn btn-sm btn-outline-dark" onclick="cc_bulk('', this)">Clear it</button>
+        <button class="btn btn-sm btn-link text-decoration-none ms-auto" onclick="cc_pickNone()">Unselect</button>
+      </div>
       <div class="table-responsive" style="max-height:58vh;overflow:auto;">
         <table class="table table-hover table-striped mb-0 text-nowrap align-middle">
           <thead class="table-dark">
             <tr>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;width:2.2rem;">
+                <input type="checkbox" class="form-check-input" id="cc_all" onchange="cc_pickAll(this)"
+                       title="Select everything listed">
+              </th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Retailer</th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">City</th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Region</th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Phone</th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Email</th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Kind</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Status</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Remark</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;width:3rem;"></th>
             </tr>
           </thead>
           <tbody id="cc_body"></tbody>
         </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%# Only the two fields this screen may write. The rest of the row came out of
+    the source workbook and is traceable back to it, so it is shown here to
+    say WHICH shop is being edited, and shown as text. %>
+<div class="modal fade" id="cc_editModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-store me-2"></i><span id="cc_editName"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="text-muted small mb-3" id="cc_editWhere"></div>
+        <div class="mb-3">
+          <label class="form-label fw-bold">Status</label>
+          <select class="form-select" id="cc_editStatus">
+            <option value="">Not set yet</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+        <div class="mb-1">
+          <label class="form-label fw-bold">Remark</label>
+          <textarea class="form-control" id="cc_editRemark" rows="4"
+                    placeholder="Whatever is worth remembering about this one."></textarea>
+        </div>
+        <div class="form-text" id="cc_editWho"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="cc_saveEdit(this)">Save</button>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
       </div>
     </div>
   </div>
@@ -103,6 +162,9 @@
   .cc-tile { cursor:pointer; transition:.12s; }
   .cc-tile:hover { transform:translateY(-1px); box-shadow:0 .35rem .8rem rgba(0,0,0,.12) !important; }
   .cc-tile:focus-visible { outline:2px solid #0d6efd; outline-offset:2px; }
+  /* The row opens the one editor this screen has, so it has to look as
+     though it can be pressed. */
+  .cc-row { cursor:pointer; }
 </style>
 
 <script>
@@ -246,13 +308,14 @@
       q: document.getElementById('cc_q').value,
       has: document.getElementById('cc_has').value,
       type: document.getElementById('cc_type').value,
+      status: document.getElementById('cc_status').value,
       limit: 2000,
     });
     var body = document.getElementById('cc_body');
-    body.innerHTML = '<tr><td colspan="6" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading…</td></tr>';
+    body.innerHTML = '<tr><td colspan="10" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading…</td></tr>';
     try {
       var j = await (await fetch('/api/cc-prospects?' + p)).json();
-      if (!j.success) { body.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-danger">' + esc(j.error) + '</td></tr>'; return; }
+      if (!j.success) { body.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">' + esc(j.error) + '</td></tr>'; return; }
       ROWS = j.rows;
       // Named by what is actually being looked at, so somebody who clicked a
       // tile does not read it as the whole list.
@@ -263,16 +326,25 @@
       if (document.getElementById('cc_has').value === 'neither') narrowed.push('with neither');
       if (document.getElementById('cc_type').value === 'online') narrowed.push('online only');
       if (document.getElementById('cc_type').value === 'store') narrowed.push('shops');
+      var st = document.getElementById('cc_status').value;
+      if (st === 'active') narrowed.push('marked active');
+      if (st === 'inactive') narrowed.push('marked inactive');
+      if (st === 'none') narrowed.push('with no status yet');
       document.getElementById('cc_detailTitle').textContent =
         scope + (narrowed.length ? ', ' + narrowed.join(' and ') : '')
         + ' — ' + (j.shown < j.total
           ? ('showing ' + n(j.shown) + ' of ' + n(j.total))
           : (n(j.total) + ' retailer' + (j.total === 1 ? '' : 's')));
-      if (!ROWS.length) { body.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">Nobody matches.</td></tr>'; return; }
+      if (!ROWS.length) { body.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">Nobody matches.</td></tr>'; return; }
 
-      body.innerHTML = ROWS.map(function (r) {
+      body.innerHTML = ROWS.map(function (r, i) {
         var where = [r.address, r.suite].filter(Boolean).join(', ');
-        return '<tr>'
+        // The row opens the editor as well as the pen does. There are ten
+        // columns now and the pen is off the right-hand edge until somebody
+        // scrolls to it, which is not somewhere a button should hide.
+        return '<tr class="cc-row" data-i="' + i + '">'
+          + '<td><input type="checkbox" class="form-check-input cc-pick" value="' + r.id
+            + '" ' + (PICKS.has(r.id) ? 'checked' : '') + ' onchange="cc_pick(' + r.id + ', this.checked)"></td>'
           + '<td class="fw-bold">' + esc(r.retailer)
             + (where ? '<div class="small text-muted fw-normal">' + esc(where) + '</div>' : '')
           + '</td>'
@@ -288,19 +360,148 @@
           + '<td class="small">' + (/online/i.test(r.store_type || '')
               ? '<span class="badge bg-warning text-dark">Online only</span>'
               : '<span class="text-muted">Shop</span>') + '</td>'
+          + '<td class="small">' + cc_statusBadge(r.status) + '</td>'
+          // Long notes are cut here rather than left to stretch the row off
+          // the side of the screen; the whole of it is in the edit box.
+          + '<td class="small" style="max-width:18rem;white-space:normal;">'
+            + (r.remark
+                ? esc(String(r.remark).length > 120 ? String(r.remark).slice(0, 120) + '…' : r.remark)
+                : '<span class="text-muted">—</span>') + '</td>'
+          + '<td><button class="btn btn-sm btn-outline-primary" onclick="cc_edit(' + i + ')"'
+            + ' title="Status and remark"><i class="fas fa-pen"></i></button></td>'
           + '</tr>';
       }).join('');
+      cc_syncBar();
     } catch (e) {
-      body.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-danger">Server error.</td></tr>';
+      body.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">Server error.</td></tr>';
     }
   };
 
+  // ── Status, selection, editing ──
+
+  function cc_statusBadge(v) {
+    var st = String(v || '').toLowerCase();
+    if (st === 'active') return '<span class="badge bg-success">Active</span>';
+    if (st === 'inactive') return '<span class="badge bg-secondary">Inactive</span>';
+    return '<span class="text-muted">—</span>';
+  }
+
+  // Kept by id rather than by row number, so a tick survives the list being
+  // re-fetched - which it is, on every keystroke in the search box.
+  var PICKS = new Set();
+
+  window.cc_pick = function (id, on) {
+    if (on) PICKS.add(id); else PICKS.delete(id);
+    cc_syncBar();
+  };
+  window.cc_pickAll = function (box) {
+    ROWS.forEach(function (r) { if (box.checked) PICKS.add(r.id); else PICKS.delete(r.id); });
+    document.querySelectorAll('.cc-pick').forEach(function (el) { el.checked = box.checked; });
+    cc_syncBar();
+  };
+  window.cc_pickNone = function () {
+    PICKS.clear();
+    document.querySelectorAll('.cc-pick').forEach(function (el) { el.checked = false; });
+    var all = document.getElementById('cc_all');
+    if (all) { all.checked = false; all.indeterminate = false; }
+    cc_syncBar();
+  };
+
+  function cc_syncBar() {
+    var bar = document.getElementById('cc_bulkBar');
+    document.getElementById('cc_bulkCount').textContent = PICKS.size;
+    bar.classList.toggle('d-none', PICKS.size === 0);
+    bar.classList.toggle('d-flex', PICKS.size > 0);
+    // The header tick says something about the rows ON SCREEN, which is not
+    // the same as the selection - somebody can tick a state, then filter to
+    // another. Half-ticked says that without having to explain it.
+    var all = document.getElementById('cc_all');
+    if (!all) return;
+    var here = ROWS.filter(function (r) { return PICKS.has(r.id); }).length;
+    all.checked = ROWS.length > 0 && here === ROWS.length;
+    all.indeterminate = here > 0 && here < ROWS.length;
+  }
+
+  window.cc_bulk = async function (status, btn) {
+    if (!PICKS.size) return;
+    var what = status ? ('mark ' + PICKS.size + ' as ' + status) : ('clear the status on ' + PICKS.size);
+    if (!window.confirm('This will ' + what + '. The remarks are left alone.')) return;
+    var old = btn.innerHTML;
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      var j = await (await fetch('/api/cc-prospects/bulk/status', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...PICKS], status: status }),
+      })).json();
+      if (!j.success) throw new Error(j.error || 'Could not save them.');
+      PICKS.clear();
+      await cc_list();
+      cc_boot();
+      if (window.showToast) showToast('success', j.changed + ' updated.');
+    } catch (e) {
+      if (window.showToast) showToast('error', e.message); else alert(e.message);
+    }
+    btn.disabled = false; btn.innerHTML = old;
+  };
+
+  // One listener on the table rather than an onclick per row: the body is
+  // rewritten on every keystroke in the search box, and handlers attached to
+  // rows would be attached again each time.
+  document.getElementById('cc_body').addEventListener('click', function (e) {
+    // A phone number, an email, the tick box and the pen all mean their own
+    // thing. Only the empty parts of the row mean "open this one".
+    if (e.target.closest('a, button, input, label')) return;
+    var tr = e.target.closest('tr.cc-row');
+    if (tr) cc_edit(Number(tr.dataset.i));
+  });
+
+  var EDITING = null;
+
+  window.cc_edit = function (i) {
+    EDITING = ROWS[i];
+    if (!EDITING) return;
+    document.getElementById('cc_editName').textContent = EDITING.retailer;
+    document.getElementById('cc_editWhere').textContent =
+      [EDITING.city, EDITING.state, EDITING.region].filter(Boolean).join(' · ');
+    document.getElementById('cc_editStatus').value = String(EDITING.status || '').toLowerCase();
+    document.getElementById('cc_editRemark').value = EDITING.remark || '';
+    document.getElementById('cc_editWho').textContent = EDITING.status_updated_by
+      ? ('Last changed by ' + EDITING.status_updated_by) : '';
+    new bootstrap.Modal(document.getElementById('cc_editModal')).show();
+  };
+
+  window.cc_saveEdit = async function (btn) {
+    if (!EDITING) return;
+    var old = btn.innerHTML;
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      var j = await (await fetch('/api/cc-prospects/' + EDITING.id, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: document.getElementById('cc_editStatus').value,
+          remark: document.getElementById('cc_editRemark').value,
+        }),
+      })).json();
+      if (!j.success) throw new Error(j.error || 'Could not save it.');
+      bootstrap.Modal.getInstance(document.getElementById('cc_editModal')).hide();
+      await cc_list();
+      if (window.showToast) showToast('success', 'Saved.');
+    } catch (e) {
+      if (window.showToast) showToast('error', e.message); else alert(e.message);
+    }
+    btn.disabled = false; btn.innerHTML = old;
+  };
+
   window.cc_excel = function (btn) {
+    // Status and Remark go in too: they are the office's own work on this
+    // list, and an export that leaves them out is a copy of the source file
+    // rather than a copy of what anybody has done with it.
     var cols = ['Retailer', 'State', 'Region', 'City', 'Address', 'Suite', 'ZIP',
-                'Phone', 'Email', 'Website', 'Kind', 'Notes'];
+                'Phone', 'Email', 'Website', 'Kind', 'Status', 'Remark', 'Notes'];
     var rows = ROWS.map(function (r) {
       return [r.retailer, r.state, r.region, r.city, r.address, r.suite, r.zip,
-              r.phone, r.email, r.website, r.store_type, r.notes];
+              r.phone, r.email, r.website, r.store_type,
+              r.status || '', r.remark || '', r.notes];
     });
     downloadXlsx('CC Prospects' + (PICKED ? ' - ' + PICKED : ''), cols, rows, btn);
   };
