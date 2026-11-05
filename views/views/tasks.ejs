@@ -1,0 +1,238 @@
+<%# Delegation + Checklist (modules/tasks). Everything on this page is drawn by
+    public/js/tasks-module.js from /api/tasks and friends; the markup here is
+    the frame and the pop-ups. A SuperAdmin manages every task; everyone else
+    sees their own and the ones they gave out. %>
+<style>
+  .tk-prio { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; text-transform: capitalize; }
+  .tk-prio-low { background: #dcfce7; color: #166534; }
+  .tk-prio-medium { background: #fef9c3; color: #854d0e; }
+  .tk-prio-high { background: #ffedd5; color: #9a3412; }
+  .tk-prio-urgent { background: #fee2e2; color: #991b1b; }
+  #tk_root .tk-overdue { color: #dc2626; font-weight: 700; }
+  .tk-desc { max-width: 420px; white-space: pre-wrap; word-break: break-word; }
+  #tk_root .tk-actions .btn { padding: 2px 7px; font-size: 12px; }
+  #tk_root .tk-group-head { background: #f1f5f9; font-weight: 700; cursor: pointer; }
+  .tk-cmt { border-bottom: 1px solid #eef2f7; padding: 8px 0; }
+  .tk-cmt:last-child { border-bottom: 0; }
+</style>
+
+<div class="container-fluid py-4" id="tk_root">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h3 class="mb-0 text-dark fw-bold"><i class="fas fa-list-check me-2"></i>Tasks</h3>
+      <div class="text-muted small">Delegation and checklist tasks — give work, track it, mark it done.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-primary smooth-ui fw-bold" onclick="TaskModule.openDelegate()"><i class="fas fa-plus me-1"></i> Delegate</button>
+      <button class="btn btn-success smooth-ui fw-bold" onclick="TaskModule.openChecklist()"><i class="fas fa-repeat me-1"></i> Checklist</button>
+      <button class="btn btn-outline-dark smooth-ui fw-bold" onclick="TaskModule.openApprovals()"><i class="fas fa-circle-check me-1"></i> Approvals <span class="badge bg-danger" id="tk_apprBadge" style="display:none"></span></button>
+      <button class="btn btn-outline-dark smooth-ui fw-bold" onclick="TaskModule.openTransfers()"><i class="fas fa-right-left me-1"></i> Transfers <span class="badge bg-danger" id="tk_trBadge" style="display:none"></span></button>
+      <button class="btn btn-outline-dark smooth-ui fw-bold" id="tk_holBtn" style="display:none" onclick="TaskModule.openHolidays()"><i class="fas fa-umbrella-beach me-1"></i> Holidays</button>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold" onclick="TaskModule.load()"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+    </div>
+  </div>
+
+  <ul class="nav nav-tabs mb-3" id="tk_tabs">
+    <li class="nav-item"><button class="nav-link active" data-tab="delegation" onclick="TaskModule.setTab('delegation', this)">Delegation</button></li>
+    <li class="nav-item"><button class="nav-link" data-tab="checklist" onclick="TaskModule.setTab('checklist', this)">Checklist</button></li>
+    <li class="nav-item"><button class="nav-link" data-tab="mine" onclick="TaskModule.setTab('mine', this)">Given by Me</button></li>
+    <li class="nav-item" id="tk_tabAwaitWrap" style="display:none"><button class="nav-link" data-tab="awaiting" onclick="TaskModule.setTab('awaiting', this)">Awaiting Date</button></li>
+  </ul>
+
+  <div class="card bg-light-glass mb-3 shadow-sm">
+    <div class="card-body p-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-3"><label class="form-label text-dark fw-bold small mb-0">Search</label>
+          <input type="text" id="tk_search" class="form-control form-control-sm" placeholder="Task, person…" oninput="TaskModule.render()"></div>
+        <div class="col-6 col-md-2" id="tk_personWrap" style="display:none"><label class="form-label text-dark fw-bold small mb-0">Person</label>
+          <select id="tk_person" class="form-select form-select-sm" onchange="TaskModule.render()"><option value="">Everyone</option></select></div>
+        <div class="col-12 col-md-4"><label class="form-label text-dark fw-bold small mb-0">Status</label>
+          <div class="btn-group w-100" role="group" id="tk_statusPills">
+            <button class="btn btn-sm btn-outline-warning active" data-status="pending" onclick="TaskModule.setStatus('pending', this)">Pending</button>
+            <button class="btn btn-sm btn-outline-primary" data-status="upcoming" onclick="TaskModule.setStatus('upcoming', this)">Upcoming</button>
+            <button class="btn btn-sm btn-outline-success" data-status="completed" onclick="TaskModule.setStatus('completed', this)">Completed</button>
+            <button class="btn btn-sm btn-outline-secondary" data-status="all" onclick="TaskModule.setStatus('all', this)">All</button>
+          </div></div>
+        <div class="col-6 col-md-1"><label class="form-label text-dark fw-bold small mb-0">From</label><input type="date" id="tk_from" class="form-control form-control-sm" onchange="TaskModule.load()"></div>
+        <div class="col-6 col-md-1"><label class="form-label text-dark fw-bold small mb-0">To</label><input type="date" id="tk_to" class="form-control form-control-sm" onchange="TaskModule.load()"></div>
+        <div class="col-6 col-md-1 text-end"><button class="btn btn-secondary btn-sm w-100" onclick="TaskModule.clearFilters()">Clear</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tk_list"><div class="text-center py-5 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Loading...</div></div>
+</div>
+
+<!-- Delegate: one task to one person, with a date (or the doer picks it). -->
+<div class="modal fade" id="tk_delegateModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-primary text-white"><h5 class="modal-title"><i class="fas fa-plus me-2"></i>Delegate Task</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-danger py-2" id="tk_dErr" style="display:none"></div>
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label fw-bold small">Doer (assign to) *</label><select class="form-select" id="tk_dDoer"></select></div>
+        <div class="col-md-3"><label class="form-label fw-bold small">Priority</label>
+          <select class="form-select" id="tk_dPriority"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+        <div class="col-md-3"><label class="form-label fw-bold small">Approval to close</label>
+          <select class="form-select" id="tk_dApproval"><option value="no">Not needed</option><option value="yes">Needed (from me)</option></select></div>
+        <div class="col-md-6"><label class="form-label fw-bold small">Due date *</label><input type="date" class="form-control" id="tk_dDate">
+          <div class="form-check mt-1"><input class="form-check-input" type="checkbox" id="tk_dDoerSets" onchange="TaskModule.doerSetsChange()"><label class="form-check-label small" for="tk_dDoerSets">Doer sets the due date</label></div></div>
+        <div class="col-md-6"><label class="form-label fw-bold small">Link (optional)</label><input type="url" class="form-control" id="tk_dUrl" placeholder="https://…"></div>
+        <div class="col-12"><label class="form-label fw-bold small">Task *</label><textarea class="form-control" id="tk_dDesc" rows="3" placeholder="What needs to be done"></textarea></div>
+        <div class="col-12"><label class="form-label fw-bold small">Remarks</label><input type="text" class="form-control" id="tk_dRemarks" placeholder="Any notes"></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-primary fw-bold" id="tk_dSave" onclick="TaskModule.saveDelegate()">Assign</button></div>
+  </div></div>
+</div>
+
+<!-- Checklist: the same task on a schedule; every date is created up front. -->
+<div class="modal fade" id="tk_checklistModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-success text-white"><h5 class="modal-title"><i class="fas fa-repeat me-2"></i>Add Checklist Task</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-danger py-2" id="tk_cErr" style="display:none"></div>
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label fw-bold small">Doer *</label><select class="form-select" id="tk_cDoer" onchange="TaskModule.checklistPreview()"></select></div>
+        <div class="col-md-6"><label class="form-label fw-bold small">Frequency</label>
+          <select class="form-select" id="tk_cFreq" onchange="TaskModule.checklistPreview()">
+            <option value="daily">Daily</option><option value="weekly">Weekly</option><option value="alternative_week">Alternate week</option>
+            <option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select></div>
+        <div class="col-md-6"><label class="form-label fw-bold small">Start date *</label><input type="date" class="form-control" id="tk_cStart" onchange="TaskModule.checklistPreview()"></div>
+        <div class="col-md-6"><label class="form-label fw-bold small">End date (optional)</label><input type="date" class="form-control" id="tk_cEnd" onchange="TaskModule.checklistPreview()"></div>
+        <div class="col-12"><label class="form-label fw-bold small">Task *</label><input type="text" class="form-control" id="tk_cDesc" placeholder="e.g. Clean the press" oninput="TaskModule.checklistPreview()"></div>
+        <div class="col-12"><label class="form-label fw-bold small">Remarks</label><input type="text" class="form-control" id="tk_cRemarks"></div>
+        <div class="col-12"><div class="alert alert-light border small mb-0" id="tk_cPreview" style="display:none"></div></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-success fw-bold" id="tk_cSave" onclick="TaskModule.saveChecklist()">Generate Tasks</button></div>
+  </div></div>
+</div>
+
+<!-- Edit a task (the person who gave it, or a SuperAdmin). -->
+<div class="modal fade" id="tk_editModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-primary text-white"><h5 class="modal-title"><i class="fas fa-pen me-2"></i>Edit Task</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-danger py-2" id="tk_eErr" style="display:none"></div>
+      <div class="mb-2"><label class="form-label fw-bold small">Task</label><textarea class="form-control" id="tk_eDesc" rows="3"></textarea></div>
+      <div class="row g-2">
+        <div class="col-6"><label class="form-label fw-bold small">Due date</label><input type="date" class="form-control" id="tk_eDate"></div>
+        <div class="col-6 tk-deleg-only"><label class="form-label fw-bold small">Due time</label><input type="time" class="form-control" id="tk_eTime"></div>
+        <div class="col-6 tk-deleg-only"><label class="form-label fw-bold small">Priority</label>
+          <select class="form-select" id="tk_ePriority"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+        <div class="col-6 tk-deleg-only"><label class="form-label fw-bold small">Approval to close</label>
+          <select class="form-select" id="tk_eApproval"><option value="no">Not needed</option><option value="yes">Needed</option></select></div>
+        <div class="col-12"><label class="form-label fw-bold small">Remarks</label><input type="text" class="form-control" id="tk_eRemarks"></div>
+        <div class="col-12 tk-deleg-only"><label class="form-label fw-bold small">Link</label><input type="url" class="form-control" id="tk_eUrl"></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-primary fw-bold" onclick="TaskModule.saveEdit()">Save Changes</button></div>
+  </div></div>
+</div>
+
+<!-- Ask for a new due date; the person who gave the task approves it. -->
+<div class="modal fade" id="tk_reviseModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-warning"><h5 class="modal-title"><i class="fas fa-calendar-plus me-2"></i>Request a New Date</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-danger py-2" id="tk_rErr" style="display:none"></div>
+      <div class="mb-2"><label class="form-label fw-bold small">New due date *</label><input type="date" class="form-control" id="tk_rDate"></div>
+      <div><label class="form-label fw-bold small">Reason *</label><textarea class="form-control" id="tk_rReason" rows="3"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-warning fw-bold" onclick="TaskModule.saveRevise()">Send Request</button></div>
+  </div></div>
+</div>
+
+<!-- The doer sets the date on a "doer sets the due date" task, or says why not yet. -->
+<div class="modal fade" id="tk_dueModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-primary text-white"><h5 class="modal-title"><i class="fas fa-calendar-day me-2"></i>Set Due Date</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-danger py-2" id="tk_sErr" style="display:none"></div>
+      <div class="mb-2"><label class="form-label fw-bold small">Due date</label><input type="date" class="form-control" id="tk_sDate"></div>
+      <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="tk_sNoDate" onchange="TaskModule.noDateChange()"><label class="form-check-label small" for="tk_sNoDate">I can't set a date yet</label></div>
+      <div id="tk_sReasonWrap" style="display:none"><label class="form-label fw-bold small">Reason</label><textarea class="form-control" id="tk_sReason" rows="2" placeholder="Why a date can't be set yet"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-primary fw-bold" onclick="TaskModule.saveDue()">Save</button></div>
+  </div></div>
+</div>
+
+<!-- Comments, and the task's details and history. -->
+<div class="modal fade" id="tk_detailModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-dark text-white"><h5 class="modal-title" id="tk_detTitle">Task</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div id="tk_detBody"></div>
+      <h6 class="fw-bold mt-3"><i class="fas fa-comments me-1"></i> Comments</h6>
+      <div id="tk_cmtList" class="mb-2"></div>
+      <div class="input-group"><input type="text" class="form-control" id="tk_cmtInput" placeholder="Write a comment…" onkeydown="if(event.key==='Enter')TaskModule.addComment()">
+        <button class="btn btn-primary" onclick="TaskModule.addComment()">Send</button></div>
+      <h6 class="fw-bold mt-3"><i class="fas fa-clock-rotate-left me-1"></i> History</h6>
+      <div id="tk_histList" class="small text-muted"></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- Approvals waiting on me (a SuperAdmin sees all of them). -->
+<div class="modal fade" id="tk_apprModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-dark text-white"><h5 class="modal-title"><i class="fas fa-circle-check me-2"></i>Approvals</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><div id="tk_apprList"></div></div>
+    <div class="modal-footer"><button class="btn btn-outline-success fw-bold" id="tk_apprAllBtn" style="display:none" onclick="TaskModule.approveAllRevises()">Approve all date changes</button>
+      <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
+  </div></div>
+</div>
+
+<!-- Transfers: hand your tasks to someone else; requests wait for approval. -->
+<div class="modal fade" id="tk_trModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-dark text-white"><h5 class="modal-title"><i class="fas fa-right-left me-2"></i>Transfers</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-danger py-2" id="tk_trErr" style="display:none"></div>
+      <h6 class="fw-bold">Hand over tasks</h6>
+      <div class="row g-2 align-items-end mb-2">
+        <div class="col-md-6" id="tk_trFromWrap" style="display:none"><label class="form-label fw-bold small">From</label><select class="form-select form-select-sm" id="tk_trFrom" onchange="TaskModule.loadTransferTasks()"></select></div>
+        <div class="col-md-6"><label class="form-label fw-bold small">To *</label><select class="form-select form-select-sm" id="tk_trTo"></select></div>
+      </div>
+      <div id="tk_trTasks" class="border rounded p-2 mb-2" style="max-height:220px;overflow:auto"></div>
+      <button class="btn btn-primary btn-sm fw-bold" onclick="TaskModule.sendTransfer()">Request transfer</button>
+      <h6 class="fw-bold mt-4">Requests</h6>
+      <div id="tk_trList"></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- Holidays (SuperAdmin). Adding one removes that day's checklist tasks and
+     moves pending delegation tasks to the next working day. -->
+<div class="modal fade" id="tk_holModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header bg-dark text-white"><h5 class="modal-title"><i class="fas fa-umbrella-beach me-2"></i>Holidays</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-danger py-2" id="tk_hErr" style="display:none"></div>
+      <div class="row g-2 mb-3">
+        <div class="col-5"><input type="date" class="form-control" id="tk_hDate"></div>
+        <div class="col-5"><input type="text" class="form-control" id="tk_hName" placeholder="e.g. Diwali"></div>
+        <div class="col-2"><button class="btn btn-primary w-100" onclick="TaskModule.addHoliday()"><i class="fas fa-plus"></i></button></div>
+      </div>
+      <div id="tk_holList"></div>
+    </div>
+  </div></div>
+</div>
+
+<script src="/js/tasks-module.js?v=1"></script>
+<script>TaskModule.init();</script>

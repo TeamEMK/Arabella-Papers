@@ -157,6 +157,9 @@ const SECTIONS = [
   // Everybody takes leave, so everybody gets the tab. What differs is what is
   // on it: your own requests, plus everyone's if you are the one deciding.
   { id: 'leave', group: 'Company', name: 'Leave', icon: 'fa-calendar-check', rule: () => true },
+  // Delegation + Checklist (modules/tasks). Everybody is given work, so
+  // everybody gets the tab; what they may do on it is decided by the task API.
+  { id: 'tasks', group: 'Company', name: 'Tasks', icon: 'fa-list-check', rule: () => true },
   // Staff records carry mobiles, emergency contacts and document status, so
   // the tab is not offered to anyone who has no business opening it.
   {
