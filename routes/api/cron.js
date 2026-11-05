@@ -14,6 +14,7 @@
 const express = require('express');
 const router = express.Router();
 const { sendVectorReport } = require('../../utils/vectorReport');
+const { sendStageReport } = require('../../utils/stageReport');
 
 function authorised(req) {
   const want = process.env.CRON_SECRET;
@@ -33,6 +34,20 @@ router.get('/vector-report', async (req, res) => {
     res.json({ success: true, ...out });
   } catch (err) {
     console.error('[cron] vector report failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/cron/stage-report — the morning list of orders with stages still
+// open. Nine o'clock IST, before the floor gets going.
+router.get('/stage-report', async (req, res) => {
+  if (!authorised(req)) return res.status(401).json({ success: false, error: 'Unauthorized' });
+  try {
+    const out = await sendStageReport();
+    console.log('[cron] stage report:', JSON.stringify(out));
+    res.json({ success: true, ...out });
+  } catch (err) {
+    console.error('[cron] stage report failed:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

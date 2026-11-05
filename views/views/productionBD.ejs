@@ -1,6 +1,10 @@
 <%# Production Dashboard. Rendered a second time as Backup Production, where the
     same board shows the orders from before the August cutoff. %>
 <div id="prodRoot"></div>
+<%# The nine stages and what counts as done, straight from
+    utils/productionStages.js, so this board and the morning mail that chases
+    unfinished stages cannot disagree about which ones are outstanding. %>
+<script src="/js/productionStages.js"></script>
 <script>
 var PROD_ARCHIVE = <%= archive ? 'true' : 'false' %>;
 document.getElementById('prodRoot').innerHTML = `
@@ -454,22 +458,14 @@ function prod_getClientBadge(s) {
 // One source of truth for "is this stage finished?" — the badge row, the
 // pending-stage hint and the Ready for Dispatch button all read from here, so
 // a stage can never count as done in one place and pending in another.
+// The list itself now lives in utils/productionStages.js, loaded by this
+// page and by the morning mail that chases unfinished stages. It was written
+// out here, and a second copy in the mail would have drifted from it - that
+// is exactly how the Proofing-Done rule came to say one thing on a screen
+// and another in a route.
 function prod_stageCfg(o) {
   const v = k => (o[k]||'').toString().trim().toLowerCase();
-  return [
-    // GNA Approved is not in the finished list on purpose: the guest list
-    // being signed off is a step on the way, and the stage is done when it has
-    // been printed - or when there is no GNA on the job at all.
-    {val:v('Guest_Name'), ok:['no','no gna','printed','gna printed'], label:'GNA'},
-    {val:v('Paper_Cutting'), ok:['done'], label:'Paper'},
-    {val:v('Dye_Status'), ok:['no die','die cutting done','die sent'], label:'Dye'},
-    {val:v('Block_Status'), ok:['no block','block printed','block sent'], label:'Block'},
-    {val:v('Printing'), ok:['done'], label:'Print'},
-    {val:v('Edges'), ok:['no','done'], label:'Edges'},
-    {val:v('Laser_Cutting'), ok:['no','done'], label:'Laser'},
-    {val:v('Output'), ok:['no','done'], label:'Output'},
-    {val:v('Card_Assembly'), ok:['done'], label:'Assembly'},
-  ];
+  return ArabellaStages.STAGES.map(s => ({ val: v(s.browser), ok: s.ok, label: s.label }));
 }
 // Every stage, every row - green for done, red for not. Only the finished
 // ones used to be drawn, so a row with three badges could mean six stages

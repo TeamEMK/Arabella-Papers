@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/vector-report",
       "schedule": "30 13 * * *"
+    },
+    {
+      "path": "/api/cron/stage-report",
+      "schedule": "30 3 * * *"
     }
   ]
 }

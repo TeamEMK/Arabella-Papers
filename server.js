@@ -81,6 +81,16 @@ app.get('/js/orderId.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'utils', 'orderId.js'));
 });
 
+// The same arrangement for the nine production stages: the board draws its
+// badges from this and the morning mail reads it, so a stage cannot be green
+// on the screen and late in somebody's inbox.
+require('./utils/productionStages');
+app.get('/js/productionStages.js', (req, res) => {
+  res.type('application/javascript');
+  res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=86400');
+  res.sendFile(path.join(__dirname, 'utils', 'productionStages.js'));
+});
+
 // Build the schema on the first request against an empty database. Runs before
 // the session middleware so the store is not querying tables that don't exist.
 app.use((req, res, next) => {

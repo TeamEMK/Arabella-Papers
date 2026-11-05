@@ -15,6 +15,15 @@ const { raiseRemake, rootOrderId } = require('../../utils/remake');
 const { FAULTS } = require('./corrections');
 const { requireLogin } = require('../../middleware/auth');
 const vectorGate = require('../../utils/vectorGate');
+// Which orders are production's work - the SQL behind both production boards.
+// It lives in its own file because the morning stage mail has to ask exactly
+// the same question, and a second copy of it would quietly start answering
+// differently. See utils/productionBoard.js.
+const {
+  LOCAL_ORDER_OFF_BOARDS, PRODUCTION_ARCHIVE_FROM, LAST_WORKED_ON, PRODUCTION_DATE,
+  LEFT_FOR_DISPATCH, REACHED_PRODUCTION, DEAD_ORDER, PRODUCTION_QUEUE_WHERE,
+  ON_PRODUCTION_BOARD,
+} = require('../../utils/productionBoard');
 // The board a request is asking for is the same thing the side panel decides
 // whether to show - role rule plus whatever was granted on the Access Control
 // page. Asking the role string here instead is what made a granted tab open
@@ -40,7 +49,6 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 *
 // belongs on the Orders Dashboard, but nobody designs, prints or couriers it
 // through this system - and at 3571 rows it buried the boards that do track
 // work and padded every total on Analytics. So it is listed, not queued.
-const LOCAL_ORDER_OFF_BOARDS = `LOWER(IFNULL(dealer_name, '')) <> 'local order'`;
 
 // What makes an order production's work, leaving aside whether it has already
 // gone to Dispatch. The queue, the till-count and the dispatch revert all need
@@ -52,7 +60,6 @@ const LOCAL_ORDER_OFF_BOARDS = `LOWER(IFNULL(dealer_name, '')) <> 'local order'`
 //
 // A fixed date rather than a rolling window: the split has to mean the same
 // thing tomorrow as it did today, or an order quietly changes boards overnight.
-const PRODUCTION_ARCHIVE_FROM = '2026-08-01';
 
 // When anybody last did something to this order: the client approval, or any
 // production stage being set. An order taken in June that somebody worked on
@@ -60,43 +67,15 @@ const PRODUCTION_ARCHIVE_FROM = '2026-08-01';
 // carried over from the archive by hand.
 //
 // GREATEST returns NULL if any argument is NULL, so every one carries a floor.
-const LAST_WORKED_ON = `GREATEST(
-  COALESCE(actual_2, timestamp),
-  COALESCE(guest_name_actual_time, '1000-01-01'),
-  COALESCE(paper_cutting_actual_time, '1000-01-01'),
-  COALESCE(dye_status_actual_time, '1000-01-01'),
-  COALESCE(no_die_actual_time, '1000-01-01'),
-  COALESCE(die_not_received_actual_time, '1000-01-01'),
-  COALESCE(die_cutting_done_actual_time, '1000-01-01'),
-  COALESCE(die_sent_actual_time, '1000-01-01'),
-  COALESCE(block_status_actual_time, '1000-01-01'),
-  COALESCE(no_block_actual_time, '1000-01-01'),
-  COALESCE(block_not_received_actual_time, '1000-01-01'),
-  COALESCE(block_printed_actual_time, '1000-01-01'),
-  COALESCE(block_sent_actual_time, '1000-01-01'),
-  COALESCE(printing_actual_time, '1000-01-01'),
-  COALESCE(edges_actual_time, '1000-01-01'),
-  COALESCE(no_laser_cutting_actual_time, '1000-01-01'),
-  COALESCE(done_laser_cutting_actual_time, '1000-01-01'),
-  COALESCE(pending_laser_cutting_actual_time, '1000-01-01'),
-  COALESCE(no_output_actual_time, '1000-01-01'),
-  COALESCE(output_done_actual_time, '1000-01-01'),
-  COALESCE(output_pending_actual_time, '1000-01-01'),
-  COALESCE(card_assembly_actual_time, '1000-01-01'),
-  COALESCE(remark_actual_time, '1000-01-01'),
-  COALESCE(reason_for_delay_actual_time, '1000-01-01')
-)`;
 
 // Which side of the cutoff an order falls on. Not the date the board prints -
 // that is when the order reached production and never moves - but the last
 // time it was touched, so working on an old order brings it back on its own.
-const PRODUCTION_DATE = `DATE(${LAST_WORKED_ON})`;
 
 // Has this order left for Dispatch? status_4 is what the Send to Dispatch
 // button sets, but almost none of the history carries it - those rows came in
 // from the sheet with a dispatch date and nothing else. Both boards test this
 // one expression, the production side negated, so an order cannot sit on both.
-const LEFT_FOR_DISPATCH = `((status_4 IS NOT NULL AND status_4 <> '') OR actual_4 IS NOT NULL)`;
 
 // Handed to Dispatch but not actually gone. "Ready" says so outright, whatever
 // date the row carries - a few were saved while still Ready and picked up one
@@ -112,21 +91,10 @@ const AWAITING_DISPATCH = `(
 // August order nobody will finish belongs on the old board, and a July one
 // being picked up again belongs on the live queue. The two branches are exact
 // complements, so an order is always on one board and never on both.
-const ON_PRODUCTION_BOARD = (archive) => archive
-  ? `IF(production_board IS NULL, ${PRODUCTION_DATE} < ?, production_board = 'old')`
-  : `IF(production_board IS NULL, ${PRODUCTION_DATE} >= ?, production_board = 'current')`;
 
 // Has this order reached the floor? Either the client has signed it off, or
 // somebody has already started a stage on it - the office records approvals
 // late, and stock in the building counts whatever the column says.
-const REACHED_PRODUCTION = `(
-  TRIM(IFNULL(design_approval_status_from_client, '')) NOT IN ('Proofing Done', '')
-  OR LOWER(IFNULL(paper_cutting, ''))  LIKE '%done%'
-  OR LOWER(IFNULL(printing, ''))       LIKE '%done%'
-  OR LOWER(IFNULL(card_assembly, ''))  LIKE '%done%'
-  OR LOWER(IFNULL(dye_status, ''))     LIKE '%done%'
-  OR LOWER(IFNULL(block_status, ''))   LIKE '%printed%'
-)`;
 
 // Client approvals that take an order which has already gone out back to the
 // floor. The first three say "make it again" outright.
@@ -210,11 +178,6 @@ function productionResetColumns(status) {
 }
 
 // An order nobody is going to make: cancelled, or rejected by the client.
-const DEAD_ORDER = `(
-  LOWER(IFNULL(design_approval_status_from_client, '')) LIKE '%rejected%'
-  OR LOWER(IFNULL(design_approval_status_from_client, '')) LIKE '%cancel%'
-  OR LOWER(IFNULL(design_status, '')) LIKE '%cancel%'
-)`;
 
 // Where the dispatch board splits. Same day as the production one, but kept
 // separate: there is no reason the two have to move together.
@@ -232,12 +195,6 @@ const ON_DISPATCH_BOARD = (archive) => archive
         (${AWAITING_DISPATCH} OR actual_4 IS NULL OR DATE(actual_4) >= ?),
         dispatch_board = 'current')`;
 
-const PRODUCTION_QUEUE_WHERE = `
-  is_deleted = 0
-  AND NOT ${DEAD_ORDER}
-  AND ${LOCAL_ORDER_OFF_BOARDS}
-  AND ${REACHED_PRODUCTION}
-`;
 
 /**
  * The dispatch columns to clear when an approval sends an order back.
