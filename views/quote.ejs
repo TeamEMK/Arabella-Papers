@@ -21,52 +21,179 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/<%= assets %>/css/pricing-calculator.css">
 <style>
-  :root { --ink:#1d1d1d; --gold:#b08a3e; --paper:#faf8f4; --line:#e6e0d4; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--paper); color:var(--ink);
-         font-family:'Jost',system-ui,sans-serif; }
-  .wrap { max-width:1320px; margin:0 auto; padding:0 16px 48px; }
+  /* ══════════════════════════════════════════════════════
+     THE PUBLIC CALCULATOR — a wedding palette, on paper
+     ══════════════════════════════════════════════════════
+     The customer here is usually a bride or groom planning a wedding,
+     not a buyer. So: blush, sage and champagne on warm cream, which is
+     the stationery itself rather than a brand's dashboard.
 
-  header.q-head { text-align:center; padding:34px 16px 24px; }
-  .q-name { font-family:'Cormorant Garamond',serif; font-size:30px; letter-spacing:.22em; }
-  .q-sub { font-size:11px; letter-spacing:.3em; color:var(--gold); margin-top:6px; }
-  .q-brand { margin-top:14px; display:inline-block; border:1px solid var(--line);
-             border-radius:999px; padding:5px 16px; font-size:11px; letter-spacing:.18em;
-             color:#6b6b6b; background:#fff; }
+     TEXT NEVER SITS ON THE PHOTOGRAPH. The two images are real
+     flat-lays with leaves, ribbon and a wax seal in them, and small
+     grey labels over that are unreadable at exactly the moment
+     somebody is typing a quantity into them. So the paper is dressed
+     at the top and the foot, and everything anybody has to READ sits
+     on plain cream between.
 
-  /* The gate */
-  .gate { max-width:430px; margin:10px auto 0; background:#fff; border:1px solid var(--line);
-          border-radius:10px; padding:26px; }
-  .gate h2 { font-family:'Cormorant Garamond',serif; font-weight:600; font-size:22px;
-             margin:0 0 4px; }
-  .gate p  { margin:0 0 18px; color:#6b6b6b; font-size:13.5px; line-height:1.5; }
-  .gate label { display:block; font-size:10.5px; letter-spacing:.14em; text-transform:uppercase;
-                color:#8a8a8a; margin-bottom:5px; }
-  .gate input { width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:6px;
-                font:inherit; font-size:14px; margin-bottom:14px; background:#fff; color:var(--ink); }
-  .gate input:focus { outline:none; border-color:var(--gold); }
-  .gate button { width:100%; padding:12px; border:0; border-radius:999px; cursor:pointer;
-                 background:var(--gold); color:#fff; font:inherit; font-size:12px;
-                 letter-spacing:.18em; text-transform:uppercase; }
-  .gate .err { color:#b02a37; font-size:13px; margin:-8px 0 12px; display:none; }
+     The pale values below are FILLS. Anything that has to be read uses
+     --ink or --muted; the -deep colours are for rules and small
+     accents, never for body text.
+  */
+  :root {
+    --cream:#fdfbf7; --ivory:#f6f1e8;
+    --ink:#3a3632; --muted:#6f6760;
+    --blush:#e8d5d1; --blush-deep:#b8898a;
+    --sage:#cfd8c8;  --sage-deep:#6f8064;
+    --champagne:#e6d9c3; --gold:#a08a5e;
+    /* The module's own primary, read out of its stylesheet
+       (--apc-plum). Our buttons take it so the page reads as one thing:
+       the loudest control on the screen is the module's CALCULATE
+       ESTIMATE, and a sage-green button above it made the wrapper and
+       the calculator look like two different companies. */
+    --slate:#3e5576; --slate-deep:#32455f;
+    --line:rgba(58,54,50,.13);
+  }
+  * { box-sizing:border-box; }
+  /* The page does not always fill the window. Without this the browser's
+     own white - or the module's cool grey - shows as a strip under the
+     foot, which reads as the page having run out. */
+  html { background:var(--cream); }
+  body {
+    margin:0; background:var(--cream); color:var(--ink);
+    font-family:'Jost',system-ui,sans-serif; font-weight:300;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1320px; margin:0 auto; padding:0 16px 10px; }
+
+  /* ── the suite across the top ──
+     A real photograph, so nothing is written on it. 8:3 is the shape it
+     was made in; the height follows the width rather than being pinned,
+     so the flat-lay is never squashed. */
+  header.q-head { text-align:center; padding:0 0 26px; }
+  .q-band {
+    width:100%; aspect-ratio:8/3; max-height:300px;
+    background:url('/ornament/suite-band.jpg') center/cover no-repeat var(--ivory);
+    border-bottom:1px solid var(--line);
+  }
+  .q-name {
+    font-family:'Cormorant Garamond',serif; font-weight:400;
+    font-size:34px; letter-spacing:.24em; text-indent:.24em;
+    margin:26px 0 0; color:var(--ink);
+  }
+  .q-rule { width:84px; height:1px; background:var(--gold); opacity:.5; margin:14px auto 0; }
+  .q-sub { font-size:11px; letter-spacing:.3em; color:var(--muted); margin-top:13px; }
+  .q-brand {
+    margin-top:16px; display:inline-block; border:1px solid var(--line);
+    border-radius:999px; padding:5px 17px; font-size:10.5px; letter-spacing:.18em;
+    color:var(--muted); background:var(--ivory);
+  }
+
+  /* ── the gate ──
+     A sheet laid on the paper: a hairline and a whisper of shadow, no
+     heavy border and no rounded-card look. Pastels plus big rounded
+     boxes is what makes a page like this read as a greetings card. */
+  .gate {
+    max-width:440px; margin:6px auto 0; background:#fff;
+    border:1px solid var(--line); border-top:2px solid var(--blush);
+    border-radius:3px; padding:30px 28px;
+    box-shadow:0 1px 2px rgba(58,54,50,.04), 0 10px 30px -22px rgba(58,54,50,.3);
+  }
+  .gate h2 {
+    font-family:'Cormorant Garamond',serif; font-weight:400; font-size:25px;
+    letter-spacing:.04em; margin:0 0 5px;
+  }
+  .gate p { margin:0 0 20px; color:var(--muted); font-size:13.5px; line-height:1.6; }
+  .gate label {
+    display:block; font-size:10px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  .gate input {
+    width:100%; padding:11px 2px; border:0; border-bottom:1px solid var(--line);
+    border-radius:0; font:inherit; font-size:14.5px; margin-bottom:18px;
+    background:transparent; color:var(--ink);
+  }
+  .gate input::placeholder { color:#b9b2aa; }
+  .gate input:focus { outline:none; border-bottom-color:var(--slate); }
+  .gate button {
+    width:100%; margin-top:4px; padding:13px; border:0; border-radius:999px;
+    cursor:pointer; background:var(--slate); color:#fff; font:inherit;
+    font-size:11.5px; letter-spacing:.2em; text-transform:uppercase;
+    transition:background .15s;
+  }
+  .gate button:hover { background:var(--slate-deep); }
+  .gate .err { color:#a3484b; font-size:13px; margin:-10px 0 14px; display:none; }
 
   /* The module draws a brand dropdown; the link already decided it. */
-  #pricing .apc-field:has(> span) { }
   #pricing [data-n="brand"] { display:none; }
   #pricing .apc-brand-hidden { display:none !important; }
 
-  .q-who { text-align:center; font-size:13px; color:#6b6b6b; margin:0 0 14px; }
-  .q-who b { color:var(--ink); }
-  .q-actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:14px; }
-  .q-actions button { padding:11px 22px; border-radius:999px; border:1px solid var(--gold);
-                      background:#fff; color:var(--gold); font:inherit; font-size:12px;
-                      letter-spacing:.14em; text-transform:uppercase; cursor:pointer; }
+  /* The module's own panel is white. On cream that reads as a sheet
+     laid down, so it is given the room and the edge to say so rather
+     than being left to float. */
+  #pricing {
+    margin:6px 0 0; padding:4px; background:var(--ivory);
+    border:1px solid var(--line); border-radius:3px;
+    box-shadow:0 10px 34px -26px rgba(58,54,50,.45);
+  }
+
+  .q-who {
+    text-align:center; font-size:12.5px; letter-spacing:.04em;
+    color:var(--muted); margin:22px 0 18px;
+  }
+  .q-who b { color:var(--ink); font-weight:400; }
+  .q-actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:22px; }
+  .q-actions button {
+    padding:12px 30px; border-radius:999px; border:1px solid var(--gold);
+    background:transparent; color:var(--gold); font:inherit; font-size:11.5px;
+    letter-spacing:.18em; text-transform:uppercase; cursor:pointer;
+    transition:background .15s, color .15s;
+  }
   .q-actions button.solid { background:var(--gold); color:#fff; }
-  .q-actions button[disabled] { opacity:.5; cursor:default; }
-  .q-note { text-align:center; font-size:13px; color:#6b6b6b; margin-top:12px; min-height:20px; }
-  footer.q-foot { text-align:center; font-size:10px; letter-spacing:.24em; color:#b9b1a2;
-                  padding:30px 16px 10px; text-transform:uppercase; }
-  @media (max-width:640px) { .q-name { font-size:24px; } }
+  .q-actions button.solid:hover { background:#8d7850; border-color:#8d7850; }
+  .q-actions button[disabled] { opacity:.45; cursor:default; }
+
+  /* One line that is ordinary most of the time and an apology
+     occasionally. The error state is a class the page adds: .bad */
+  .q-note {
+    text-align:center; font-size:13px; color:var(--muted);
+    margin-top:16px; min-height:21px; line-height:1.5;
+  }
+  .q-note.bad { color:#a3484b; }
+
+  /* ── the foot ──
+     The same photograph, turned over, so the page is closed the way it
+     was opened. Nothing is written on it either. */
+  .q-bandfoot {
+    width:100%; aspect-ratio:8/3; max-height:220px; margin-top:34px;
+    background:url('/ornament/suite-band.jpg') center/cover no-repeat var(--ivory);
+    transform:scaleX(-1); border-top:1px solid var(--line);
+  }
+  footer.q-foot {
+    text-align:center; font-size:10px; letter-spacing:.26em; color:#9b948c;
+    padding:22px 16px 26px; text-transform:uppercase; background:var(--cream);
+  }
+
+  /* ── on a phone ──
+     The tall flat-lay was made for this shape: decoration at the top
+     and the foot, bare paper down the middle. It becomes the page
+     itself, and the two bands step aside rather than repeating it. */
+  @media (max-width:760px) {
+    body {
+      background:url('/ornament/suite-tall.jpg') center top/cover no-repeat fixed var(--cream);
+    }
+    .q-band, .q-bandfoot { display:none; }
+    header.q-head { padding-top:118px; }
+    .q-name { font-size:26px; margin-top:0; }
+    .wrap { padding-bottom:0; }
+    .gate { background:rgba(255,255,255,.92); backdrop-filter:blur(2px); }
+    /* The tall photograph has leaves and a wax seal across its foot, and
+       on a short page the footer line lands right on them. A plate of
+       paper under it, rather than grey text over a photograph. */
+    footer.q-foot {
+      background:rgba(253,251,247,.9); backdrop-filter:blur(2px);
+      padding:16px 16px 18px; margin-top:26px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -74,8 +201,16 @@
 <%# Ours while the gate is up. Once the calculator mounts, the build draws
     its own masthead and this gets out of the way - two headers on one page
     is one too many. %>
+<%# The suite itself, photographed. Decorative only: nothing is written
+    over it, because small grey labels on a photograph of leaves and
+    ribbon are unreadable at exactly the moment somebody is typing a
+    quantity. The paper is dressed here and at the foot; everything to
+    be READ sits on plain cream between. %>
+<div class="q-band" role="presentation"></div>
+
 <header class="q-head" id="q_head">
   <div class="q-name">ARABELLA PAPERS</div>
+  <div class="q-rule"></div>
   <div class="q-sub">PRICE YOUR ORDER</div>
   <div class="q-brand"><%= brandLabel %></div>
 </header>
@@ -112,6 +247,9 @@
 
 </div>
 
+<%# The same photograph, turned over, so the page closes the way it
+    opened. Also decorative; also carries no text. %>
+<div class="q-bandfoot" role="presentation"></div>
 <footer class="q-foot">Fine Papers &nbsp;·&nbsp; Timeless Celebrations</footer>
 
 <script src="/<%= assets %>/js/pricing-rates.js"></script>
@@ -171,10 +309,13 @@
     }
   }
 
+  // The error state is a class rather than a colour written in here, so
+  // the palette lives in one place - a hard-coded red survived two
+  // restyles of this page before anybody noticed it had.
   function q_note(msg, bad) {
     var el = document.getElementById('q_note');
     el.innerHTML = msg || '';
-    el.style.color = bad ? '#b02a37' : '#6b6b6b';
+    el.classList.toggle('bad', !!bad);
   }
 
   /** @returns {Promise<boolean>} whether it actually reached the clipboard */

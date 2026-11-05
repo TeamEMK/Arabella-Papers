@@ -269,6 +269,31 @@ const check = (name, ok, extra) => {
   check('and the code does not reach for a button that is not there',
     /\.filter\(Boolean\)/.test(page) && !/getElementById\('q_pdf'\)\]/.test(page));
 
+  console.log('\nThe paper it is printed on');
+  const qview = require('fs').readFileSync(path.join(ROOT, 'views/quote.ejs'), 'utf8');
+  // The two photographs are real flat-lays with leaves, ribbon and a wax
+  // seal in them. Nothing anybody has to READ may sit on one: small grey
+  // labels over a photograph are unreadable at exactly the moment somebody
+  // is typing a quantity into them.
+  check('the photographs carry no text',
+    (qview.match(/role="presentation"/g) || []).length === 2);
+  check('they are bands above and below, not a field behind the form',
+    qview.includes('.q-band {') && qview.includes('.q-bandfoot {'));
+  // The module's own CALCULATE ESTIMATE is the loudest control on the page.
+  // Our buttons take its colour, so the wrapper and the calculator do not
+  // read as two different companies.
+  check('our buttons use the module\'s own primary', qview.includes('--slate:#3e5576'));
+  const modcss = require('fs').readFileSync(
+    path.join(ROOT, 'public/pricing-arabella/css/pricing-calculator.css'), 'utf8');
+  check('and that is still the colour the module uses', modcss.includes('--apc-plum: #3e5576'));
+  check('the error state is a class, not a colour written into the script',
+    qview.includes("classList.toggle('bad'") && !qview.includes('#b02a37'));
+  for (const img of ['suite-band.jpg', 'suite-tall.jpg']) {
+    const kb = require('fs').statSync(path.join(ROOT, 'public/ornament', img)).size / 1024;
+    // This is a public page. A heavy background is a customer waiting.
+    check(img + ' is light enough to send (' + kb.toFixed(0) + ' KB)', kb < 300, kb);
+  }
+
   console.log('\nIt does not disturb the internal tab');
   const [[internal]] = await db.query(
     "SELECT COUNT(*) AS n FROM pricing_quotes WHERE source = 'internal'");
