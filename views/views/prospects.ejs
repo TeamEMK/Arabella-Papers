@@ -96,6 +96,15 @@
   </div>
 </div>
 
+<style>
+  /* Both of these open something, so both have to look as though they can
+     be pressed. */
+  .pp-tile { cursor:pointer; transition:.12s; }
+  .pp-tile:hover { transform:translateY(-1px); box-shadow:0 .35rem .8rem rgba(0,0,0,.12) !important; }
+  .pp-tile:focus-visible { outline:2px solid #0d6efd; outline-offset:2px; }
+  .pp-row { cursor:pointer; }
+</style>
+
 <script>
 (function () {
   var ROWS = [], CURRENT = null, timer = null;
@@ -108,6 +117,9 @@
   window.pp_debounce = function () { clearTimeout(timer); timer = setTimeout(pp_load, 300); };
 
   window.pp_clear = function () {
+    // Including the one with no control on the bar, or Clear leaves a filter
+    // on that nobody can see to turn off.
+    NEEDS_NAME = false;
     ['pp_q', 'pp_status', 'pp_state', 'pp_pricing', 'pp_source', 'pp_mail']
       .forEach(function (id) { document.getElementById(id).value = ''; });
     pp_load();
@@ -132,18 +144,45 @@
       fillSelect('pp_source', j.lead_source, 'Anywhere');
 
       var t = j.totals;
+      // Each tile opens the list it counts. A number somebody cannot act on
+      // is a number they stop reading - and the fourth one especially, since
+      // "need a company name" is a pile of work, not a statistic.
       document.getElementById('pp_tiles').innerHTML = [
-        ['On the list', t.all_rows, ''],
-        ['With an email', t.with_email, 'text-success'],
-        ['Email known bad', t.dead_mail, 'text-danger'],
-        ['Need a company name', t.needs_name, 'text-warning'],
+        ['On the list', t.all_rows, '', ''],
+        ['With an email', t.with_email, 'text-success', 'ok'],
+        ['Email known bad', t.dead_mail, 'text-danger', 'dead'],
+        ['Need a company name', t.needs_name, 'text-warning', 'needsName'],
       ].map(function (x) {
-        return '<div class="col-6 col-md-3"><div class="card bg-light-glass shadow-sm smooth-ui h-100">'
+        return '<div class="col-6 col-md-3">'
+          + '<div class="card bg-light-glass shadow-sm smooth-ui h-100 pp-tile" tabindex="0" role="button"'
+          + ' onclick="pp_tile(\'' + x[3] + '\')"'
+          + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();pp_tile(\'' + x[3] + '\')}">'
           + '<div class="card-body py-2"><div class="text-muted small text-uppercase">' + x[0] + '</div>'
           + '<div class="fs-4 fw-bold ' + x[2] + '">' + (x[1] || 0) + '</div></div></div></div>';
       }).join('');
     } catch (e) {}
   }
+
+  // Set by the fourth tile only. Kept beside the other filters rather than
+  // inside them because there is no control on the bar for it, and a filter
+  // nobody can see is a filter somebody will swear is broken - so the count
+  // line says so in words whenever it is on.
+  var NEEDS_NAME = false;
+
+  window.pp_tile = function (which) {
+    NEEDS_NAME = (which === 'needsName');
+    document.getElementById('pp_mail').value =
+      (which === 'ok' || which === 'dead') ? which : '';
+    if (!which) {
+      // "On the list" means the whole list, so it clears everything rather
+      // than quietly leaving a state or a status on.
+      ['pp_q', 'pp_status', 'pp_state', 'pp_pricing', 'pp_source'].forEach(function (id) {
+        document.getElementById(id).value = '';
+      });
+    }
+    pp_load();
+    document.getElementById('pp_body').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   window.pp_load = async function () {
     var p = new URLSearchParams({
@@ -153,6 +192,9 @@
       pricing: document.getElementById('pp_pricing').value,
       source: document.getElementById('pp_source').value,
       mail: document.getElementById('pp_mail').value,
+      // Not on the filter bar - it is the fourth tile's doing, and it is held
+      // here so the list, the count and the tile cannot disagree about it.
+      needsName: NEEDS_NAME ? '1' : '',
       limit: 1000,
     });
     var body = document.getElementById('pp_body');
@@ -162,7 +204,8 @@
       if (!j.success) { body.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">' + esc(j.error) + '</td></tr>'; return; }
       ROWS = j.rows;
       document.getElementById('pp_count').textContent =
-        j.shown < j.total ? ('showing ' + j.shown + ' of ' + j.total) : (j.total + ' companies');
+        (j.shown < j.total ? ('showing ' + j.shown + ' of ' + j.total) : (j.total + ' companies'))
+        + (NEEDS_NAME ? ' · needing a company name' : '');
       if (!ROWS.length) { body.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Nobody matches.</td></tr>'; return; }
 
       body.innerHTML = ROWS.map(function (r, i) {
@@ -171,7 +214,7 @@
           : (Number(r.mail_dead)
               ? '<span class="text-danger" title="' + esc(r.mail_outcome || 'bounced') + '"><s>' + esc(r.email) + '</s></span>'
               : '<a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a>');
-        return '<tr>'
+        return '<tr class="pp-row" data-i="' + i + '">'
           + '<td class="fw-bold">' + esc(r.company_name)
             + (Number(r.needs_name) ? ' <span class="badge bg-warning text-dark" title="The sheet gave no company name, so this is the contact person">name?</span>' : '')
           + '</td>'
@@ -181,13 +224,24 @@
           + '<td class="small">' + mail + '</td>'
           + '<td class="small">' + esc(r.status || '—') + '</td>'
           + '<td class="small">' + esc(r.pricing || '—') + '</td>'
-          + '<td><button class="btn btn-sm btn-outline-primary" onclick="pp_open(' + i + ')"><i class="fas fa-eye"></i></button></td>'
+          // A pen, not an eye: this box has always been editable and saved
+          // what was typed in it, and an eye says it is only for looking.
+          + '<td><button class="btn btn-sm btn-outline-primary" onclick="pp_open(' + i + ')"'
+            + ' title="Edit"><i class="fas fa-pen"></i></button></td>'
           + '</tr>';
       }).join('');
     } catch (e) {
       body.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">Server error.</td></tr>';
     }
   };
+
+  // One listener on the table rather than an onclick per row: the body is
+  // rewritten on every keystroke in the search box.
+  document.getElementById('pp_body').addEventListener('click', function (e) {
+    if (e.target.closest('a, button, input, label')) return;
+    var tr = e.target.closest('tr.pp-row');
+    if (tr) pp_open(Number(tr.dataset.i));
+  });
 
   var FIELDS = [
     ['company_name', 'Company'], ['contact_person', 'Contact person'],

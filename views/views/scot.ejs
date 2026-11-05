@@ -19,10 +19,15 @@
   </div>
 
   <%# Hidden until the sheet has been read, rather than showing three zeros
-      that look like an answer. %>
+      that look like an answer.
+
+      Each one opens the list it counts: "Due now" is not a statistic, it is
+      the morning's calls. %>
   <div class="row g-2 mb-3 d-none" id="scot_tiles">
     <div class="col-6 col-md-4">
-      <div class="card bg-light-glass shadow-sm smooth-ui h-100">
+      <div class="card bg-light-glass shadow-sm smooth-ui h-100 scot-tile" tabindex="0" role="button"
+           onclick="scot_pick('due')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scot_pick('due')}">
         <div class="card-body py-2">
           <div class="text-muted small text-uppercase">Due now</div>
           <div class="fs-3 fw-bold text-danger" id="scot_tileDue">0</div>
@@ -30,7 +35,9 @@
       </div>
     </div>
     <div class="col-6 col-md-4">
-      <div class="card bg-light-glass shadow-sm smooth-ui h-100">
+      <div class="card bg-light-glass shadow-sm smooth-ui h-100 scot-tile" tabindex="0" role="button"
+           onclick="scot_pick('soon')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scot_pick('soon')}">
         <div class="card-body py-2">
           <div class="text-muted small text-uppercase">Next 7 days</div>
           <div class="fs-3 fw-bold text-warning" id="scot_tileSoon">0</div>
@@ -38,7 +45,9 @@
       </div>
     </div>
     <div class="col-12 col-md-4">
-      <div class="card bg-light-glass shadow-sm smooth-ui h-100">
+      <div class="card bg-light-glass shadow-sm smooth-ui h-100 scot-tile" tabindex="0" role="button"
+           onclick="scot_pick('all')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scot_pick('all')}">
         <div class="card-body py-2">
           <div class="text-muted small text-uppercase">On the list</div>
           <div class="fs-3 fw-bold" id="scot_tileTotal">0</div>
@@ -54,3 +63,16 @@
   </div>
 
 </div>
+
+<script>
+  // The tiles pick the same thing the dropdown does, so there is one filter
+  // and not two that can disagree.
+  function scot_pick(which) {
+    var sel = document.getElementById('scot_when');
+    if (!sel) return;
+    sel.value = which;
+    document.getElementById('scot_search').value = '';
+    scot_render();
+    document.getElementById('scot_tbody').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+</script>

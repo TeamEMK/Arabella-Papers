@@ -734,6 +734,28 @@ CREATE TABLE IF NOT EXISTS prospects (
 -- No status column yet. Nothing has been done with any of these, and a
 -- column of blanks invites somebody to invent a workflow nobody asked for.
 -- =============================================
+-- What the office has decided about a client on the calling list.
+--
+-- SEPARATE FROM THE SHEET, ON PURPOSE. S.C.O.T. is read out of the office's
+-- own Google Sheet, and the sheet does the thinking - the ordering rhythm,
+-- when each client is due again, how late they are. Writing back into it
+-- would put our rows next to their formulas, and a note typed here would be
+-- one bad cell reference away from changing a number somebody relies on.
+--
+-- So the note lives here and is joined on by name. Keyed on a tidied-up
+-- version of the name rather than the name itself, because the sheet is typed
+-- into by hand: "Smith & Co" and "smith  &  co" are one client.
+CREATE TABLE IF NOT EXISTS scot_notes (
+  client_key VARCHAR(190) NOT NULL PRIMARY KEY,
+  -- The name as the sheet last spelled it, so a note whose client has been
+  -- renamed away can still be found by a person.
+  client_name VARCHAR(255) NOT NULL,
+  status VARCHAR(20) DEFAULT NULL,
+  remark TEXT,
+  updated_by VARCHAR(150) DEFAULT '',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS cc_prospects (
   id INT AUTO_INCREMENT PRIMARY KEY,
   retailer VARCHAR(255) NOT NULL,

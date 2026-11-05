@@ -188,6 +188,38 @@ const check = (name, ok, extra) => {
   check('naming a nameless row clears the flag',
     (await get('/api/prospects?needsName=1')).total === 0);
 
+  // ── THE FOUR COUNTS ACROSS THE TOP ──
+  //
+  // Each opens the list it counts. The fourth is the one that matters:
+  // "need a company name" is a pile of work, not a statistic, and until now
+  // there was no control anywhere on the page that could show it - the
+  // filter existed on the server and nothing sent it.
+  console.log('\nThe counts open what they count');
+  const view = require('fs').readFileSync(path.join(ROOT, 'views/views/prospects.ejs'), 'utf8');
+  // The tiles are generated from one list, so counting pp_tile( in the
+  // source counts the template, not the tiles. What matters is that every
+  // entry in that list carries a filter to open, and that the template wires
+  // both the mouse and the keyboard.
+  const tileList = (view.match(/\['On the list'[\s\S]*?\]\.map\(/) || [''])[0];
+  check('every count in the list carries something to open',
+    (tileList.match(/\],/g) || []).length === 4
+    && /'ok'/.test(tileList) && /'dead'/.test(tileList) && /'needsName'/.test(tileList), tileList.length);
+  check('and a tile answers the keyboard as well as the mouse',
+    /onclick="pp_tile/.test(view) && /onkeydown=/.test(view) && /role="button"/.test(view));
+  check('and the one with no control on the bar is actually sent now',
+    /needsName: NEEDS_NAME/.test(view));
+  check('Clear turns it off too, or it stays on with nothing to show it',
+    /pp_clear = function[\s\S]{0,200}NEEDS_NAME = false/.test(view));
+  check('and the count line says when it is on',
+    /needing a company name/.test(view));
+  check('the row opens the editor, not just the button at the end',
+    view.includes("getElementById('pp_body').addEventListener('click'")
+    && view.includes("closest('tr.pp-row')"));
+  check('a link or a tick box inside it is left alone',
+    view.includes("closest('a, button, input, label')"));
+  // It always saved what was typed in it. An eye says otherwise.
+  check('the button says edit rather than look', /fa-pen/.test(view) && !/fa-eye/.test(view));
+
   server.close();
   await db.end().catch(() => {});
   await admin.query('DROP DATABASE `' + TEST_DB + '`');

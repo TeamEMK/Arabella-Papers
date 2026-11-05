@@ -16,6 +16,34 @@ const router = express.Router();
 const { requireLogin } = require('../../middleware/auth');
 const sheets = require('../../utils/sheets');
 const scot = require('../../utils/scot');
+const db = require('../../config/db');
+
+// ── THE OFFICE'S OWN NOTE ON A CLIENT ──
+//
+// The sheet stays the sheet. It does the thinking - the rhythm, the expected
+// date, how late somebody is - and nothing here writes back into it: our rows
+// beside their formulas is one bad cell reference away from changing a number
+// a meeting relies on.
+//
+// So a status and a remark live in our database and are joined on by name.
+// The join key is a tidied name, because the sheet is typed into by hand and
+// "Smith & Co" and "smith  &  co" are one client.
+const STATUSES = ['active', 'inactive'];
+const keyFor = (name) => String(name || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 190);
+
+/** Every note, by key, for stitching onto the list. */
+async function notesByKey() {
+  try {
+    const [rows] = await db.query(
+      'SELECT client_key, status, remark, updated_by, updated_at FROM scot_notes');
+    return new Map(rows.map(r => [r.client_key, r]));
+  } catch (err) {
+    // A note is an extra, not the list. Losing them must not lose the
+    // calling list, which is the thing somebody opened the page for.
+    console.error('[scot] notes unavailable:', err.message);
+    return new Map();
+  }
+}
 
 const TAB = 'Dashboard';
 // 1216 rows allocated, 106 with a name in them. Reading the lot takes about
@@ -116,7 +144,20 @@ async function readList() {
 router.get('/calling-list', requireLogin, async (req, res) => {
   try {
     if (req.query.fresh === '1') _cache = null;
-    res.json({ success: true, ...(await readList()) });
+    const data = await readList();
+    // Stitched on here rather than inside readList, which is cached for ten
+    // minutes: a note saved a second ago has to show on the next draw, and
+    // the sheet read is the slow part, not this.
+    const notes = await notesByKey();
+    const list = data.list.map((c) => {
+      const n = notes.get(keyFor(c.client));
+      return Object.assign({}, c, {
+        status: (n && n.status) || '',
+        remark: (n && n.remark) || '',
+        noteBy: (n && n.updated_by) || '',
+      });
+    });
+    res.json({ success: true, ...data, list });
   } catch (err) {
     console.error('SCOT calling list failed:', err);
     // Google's own message is the useful one - "Unable to parse range",
@@ -127,4 +168,46 @@ router.get('/calling-list', requireLogin, async (req, res) => {
   }
 });
 
+/**
+ * PUT /api/scot/note — the status and the remark on one client.
+ *
+ * Keyed by the client's name, because that is all the sheet gives us to
+ * identify a row by. A client renamed in the sheet therefore starts with a
+ * blank note rather than picking up somebody else's - the old one is kept,
+ * under the old name, instead of being silently reattached.
+ */
+router.put('/note', requireLogin, express.json(), async (req, res) => {
+  try {
+    const name = String((req.body && req.body.client) || '').trim().slice(0, 255);
+    if (!name) return res.status(400).json({ success: false, error: 'Which client?' });
+
+    const raw = String((req.body && req.body.status) || '').trim().toLowerCase();
+    if (raw && !STATUSES.includes(raw)) {
+      return res.status(400).json({ success: false, error: 'The status has to be Active or Inactive, or empty.' });
+    }
+    const status = raw || null;
+    const remark = String((req.body && req.body.remark) || '').trim().slice(0, 2000) || null;
+
+    // Nothing to say about somebody is not a row worth keeping, and leaving
+    // one behind makes the table a list of everybody anyone ever opened.
+    if (!status && !remark) {
+      await db.query('DELETE FROM scot_notes WHERE client_key = ?', [keyFor(name)]);
+      return res.json({ success: true, status: '', remark: '' });
+    }
+
+    await db.query(
+      `INSERT INTO scot_notes (client_key, client_name, status, remark, updated_by)
+       VALUES (?,?,?,?,?)
+       ON DUPLICATE KEY UPDATE client_name = VALUES(client_name), status = VALUES(status),
+                               remark = VALUES(remark), updated_by = VALUES(updated_by)`,
+      [keyFor(name), name, status, remark, (req.session.user && req.session.user.email) || '']);
+
+    res.json({ success: true, status: status || '', remark: remark || '' });
+  } catch (err) {
+    console.error('Saving a SCOT note failed:', err);
+    res.status(500).json({ success: false, error: 'Could not save it.' });
+  }
+});
+
 module.exports = router;
+module.exports.keyFor = keyFor;
