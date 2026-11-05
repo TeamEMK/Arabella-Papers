@@ -309,6 +309,35 @@ const check = (name, ok, extra) => {
     check(img + ' is light enough to send (' + kb.toFixed(0) + ' KB)', kb < 300, kb);
   }
 
+  // THE BUG THE OFFICE FOUND ON LIVE. The `hidden` attribute is only
+  // display:none from the browser's own stylesheet, and ANY author
+  // `display` beats it. The moment .gate was given display:flex,
+  // q_open()'s `gate.hidden = true` stopped hiding anything, and the gate
+  // sat on screen above the calculator it had just opened. The other pages
+  // never hit this because Bootstrap carries its own
+  // [hidden]{display:none!important}; this page does not load Bootstrap.
+  //
+  // Checked for EVERY element the script hides, not just the one that
+  // broke - the next person to style one of the others would otherwise
+  // reintroduce exactly this.
+  console.log('\nWhat the script hides actually goes');
+  const hides = [...qview.matchAll(/getElementById\('([a-zA-Z_]+)'\)\.hidden = true/g)].map(m => m[1]);
+  check('the script hides something by attribute', hides.length >= 2, hides);
+  // The style block, with comments stripped so a mention inside one does
+  // not read as a rule.
+  const css = (qview.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1]
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const id of hides) {
+    const rules = css.split('}').filter(r => r.includes('display')
+      && new RegExp('(^|[,\\s])[.#]?' + id + '\\b', 'm').test(r.split('{')[0] || ''));
+    const fights = rules.some(r => !/\[hidden\]/.test(r.split('{')[0] || ''));
+    const answered = css.includes('#' + id + '[hidden]') || css.includes('.' + id + '[hidden]');
+    check(fights
+      ? id + ' has a display rule, and [hidden] takes it back'
+      : id + ' has no display rule to fight',
+      !fights || answered, { fights, answered });
+  }
+
   console.log('\nIt does not disturb the internal tab');
   const [[internal]] = await db.query(
     "SELECT COUNT(*) AS n FROM pricing_quotes WHERE source = 'internal'");

@@ -107,6 +107,15 @@
     border-right:1px solid var(--line);
   }
   .gate-form { flex:1 1 auto; padding:36px 34px 30px; }
+  /* THE hidden ATTRIBUTE IS ONLY display:none FROM THE BROWSER'S OWN
+     STYLESHEET, and any author `display` beats it. So the moment .gate got
+     display:flex, q_open()'s `gate.hidden = true` stopped hiding anything
+     and the gate sat on screen above the calculator it had just opened.
+     The other pages never hit this because Bootstrap carries a
+     [hidden]{display:none!important} of its own; this page does not load
+     Bootstrap. Said here by class+attribute, which wins on specificity
+     without an !important. */
+  .gate[hidden] { display:none; }
   .gate-foot {
     margin:16px 0 0; font-size:11px; letter-spacing:.06em;
     color:#9b948c; text-align:center;
