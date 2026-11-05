@@ -48,6 +48,10 @@ const BRANDS = {
     // they sent. Theirs, not ours to reword.
     wordmark: 'ARABELLA PAPERS',
     title: 'Wedding stationery price estimate',
+    // Nothing in the pill on this one. It would read ARABELLA PAPERS
+    // directly under a wordmark reading ARABELLA PAPERS, which says the
+    // same thing twice and makes the page look like it is still loading.
+    pill: '',
   },
   kpc: {
     code: 'KPC', label: 'KPC',
@@ -59,6 +63,11 @@ const BRANDS = {
     // the difference between the two links.
     wordmark: 'ARABELLA PAPERS',
     title: 'Wedding stationery price estimate',
+    // The one word that tells the two links apart on screen. Both pages
+    // are signed Arabella Papers and look identical otherwise, which is
+    // what the office asked for - and then asked for a way to tell them
+    // apart. This is it, and it is the ONLY place a customer sees KPC.
+    pill: 'KPC',
   },
 };
 
@@ -103,6 +112,7 @@ router.get('/:brand', (req, res, next) => {
   res.render('quote', {
     brandCode: brand.code,
     brandLabel: brand.wordmark,
+    brandPill: brand.pill || '',
     brandSlug: String(req.params.brand).toLowerCase(),
     assets: brand.assets,
     wordmark: brand.wordmark,

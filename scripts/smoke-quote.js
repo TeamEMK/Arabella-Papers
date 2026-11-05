@@ -86,21 +86,28 @@ const check = (name, ok, extra) => {
   check('and is not a redirect to the login', !/name="password"/.test(html));
   check('it is signed Arabella Papers, not the internal code ARB',
     /ARABELLA PAPERS/.test(html) && !/ARABELLA \(ARB\)/.test(html));
+  // No pill on this one: it would repeat the wordmark directly above it,
+  // which says the same thing twice and reads as a page still loading.
+  check('and carries no pill, because there is nothing to tell it apart from',
+    !/class="q-brand"/.test(html));
   check('and asks who you are before anything else', /id="gate"/.test(html) && /g_email/.test(html));
 
   r = await get('/quote/kpc');
   html = await r.text();
   check('the KPC link opens', r.status === 200, r.status);
   // The office asked for this page to be signed Arabella Papers while the
-  // link stays /quote/kpc. So the brand now decides the PRICE LIST and
-  // nothing else, and these two checks are the whole of that arrangement:
-  // nothing a customer reads says KPC, and the rates behind it still do.
+  // link stays /quote/kpc - and then, once both pages looked identical, for
+  // one word that tells them apart. So: signed Arabella Papers, priced from
+  // the KPC list, and KPC said ONCE, in the pill under the wordmark.
   const visible = html
     .replace(/<script[\s\S]*?<\/script>/g, '')
     .replace(/<link[^>]*>/g, '')
     .replace(/<%[\s\S]*?%>/g, '');
   check('and is signed Arabella Papers, like the other one',
-    /ARABELLA PAPERS/.test(html) && !/KPC/.test(visible), (visible.match(/KPC/g) || []).length);
+    /ARABELLA PAPERS/.test(html));
+  check('KPC is said once, and only in the pill',
+    (visible.match(/KPC/g) || []).length === 1
+    && /<div class="q-brand">KPC<\/div>/.test(visible), (visible.match(/KPC/g) || []).length);
   check('while still being priced from the KPC list',
     /pricing-kpc\/js\//.test(html));
 

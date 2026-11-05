@@ -236,7 +236,9 @@
   <div class="q-name">ARABELLA PAPERS</div>
   <div class="q-rule"></div>
   <div class="q-sub">PRICE YOUR ORDER</div>
-  <div class="q-brand"><%= brandLabel %></div>
+  <%# Only where it says something. On the Arabella link it would repeat
+      the wordmark directly above it. %>
+  <% if (brandPill) { %><div class="q-brand"><%= brandPill %></div><% } %>
 </header>
 
 <div class="wrap">
