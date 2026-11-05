@@ -1,0 +1,504 @@
+<%# ══════════════════════════════════════════════════════
+    BELLA FIGURA DEALERS
+
+    The third of the prospect lists and the smallest: 395 shops and event
+    planners read off Bella Figura's public find-us map.
+
+    Built as the office already knows CC Prospects - counts across the top
+    that open what they count, the states underneath, the list below - so
+    there is no new screen to learn. What differs is what the source gives:
+    half of these have no street address and most have no phone, because
+    the map shows only what each dealer chose to publish. So the question
+    this screen answers first is not "where are they" but "how do I reach
+    this one at all".
+ ══════════════════════════════════════════════════════ %>
+<div class="container-fluid py-3">
+
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h4 class="mb-0 fw-bold">
+      <i class="fas fa-shop me-2 text-primary"></i>BF Prospects
+    </h4>
+    <button class="btn btn-sm btn-outline-dark" onclick="bf_boot()">
+      <i class="fas fa-sync-alt me-1"></i>Refresh
+    </button>
+  </div>
+
+  <div class="row g-2 mb-3" id="bf_tiles"></div>
+
+  <%# ── the states ── %>
+  <div class="card bg-light-glass shadow-sm smooth-ui p-2 mb-3">
+    <div class="card-body p-2">
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h6 class="fw-bold mb-0 me-2">Where they are</h6>
+        <span class="text-muted small ms-auto" id="bf_stateNote"></span>
+      </div>
+      <div class="bf-grid" id="bf_states"></div>
+    </div>
+  </div>
+
+  <%# ── the list ── %>
+  <div class="card bg-light-glass shadow-sm smooth-ui p-2" id="bf_detail" hidden>
+    <div class="card-body p-2">
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h6 class="fw-bold mb-0" id="bf_detailTitle"></h6>
+        <button class="btn btn-sm btn-link text-decoration-none" onclick="bf_close()">clear</button>
+        <div class="ms-auto d-flex flex-wrap gap-2">
+          <input type="text" id="bf_q" class="form-control form-control-sm" style="max-width:230px"
+                 placeholder="Shop, city, email, phone, ZIP..." onkeyup="bf_debounce()">
+          <select id="bf_country" class="form-select form-select-sm" style="max-width:150px" onchange="bf_list()">
+            <option value="">Any country</option>
+          </select>
+          <select id="bf_has" class="form-select form-select-sm" style="max-width:175px" onchange="bf_list()">
+            <option value="">Any way to reach</option>
+            <option value="email">Has an email</option>
+            <option value="phone">Has a phone</option>
+            <option value="website">Has a website</option>
+            <option value="social">Has Instagram or Facebook</option>
+            <option value="none">No way to reach them</option>
+          </select>
+          <select id="bf_visit" class="form-select form-select-sm" style="max-width:175px" onchange="bf_list()">
+            <option value="">Any visitor policy</option>
+            <option value="appointment">By appointment</option>
+            <option value="open">Nothing stated</option>
+          </select>
+          <select id="bf_status" class="form-select form-select-sm" style="max-width:150px" onchange="bf_list()">
+            <option value="">Any status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="none">Not set yet</option>
+          </select>
+          <button class="btn btn-sm btn-outline-success" onclick="bf_excel(this)">
+            <i class="fas fa-file-excel me-1"></i>Excel
+          </button>
+        </div>
+      </div>
+
+      <%# Only on screen when something is ticked. A bar that is always
+          there is a bar people stop reading. %>
+      <div class="alert alert-primary py-2 px-3 d-none align-items-center gap-2 flex-wrap" id="bf_bulkBar">
+        <span><b id="bf_bulkCount">0</b> selected</span>
+        <span class="text-muted small">set the status on all of them:</span>
+        <button class="btn btn-sm btn-success" onclick="bf_bulk('active', this)">Active</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="bf_bulk('inactive', this)">Inactive</button>
+        <button class="btn btn-sm btn-outline-dark" onclick="bf_bulk('', this)">Clear it</button>
+        <button class="btn btn-sm btn-link text-decoration-none ms-auto" onclick="bf_pickNone()">Unselect</button>
+      </div>
+
+      <div class="table-responsive" style="max-height:58vh;overflow:auto;">
+        <table class="table table-hover table-striped mb-0 text-nowrap align-middle">
+          <thead class="table-dark">
+            <tr>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;width:2.2rem;">
+                <input type="checkbox" class="form-check-input" id="bf_all" onchange="bf_pickAll(this)"
+                       title="Select everything listed">
+              </th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Dealer</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">City</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Phone</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Email</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Online</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Visiting</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Status</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Remark</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;width:3rem;"></th>
+            </tr>
+          </thead>
+          <tbody id="bf_body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%# Only the two fields this screen may write. The rest of the row came off
+    Bella Figura's map and is traceable back to it, so it is shown here to
+    say WHICH dealer is being edited, and shown as text. %>
+<div class="modal fade" id="bf_editModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-shop me-2"></i><span id="bf_editName"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="text-muted small mb-2" id="bf_editWhere"></div>
+        <div class="small mb-3" id="bf_editReach"></div>
+        <div class="mb-3">
+          <label class="form-label fw-bold">Status</label>
+          <select class="form-select" id="bf_editStatus">
+            <option value="">Not set yet</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+        <div class="mb-1">
+          <label class="form-label fw-bold">Remark</label>
+          <textarea class="form-control" id="bf_editRemark" rows="4"
+                    placeholder="Whatever is worth remembering about this one."></textarea>
+        </div>
+        <div class="form-text" id="bf_editWho"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="bf_saveEdit(this)">Save</button>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .bf-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(176px,1fr)); gap:8px; }
+  .bf-state { text-align:left; border:1px solid rgba(0,0,0,.08); border-radius:8px; background:#fff;
+              padding:10px 12px; cursor:pointer; transition:.12s; }
+  .bf-state:hover { border-color:#0d6efd; transform:translateY(-1px); }
+  .bf-state.on { border-color:#0d6efd; box-shadow:0 0 0 2px rgba(13,110,253,.18); }
+  .bf-state .nm { font-weight:600; font-size:14px; }
+  .bf-state .big { font-size:21px; font-weight:700; line-height:1.1; }
+  .bf-state .sub { font-size:11px; color:#6c757d; }
+  /* The bar is the state against the biggest one, so the shape of the
+     list is readable without counting. */
+  .bf-bar { height:4px; border-radius:3px; background:#e9ecef; margin-top:7px; overflow:hidden; }
+  .bf-bar i { display:block; height:100%; background:#0d6efd; }
+  /* Both of these open something, so both have to look pressable. */
+  .bf-tile { cursor:pointer; transition:.12s; }
+  .bf-tile:hover { transform:translateY(-1px); box-shadow:0 .35rem .8rem rgba(0,0,0,.12) !important; }
+  .bf-tile:focus-visible { outline:2px solid #0d6efd; outline-offset:2px; }
+  .bf-row { cursor:pointer; }
+</style>
+
+<script>
+(function () {
+  var STATES = [], TOTALS = null, ROWS = [], PICKED = null, timer = null;
+  var esc = function (v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+  var n = function (v) { return Number(v || 0).toLocaleString('en-US'); };
+  var link = function (url) {
+    var u = String(url || '').trim();
+    if (!u) return '';
+    return /^https?:/i.test(u) ? u : 'http://' + u;
+  };
+
+  window.bf_boot = async function () {
+    try {
+      var j = await (await fetch('/api/bf-prospects/board')).json();
+      if (!j.success) throw new Error(j.error);
+      TOTALS = j.totals; STATES = j.states;
+      bf_drawTiles();
+      bf_drawStates();
+      bf_fillCountries();
+    } catch (e) {
+      document.getElementById('bf_states').innerHTML =
+        '<div class="text-danger small">Could not read the board.</div>';
+    }
+  };
+
+  function bf_drawTiles() {
+    var t = TOTALS || {};
+    // Each tile opens the list it counts. "No way to reach them" is the one
+    // that matters most here: it is the pile nobody can do anything with,
+    // and it is worth knowing how big it is before planning a round.
+    var tiles = [
+      ['Dealers', t.dealers, '', ''],
+      ['With an email', t.with_email, 'text-success', 'email'],
+      ['With a phone', t.with_phone, 'text-success', 'phone'],
+      ['With a website', t.with_website, '', 'website'],
+      ['Instagram or Facebook', t.with_social, '', 'social'],
+      ['No way to reach them', t.unreachable, 'text-danger', 'none'],
+    ];
+    document.getElementById('bf_tiles').innerHTML = tiles.map(function (x) {
+      return '<div class="col-6 col-md-2">'
+        + '<div class="card bg-light-glass shadow-sm smooth-ui h-100 bf-tile" tabindex="0" role="button"'
+        + ' onclick="bf_tile(\'' + x[3] + '\')"'
+        + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();bf_tile(\'' + x[3] + '\')}">'
+        + '<div class="card-body py-2"><div class="text-muted small text-uppercase">' + x[0] + '</div>'
+        + '<div class="fs-4 fw-bold ' + x[2] + '">' + n(x[1]) + '</div></div></div></div>';
+    }).join('');
+    document.getElementById('bf_stateNote').textContent =
+      n(t.states) + ' states and provinces · ' + n(t.countries) + ' countries';
+  }
+
+  function bf_drawStates() {
+    var most = STATES.reduce(function (m, s) { return Math.max(m, Number(s.dealers)); }, 1);
+    document.getElementById('bf_states').innerHTML = STATES.map(function (s) {
+      var pct = Math.round(Number(s.dealers) / most * 100);
+      return '<button class="bf-state" data-state="' + esc(s.state) + '" onclick="bf_openState(this)">'
+        + '<div class="nm">' + esc(s.state)
+          + (s.country && s.country !== 'USA' ? ' <span class="text-muted small">' + esc(s.country) + '</span>' : '')
+        + '</div>'
+        + '<div class="big">' + n(s.dealers) + '</div>'
+        + '<div class="sub">' + n(s.with_email) + ' email · ' + n(s.with_phone) + ' phone</div>'
+        + '<div class="sub">' + n(s.towns) + ' town' + (Number(s.towns) === 1 ? '' : 's') + '</div>'
+        + '<div class="bf-bar"><i style="width:' + pct + '%"></i></div>'
+        + '</button>';
+    }).join('');
+  }
+
+  function bf_fillCountries() {
+    var seen = [...new Set(STATES.map(function (s) { return s.country; }).filter(function (c) { return c && c !== '—'; }))];
+    var sel = document.getElementById('bf_country');
+    sel.innerHTML = '<option value="">Any country</option>'
+      + seen.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+  }
+
+  window.bf_openState = function (btn) {
+    PICKED = btn.dataset.state;
+    document.querySelectorAll('.bf-state').forEach(function (b) { b.classList.toggle('on', b === btn); });
+    document.getElementById('bf_detail').hidden = false;
+    bf_list();
+    document.getElementById('bf_detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  window.bf_tile = function (which) {
+    PICKED = null;
+    document.querySelectorAll('.bf-state').forEach(function (b) { b.classList.remove('on'); });
+    document.getElementById('bf_has').value = which || '';
+    ['bf_q', 'bf_country', 'bf_visit', 'bf_status'].forEach(function (id) {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('bf_detail').hidden = false;
+    bf_list();
+    document.getElementById('bf_detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  window.bf_close = function () {
+    PICKED = null;
+    document.querySelectorAll('.bf-state').forEach(function (b) { b.classList.remove('on'); });
+    ['bf_q', 'bf_country', 'bf_has', 'bf_visit', 'bf_status'].forEach(function (id) {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('bf_detail').hidden = true;
+    bf_pickNone();
+  };
+
+  window.bf_debounce = function () { clearTimeout(timer); timer = setTimeout(bf_list, 300); };
+
+  window.bf_list = async function () {
+    var p = new URLSearchParams({
+      state: PICKED || '',
+      country: document.getElementById('bf_country').value,
+      q: document.getElementById('bf_q').value,
+      has: document.getElementById('bf_has').value,
+      visit: document.getElementById('bf_visit').value,
+      status: document.getElementById('bf_status').value,
+      limit: 2000,
+    });
+    var body = document.getElementById('bf_body');
+    body.innerHTML = '<tr><td colspan="10" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading…</td></tr>';
+    try {
+      var j = await (await fetch('/api/bf-prospects?' + p)).json();
+      if (!j.success) { body.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">' + esc(j.error) + '</td></tr>'; return; }
+      ROWS = j.rows;
+
+      // Named by what is actually being looked at, so somebody who clicked a
+      // tile does not read it as the whole list.
+      var scope = PICKED || 'Every dealer';
+      var narrowed = [];
+      var has = document.getElementById('bf_has').value;
+      if (has === 'email') narrowed.push('with an email');
+      if (has === 'phone') narrowed.push('with a phone');
+      if (has === 'website') narrowed.push('with a website');
+      if (has === 'social') narrowed.push('on Instagram or Facebook');
+      if (has === 'none') narrowed.push('with no way to reach them');
+      var visit = document.getElementById('bf_visit').value;
+      if (visit === 'appointment') narrowed.push('by appointment');
+      if (visit === 'open') narrowed.push('with no visitor policy stated');
+      var st = document.getElementById('bf_status').value;
+      if (st === 'active') narrowed.push('marked active');
+      if (st === 'inactive') narrowed.push('marked inactive');
+      if (st === 'none') narrowed.push('with no status yet');
+      var country = document.getElementById('bf_country').value;
+      if (country) narrowed.push('in ' + country);
+
+      document.getElementById('bf_detailTitle').textContent =
+        scope + (narrowed.length ? ', ' + narrowed.join(' and ') : '')
+        + ' — ' + (j.shown < j.total
+          ? ('showing ' + n(j.shown) + ' of ' + n(j.total))
+          : (n(j.total) + ' dealer' + (j.total === 1 ? '' : 's')));
+
+      if (!ROWS.length) { body.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">Nobody matches.</td></tr>'; return; }
+
+      body.innerHTML = ROWS.map(function (r, i) {
+        var online = [];
+        if (r.website) online.push('<a href="' + esc(link(r.website)) + '" target="_blank" rel="noopener">site</a>');
+        if (r.instagram) online.push('<a href="' + esc(link(r.instagram)) + '" target="_blank" rel="noopener">instagram</a>');
+        if (r.facebook) online.push('<a href="' + esc(link(r.facebook)) + '" target="_blank" rel="noopener">facebook</a>');
+        // The row opens the editor as well as the pen does: there are ten
+        // columns and the pen is off the right-hand edge until somebody
+        // scrolls to it.
+        return '<tr class="bf-row" data-i="' + i + '">'
+          + '<td><input type="checkbox" class="form-check-input bf-pick" value="' + r.id
+            + '" ' + (PICKS.has(r.id) ? 'checked' : '') + ' onchange="bf_pick(' + r.id + ', this.checked)"></td>'
+          + '<td class="fw-bold">' + esc(r.store_name)
+            + (r.address ? '<div class="small text-muted fw-normal">' + esc(r.address) + '</div>'
+                         : '<div class="small text-muted fw-normal fst-italic">no address published</div>')
+          + '</td>'
+          + '<td class="small">' + esc(r.city || '—')
+            + (PICKED ? '' : ' <span class="badge bg-light text-dark border">' + esc(r.state || '—') + '</span>')
+            + (r.zip ? '<div class="text-muted">' + esc(r.zip) + '</div>' : '') + '</td>'
+          + '<td class="small">' + (r.phone ? '<a href="tel:' + esc(r.phone) + '">' + esc(r.phone) + '</a>' : '<span class="text-muted">—</span>') + '</td>'
+          + '<td class="small">' + (r.email ? '<a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a>' : '<span class="text-muted">—</span>') + '</td>'
+          + '<td class="small">' + (online.length ? online.join(' · ') : '<span class="text-muted">—</span>') + '</td>'
+          + '<td class="small">' + (r.visitor_policy
+              ? '<span class="badge bg-warning text-dark">' + esc(r.visitor_policy) + '</span>'
+              : '<span class="text-muted">—</span>') + '</td>'
+          + '<td class="small">' + bf_statusBadge(r.status) + '</td>'
+          + '<td class="small" style="max-width:18rem;white-space:normal;">'
+            + (r.remark
+                ? esc(String(r.remark).length > 120 ? String(r.remark).slice(0, 120) + '…' : r.remark)
+                : '<span class="text-muted">—</span>') + '</td>'
+          + '<td><button class="btn btn-sm btn-outline-primary" onclick="bf_edit(' + i + ')"'
+            + ' title="Status and remark"><i class="fas fa-pen"></i></button></td>'
+          + '</tr>';
+      }).join('');
+      bf_syncBar();
+    } catch (e) {
+      body.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">Server error.</td></tr>';
+    }
+  };
+
+  function bf_statusBadge(v) {
+    var st = String(v || '').toLowerCase();
+    if (st === 'active') return '<span class="badge bg-success">Active</span>';
+    if (st === 'inactive') return '<span class="badge bg-secondary">Inactive</span>';
+    return '<span class="text-muted">—</span>';
+  }
+
+  // Kept by id rather than by row number, so a tick survives the list being
+  // re-fetched - which it is, on every keystroke in the search box.
+  var PICKS = new Set();
+
+  window.bf_pick = function (id, on) {
+    if (on) PICKS.add(id); else PICKS.delete(id);
+    bf_syncBar();
+  };
+  window.bf_pickAll = function (box) {
+    ROWS.forEach(function (r) { if (box.checked) PICKS.add(r.id); else PICKS.delete(r.id); });
+    document.querySelectorAll('.bf-pick').forEach(function (el) { el.checked = box.checked; });
+    bf_syncBar();
+  };
+  window.bf_pickNone = function () {
+    PICKS.clear();
+    document.querySelectorAll('.bf-pick').forEach(function (el) { el.checked = false; });
+    var all = document.getElementById('bf_all');
+    if (all) { all.checked = false; all.indeterminate = false; }
+    bf_syncBar();
+  };
+
+  function bf_syncBar() {
+    var bar = document.getElementById('bf_bulkBar');
+    document.getElementById('bf_bulkCount').textContent = PICKS.size;
+    bar.classList.toggle('d-none', PICKS.size === 0);
+    bar.classList.toggle('d-flex', PICKS.size > 0);
+    // The header tick says something about the rows ON SCREEN, which is not
+    // the same as the selection - somebody can tick a state, then filter to
+    // another. Half-ticked says that without having to explain it.
+    var all = document.getElementById('bf_all');
+    if (!all) return;
+    var here = ROWS.filter(function (r) { return PICKS.has(r.id); }).length;
+    all.checked = ROWS.length > 0 && here === ROWS.length;
+    all.indeterminate = here > 0 && here < ROWS.length;
+  }
+
+  window.bf_bulk = async function (status, btn) {
+    if (!PICKS.size) return;
+    var what = status ? ('mark ' + PICKS.size + ' as ' + status) : ('clear the status on ' + PICKS.size);
+    if (!window.confirm('This will ' + what + '. The remarks are left alone.')) return;
+    var old = btn.innerHTML;
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      var j = await (await fetch('/api/bf-prospects/bulk/status', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...PICKS], status: status }),
+      })).json();
+      if (!j.success) throw new Error(j.error || 'Could not save them.');
+      PICKS.clear();
+      await bf_list();
+      bf_boot();
+      if (window.showToast) showToast('success', j.changed + ' updated.');
+    } catch (e) {
+      if (window.showToast) showToast('error', e.message); else alert(e.message);
+    }
+    btn.disabled = false; btn.innerHTML = old;
+  };
+
+  // One listener on the table rather than an onclick per row: the body is
+  // rewritten on every keystroke in the search box, and handlers attached to
+  // rows would be attached again each time.
+  document.getElementById('bf_body').addEventListener('click', function (e) {
+    // A phone number, an email, a link, the tick box and the pen all mean
+    // their own thing. Only the empty parts of the row mean "open this one".
+    if (e.target.closest('a, button, input, label')) return;
+    var tr = e.target.closest('tr.bf-row');
+    if (tr) bf_edit(Number(tr.dataset.i));
+  });
+
+  var EDITING = null;
+
+  window.bf_edit = function (i) {
+    EDITING = ROWS[i];
+    if (!EDITING) return;
+    document.getElementById('bf_editName').textContent = EDITING.store_name;
+    document.getElementById('bf_editWhere').textContent =
+      [EDITING.address, EDITING.city, EDITING.state, EDITING.zip, EDITING.country].filter(Boolean).join(' · ')
+      || 'No address published';
+    // Said here because it is the first question about one of these: half
+    // of them cannot be visited and most cannot be rung.
+    var reach = [];
+    if (EDITING.phone) reach.push('<a href="tel:' + esc(EDITING.phone) + '">' + esc(EDITING.phone) + '</a>');
+    if (EDITING.email) reach.push('<a href="mailto:' + esc(EDITING.email) + '">' + esc(EDITING.email) + '</a>');
+    if (EDITING.website) reach.push('<a href="' + esc(link(EDITING.website)) + '" target="_blank" rel="noopener">website</a>');
+    if (EDITING.instagram) reach.push('<a href="' + esc(link(EDITING.instagram)) + '" target="_blank" rel="noopener">instagram</a>');
+    if (EDITING.facebook) reach.push('<a href="' + esc(link(EDITING.facebook)) + '" target="_blank" rel="noopener">facebook</a>');
+    document.getElementById('bf_editReach').innerHTML = reach.length
+      ? reach.join(' &nbsp;·&nbsp; ')
+      : '<span class="text-danger">Nothing published — no phone, no email, no website.</span>';
+    document.getElementById('bf_editStatus').value = String(EDITING.status || '').toLowerCase();
+    document.getElementById('bf_editRemark').value = EDITING.remark || '';
+    document.getElementById('bf_editWho').textContent = EDITING.status_updated_by
+      ? ('Last changed by ' + EDITING.status_updated_by) : '';
+    new bootstrap.Modal(document.getElementById('bf_editModal')).show();
+  };
+
+  window.bf_saveEdit = async function (btn) {
+    if (!EDITING) return;
+    var old = btn.innerHTML;
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      var j = await (await fetch('/api/bf-prospects/' + EDITING.id, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: document.getElementById('bf_editStatus').value,
+          remark: document.getElementById('bf_editRemark').value,
+        }),
+      })).json();
+      if (!j.success) throw new Error(j.error || 'Could not save it.');
+      bootstrap.Modal.getInstance(document.getElementById('bf_editModal')).hide();
+      await bf_list();
+      if (window.showToast) showToast('success', 'Saved.');
+    } catch (e) {
+      if (window.showToast) showToast('error', e.message); else alert(e.message);
+    }
+    btn.disabled = false; btn.innerHTML = old;
+  };
+
+  window.bf_excel = function (btn) {
+    // Status and Remark go in too: they are the office's own work on this
+    // list, and an export without them is a copy of the source file rather
+    // than a copy of what anybody has done with it.
+    var cols = ['Dealer', 'Address', 'City', 'State/Prov.', 'ZIP', 'Country',
+                'Phone', 'Email', 'Website', 'Instagram', 'Facebook',
+                'Visitor policy', 'Status', 'Remark'];
+    var rows = ROWS.map(function (r) {
+      return [r.store_name, r.address, r.city, r.state, r.zip, r.country,
+              r.phone, r.email, r.website, r.instagram, r.facebook,
+              r.visitor_policy, r.status || '', r.remark || ''];
+    });
+    downloadXlsx('BF Prospects' + (PICKED ? ' - ' + PICKED : ''), cols, rows, btn);
+  };
+
+  bf_boot();
+})();
+</script>

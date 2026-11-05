@@ -756,6 +756,50 @@ CREATE TABLE IF NOT EXISTS scot_notes (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+-- The Bella Figura dealer list - 395 shops and event planners that already
+-- sell a competitor's wedding stationery, read off their public find-us map
+-- on 26 Oct 2026.
+--
+-- Its own table, not mixed into cc_prospects. They are two different
+-- competitors' lists gathered on different days, and the office works them
+-- as two rounds; one table with a "source" column would make every count on
+-- either screen a question about which rows it meant.
+--
+-- Most of these fields arrive blank, and that is the data rather than a
+-- fault: the map shows only what each dealer chose to publish. 314 have a
+-- website, 136 an email, and 47 a phone number.
+CREATE TABLE IF NOT EXISTS bf_prospects (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  store_name VARCHAR(255) NOT NULL,
+  address VARCHAR(400) DEFAULT NULL,
+  city VARCHAR(120) DEFAULT NULL,
+  -- "State/Prov." in the sheet: a US state, a Canadian province, or blank.
+  state VARCHAR(80) DEFAULT NULL,
+  zip VARCHAR(20) DEFAULT NULL,
+  -- 389 USA, 5 Canada, 1 Panama. Kept because a calling round is planned
+  -- by country first and the five Canadian ones are not a US state.
+  country VARCHAR(60) DEFAULT NULL,
+  phone VARCHAR(60) DEFAULT NULL,
+  email VARCHAR(255) DEFAULT NULL,
+  website VARCHAR(400) DEFAULT NULL,
+  instagram VARCHAR(400) DEFAULT NULL,
+  facebook VARCHAR(400) DEFAULT NULL,
+  -- "Clients by Appointment" and the like. It decides whether somebody can
+  -- be walked in on or has to be written to first.
+  visitor_policy VARCHAR(160) DEFAULT NULL,
+  -- The office's own work on the row, same as on cc_prospects. Nothing is
+  -- seeded: a shop nobody has looked at has no status.
+  status VARCHAR(20) DEFAULT NULL,
+  remark TEXT,
+  status_updated_by VARCHAR(150) DEFAULT '',
+  status_updated_at DATETIME DEFAULT NULL,
+  -- The row it came from in the workbook, so a question about one can be
+  -- traced back to the sheet.
+  source_row INT DEFAULT NULL,
+  INDEX idx_bf_state (state),
+  INDEX idx_bf_store (store_name)
+);
+
 CREATE TABLE IF NOT EXISTS cc_prospects (
   id INT AUTO_INCREMENT PRIMARY KEY,
   retailer VARCHAR(255) NOT NULL,

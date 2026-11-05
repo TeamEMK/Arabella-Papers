@@ -99,6 +99,16 @@ const SECTIONS = [
     id: 'ccProspects', group: 'ASMP', name: 'CC Prospects', icon: 'fa-store',
     rule: (role) => role === 'SuperAdmin',
   },
+  // Bella Figura's dealer list - 395 of them, read off their public find-us
+  // map. The third of these lists and the smallest, beside the other two
+  // because it is the same job on a different competitor.
+  //
+  // Contact details for other people's businesses, so SuperAdmin like the
+  // rest of this group.
+  {
+    id: 'bfProspects', group: 'ASMP', name: 'BF Prospects', icon: 'fa-shop',
+    rule: (role) => role === 'SuperAdmin',
+  },
   {
     // 'Production & Dispatch' is named in full rather than caught by an
     // includes() on 'Production': a role matched by a fragment is a trap for
