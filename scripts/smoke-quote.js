@@ -275,8 +275,23 @@ const check = (name, ok, extra) => {
   // seal in them. Nothing anybody has to READ may sit on one: small grey
   // labels over a photograph are unreadable at exactly the moment somebody
   // is typing a quantity into them.
-  check('the photographs carry no text',
-    (qview.match(/role="presentation"/g) || []).length === 2);
+  // Not a count - a count needs updating every time one is added, and
+  // the one somebody adds without the role is exactly the one that then
+  // gets text put on it. Every decorative panel on this page must be an
+  // EMPTY element marked as presentation.
+  const decorative = ['q-band', 'q-bandfoot', 'gate-art'];
+  for (const cls of decorative) {
+    check(cls + ' is an empty panel marked as decoration',
+      new RegExp('<div class="' + cls + '" role="presentation"></div>').test(qview));
+  }
+  // The form alone in the middle of an empty page looked like a form on
+  // an empty page. It is one sheet now - the suite down one side, the
+  // three questions down the other - and the picture steps aside on a
+  // phone, where the page background is already that photograph.
+  check('the gate is a composed sheet, not a box floating in cream',
+    qview.includes('class="gate-art"') && qview.includes('.gate-art {'));
+  check('and the picture gets out of the way on a phone',
+    /@media \(max-width:760px\)[\s\S]{0,900}\.gate-art \{ display:none/.test(qview));
   check('they are bands above and below, not a field behind the form',
     qview.includes('.q-band {') && qview.includes('.q-bandfoot {'));
   // The module's own CALCULATE ESTIMATE is the loudest control on the page.

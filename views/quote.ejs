@@ -93,35 +93,48 @@
      heavy border and no rounded-card look. Pastels plus big rounded
      boxes is what makes a page like this read as a greetings card. */
   .gate {
-    max-width:440px; margin:6px auto 0; background:#fff;
+    display:flex; max-width:860px; margin:6px auto 0; background:#fff;
     border:1px solid var(--line); border-top:2px solid var(--blush);
-    border-radius:3px; padding:30px 28px;
-    box-shadow:0 1px 2px rgba(58,54,50,.04), 0 10px 30px -22px rgba(58,54,50,.3);
+    border-radius:3px; overflow:hidden;
+    box-shadow:0 1px 2px rgba(58,54,50,.04), 0 14px 40px -28px rgba(58,54,50,.38);
   }
-  .gate h2 {
+  /* The tall flat-lay, cropped to a column. Its composition puts the
+     leaves at the head and the seal at the foot with bare paper between,
+     so a tall narrow crop of it still reads. */
+  .gate-art {
+    flex:0 0 42%; min-height:430px;
+    background:url('/ornament/suite-tall.jpg') center/cover no-repeat var(--ivory);
+    border-right:1px solid var(--line);
+  }
+  .gate-form { flex:1 1 auto; padding:36px 34px 30px; }
+  .gate-foot {
+    margin:16px 0 0; font-size:11px; letter-spacing:.06em;
+    color:#9b948c; text-align:center;
+  }
+  .gate-form h2 {
     font-family:'Cormorant Garamond',serif; font-weight:400; font-size:25px;
     letter-spacing:.04em; margin:0 0 5px;
   }
-  .gate p { margin:0 0 20px; color:var(--muted); font-size:13.5px; line-height:1.6; }
-  .gate label {
+  .gate-form > p { margin:0 0 20px; color:var(--muted); font-size:13.5px; line-height:1.6; }
+  .gate-form label {
     display:block; font-size:10px; letter-spacing:.16em; text-transform:uppercase;
     color:var(--muted); margin-bottom:6px;
   }
-  .gate input {
+  .gate-form input {
     width:100%; padding:11px 2px; border:0; border-bottom:1px solid var(--line);
     border-radius:0; font:inherit; font-size:14.5px; margin-bottom:18px;
     background:transparent; color:var(--ink);
   }
-  .gate input::placeholder { color:#b9b2aa; }
-  .gate input:focus { outline:none; border-bottom-color:var(--slate); }
-  .gate button {
+  .gate-form input::placeholder { color:#b9b2aa; }
+  .gate-form input:focus { outline:none; border-bottom-color:var(--slate); }
+  .gate-form button {
     width:100%; margin-top:4px; padding:13px; border:0; border-radius:999px;
     cursor:pointer; background:var(--slate); color:#fff; font:inherit;
     font-size:11.5px; letter-spacing:.2em; text-transform:uppercase;
     transition:background .15s;
   }
-  .gate button:hover { background:var(--slate-deep); }
-  .gate .err { color:#a3484b; font-size:13px; margin:-10px 0 14px; display:none; }
+  .gate-form button:hover { background:var(--slate-deep); }
+  .gate-form .err { color:#a3484b; font-size:13px; margin:-10px 0 14px; display:none; }
 
   /* The module draws a brand dropdown; the link already decided it. */
   #pricing [data-n="brand"] { display:none; }
@@ -185,7 +198,9 @@
     header.q-head { padding-top:118px; }
     .q-name { font-size:26px; margin-top:0; }
     .wrap { padding-bottom:0; }
-    .gate { background:rgba(255,255,255,.92); backdrop-filter:blur(2px); }
+    .gate { display:block; max-width:440px; background:rgba(255,255,255,.93); backdrop-filter:blur(2px); }
+    .gate-art { display:none; }
+    .gate-form { padding:28px 24px 24px; }
     /* The tall photograph has leaves and a wax seal across its foot, and
        on a short page the footer line lands right on them. A plate of
        paper under it, rather than grey text over a photograph. */
@@ -217,7 +232,14 @@
 
 <div class="wrap">
 
+  <%# One sheet, laid on the paper: the suite down one side, the three
+      questions down the other. The form on its own in the middle of an
+      empty page looked like a form on an empty page. The picture is
+      decoration and carries no text, and it steps aside on a phone -
+      the page background there is already the same photograph. %>
   <div class="gate" id="gate">
+    <div class="gate-art" role="presentation"></div>
+    <div class="gate-form">
     <h2>Before we begin</h2>
     <p>Tell us who you are, and we will email your cost summary when you are done.</p>
     <label for="g_name">Your name</label>
@@ -228,6 +250,8 @@
     <input type="text" id="g_store" autocomplete="organization" placeholder="Your shop or studio">
     <div class="err" id="g_err"></div>
     <button type="button" onclick="q_open()">Open the calculator</button>
+    <p class="gate-foot">Your estimate is emailed to you. Nothing is ordered here.</p>
+    </div>
   </div>
 
   <div id="calc" hidden>
