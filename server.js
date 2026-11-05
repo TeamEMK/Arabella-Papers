@@ -155,6 +155,9 @@ app.use('/api/cron', cronApi);
 app.use('/api/pricing', pricingApi);
 app.use('/api/prospects', prospectsApi);
 app.use('/api/cc-prospects', ccProspectsApi);
+// Delegation + Checklist tasks (modules/tasks, from the E-Marketing ERP):
+// /api/tasks, /api/approvals, /api/transfers, /api/comments, /api/holidays …
+require('./modules/tasks/arabella')(app);
 
 // ── 404 FALLBACK ──
 app.use((req, res) => {
