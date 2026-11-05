@@ -42,16 +42,27 @@ const SECTIONS = [
   // chasing a thing along rather than building it, which is why neither sat
   // comfortably under Orders or in a group of its own.
   //
-  // Nobody gained or lost a tab by this grouping: every rule below is the one
-  // it already had. A heading is only ever drawn for a group somebody has a
-  // tab in, so this one is invisible to anybody with none of them.
+  // SUPERADMIN ONLY, EXCEPT FMS TASK. The group was assembled out of tabs
+  // that each kept the rule it already had, which left it ragged: SCOT was
+  // open to every designer and the rest were not. The office asked for the
+  // group to be SuperAdmin's, and kept FMS Task open - that one is where a
+  // person finds the work handed to them, not a list of other people's
+  // businesses. A tab added here later should take the SuperAdmin rule
+  // unless it is somebody's own work in the same way.
+  //
+  // Access Control can still grant any of these to a named person on top; the
+  // rule is the floor, not the ceiling. A heading is only drawn for a group
+  // somebody has a tab in, so this is invisible to everybody else.
 
   // SCOT folds out of the Orders Dashboard as well, and both draw the same
   // partial - but somebody whose job is ringing clients should not have to
   // open a board of orders to get at it.
+  //
+  // It used to be open to every designer. Six people lose the tab by this,
+  // and Access Control can hand it back to any of them by name.
   {
     id: 'scot', group: 'ASMP', name: 'SCOT', icon: 'fa-phone-volume',
-    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head' || role.includes('Designer'),
+    rule: (role) => role === 'SuperAdmin',
   },
   // Work that lives in a Google Sheet — an enquiry or an order walked through
   // its steps. Two tabs, because they are two jobs: mapping a sheet is done
@@ -60,10 +71,14 @@ const SECTIONS = [
   // people who will never press it.
   {
     id: 'fmsAdmin', group: 'ASMP', name: 'FMS Admin', icon: 'fa-sitemap',
-    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
+    rule: (role) => role === 'SuperAdmin',
   },
-  // Open to everyone: being named on a step is what puts anything on this
-  // page, and somebody on no step sees an empty tab rather than a locked door.
+  // THE ONE EXCEPTION IN THIS GROUP, and deliberately so. Everything else
+  // here is a list of other people's businesses or somebody's setup screen.
+  // This is where a person goes to see the work that has been handed to
+  // them, and locking it would mean the people doing the steps could not see
+  // their own. Being named on a step is what puts anything on this page, so
+  // somebody on no step sees an empty tab rather than a locked door.
   { id: 'fms', group: 'ASMP', name: 'FMS Task', icon: 'fa-diagram-project', rule: () => true },
   // The dealers and stationers being worked on - 928 of them, out of the
   // spreadsheet several people had been adding to for years. It sits with
@@ -73,7 +88,7 @@ const SECTIONS = [
   // Contact details for 928 businesses, so it is not on offer to the floor.
   {
     id: 'prospects', group: 'ASMP', name: 'Prospects', icon: 'fa-address-book',
-    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
+    rule: (role) => role === 'SuperAdmin',
   },
   // The shops that already sell a competitor's wedding stationery - 7,041 of
   // them, read off a public find-a-retailer page. Beside Prospects because it
@@ -82,7 +97,7 @@ const SECTIONS = [
   // Contact details for seven thousand businesses, so not on offer to the floor.
   {
     id: 'ccProspects', group: 'ASMP', name: 'CC Prospects', icon: 'fa-store',
-    rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
+    rule: (role) => role === 'SuperAdmin',
   },
   {
     // 'Production & Dispatch' is named in full rather than caught by an

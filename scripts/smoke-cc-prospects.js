@@ -93,14 +93,23 @@ const check = (name, ok, extra) => {
   const jar = (out.headers.get('set-cookie') || '').split(';')[0];
   const get = async (url) => (await go(url, { headers: { cookie: jar } })).json();
 
-  const { defaultSectionIds } = require(path.join(ROOT, 'utils/nav.js'));
-  check('the floor is not offered the tab',
-    !defaultSectionIds('India Designer', '').includes('ccProspects'));
-  check('a head of department is',
-    defaultSectionIds('Accounts', 'Head').includes('ccProspects'));
-  const { SECTIONS } = require(path.join(ROOT, 'utils/nav.js'));
-  check('and it sits in ASMP',
-    (SECTIONS.find(s => s.id === 'ccProspects') || {}).group === 'ASMP');
+  // ASMP is SuperAdmin's, by the office's decision - every tab in the group
+  // except FMS Task, which is where a person finds the work handed to them.
+  // Written as a sweep over the group rather than one tab at a time: a tab
+  // added here later with a looser rule is the thing this has to catch, and
+  // naming them by hand is how that gets missed.
+  const { defaultSectionIds, SECTIONS } = require(path.join(ROOT, 'utils/nav.js'));
+  const asmp = SECTIONS.filter(s => s.group === 'ASMP').map(s => s.id);
+  check('ccProspects sits in ASMP', asmp.includes('ccProspects'));
+  for (const role of ['India Designer', 'Designer', 'Accounts', 'Production Manager']) {
+    for (const domain of ['', 'Head', 'Designer']) {
+      const seen = defaultSectionIds(role, domain).filter(id => asmp.includes(id));
+      check(`${role || '-'}/${domain || '-'} gets FMS Task and nothing else in ASMP`,
+        seen.length === 1 && seen[0] === 'fms', seen);
+    }
+  }
+  check('a SuperAdmin gets all of it',
+    asmp.every(id => defaultSectionIds('SuperAdmin', 'Head').includes(id)));
 
   console.log('\nThe board');
   const board = await get('/api/cc-prospects/board');
