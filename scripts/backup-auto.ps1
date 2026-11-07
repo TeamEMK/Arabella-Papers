@@ -145,12 +145,33 @@ $stderr = ''
 # will not take - fails all four times and still gets in front of somebody.
 # Only the blip passes quietly, which is the whole point.
 $waits = @(60, 180, 300)
+
+# ── ONCE A WEEK, THE WHOLE THING ──
+#
+# The daily dump leaves out catalogue_items' rows, because the artwork is
+# 54MB of the database and copying it every morning is what turned a folder
+# of 8MB files into 1.3GB of the same pictures thirteen times over. So one
+# day a week takes everything, and the pruner keeps the newest few of those.
+#
+# Decided by whether a full dump already exists in the last seven days rather
+# than by "it is Sunday": a machine that was off on Sunday would otherwise
+# wait a week, and the catalogue would go uncopied for a fortnight.
+$lastFull = Get-ChildItem -Path $backupDir -Filter 'arabella-full-*.sql' -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Where-Object { Test-DumpComplete $_ } |
+            Select-Object -First 1
+$wantFull = (-not $lastFull) -or ($lastFull.LastWriteTime -lt (Get-Date).AddDays(-7))
+$dumpArgs = if ($wantFull) { '"scripts/backup-live.js" --full' } else { '"scripts/backup-live.js"' }
+if ($wantFull) {
+  Write-Log 'this one is a FULL dump - the catalogue images are included'
+}
+
 foreach ($attempt in 1..4) {
   $outFile = [System.IO.Path]::GetTempFileName()
   $errFile = [System.IO.Path]::GetTempFileName()
   try {
     $p = Start-Process -FilePath 'node' `
-          -ArgumentList '"scripts/backup-live.js"' `
+          -ArgumentList $dumpArgs `
           -WorkingDirectory $root -NoNewWindow -Wait -PassThru `
           -RedirectStandardOutput $outFile -RedirectStandardError $errFile
     $code = $p.ExitCode

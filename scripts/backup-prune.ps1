@@ -20,7 +20,15 @@ param(
   [int]$KeepDays = 30,
   # And never thin below this many files in total. A folder that has somehow
   # ended up with a handful of backups is not one to be deleting from.
-  [int]$FloorCount = 10
+  [int]$FloorCount = 10,
+  # The newest few full dumps are kept whatever the dates say.
+  #
+  # A daily dump no longer carries catalogue_items - the artwork is 54MB of
+  # the database and did not need copying every morning - so the ONLY place
+  # those pictures exist outside the live server is a weekly arabella-full-*
+  # file. Thin those on age like everything else and the one copy of the
+  # catalogue goes out with the old Tuesdays.
+  [int]$KeepFull = 3
 )
 
 if (-not (Test-Path $Path)) { return @() }
@@ -40,6 +48,13 @@ foreach ($f in ($all | Sort-Object LastWriteTime)) {
 }
 $keepers = [System.Collections.Generic.HashSet[string]]::new()
 foreach ($v in $monthly.Values) { [void]$keepers.Add($v) }
+
+# The newest full dumps, by name rather than by size: a full dump is the only
+# copy of the catalogue images, and which file is one is decided when it is
+# written, not guessed at afterwards.
+$fulls = @($all | Where-Object { $_.Name -like 'arabella-full-*' } |
+           Sort-Object LastWriteTime -Descending | Select-Object -First $KeepFull)
+foreach ($f in $fulls) { [void]$keepers.Add($f.FullName) }
 
 $removed = @()
 foreach ($f in $all) {

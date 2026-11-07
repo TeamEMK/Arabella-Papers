@@ -61,6 +61,29 @@ function findMysqldump() {
   return guesses.find(g => g === 'mysqldump' || fs.existsSync(g));
 }
 
+// ══════════════════════════════════════════════════════
+// THE CATALOGUE IS NOT DUMPED EVERY DAY
+//
+// catalogue_items holds the artwork itself - 136 rows carrying 48MB of image
+// bytes and 6MB of thumbnails - and it is the whole reason a daily backup
+// went from 8MB to 127MB after the catalogue was imported in late October.
+// Thirteen days of it filled 1.3GB of the Desktop with thirteen copies of
+// the same pictures, while the data somebody would actually restore after a
+// bad UPDATE - the orders, the dealers, the prospects - is about ten.
+//
+// So the daily dump takes the table's STRUCTURE and not its rows. A restore
+// from it gives a working system with an empty catalogue, which is a thing
+// you can use; the pictures come from the weekly full dump, which is run
+// with --full and kept separately.
+//
+// NOT ignored outright. --ignore-table drops the CREATE TABLE as well, so a
+// restore would leave the catalogue screen querying a table that is not
+// there. Structure without rows is the difference between empty and broken.
+// ══════════════════════════════════════════════════════
+const HEAVY_TABLES = ['catalogue_items'];
+
+const FULL = process.argv.includes('--full') || process.env.BACKUP_FULL === '1';
+
 const url = new URL(connectionUrl());
 // Named in office time, not UTC - a file called 14-32 taken at half seven in
 // the evening is no use when you are looking for the one from before lunch.
@@ -68,11 +91,13 @@ const stamp = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Kolkata' })
   .slice(0, 16).replace(/[: ]/g, '-');
 const outDir = path.join(os.homedir(), 'Desktop', 'arabella-backups');
 fs.mkdirSync(outDir, { recursive: true });
-const outFile = path.join(outDir, `arabella-${stamp}.sql`);
+// A full dump is named so it can be told apart on sight and in the pruner,
+// which keeps the newest few of them whatever else it thins out.
+const outFile = path.join(outDir, `arabella-${FULL ? 'full-' : ''}${stamp}.sql`);
 
 // --single-transaction so the dump is consistent without locking the live
 // tables while the office is using the system.
-const args = [
+const BASE = [
   `--host=${url.hostname}`,
   `--port=${url.port || 3306}`,
   `--user=${decodeURIComponent(url.username)}`,
@@ -113,14 +138,31 @@ const args = [
   // not wanted - and leaving it off printed a warning on every single run
   // that trained everybody to ignore the warnings.
   '--set-gtid-purged=OFF',
-  url.pathname.replace('/', '') || 'railway',
 ];
 
+const DB = url.pathname.replace('/', '') || 'railway';
+
+// One pass on a full dump, two on a daily one: the heavy tables' structure
+// first, then everything else with their rows left out. Both land in the same
+// file, and the LAST pass is the ordinary one - so the "Dump completed" line
+// that backup-auto.ps1 looks for is still the last thing in the file, and a
+// run cut off partway still fails that test.
+const passes = FULL
+  ? [{ what: 'everything', args: [...BASE, DB] }]
+  : [
+      { what: 'catalogue structure', args: [...BASE, '--no-data', DB, ...HEAVY_TABLES] },
+      {
+        what: 'everything else',
+        args: [...BASE, ...HEAVY_TABLES.map(t => `--ignore-table=${DB}.${t}`), DB],
+      },
+    ];
+
 console.log(`\nBacking up ${url.hostname} -> ${outFile}`);
+if (!FULL) {
+  console.log(`Skipping the rows of: ${HEAVY_TABLES.join(', ')}  (use --full for those)`);
+}
 
 const out = fs.createWriteStream(outFile);
-const dump = spawn(findMysqldump(), args);
-dump.stdout.pipe(out);
 // Filtered a line at a time, not a chunk at a time.
 //
 // mysqldump warns about the password on every single run and that warning is
@@ -131,24 +173,58 @@ dump.stdout.pipe(out);
 // 'net-read-timeout=600'" - had been swallowed by the same filter. Three
 // mornings of failures were diagnosed by reproducing them instead of by
 // reading the log, which is what the log is for.
-dump.stderr.on('data', d => {
-  const keep = d.toString().split(/\r?\n/)
-    .filter(line => line.trim() && !line.includes('Using a password on the command line'));
-  if (keep.length) process.stderr.write(keep.join('\n') + '\n');
-});
+function runPass(pass) {
+  return new Promise((resolve, reject) => {
+    const dump = spawn(findMysqldump(), pass.args);
+    // end:false so the next pass can keep writing into the same file.
+    dump.stdout.pipe(out, { end: false });
 
-dump.on('error', err => {
-  console.error('\nCould not run mysqldump:', err.message);
-  console.error('Install MySQL Server, or add its bin folder to PATH.\n');
-  process.exit(1);
-});
+    // Filtered a line at a time, not a chunk at a time.
+    //
+    // mysqldump warns about the password on every single run and that warning
+    // is noise, but it arrives in the same write as whatever follows it.
+    // Testing the whole chunk threw the real message away with it: on 21
+    // October the log of a failed run read "FAILED - exit 7 - mysqldump:" and
+    // nothing else, while the line that explained the whole thing - "[ERROR]
+    // unknown variable 'net-read-timeout=600'" - had been swallowed by the
+    // same filter. Three mornings of failures were diagnosed by reproducing
+    // them instead of by reading the log, which is what the log is for.
+    dump.stderr.on('data', d => {
+      const keep = d.toString().split(/\r?\n/)
+        .filter(line => line.trim() && !line.includes('Using a password on the command line'));
+      if (keep.length) process.stderr.write(keep.join('\n') + '\n');
+    });
 
-dump.on('close', code => {
-  out.end();
-  if (code !== 0) {
-    console.error(`\nmysqldump exited with code ${code}. The file may be incomplete.\n`);
-    process.exit(code);
+    dump.on('error', err => {
+      console.error('\nCould not run mysqldump:', err.message);
+      console.error('Install MySQL Server, or add its bin folder to PATH.\n');
+      process.exit(1);
+    });
+
+    // Waits for the pipe to drain as well as for the process to go. Resolving
+    // on 'close' alone can start the next pass while the last of this one is
+    // still being written, which interleaves two dumps in one file.
+    let gone = false, drained = false, exit = 0;
+    const done = () => { if (gone && drained) (exit === 0 ? resolve() : reject(exit)); };
+    dump.stdout.on('end', () => { drained = true; done(); });
+    dump.on('close', code => { gone = true; exit = code; done(); });
+  });
+}
+
+(async () => {
+  for (const pass of passes) {
+    if (passes.length > 1) console.log(`  ... ${pass.what}`);
+    try {
+      await runPass(pass);
+    } catch (code) {
+      out.end();
+      console.error(`\nmysqldump exited with code ${code}. The file may be incomplete.\n`);
+      process.exit(code);
+    }
   }
-  const mb = (fs.statSync(outFile).size / 1024 / 1024).toFixed(1);
-  console.log(`Done. ${mb} MB written.\n`);
-});
+  out.end();
+  out.on('close', () => {
+    const mb = (fs.statSync(outFile).size / 1024 / 1024).toFixed(1);
+    console.log(`Done. ${mb} MB written.\n`);
+  });
+})();
