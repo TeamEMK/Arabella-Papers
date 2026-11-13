@@ -29,6 +29,14 @@ process.env.DB_NAME = TEST_DB;
 process.env.ADMIN_EMAIL = 'probe@test.local';
 process.env.ADMIN_PASSWORD = 'probe-pass-123';
 
+// server.js listens on PORT by itself when it is not on Vercel, and this
+// test runs while the dev server may already be on 3500. Pointed at a free
+// one before it is required: the suite uses its own listener anyway, and a
+// collision here reads as "the feature is broken" rather than "the port was
+// taken".
+process.env.PORT = '0';
+
+
 {
   const p = require.resolve(path.join(ROOT, 'utils/mailer.js'));
   require.cache[p] = {

@@ -11,3 +11,7 @@ credentials.json
 
 # Order snapshots taken before a repair — live data, kept to hand, not in the repo.
 *-before-repair.json
+
+# Python leaves these beside the import scripts.
+__pycache__/
+*.pyc
