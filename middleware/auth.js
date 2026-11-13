@@ -8,11 +8,42 @@ function isBackgroundRequest(req) {
     || /^\/(api|views)\//.test(req.originalUrl);
 }
 
+// ── WHERE THEY WERE TRYING TO GO ──
+//
+// Now that a page has its own address, somebody can be sent a link to one -
+// and before this, opening that link while signed out dropped them on the
+// dashboard with no sign the link had ever named anything. They had to be
+// sent it again.
+//
+// Only our own app paths are carried. `next` is handed straight back to the
+// browser as a redirect, so anything that could leave the site - another
+// host, a protocol-relative //evil.test, a backslash that some browsers
+// normalise to a slash - is not a destination, it is an open redirect with
+// our login page as the bait.
+const { BASE, SLUG_RE } = require('../utils/sectionSlug');
+
+function safeNext(value) {
+  const raw = String(value || '');
+  // Rejected before parsing rather than after: // and /\ are already off-site
+  // to a browser, whatever a URL parser makes of them.
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return '';
+  let u;
+  try { u = new URL(raw, 'http://placeholder.invalid'); } catch (e) { return ''; }
+  if (u.pathname === BASE) return BASE;
+  if (!u.pathname.startsWith(BASE + '/')) return '';
+  const rest = u.pathname.slice(BASE.length + 1);
+  if (!SLUG_RE.test(rest)) return '';
+  // The query is kept - ?vectors=due rides on one of these - but the hash is
+  // not, because a browser never sends it to us in the first place.
+  return u.pathname + u.search;
+}
+
 function refuse(req, res) {
   if (isBackgroundRequest(req)) {
     return res.status(401).json({ success: false, error: 'Session expired. Please log in again.' });
   }
-  return res.redirect('/login');
+  const back = safeNext(req.originalUrl);
+  return res.redirect(back ? '/login?next=' + encodeURIComponent(back) : '/login');
 }
 
 // Require login
@@ -48,4 +79,4 @@ function injectUser(req, res, next) {
   next();
 }
 
-module.exports = { requireLogin, requireRole, injectUser };
+module.exports = { requireLogin, requireRole, injectUser, safeNext };

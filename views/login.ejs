@@ -111,6 +111,10 @@
          class="logo" onerror="this.remove()"/>
     <h2>Login</h2>
     <form method="POST" action="/login" id="loginForm">
+      <%# Where they were heading before being asked to sign in. Checked
+          again on the way out - a hidden field is a field, and this one
+          comes back from a browser. %>
+      <% if (locals.next) { %><input type="hidden" name="next" value="<%= next %>"><% } %>
       <div class="input-group-custom">
         <input type="email" id="email" name="email" placeholder=" " required autocomplete="email"/>
         <label for="email">Email</label>

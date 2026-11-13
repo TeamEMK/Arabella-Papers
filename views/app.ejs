@@ -160,6 +160,10 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <!-- Every design file box uploads straight to Drive through this. -->
 <script src="/js/directUpload.js"></script>
+<!-- The same rule the server routes on, so the address bar and the routes
+     cannot disagree about where a page lives. Must load before the shell's
+     own script, which reads it on the first line of its routing. -->
+<script src="/js/sectionSlug.js"></script>
 
 <script>
   // ── USER CONTEXT (from server session) ──
@@ -786,18 +790,35 @@
   // the browser's Back button went out of the app rather than to the page
   // before.
   //
-  // ?tab=<id> on the root, rather than a path like /prospects: a path needs
-  // the server to answer for it on a refresh, and the server already answers
-  // for /track, /catalogue and /quote, which are different things entirely.
+  // /app/<slug>, a page per path. It was /?tab=<id> before that, and the
+  // reason given for the query was that a path needs the server to answer on
+  // a refresh and the server already answers for /track, /catalogue and
+  // /quote. That is still true, which is exactly why these live under /app:
+  // it collides with nothing, and routes/index.js answers for all of it.
   //
   // Other parameters are kept. ?vectors=due arrives on a held logout and is
-  // read after this runs.
-  function tabUrl(page) {
+  // read further down, after this has run.
+  const NAV_IDS = NAV_MENU.map(t => t.id);
+  const HOME = NAV_MENU.length ? NAV_MENU[0].id : '';
+  const SEC = window.ArabellaSections;
+
+  // Rule 1: one builder, one reader, and nothing anywhere hand-builds a URL.
+  function pageUrl(page) {
     const u = new URL(window.location.href);
-    u.pathname = '/';
-    u.searchParams.set('tab', page);
-    return u.pathname + u.search + u.hash;
+    u.pathname = SEC.pathFor(page, HOME);
+    // An old link is not carried forward. Both of these NAMED the page, and
+    // leaving either on would mean /app/cc-prospects?tab=ccProspects, which
+    // is the old address and the new one arguing in the same bar.
+    u.searchParams.delete('tab');
+    let hash = u.hash;
+    if (allowed(hash.replace(/^#/, ''))) hash = '';
+    return u.pathname + u.search + hash;
   }
+  function pageInAddress() {
+    return SEC.idFromPath(location.pathname, NAV_IDS);
+  }
+
+  const allowed = (id) => !!id && NAV_IDS.indexOf(id) !== -1;
 
   const _origLoadPage = loadPage;
   window.loadPage = function(page, opts) {
@@ -805,31 +826,55 @@
     // `replace` on the first load and when coming back through history, so
     // the Back button does not have to be pressed twice to leave.
     if (window.history && history.pushState) {
-      const url = tabUrl(page);
+      const url = pageUrl(page);
       if (opts && opts.replace) history.replaceState({ tab: page }, '', url);
-      else if (new URL(url, location.origin).search !== location.search) {
+      // Compared on the whole address, not just the query: the page now
+      // lives in the path, and a query-only test would push a fresh entry
+      // every time somebody clicked the tab they were already on.
+      else if (url !== location.pathname + location.search + location.hash) {
         history.pushState({ tab: page }, '', url);
       }
     }
     _origLoadPage(page);
   };
 
-  window.addEventListener('popstate', function (e) {
-    const page = (e.state && e.state.tab)
-      || new URLSearchParams(location.search).get('tab');
-    if (page && NAV_MENU.some(t => t.id === page)) loadPage(page, { replace: true });
+  // Rule 2: Back and Forward open what the address names and never push.
+  // The state object is a convenience; the address is the truth, because an
+  // entry written before this code shipped has no state on it at all.
+  window.addEventListener('popstate', function () {
+    const page = pageInAddress() || ((history.state && history.state.tab) || '');
+    if (allowed(page)) loadPage(page, { replace: true });
+    else if (allowed(HOME)) loadPage(HOME, { replace: true });
   });
 
-  // ── INIT: the tab in the address, then the last one used, then the first ──
+  // ── INIT: the address, then an old-style link, then the last one used ──
+  //
+  // Rule 3 lives here. /?tab=ccProspects and /#ccProspects were both real
+  // addresses people were given - one of them is in a mail that goes out at
+  // nine every morning - so they open their page and the address is quietly
+  // rewritten to the new one. replaceState, not push: the old link should not
+  // become a Back step on its own page.
   (function() {
     if (!NAV_MENU.length) return;
-    const allowed = (id) => id && NAV_MENU.some(t => t.id === id);
-    const asked = new URLSearchParams(location.search).get('tab');
     const last = localStorage.getItem('activeTab_arabella');
-    // A tab somebody was sent wins over whatever they had open last - that is
-    // the whole point of the link.
-    loadPage(allowed(asked) ? asked : (allowed(last) ? last : NAV_MENU[0].id),
-      { replace: true });
+
+    const fromPath = pageInAddress();
+    const legacy = new URLSearchParams(location.search).get('tab')
+      || location.hash.replace(/^#/, '');
+
+    // A page somebody was sent wins over whatever they had open last - that
+    // is the whole point of the link.
+    let open = '';
+    if (allowed(fromPath)) open = fromPath;
+    else if (allowed(legacy)) open = legacy;
+    else if (allowed(last)) open = last;
+    else open = HOME;
+
+    // An unknown or forbidden name in the address falls back to home, and the
+    // address has to follow it - otherwise the bar keeps saying /app/nope
+    // while the dashboard is on screen, and a refresh repeats the whole
+    // thing. Same for /, which is a real address people have bookmarked.
+    loadPage(open, { replace: true });
   })();
 
   // Where this person is, asked once a session and never waited for.

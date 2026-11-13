@@ -93,6 +93,25 @@ app.get('/js/productionStages.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'utils', 'productionStages.js'));
 });
 
+// And again for the section slugs. Express decides from this which paths
+// serve the shell; the shell decides from it what to put in the address bar.
+// Two copies of that rule would mean a page reachable at one spelling and
+// linked at another.
+const sectionSlug = require('./utils/sectionSlug');
+app.get('/js/sectionSlug.js', (req, res) => {
+  res.type('application/javascript');
+  res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=86400');
+  res.sendFile(path.join(__dirname, 'utils', 'sectionSlug.js'));
+});
+
+// Said at boot, not discovered later. Two sections slugging to the same path
+// would make one of them unreachable, and the symptom - a tab that opens the
+// wrong page - looks like anything but a naming clash.
+{
+  const clashes = sectionSlug.collisions(require('./utils/nav').SECTION_IDS);
+  if (clashes.length) throw new Error('Section slug clash: ' + clashes.join('; '));
+}
+
 // Build the schema on the first request against an empty database. Runs before
 // the session middleware so the store is not querying tables that don't exist.
 app.use((req, res, next) => {

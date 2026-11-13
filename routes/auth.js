@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const { ipOf, locationOf, fixFrom } = require('../utils/whereFrom');
 const vectorDuty = require('../utils/vectorDuty');
+const { safeNext } = require('../middleware/auth');
 
 /**
  * The vector-file gate.
@@ -28,10 +29,18 @@ async function vectorHold(req) {
   }
 }
 
+// Carried through the sign-in and checked again on the way out, because
+// between the two it has been through a browser and a form field. See
+// safeNext in middleware/auth.js for what is allowed.
+const landing = (req) => safeNext(req.query.next || req.body?.next) || '/';
+// For putting back in the form after a bad password: the bare value, so an
+// empty one stays empty rather than becoming a hidden field saying '/'.
+const keepNext = (req) => safeNext(req.query.next || req.body?.next);
+
 // GET /login
 router.get('/login', (req, res) => {
-  if (req.session?.user) return res.redirect('/');
-  res.render('login', { error: null });
+  if (req.session?.user) return res.redirect(landing(req));
+  res.render('login', { error: null, next: safeNext(req.query.next) });
 });
 
 // POST /login
@@ -40,12 +49,12 @@ router.post('/login', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
     if (!rows.length) {
-      return res.render('login', { error: 'Invalid credentials' });
+      return res.render('login', { error: 'Invalid credentials', next: keepNext(req) });
     }
     const user = rows[0];
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      return res.render('login', { error: 'Invalid credentials' });
+      return res.render('login', { error: 'Invalid credentials', next: keepNext(req) });
     }
 
     // Update last login
@@ -70,10 +79,10 @@ router.post('/login', async (req, res) => {
       domain: user.domain,
     };
 
-    res.redirect('/');
+    res.redirect(landing(req));
   } catch (err) {
     console.error(err);
-    res.render('login', { error: 'Server error. Please try again.' });
+    res.render('login', { error: 'Server error. Please try again.', next: keepNext(req) });
   }
 });
 

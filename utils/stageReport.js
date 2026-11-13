@@ -22,6 +22,12 @@
 // order is late while the screen shows it green is worse than no mail.
 // ══════════════════════════════════════════════════════
 const db = require('../config/db');
+// Built from the same helper the app routes on rather than typed here, so
+// this link cannot go stale the day a section is renamed. The old form,
+// /?tab=productionBD, is in two inboxes already and still opens the board -
+// the shell reads it and rewrites the address.
+const { pathFor } = require('./sectionSlug');
+const BOARD_PATH = pathFor('productionBD', 'dashboard');
 const { sendMail } = require('./mailer');
 const stages = require('./productionStages');
 
@@ -172,7 +178,7 @@ function html(report) {
       <tbody>${rows}</tbody>
     </table>
     <p style="margin:18px 0 0;">
-      <a href="${url}/?tab=productionBD" style="color:#0d6efd;">Open the production board</a>
+      <a href="${url}${BOARD_PATH}" style="color:#0d6efd;">Open the production board</a>
     </p>
     <p style="margin:10px 0 0;color:#888;font-size:12px;">
       Sent at nine each morning. Cancelled orders, local orders and anything
