@@ -92,6 +92,74 @@ CREATE TABLE IF NOT EXISTS catalogue_items (
 );
 
 -- =============================================
+-- ENVELOPE LINEARS
+-- Five sections, each with its own categories, each category a PDF.
+--
+-- NOT built like catalogue_items, deliberately. That table renders every page
+-- of every volume into the database and is 54MB of the 60 - it is the whole
+-- reason a nightly backup went from 8MB to 127MB. Here the PDF lives in
+-- Drive and only a small cover thumbnail is kept, so the grid looks the same
+-- and the database does not notice.
+--
+-- The section and the category are plain text rather than a fixed list in
+-- code: there are five sections today and the office names them, so adding a
+-- sixth should be a row, not a deploy.
+-- =============================================
+CREATE TABLE IF NOT EXISTS envelope_linears (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  section VARCHAR(80) NOT NULL,
+  category VARCHAR(120) NOT NULL,
+  -- The tile's picture, which is the first design in the category. Small:
+  -- about 10KB, not the 70KB the design itself weighs.
+  cover MEDIUMBLOB,
+  -- Taken down without being destroyed, like the design catalogue.
+  is_active TINYINT(1) DEFAULT 1,
+  section_order INT DEFAULT 0,
+  sort_order INT DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_envlin_live (is_active, section_order, sort_order),
+  INDEX idx_envlin_section (section, category)
+);
+
+-- =============================================
+-- ENVELOPE LINEAR DESIGNS
+-- The designs themselves: one row per picture, about twenty per category and
+-- 316 in all. The office's PDFs are one design per page, so these are the
+-- pages pulled apart - a person wants to look at a liner, not at a document.
+--
+-- The picture is in Drive and only a thumbnail for the grid is here. All 316
+-- thumbnails together are about 3MB, against the 69MB the designs themselves
+-- weigh; put those in the database instead and this table alone would be
+-- bigger than the whole of the rest of it, which is exactly what happened
+-- with catalogue_items.
+-- =============================================
+CREATE TABLE IF NOT EXISTS envelope_linear_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  category_id INT NOT NULL,
+  -- What somebody quotes back when they ring up about one.
+  code VARCHAR(60) DEFAULT '',
+  name VARCHAR(255) DEFAULT '',
+  -- Which page of which PDF it came off, so a design can be traced back to
+  -- the file it was pulled from without opening every one of them.
+  source_file VARCHAR(255) DEFAULT '',
+  source_page INT DEFAULT 0,
+  -- The design itself, kept here rather than in Drive - the same way the
+  -- design catalogue keeps its pictures. A Drive link opens a Drive page in
+  -- a new tab, which is not what somebody flicking through liners wants;
+  -- they want the picture, full size, over the grid they are already in.
+  -- file_url is left for anything that was linked rather than uploaded.
+  file_url VARCHAR(500) DEFAULT '',
+  mime_type VARCHAR(80) DEFAULT 'image/jpeg',
+  bytes MEDIUMBLOB,
+  width INT DEFAULT 0,
+  height INT DEFAULT 0,
+  thumb MEDIUMBLOB,
+  is_active TINYINT(1) DEFAULT 1,
+  sort_order INT DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_elitem_cat (category_id, is_active, sort_order)
+);
+-- =============================================
 -- VECTOR FILES
 -- The print-ready artwork for an order, which is not the proofing image and
 -- not the client's approval upload - the office keeps all three apart.

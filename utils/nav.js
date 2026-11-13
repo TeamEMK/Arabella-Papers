@@ -236,6 +236,14 @@ const SECTIONS = [
     rule: (role, domain) => role === 'SuperAdmin' || domain === 'Head',
   },
   {
+    // Reference material a designer looks things up in, so everybody, like
+    // Stock and Inventory. Not Admin: the Design Catalogue sits there because
+    // what goes into it appears on the public /catalogue page, and this has
+    // no public side at all.
+    id: 'envelopeLinears', group: 'Company', name: 'Envelope Linears',
+    icon: 'fa-envelope-open-text', rule: () => true,
+  },
+  {
     id: 'users', group: 'Admin', name: 'Users', icon: 'fa-users',
     rule: (role) => role === 'SuperAdmin', locked: true,
   },

@@ -67,6 +67,9 @@ function findMysqldump() {
 // catalogue_items holds the artwork itself - 136 rows carrying 48MB of image
 // bytes and 6MB of thumbnails - and it is the whole reason a daily backup
 // went from 8MB to 127MB after the catalogue was imported in late October.
+// envelope_linear_items is here for the same reason and in advance of the
+// same mistake: 316 thumbnails, 6.4MB, and every one of them can be made
+// again from the PDFs in a few minutes.
 // Thirteen days of it filled 1.3GB of the Desktop with thirteen copies of
 // the same pictures, while the data somebody would actually restore after a
 // bad UPDATE - the orders, the dealers, the prospects - is about ten.
@@ -80,7 +83,7 @@ function findMysqldump() {
 // restore would leave the catalogue screen querying a table that is not
 // there. Structure without rows is the difference between empty and broken.
 // ══════════════════════════════════════════════════════
-const HEAVY_TABLES = ['catalogue_items'];
+const HEAVY_TABLES = ['catalogue_items', 'envelope_linear_items'];
 
 const FULL = process.argv.includes('--full') || process.env.BACKUP_FULL === '1';
 

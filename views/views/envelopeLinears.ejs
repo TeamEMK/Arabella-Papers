@@ -1,0 +1,352 @@
+<%# Envelope Linears — sections and their categories down the side, the
+    designs of whichever one is picked filling the page beside them. %>
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0 text-dark fw-bold">
+      <i class="fas fa-envelope-open-text me-2"></i>Envelope Linears
+    </h3>
+    <div class="d-flex gap-2">
+      <%# On a phone the list is above the designs and both are long, so it
+          folds away rather than making somebody scroll past 21 names. %>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold d-lg-none"
+              type="button" onclick="el_toggleSide()">
+        <i class="fas fa-list me-1"></i> Categories
+      </button>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold"
+              onclick="refreshBoard(this, el_fetch, 'designs')">
+        <i class="fas fa-sync-alt me-1"></i> Refresh
+      </button>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <%# ── The side ── %>
+    <div class="col-12 col-lg-3" id="el_side">
+      <div class="card bg-light-glass shadow-sm el-sidecard">
+        <div class="card-body p-2">
+          <input type="text" id="el_q" class="form-control form-control-sm mb-2"
+                 placeholder="Search a category..." oninput="el_render()">
+          <div id="el_nav">
+            <div class="text-center text-muted py-4">
+              <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            </div>
+          </div>
+          <div class="text-muted small px-2 pt-2 border-top" id="el_count"></div>
+        </div>
+      </div>
+    </div>
+
+    <%# ── The designs ── %>
+    <div class="col-12 col-lg-9">
+      <div id="el_body">
+        <div class="text-center text-muted py-5">
+          <div class="spinner-border text-primary" role="status"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%# The full design, over everything. The design catalogue opens its
+    pictures the same way. %>
+<div class="el-lb" id="el_lb" onclick="el_lbClose(event)">
+  <button type="button" class="el-lb-x" onclick="el_lbClose(event, true)" title="Close">&times;</button>
+  <button type="button" class="el-lb-nav el-lb-prev" onclick="el_lbStep(event, -1)">&lsaquo;</button>
+  <img id="el_lbImg" alt="">
+  <button type="button" class="el-lb-nav el-lb-next" onclick="el_lbStep(event, 1)">&rsaquo;</button>
+  <div class="el-lb-cap" id="el_lbCap"></div>
+</div>
+
+<style>
+  /* Stays put while the designs beside it are scrolled - the whole point of
+     putting the list down the side rather than above. */
+  @media (min-width: 992px) {
+    .el-sidecard { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
+  }
+  .el-sechead2 {
+    width: 100%; text-align: left; border: 0; background: none;
+    font-weight: 700; color: #2f2c28; font-size: .9rem;
+    padding: .45rem .5rem; border-radius: 6px;
+    display: flex; align-items: center; gap: .4rem;
+  }
+  .el-sechead2:hover { background: rgba(0,0,0,.04); }
+  .el-sechead2 .el-caret { transition: transform .15s ease; font-size: .7rem; color: #8a8178; }
+  .el-sechead2.open .el-caret { transform: rotate(90deg); }
+  .el-catlink {
+    display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+    width: 100%; text-align: left; border: 0; background: none;
+    padding: .32rem .5rem .32rem 1.45rem; border-radius: 6px;
+    font-size: .84rem; color: #5a544c; line-height: 1.3;
+  }
+  .el-catlink:hover { background: rgba(0,0,0,.05); color: #2f2c28; }
+  .el-catlink.on { background: #2f2c28; color: #fff; font-weight: 600; }
+  .el-catlink .el-n { font-size: .72rem; opacity: .7; flex: none; }
+
+  /* The designs */
+  .el-head {
+    display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap;
+    margin-bottom: .75rem; padding-bottom: .4rem;
+    border-bottom: 2px solid rgba(0,0,0,.08);
+  }
+  .el-head h4 { margin: 0; font-weight: 700; color: #2f2c28; }
+  .el-design {
+    border: 1px solid rgba(0,0,0,.08); border-radius: 8px;
+    overflow: hidden; background: #fff; display: block;
+  }
+  .el-design[role="button"] { cursor: zoom-in; }
+  .el-design:hover { box-shadow: 0 .4rem .9rem rgba(0,0,0,.12); }
+  .el-design .el-pic {
+    height: 190px; background: #f4f1ec;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .el-design .el-pic img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .el-design .el-lbl { padding: .35rem .5rem; font-size: .74rem; color: #8a8178; }
+
+  /* 1055 is Bootstrap's modal, and other things on this app sit high too.
+     Above all of it, or the click appears to do nothing at all. */
+  .el-lb {
+    position: fixed; inset: 0; z-index: 2000;
+    background: rgba(20,18,16,.92);
+    display: none; align-items: center; justify-content: center;
+    padding: 3.5rem 4rem;
+  }
+  .el-lb.on { display: flex; }
+  .el-lb img {
+    max-width: 100%; max-height: 100%;
+    object-fit: contain; border-radius: 6px;
+    box-shadow: 0 1rem 3rem rgba(0,0,0,.5);
+  }
+  .el-lb-cap {
+    position: absolute; left: 0; right: 0; bottom: 1rem;
+    text-align: center; color: #e8e2d9; font-size: .85rem;
+    pointer-events: none;
+  }
+  .el-lb-x {
+    position: absolute; top: .6rem; right: 1rem;
+    background: none; border: 0; color: #e8e2d9;
+    font-size: 2.4rem; line-height: 1; cursor: pointer; opacity: .8;
+  }
+  .el-lb-nav {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    background: rgba(0,0,0,.35); border: 0; color: #fff;
+    font-size: 2.6rem; line-height: 1; cursor: pointer;
+    width: 3rem; height: 4.5rem; opacity: .75;
+  }
+  .el-lb-nav:hover, .el-lb-x:hover { opacity: 1; }
+  .el-lb-prev { left: .4rem; border-radius: 0 6px 6px 0; }
+  .el-lb-next { right: .4rem; border-radius: 6px 0 0 6px; }
+  @media (max-width: 575px) {
+    .el-lb { padding: 3rem .5rem; }
+    .el-lb-nav { width: 2.2rem; font-size: 2rem; }
+  }
+</style>
+
+<script>
+let el_sections = [];
+// Which sections are folded open in the side list. A set of names rather
+// than a flag per row, so a redraw after a search does not lose them.
+let el_openSet = new Set();
+let el_pickedId = 0;
+// The designs of whichever category is showing, so the arrows in the
+// lightbox have something to step through. Only the ones that actually have
+// a picture: an arrow that lands on a blank is worse than one that skips it.
+let el_shown = [];
+let el_at = -1;
+
+function el_esc(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function el_fetch() {
+  try {
+    const res = await fetch('/api/envelope-linears/board');
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Could not load.');
+    el_sections = json.sections || [];
+    // Everything open to begin with: the whole list is 21 names and somebody
+    // arriving wants to see what there is, not to go hunting for it.
+    el_sections.forEach(s => el_openSet.add(s.section));
+    el_render();
+    // Lands on something rather than on an empty page telling them to pick.
+    if (!el_pickedId) {
+      const first = el_sections.reduce((f, s) => f || s.items.find(i => i.count), null);
+      if (first) el_pick(first.id);
+    }
+    return json.designs || 0;
+  } catch (e) {
+    // The container, not a cell inside it: on a first load that failed the
+    // list was never drawn, and writing into a child that does not exist is
+    // how a failure becomes a blank page with nothing said.
+    const box = document.getElementById('el_nav');
+    if (box) {
+      box.innerHTML = '<div class="alert alert-danger m-0 small">Could not load Envelope Linears.</div>';
+    }
+    return 0;
+  }
+}
+
+function el_toggleSection(name) {
+  if (el_openSet.has(name)) el_openSet.delete(name); else el_openSet.add(name);
+  el_render();
+}
+
+function el_toggleSide() {
+  document.getElementById('el_side').classList.toggle('d-none');
+}
+
+/** Draws the side list. The designs beside it are left alone. */
+function el_render() {
+  const box = document.getElementById('el_nav');
+  if (!box) return;
+  const q = (document.getElementById('el_q').value || '').trim().toLowerCase();
+
+  let cats = 0, designs = 0;
+  const blocks = el_sections.map(s => {
+    const items = s.items.filter(it => !q
+      || String(it.category || '').toLowerCase().includes(q)
+      || String(s.section || '').toLowerCase().includes(q));
+    if (!items.length) return '';
+    cats += items.length;
+    items.forEach(it => { designs += it.count; });
+
+    // A search opens whatever it found. Typing a name and being shown a
+    // folded-up section with the answer hidden inside is not a search.
+    const open = q ? true : el_openSet.has(s.section);
+    const rows = !open ? '' : items.map(it => `
+        <button type="button"
+                class="el-catlink${it.id === el_pickedId ? ' on' : ''}"
+                data-id="${it.id}" onclick="el_pick(${it.id})">
+          <span>${el_esc(it.category)}</span>
+          <span class="el-n">${it.count || 0}</span>
+        </button>`).join('');
+
+    return `<div class="mb-1">
+        <button type="button" class="el-sechead2${open ? ' open' : ''}"
+                onclick="el_toggleSection(${JSON.stringify(s.section)
+                  .replace(/"/g, '&quot;')})">
+          <i class="fas fa-chevron-right el-caret"></i>
+          <span class="flex-grow-1">${el_esc(s.section)}</span>
+          <span class="text-muted small fw-normal">${items.length}</span>
+        </button>
+        ${rows}
+      </div>`;
+  }).filter(Boolean).join('');
+
+  box.innerHTML = blocks
+    || '<div class="text-muted small text-center py-3">Nothing matches that.</div>';
+
+  const count = document.getElementById('el_count');
+  if (count) {
+    count.textContent = cats + (cats === 1 ? ' category, ' : ' categories, ')
+      + designs + (designs === 1 ? ' design' : ' designs');
+  }
+}
+
+/** Opens one category in the panel beside the list. */
+async function el_pick(id) {
+  el_pickedId = id;
+  el_render();
+  const body = document.getElementById('el_body');
+  body.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
+  // On a phone the list is stacked above the designs, so leaving it open
+  // means picking a category and seeing nothing happen below the fold.
+  if (window.innerWidth < 992) document.getElementById('el_side').classList.add('d-none');
+
+  try {
+    const res = await fetch('/api/envelope-linears/category/' + id);
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Could not load.');
+    // Somebody clicked another category while this one was still coming.
+    // Without this the slower answer lands last and overwrites the one they
+    // are actually looking at.
+    if (el_pickedId !== id) return;
+
+    el_shown = json.items.filter(it => it.hasImage);
+    el_at = -1;
+
+    const head = `<div class="el-head">
+        <h4>${el_esc(json.category)}</h4>
+        <span class="text-muted small">${el_esc(json.section)}</span>
+        <span class="text-muted small ms-auto">${json.items.length}
+          ${json.items.length === 1 ? 'design' : 'designs'}</span>
+      </div>`;
+
+    if (!json.items.length) {
+      body.innerHTML = head + '<div class="text-center text-muted py-5">'
+        + 'Nothing has been put in this category yet.</div>';
+      return;
+    }
+
+    body.innerHTML = head + '<div class="row g-3">' + json.items.map(it => {
+      // NOT lazy. A category is about twenty pictures and somebody who just
+      // opened it wants all of them.
+      const pic = it.hasThumb
+        ? `<img src="/api/envelope-linears/thumb/${it.id}" alt="">`
+        : '<i class="fas fa-image text-muted"></i>';
+      const label = it.code || it.name || ('Design ' + (it.page || ''));
+      // The tile shows the thumbnail - that is why this page is quick - and
+      // clicking it opens the full picture over the page, the way the design
+      // catalogue does. A design with no picture stored is left as a plain
+      // box rather than something that looks clickable and is not.
+      const open = it.hasImage
+        ? `<div class="el-design" role="button" tabindex="0" onclick="el_lb(${it.id})">`
+        : (it.url
+            ? `<a href="${el_esc(it.url)}" target="_blank" rel="noopener" class="el-design text-decoration-none">`
+            : '<div class="el-design">');
+      const close = it.hasImage ? '</div>' : (it.url ? '</a>' : '</div>');
+      return `<div class="col-6 col-sm-4 col-lg-3 col-xxl-2">
+          ${open}<div class="el-pic">${pic}</div>
+          <div class="el-lbl text-truncate">${el_esc(label)}</div>${close}
+        </div>`;
+    }).join('') + '</div>';
+  } catch (e) {
+    body.innerHTML = '<div class="alert alert-danger m-0">Could not load that category.</div>';
+  }
+}
+
+function el_lbShow(i) {
+  if (i < 0 || i >= el_shown.length) return;
+  el_at = i;
+  const it = el_shown[i];
+  document.getElementById('el_lbImg').src = '/api/envelope-linears/image/' + it.id;
+  document.getElementById('el_lbCap').textContent =
+    (it.code || it.name || ('Design ' + (it.page || '')))
+    + (el_shown.length > 1 ? '  (' + (i + 1) + ' of ' + el_shown.length + ')' : '');
+  document.getElementById('el_lb').classList.add('on');
+}
+
+function el_lb(id) {
+  el_lbShow(el_shown.findIndex(it => it.id === id));
+}
+
+function el_lbStep(ev, by) {
+  // Without this the click reaches the backdrop underneath and shuts the
+  // picture the arrow was supposed to change.
+  if (ev) ev.stopPropagation();
+  if (!el_shown.length) return;
+  el_lbShow((el_at + by + el_shown.length) % el_shown.length);
+}
+
+function el_lbClose(ev, force) {
+  // Only the backdrop itself closes it. Clicking the picture does not, or
+  // every attempt to look closely at a liner shuts the thing being looked at.
+  if (force || !ev || ev.target.id === 'el_lb') {
+    document.getElementById('el_lb').classList.remove('on');
+    // Emptied so a big picture is not still being fetched behind a closed
+    // lightbox, and so the next one does not flash the last one first.
+    document.getElementById('el_lbImg').removeAttribute('src');
+  }
+}
+
+document.addEventListener('keydown', ev => {
+  const lb = document.getElementById('el_lb');
+  if (!lb || !lb.classList.contains('on')) return;
+  if (ev.key === 'Escape') { ev.stopPropagation(); el_lbClose(null, true); }
+  else if (ev.key === 'ArrowRight') el_lbStep(null, 1);
+  else if (ev.key === 'ArrowLeft') el_lbStep(null, -1);
+}, true);
+
+el_fetch();
+</script>

@@ -165,6 +165,13 @@ const COLUMN_MIGRATIONS = [
   { table: 'activity_log', column: 'accuracy_m', type: 'INT NULL' },
   // The grid-sized copy, added after the full pictures were already in.
   { table: 'catalogue_items', column: 'thumb', type: 'MEDIUMBLOB NULL' },
+  // Envelope Linears started out pointing at Drive and keeping only a
+  // thumbnail here. Opening a design then meant a Drive page in a new tab,
+  // when what the office wanted was the picture itself over the grid - the
+  // way the design catalogue has always worked. So the full bytes live here
+  // too, and these two arrive on tables that already exist.
+  { table: 'envelope_linear_items', column: 'bytes', type: 'MEDIUMBLOB NULL' },
+  { table: 'envelope_linear_items', column: 'mime_type', type: "VARCHAR(80) DEFAULT 'image/jpeg'" },
 ];
 
 async function addMissingColumns() {
@@ -260,6 +267,63 @@ const SETTING_SEED = [
   ['vector_rule_start_date', '2026-10-28'],
 ];
 
+/**
+ * ENVELOPE LINEARS — the five sections and what is in them.
+ *
+ * The office gave the structure before the artwork, so the tab is useful the
+ * day it ships: every category is on screen, greyed, saying it has no PDF
+ * yet, and the import fills them in as the files arrive. The alternative was
+ * an empty page and a promise.
+ *
+ * Seeded only into an empty table, like the add-ons above. These names get
+ * edited - "Judaica" will be spelt three ways before anybody is happy - and
+ * a deploy that put the first spelling back would be a deploy that undid
+ * somebody's afternoon.
+ *
+ * Written exactly as the office wrote them, slashes and ampersands included.
+ * They are text in a row, not file names, so nothing here has to survive
+ * being a folder on Windows - which "Birds / Butterflies / Wildlife" could
+ * not.
+ */
+const ENVELOPE_LINEAR_SEED = [
+  ['Classic & Traditional', [
+    'Floral & Botanical', 'Damask & Ornamental', 'Toile & Scenic',
+    'Heritage & Vintage', 'Chinoiserie',
+  ]],
+  ['Modern & Contemporary', [
+    'Playful & Whimsical', 'Abstract & Artistic', 'Geometric & Art Deco',
+    'Minimal & Micro Pattern', 'Stripes, Checks & Lattice',
+  ]],
+  ['Nature / Places / Destinations', [
+    'Coastal & Nautical', 'Mediterranean & Destination', 'Cityscapes & Maps',
+    'Birds / Butterflies / Wildlife',
+  ]],
+  ['Celebrations & Personalisation', [
+    'Monograms, Crests & Personalised', 'Jewish Heritage & Judaica',
+    'Holiday & Seasonal', 'Romantic & Feminine',
+  ]],
+  ['Speciality & Statement', [
+    'Embossed / Debossed', 'Foil Friendly & Metallic', 'Bold & Statement Prints',
+  ]],
+];
+
+async function seedEnvelopeLinears() {
+  const [[row]] = await db.query('SELECT COUNT(*) AS c FROM envelope_linears');
+  if (row.c) return 0;
+  const rows = [];
+  ENVELOPE_LINEAR_SEED.forEach(([section, cats], si) => {
+    cats.forEach((category, oi) => rows.push([section, category, si, oi]));
+  });
+  await db.query(
+    `INSERT INTO envelope_linears (section, category, section_order, sort_order, is_active)
+     VALUES ${rows.map(() => '(?,?,?,?,1)').join(', ')}`,
+    rows.flat(),
+  );
+  // The designs that go in them arrive by import - see
+  // scripts/import-envelope-linears.py. This seeds the shelf, not the books.
+  return rows.length;
+}
+
 async function seedSettings() {
   let n = 0;
   for (const [name, value] of SETTING_SEED) {
@@ -313,6 +377,7 @@ function fingerprint(sql) {
   // twenty seconds to prove it.
   return crypto.createHash('sha1').update(JSON.stringify([
     statementsFrom(sql), COLUMN_MIGRATIONS, GNA_SEED, ADD_ON_SEED, SETTING_SEED,
+    ENVELOPE_LINEAR_SEED,
   ])).digest('hex').slice(0, 16);
 }
 
@@ -361,7 +426,11 @@ async function build() {
   // office fills in from the floor are not pushed back to null on the next
   // boot - see seedSteps.
   const pmsSteps = await pmsEngine.seedSteps();
-  return { created, admin, columns, gna, addOns, settings, approvals, pmsSteps };
+  // The five Envelope Linears sections and their categories, onto an empty
+  // table only - see seedEnvelopeLinears.
+  const envelopeLinears = await seedEnvelopeLinears();
+  return { created, admin, columns, gna, addOns, settings, approvals, pmsSteps,
+           envelopeLinears };
 }
 
 /**
@@ -411,4 +480,4 @@ function ensureSchema() {
   return ready;
 }
 
-module.exports = { ensureSchema, statementsFrom };
+module.exports = { ensureSchema, statementsFrom, ENVELOPE_LINEAR_SEED };
