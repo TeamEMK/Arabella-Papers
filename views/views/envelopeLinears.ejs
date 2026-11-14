@@ -12,6 +12,10 @@
               type="button" onclick="el_toggleSide()">
         <i class="fas fa-list me-1"></i> Categories
       </button>
+      <a class="btn btn-outline-dark smooth-ui fw-bold" href="/linears"
+         target="_blank" rel="noopener">
+        <i class="fas fa-up-right-from-square me-1"></i> Open the public page
+      </a>
       <button class="btn btn-outline-dark smooth-ui fw-bold d-none"
               type="button" id="el_manageBtn" onclick="el_toggleManage()">
         <i class="fas fa-pen me-1"></i> <span id="el_manageLbl">Manage</span>
@@ -21,6 +25,20 @@
         <i class="fas fa-sync-alt me-1"></i> Refresh
       </button>
     </div>
+  </div>
+
+  <%# The link is the point of having a public page at all, so it is on the
+      screen rather than something to be reconstructed from memory when a
+      customer asks for it. %>
+  <div class="alert alert-light border d-flex flex-wrap align-items-center gap-2 py-2">
+    <span class="text-muted small">Customers open this - no login:</span>
+    <code id="el_link" class="small"></code>
+    <button class="btn btn-sm btn-outline-secondary" onclick="el_copyLink()">
+      <i class="fas fa-copy me-1"></i>Copy
+    </button>
+    <span class="text-muted small ms-auto">
+      Every design that is not hidden is on it, full size.
+    </span>
   </div>
 
   <div class="row g-3">
@@ -815,6 +833,14 @@ document.addEventListener('keydown', ev => {
   else if (ev.key === 'ArrowRight') el_lbStep(null, 1);
   else if (ev.key === 'ArrowLeft') el_lbStep(null, -1);
 }, true);
+
+document.getElementById('el_link').textContent = window.location.origin + '/linears';
+
+function el_copyLink() {
+  navigator.clipboard.writeText(window.location.origin + '/linears')
+    .then(function () { showToast('success', 'Link copied'); })
+    .catch(function () { showToast('warning', 'Could not copy - select it by hand'); });
+}
 
 el_fetch();
 </script>

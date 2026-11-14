@@ -11,6 +11,7 @@ const { injectUser } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const trackRoutes = require('./routes/track');
 const catalogueRoutes = require('./routes/catalogue');
+const linearsRoutes = require('./routes/linears');
 const quoteRoutes = require('./routes/quote');
 const catalogueApi = require('./routes/api/catalogue');
 const indexRoutes = require('./routes/index');
@@ -143,6 +144,9 @@ app.set('views', path.join(__dirname, 'views'));
 // routes so nothing downstream can decide it needs one.
 app.use('/track', trackRoutes);
 app.use('/catalogue', catalogueRoutes);
+// The liner book, for a customer. No login: see the note at the top of
+// routes/linears.js for exactly what that opens up.
+app.use('/linears', linearsRoutes);
 // Two public links, one per brand - see routes/quote.js.
 app.use('/quote', quoteRoutes);
 app.use('/', authRoutes);
