@@ -432,14 +432,25 @@ function cr_render() {
   }
 
   body.innerHTML = rows.map(function (c, i) {
-    // Only the designer it belongs to answers it, and only while it is open.
-    const mine = !cr_canRaise || (APP_USER.username || '').trim().toLowerCase() === (c.designer || '').trim().toLowerCase();
-    const answer = c.status === 'pending' && mine
+    // Who gets a button, and only while the correction is still open.
+    //
+    // Everyone on this screen may answer what they can see. An ordinary
+    // designer is only ever sent their own, so anything in front of them is
+    // theirs. A SuperAdmin is sent everybody's and is allowed to answer any
+    // of them - which is what the server has permitted since the day this
+    // section was written. Only this line disagreed.
+    //
+    // It disagreed by comparing a LOGIN NAME with the name written on the
+    // order, and those are not the same thing: order sheets spell people out
+    // in full. "Sagar" never matched "Sagar Gupta", so twelve corrections on
+    // his own orders had no button at all - and one on "Kalpana", a name with
+    // no login behind it, could not have been answered by anybody alive.
+    const answer = c.status === 'pending'
       ? '<button class="btn btn-sm btn-success fw-bold" onclick="cr_openDo(' + c.id + ')">Answer</button>'
       : '';
     // Reopening is not a thing: a delayed one is still outstanding, so it is
     // answered the same way as a pending one.
-    const redo = c.status === 'delayed' && mine
+    const redo = c.status === 'delayed'
       ? '<button class="btn btn-sm btn-outline-success fw-bold" onclick="cr_openDo(' + c.id + ')">Update</button>'
       : '';
     const remove = cr_canRaise
