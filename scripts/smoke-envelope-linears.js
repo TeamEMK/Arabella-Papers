@@ -139,13 +139,36 @@ const NL = String.fromCharCode(10);
     opts.redirect = 'manual';
     return fetch(BASE + url, opts);
   };
+  // Signed in, and PROVED signed in before the cookie is handed back.
+  //
+  // The session store keeps its rows in MySQL and makes its own table on
+  // startup. This suite builds a brand new database every run, so a login can
+  // land in the gap before that table exists: the cookie comes back looking
+  // perfectly good, the session was never written, and the next request is a
+  // 401. It failed about one run in five, and it failed on the line that says
+  // "a designer can browse it", which is a sentence about permissions and had
+  // nothing to do with it.
+  //
+  // So: ask for something behind the login and only believe the cookie once
+  // the answer comes back. Nothing here is retried that actually got in - a
+  // wrong password answers 401 ten times and then says so plainly.
   const signIn = async (email, password) => {
-    const r = await go('/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ email, password }),
-    });
-    return (r.headers.get('set-cookie') || '').split(';')[0];
+    let last = 0;
+    for (let i = 0; i < 20; i++) {
+      const r = await go('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ email, password }),
+      });
+      const cookie = (r.headers.get('set-cookie') || '').split(';')[0];
+      if (cookie) {
+        const who = await go('/api/envelope-linears/board', { headers: { cookie } });
+        last = who.status;
+        if (who.status === 200) return cookie;
+      }
+      await new Promise(done => setTimeout(done, 200));
+    }
+    throw new Error('could not sign ' + email + ' in (last answer ' + last + ')');
   };
   const jar = await signIn(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
   const get = (url, cookie) => go(url, { headers: { cookie: cookie === undefined ? jar : cookie } });

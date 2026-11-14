@@ -12,7 +12,7 @@
               type="button" onclick="el_toggleSide()">
         <i class="fas fa-list me-1"></i> Categories
       </button>
-      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold d-none"
+      <button class="btn btn-outline-dark smooth-ui fw-bold d-none"
               type="button" id="el_manageBtn" onclick="el_toggleManage()">
         <i class="fas fa-pen me-1"></i> <span id="el_manageLbl">Manage</span>
       </button>
@@ -140,6 +140,18 @@
   }
   .el-design .el-pic img { max-width: 100%; max-height: 100%; object-fit: contain; }
   .el-design .el-lbl { padding: .35rem .5rem; font-size: .74rem; color: #8a8178; }
+
+  /* The Manage button while it is on. Spelled out rather than borrowed from
+     Bootstrap's utilities so the background and the writing on it can never
+     arrive separately - that is a black button with nothing on it. */
+  #el_manageBtn.el-managing,
+  #el_manageBtn.el-managing:hover,
+  #el_manageBtn.el-managing:focus {
+    background-color: #2f2c28;
+    border-color: #2f2c28;
+    color: #fff;
+  }
+  #el_manageBtn.el-managing i { color: #fff; }
 
   .el-catlink .el-x {
     border: 0; background: none; color: inherit; opacity: .45;
@@ -424,10 +436,16 @@ function el_toggleManage() {
 function el_paintManage() {
   const btn = document.getElementById('el_manageBtn');
   if (btn) {
-    btn.classList.toggle('btn-dark', el_manage);
-    btn.classList.toggle('text-white', el_manage);
-    btn.classList.toggle('btn-outline-dark', !el_manage);
-    btn.classList.toggle('text-dark', !el_manage);
+    // ONE class on, one class off, and the colours in the stylesheet.
+    //
+    // This used to swap btn-outline-dark for btn-dark and text-dark for
+    // text-white - four classes in flight at once, and if a page was drawn
+    // holding the dark background without the white text it was a black
+    // button with nothing readable on it. The office photographed exactly
+    // that. Which of the four lost its race hardly matters: the cure is to
+    // stop racing, so the button keeps the class list it was written with
+    // and a single state class says which state it is in.
+    btn.classList.toggle('el-managing', el_manage);
     document.getElementById('el_manageLbl').textContent = el_manage ? 'Done' : 'Manage';
   }
   const add = document.getElementById('el_newBtn');
