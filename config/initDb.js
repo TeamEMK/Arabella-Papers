@@ -172,6 +172,8 @@ const COLUMN_MIGRATIONS = [
   // too, and these two arrive on tables that already exist.
   { table: 'envelope_linear_items', column: 'bytes', type: 'MEDIUMBLOB NULL' },
   { table: 'envelope_linear_items', column: 'mime_type', type: "VARCHAR(80) DEFAULT 'image/jpeg'" },
+  // Added once designs started being named after the category they are in.
+  { table: 'envelope_linears', column: 'code_next', type: 'INT DEFAULT 0' },
 ];
 
 async function addMissingColumns() {

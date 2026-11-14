@@ -112,6 +112,11 @@ CREATE TABLE IF NOT EXISTS envelope_linears (
   -- The tile's picture, which is the first design in the category. Small:
   -- about 10KB, not the 70KB the design itself weighs.
   cover MEDIUMBLOB,
+  -- The highest design number this category has EVER handed out. Not how many
+  -- it holds: delete the second of three and add another, and the new one has
+  -- to be a fourth. A code that has been read down a telephone cannot come
+  -- back next month meaning a different liner, so this only ever goes up.
+  code_next INT DEFAULT 0,
   -- Taken down without being destroyed, like the design catalogue.
   is_active TINYINT(1) DEFAULT 1,
   section_order INT DEFAULT 0,

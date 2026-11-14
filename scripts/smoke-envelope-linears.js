@@ -359,6 +359,35 @@ const NL = String.fromCharCode(10);
     body: JSON.stringify({ image: JPEG, thumb: JPEG, name: 'Suite design', width: 2, height: 2 }),
   }).then(r => r.json());
   check('a design goes in', putIn.success === true && putIn.id > 0, putIn);
+  // Named as it is stored, so nothing is ever called "Design 7" in twenty-one
+  // different categories at once.
+  check('and it is given a name of its own on the way in',
+    putIn.code === 'SS-SL-01', putIn.code);
+
+  const second = await go('/api/envelope-linears/' + made.id + '/items', {
+    method: 'POST', headers: { cookie: jar, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: JPEG, thumb: JPEG }),
+  }).then(r => r.json());
+  check('the next one takes the next number', second.code === 'SS-SL-02', second.code);
+
+  // Deleting the second and adding another must give a third, not a second
+  // second: a code that has been read out to somebody cannot come back
+  // meaning a different design.
+  await go('/api/envelope-linears/item/' + second.id, { method: 'DELETE', headers: { cookie: jar } });
+  const third = await go('/api/envelope-linears/' + made.id + '/items', {
+    method: 'POST', headers: { cookie: jar, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: JPEG, thumb: JPEG }),
+  }).then(r => r.json());
+  check('a number is never handed out twice', third.code === 'SS-SL-03', third.code);
+  await go('/api/envelope-linears/item/' + third.id, { method: 'DELETE', headers: { cookie: jar } });
+
+  // Somebody naming one by hand means it.
+  const byHand = await go('/api/envelope-linears/' + made.id + '/items', {
+    method: 'POST', headers: { cookie: jar, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: JPEG, thumb: JPEG, code: 'SPECIAL-1' }),
+  }).then(r => r.json());
+  check('a name typed by hand is kept', byHand.code === 'SPECIAL-1', byHand.code);
+  await go('/api/envelope-linears/item/' + byHand.id, { method: 'DELETE', headers: { cookie: jar } });
 
   const nowIn = await getJson('/api/envelope-linears/category/' + made.id);
   check('and comes back with a picture to open',

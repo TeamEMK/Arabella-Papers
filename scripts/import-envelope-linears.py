@@ -374,6 +374,23 @@ def main():
                 (cat['id'], cat['id']))
     conn.commit()
 
+    # ── Name them ──
+    # Handed to the Node side rather than worked out here. The rule for what
+    # a liner is called lives in utils/linerCode.js, and a second copy of it
+    # in Python is two rules that agree until the day one of them is edited.
+    print()
+    print('Naming...')
+    naming = subprocess.run(
+        ['node', os.path.join('scripts', 'code-envelope-linears.js'), '--write',
+         '--db', args.db],
+        cwd=ROOT, capture_output=True, text=True)
+    for line in (naming.stdout or '').splitlines()[-3:]:
+        print('  ' + line)
+    if naming.returncode != 0:
+        print('  Naming failed, so the designs are in but unnamed:')
+        print('  ' + (naming.stderr or '').strip()[:400])
+        print('  Run: node scripts/code-envelope-linears.js --write --db ' + args.db)
+
     with conn.cursor() as cur:
         cur.execute('SELECT COUNT(*) FROM envelope_linear_items WHERE is_active = 1')
         total = cur.fetchone()[0]

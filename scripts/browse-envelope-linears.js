@@ -303,6 +303,25 @@ function freePort() {
     // On a phone picking a category hides the list, so without this there is
     // nothing to go back to but the browser's own back button - which leaves
     // the tab altogether.
+    // "Design 7" existed in most of the twenty-one categories at once, which
+    // is no use to somebody reading one out down a telephone.
+    console.log(NL + 'Every design is called something of its own');
+    const labels = await ev(
+      "JSON.stringify([...document.querySelectorAll('#el_body .el-lbl')]"
+      + ".map(e=>e.innerText.trim()))").then(JSON.parse);
+    check('the six on screen are all different',
+      new Set(labels).size === labels.length, labels);
+    check('and each says where it lives',
+      labels.every(l => /^SS-ED-\d{2}$/.test(l)), labels);
+    check('the lightbox caption uses the same name', await (async () => {
+      await ev("document.querySelector('#el_body .el-design').click();");
+      await sleep(600);
+      const cap = await ev("document.getElementById('el_lbCap').innerText");
+      await ev('el_lbClose(null, true);');
+      await sleep(200);
+      return /^SS-ED-01/.test(cap || '');
+    })());
+
     console.log(NL + 'Back returns to the list');
     check('the open category offers a way back',
       await ev("!!document.querySelector('#el_body .el-back')"));

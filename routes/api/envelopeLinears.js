@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../config/db');
 const { requireLogin, requireRole, hasRole } = require('../../middleware/auth');
+const { codeFor } = require('../../utils/linerCode');
 
 // ══════════════════════════════════════════════════════
 // ENVELOPE LINEARS
@@ -418,7 +419,7 @@ router.post('/:id/items', requireLogin, canManage, async (req, res) => {
       return res.status(400).json({ success: false, error: 'No such category.' });
     }
     const [[cat]] = await db.query(
-      'SELECT id FROM envelope_linears WHERE id = ?', [id]);
+      'SELECT id, section, category, code_next FROM envelope_linears WHERE id = ?', [id]);
     if (!cat) return res.status(404).json({ success: false, error: 'No such category.' });
 
     const b = req.body || {};
@@ -430,14 +431,40 @@ router.post('/:id/items', requireLogin, canManage, async (req, res) => {
     const [[last]] = await db.query(
       'SELECT COALESCE(MAX(sort_order), -1) AS n FROM envelope_linear_items WHERE category_id = ?', [id]);
 
+    // The name it will be quoted by: CT-FB-19 for the nineteenth liner in
+    // Floral & Botanical.
+    //
+    // Counted off the category's OWN counter, not off what is in the table.
+    // The highest code in the table was the obvious way and it is wrong:
+    // delete the second of three and the highest drops back to one, so the
+    // next design added is handed a second SS-SL-02 - and a code somebody
+    // read down a telephone last month now means a different liner. My own
+    // test caught that; the counter only ever goes up.
+    //
+    // The MAX is still consulted, for rows that were named before the counter
+    // existed. Whatever was typed wins over both, because somebody naming one
+    // by hand means it.
+    const [[used]] = await db.query(
+      `SELECT COALESCE(MAX(CAST(SUBSTRING_INDEX(code, '-', -1) AS UNSIGNED)), 0) AS n
+         FROM envelope_linear_items
+        WHERE category_id = ? AND code REGEXP '-[0-9]+$'`, [id]);
+    const nextNumber = Math.max(Number(cat.code_next) || 0, Number(used.n) || 0) + 1;
+    const code = clean(b.code, 60) || codeFor(cat.section, cat.category, nextNumber);
+
     const [out] = await db.query(
       `INSERT INTO envelope_linear_items
          (category_id, code, name, source_file, mime_type, bytes, thumb,
           width, height, sort_order, is_active)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [id, clean(b.code, 60), clean(b.name, 255), clean(b.sourceFile, 255),
+      [id, code, clean(b.name, 255), clean(b.sourceFile, 255),
        full.mime, full.bytes, thumb.bytes,
        Number(b.width) || 0, Number(b.height) || 0, Number(last.n) + 1]);
+
+    // Remembered before anything else can be added, so two designs arriving
+    // close together cannot be handed the same number.
+    await db.query(
+      'UPDATE envelope_linears SET code_next = GREATEST(COALESCE(code_next, 0), ?) WHERE id = ?',
+      [nextNumber, id]);
 
     // The tile shows its first design, so a category that had none now has a
     // cover. Only when it has none: replacing it on every upload would make
@@ -446,7 +473,7 @@ router.post('/:id/items', requireLogin, canManage, async (req, res) => {
       `UPDATE envelope_linears SET cover = ? WHERE id = ? AND cover IS NULL`,
       [thumb.bytes, id]);
 
-    res.json({ success: true, id: out.insertId });
+    res.json({ success: true, id: out.insertId, code });
   } catch (err) {
     console.error('Envelope Linears item create failed:', err);
     res.status(500).json({ success: false, error: err.message });
