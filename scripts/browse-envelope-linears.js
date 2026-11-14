@@ -300,6 +300,27 @@ function freePort() {
       !(await ev("document.getElementById('el_lb').classList.contains('on')"))
       && !!(await ev("!!document.querySelector('#el_body .el-design')")));
 
+    // On a phone picking a category hides the list, so without this there is
+    // nothing to go back to but the browser's own back button - which leaves
+    // the tab altogether.
+    console.log(NL + 'Back returns to the list');
+    check('the open category offers a way back',
+      await ev("!!document.querySelector('#el_body .el-back')"));
+    await ev("document.querySelector('#el_body .el-back').click();");
+    await sleep(500);
+    check('pressing it lets go of the category',
+      /Pick a category from the list/.test(
+        await ev("document.getElementById('el_body').innerText")),
+      await ev("document.getElementById('el_body').innerText"));
+    check('nothing is highlighted any more',
+      (await ev("document.querySelectorAll('.el-catlink.on').length")) === 0);
+    check('and the list is still all there',
+      (await ev("document.querySelectorAll('.el-catlink').length")) === counts.cats);
+    // Straight back in, so the rest of the suite has a category open.
+    await ev("(function(){var t=[...document.querySelectorAll('.el-catlink')]"
+      + ".find(e=>/Embossed/.test(e.innerText)); t && t.click();})()");
+    await sleep(900);
+
     console.log(NL + 'Searching the side list');
     await ev("document.getElementById('el_q').value='chinois';el_render();");
     check('typing part of a category narrows it to one',

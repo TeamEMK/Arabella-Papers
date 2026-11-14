@@ -114,6 +114,7 @@
   .el-catlink {
     display: flex; align-items: center; justify-content: space-between; gap: .5rem;
     width: 100%; text-align: left; border: 0; background: none;
+    cursor: pointer; user-select: none;
     padding: .32rem .5rem .32rem 1.45rem; border-radius: 6px;
     font-size: .84rem; color: #5a544c; line-height: 1.3;
   }
@@ -128,6 +129,12 @@
     border-bottom: 2px solid rgba(0,0,0,.08);
   }
   .el-head h4 { margin: 0; font-weight: 700; color: #2f2c28; }
+  .el-back {
+    border: 1px solid rgba(0,0,0,.15); background: #fff; border-radius: 6px;
+    color: #5a544c; font-size: .82rem; font-weight: 700;
+    padding: .2rem .55rem; line-height: 1.4; align-self: center;
+  }
+  .el-back:hover { background: #2f2c28; border-color: #2f2c28; color: #fff; }
   .el-design {
     border: 1px solid rgba(0,0,0,.08); border-radius: 8px;
     overflow: hidden; background: #fff; display: block;
@@ -159,13 +166,15 @@
   }
   .el-catlink .el-x:hover { opacity: 1; color: #dc3545; }
   .el-catlink.on .el-x:hover { color: #ffb3bb; }
-  .el-design .el-del {
-    position: absolute; top: .25rem; right: .25rem;
-    background: rgba(255,255,255,.92); border: 1px solid rgba(0,0,0,.12);
-    border-radius: 50%; width: 1.6rem; height: 1.6rem; line-height: 1;
+  .el-tilewrap { position: relative; height: 100%; }
+  .el-tilewrap .el-del {
+    position: absolute; top: .3rem; right: .3rem; z-index: 2;
+    background: rgba(255,255,255,.94); border: 1px solid rgba(0,0,0,.14);
+    border-radius: 50%; width: 1.7rem; height: 1.7rem; line-height: 1;
     color: #dc3545; font-size: .75rem; padding: 0;
+    display: flex; align-items: center; justify-content: center;
   }
-  .el-design { position: relative; }
+  .el-tilewrap .el-del:hover { background: #dc3545; color: #fff; border-color: #dc3545; }
   .el-drop {
     border: 2px dashed rgba(0,0,0,.2); border-radius: 10px;
     padding: 1.1rem; text-align: center; color: #8a8178;
@@ -296,8 +305,16 @@ function el_render() {
     // folded-up section with the answer hidden inside is not a search.
     const open = q ? true : el_openSet.has(s.section);
     const rows = !open ? '' : items.map(it => {
-      // The bin is its own button inside the row, so stopPropagation keeps a
-      // click on it from also opening the category behind it.
+      // A BUTTON CANNOT GO INSIDE A BUTTON.
+      //
+      // The row used to be a <button> with the bin as another <button> inside
+      // it, which is not HTML a browser will accept: the parser closes the
+      // outer one where the inner one starts, so the bin fell out of the row
+      // and landed on a line of its own underneath every category. It looked
+      // like a styling problem and was a nesting one.
+      //
+      // So the row is a div that behaves like a button - clickable, reachable
+      // by keyboard - and the bin is a real button inside it.
       const bin = el_manage
         ? `<button type="button" class="el-x" title="Remove this category"
              onclick="event.stopPropagation();el_removeCategory(${it.id},
@@ -305,12 +322,13 @@ function el_render() {
              <i class="fas fa-trash"></i></button>`
         : '';
       return `
-        <button type="button"
-                class="el-catlink${it.id === el_pickedId ? ' on' : ''}"
-                data-id="${it.id}" onclick="el_pick(${it.id})">
+        <div class="el-catlink${it.id === el_pickedId ? ' on' : ''}"
+             role="button" tabindex="0"
+             data-id="${it.id}" onclick="el_pick(${it.id})"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();el_pick(${it.id});}">
           <span class="flex-grow-1">${el_esc(it.category)}</span>
           <span class="el-n">${it.count || 0}</span>${bin}
-        </button>`;
+        </div>`;
     }).join('');
 
     return `<div class="mb-1">
@@ -332,6 +350,33 @@ function el_render() {
   if (count) {
     count.textContent = cats + (cats === 1 ? ' category, ' : ' categories, ')
       + designs + (designs === 1 ? ' design' : ' designs');
+  }
+}
+
+/**
+ * Back to the list of categories.
+ *
+ * On a phone this is the whole way back: picking a category hides the list,
+ * so without this there is nothing to return to but the browser's own back
+ * button, which leaves the tab altogether. On a wide screen the list never
+ * went away, so Back just lets go of the category - which is still worth
+ * having after scrolling through twenty designs.
+ */
+function el_back() {
+  el_pickedId = 0;
+  el_shown = [];
+  el_at = -1;
+  document.getElementById('el_side').classList.remove('d-none');
+  document.getElementById('el_body').innerHTML =
+    '<div class="text-center text-muted py-5">'
+    + '<i class="fas fa-envelope-open-text fa-2x mb-2 d-block opacity-50"></i>'
+    + 'Pick a category from the list.</div>';
+  el_render();                 // nothing is highlighted any more
+  // The list is above the designs on a phone, and Back is at the top of the
+  // designs - which can be a long way down the page by now.
+  const side = document.getElementById('el_side');
+  if (window.innerWidth < 992 && side.scrollIntoView) {
+    side.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }
 
@@ -358,6 +403,9 @@ async function el_pick(id) {
     el_at = -1;
 
     const head = `<div class="el-head">
+        <button type="button" class="el-back" onclick="el_back()" title="Back to the list">
+          <i class="fas fa-arrow-left"></i><span class="d-none d-sm-inline ms-1">Back</span>
+        </button>
         <h4>${el_esc(json.category)}</h4>
         <span class="text-muted small">${el_esc(json.section)}</span>
         <span class="text-muted small ms-auto">${json.items.length}
@@ -405,16 +453,25 @@ async function el_pick(id) {
             ? `<a href="${el_esc(it.url)}" target="_blank" rel="noopener" class="el-design text-decoration-none">`
             : '<div class="el-design">');
       const close = it.hasImage ? '</div>' : (it.url ? '</a>' : '</div>');
-      // Outside the tile's own click, so removing one is never mistaken for
-      // opening it.
+      // The bin is a SIBLING of the tile inside a wrapper, not a child of it
+      // and not loose after it.
+      //
+      // Loose after it was the bug: the rule that pins it to the corner is
+      // written as .el-tilewrap .el-del, and a bin sitting outside the tile
+      // matched nothing at all, so it dropped into the flow underneath every
+      // design. A sibling rather than a child because the tile is sometimes
+      // an <a>, and a button inside a link is the same kind of nesting a
+      // browser quietly takes apart.
       const bin = el_manage
         ? `<button type="button" class="el-del" title="Remove this design"
              onclick="event.stopPropagation();el_removeDesign(${it.id})">
              <i class="fas fa-trash"></i></button>`
         : '';
       return `<div class="col-6 col-sm-4 col-lg-3 col-xxl-2">
-          ${open}<div class="el-pic">${pic}</div>
-          <div class="el-lbl text-truncate">${el_esc(label)}</div>${close}${bin}
+          <div class="el-tilewrap">
+            ${open}<div class="el-pic">${pic}</div>
+            <div class="el-lbl text-truncate">${el_esc(label)}</div>${close}${bin}
+          </div>
         </div>`;
     }).join('') + '</div>';
   } catch (e) {

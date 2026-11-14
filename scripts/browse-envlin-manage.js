@@ -278,6 +278,45 @@ const CATEGORY = 'Probe Liners';
       /1/.test(await ev("document.querySelector('.el-catlink.on').innerText")));
 
     // ──────────────────────────────────────────────
+    // ──────────────────────────────────────────────
+    // A button inside a button is not HTML a browser accepts: the parser
+    // closes the outer one, and the bin ends up on a line of its own under
+    // the row. It looked like a styling problem and was a nesting one, so
+    // this asks the BROWSER where the bins ended up, not the source.
+    console.log(NL + 'The bins stay where they were put');
+    check('every category row carries its own bin',
+      (await ev("document.querySelectorAll('.el-catlink .el-x').length"))
+      === (await ev("document.querySelectorAll('.el-catlink').length")),
+      [await ev("document.querySelectorAll('.el-catlink .el-x').length"),
+       await ev("document.querySelectorAll('.el-catlink').length")]);
+    check('and none of them fell out of the row',
+      (await ev("document.querySelectorAll('#el_nav > * > .el-x').length")) === 0);
+    const rowFit = await ev(
+      "(function(){var r=document.querySelector('.el-catlink');"
+      + "var b=r.querySelector('.el-x');if(!b)return 'no bin';"
+      + "var a=r.getBoundingClientRect(), c=b.getBoundingClientRect();"
+      + "return JSON.stringify({inside: c.top >= a.top - 1 && c.bottom <= a.bottom + 1,"
+      + " rowHeight: Math.round(a.height)});})()");
+    // Parsed defensively: when the bin is missing the page answers with a
+    // word, not JSON, and a suite that dies on its own failure message tells
+    // you nothing about the checks after it.
+    const asObj = (v) => { try { return JSON.parse(v); } catch (e) { return {}; } };
+    check('the bin sits on the same line as the name', asObj(rowFit).inside === true, rowFit);
+    check('so a row is still one line high',
+      asObj(rowFit).rowHeight > 0 && asObj(rowFit).rowHeight < 48, rowFit);
+
+    const tileFit = await ev(
+      "(function(){var w=document.querySelector('#el_body .el-tilewrap');"
+      + "var t=w.querySelector('.el-design'), b=w.querySelector('.el-del');"
+      + "if(!b)return 'no bin';"
+      + "var a=t.getBoundingClientRect(), c=b.getBoundingClientRect();"
+      + "return JSON.stringify({over: c.top >= a.top - 1 && c.right <= a.right + 1"
+      + " && c.bottom <= a.bottom + 1, parent: b.offsetParent && b.offsetParent.className});})()");
+    check('the design bin sits on the picture, not under it',
+      asObj(tileFit).over === true, tileFit);
+    check('and it is pinned to the tile it belongs to',
+      /el-tilewrap/.test(asObj(tileFit).parent || ''), tileFit);
+
     console.log(NL + 'The empty category got a cover from it');
     const [[cov]] = await db.query(
       'SELECT LENGTH(cover) AS c FROM envelope_linears WHERE id = ?', [madeRow.id]);
