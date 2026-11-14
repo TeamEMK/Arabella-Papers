@@ -174,6 +174,8 @@ const COLUMN_MIGRATIONS = [
   { table: 'envelope_linear_items', column: 'mime_type', type: "VARCHAR(80) DEFAULT 'image/jpeg'" },
   // Added once designs started being named after the category they are in.
   { table: 'envelope_linears', column: 'code_next', type: 'INT DEFAULT 0' },
+  // Added when the search box learned to answer "blue flower".
+  { table: 'envelope_linear_items', column: 'tags', type: "VARCHAR(500) DEFAULT ''" },
 ];
 
 async function addMissingColumns() {

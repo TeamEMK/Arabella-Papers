@@ -154,6 +154,12 @@ CREATE TABLE IF NOT EXISTS envelope_linear_items (
   -- they want the picture, full size, over the grid they are already in.
   -- file_url is left for anything that was linked rather than uploaded.
   file_url VARCHAR(500) DEFAULT '',
+  -- The words this design answers to in the search box: the colours actually
+  -- in the picture, and the names of the section and category it sits in.
+  -- Kept on the row rather than worked out on every search, because the
+  -- colours come from counting pixels and that is not a thing to do while
+  -- somebody is typing. See utils/linerTags.js.
+  tags VARCHAR(500) DEFAULT '',
   mime_type VARCHAR(80) DEFAULT 'image/jpeg',
   bytes MEDIUMBLOB,
   width INT DEFAULT 0,

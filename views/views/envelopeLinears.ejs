@@ -28,8 +28,10 @@
     <div class="col-12 col-lg-3" id="el_side">
       <div class="card bg-light-glass shadow-sm el-sidecard">
         <div class="card-body p-2">
-          <input type="text" id="el_q" class="form-control form-control-sm mb-2"
-                 placeholder="Search a category..." oninput="el_render()">
+          <input type="text" id="el_q" class="form-control form-control-sm mb-1"
+                 placeholder="blue flower, red damask, monogram..."
+                 oninput="el_searchSoon()">
+          <div class="form-text small mb-2" id="el_qHint">Try a colour and a kind.</div>
           <button type="button" id="el_newBtn"
                   class="btn btn-sm btn-dark w-100 mb-2 fw-bold d-none"
                   onclick="el_openNew()">
@@ -147,6 +149,11 @@
   }
   .el-design .el-pic img { max-width: 100%; max-height: 100%; object-fit: contain; }
   .el-design .el-lbl { padding: .35rem .5rem; font-size: .74rem; color: #8a8178; }
+  .el-where {
+    font-size: .7rem; color: #8a8178; padding: .2rem .1rem 0;
+    cursor: pointer; text-decoration: underline dotted;
+  }
+  .el-where:hover { color: #2f2c28; }
 
   /* The Manage button while it is on. Spelled out rather than borrowed from
      Bootstrap's utilities so the background and the writing on it can never
@@ -237,6 +244,10 @@ let el_at = -1;
 // server, and a screen holding its own copy eventually draws a button the
 // server refuses.
 let el_canManage = false;
+// What the search box is showing, so the panel knows whether it is looking
+// at a category or at the answer to a question.
+let el_searchOn = false;
+let el_searchTimer = null;
 let el_manage = false;
 
 function el_esc(v) {
@@ -383,6 +394,7 @@ function el_back() {
 /** Opens one category in the panel beside the list. */
 async function el_pick(id) {
   el_pickedId = id;
+  el_searchOn = false;
   el_render();
   const body = document.getElementById('el_body');
   body.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
@@ -477,6 +489,102 @@ async function el_pick(id) {
   } catch (e) {
     body.innerHTML = '<div class="alert alert-danger m-0">Could not load that category.</div>';
   }
+}
+
+// ── SEARCHING ─────────────────────────────────────────────
+//
+// The box does two things at once, and that is on purpose. It narrows the
+// list of categories beside it, AND it asks the server for designs that
+// answer to what was typed - so "chinois" finds a category and "blue
+// flower" finds twenty pictures.
+
+function el_searchSoon() {
+  // The category list is local, so it narrows on the keystroke.
+  el_render();
+  clearTimeout(el_searchTimer);
+  const q = (document.getElementById('el_q').value || '').trim();
+  if (q.length < 2) {
+    // Back to whatever was open before the typing started.
+    if (el_searchOn) {
+      el_searchOn = false;
+      document.getElementById('el_qHint').textContent = 'Try a colour and a kind.';
+      if (el_pickedId) el_pick(el_pickedId); else el_back();
+    }
+    return;
+  }
+  document.getElementById('el_qHint').textContent = 'Looking...';
+  // Not on every keystroke: "blue flower" is eleven of them and the first
+  // ten answers are thrown away.
+  el_searchTimer = setTimeout(() => el_search(q), 350);
+}
+
+async function el_search(q) {
+  const body = document.getElementById('el_body');
+  try {
+    const res = await fetch('/api/envelope-linears/search?q=' + encodeURIComponent(q));
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Could not search.');
+    // Somebody typed on while this was coming back.
+    const now = (document.getElementById('el_q').value || '').trim();
+    if (now !== q) return;
+
+    el_searchOn = true;
+    el_pickedId = 0;
+    el_render();
+    el_shown = json.items.filter(it => it.hasImage);
+    el_at = -1;
+
+    document.getElementById('el_qHint').textContent =
+      json.found + (json.found === 1 ? ' design' : ' designs');
+
+    const head = '<div class="el-head">'
+      + '<button type="button" class="el-back" onclick="el_clearSearch()" '
+      + 'title="Back to the list"><i class="fas fa-arrow-left"></i>'
+      + '<span class="d-none d-sm-inline ms-1">Back</span></button>'
+      + '<h4>' + el_esc(q) + '</h4>'
+      + '<span class="text-muted small ms-auto">' + json.found
+      + (json.found === 1 ? ' design' : ' designs')
+      + (json.found > json.items.length ? ', showing ' + json.items.length : '')
+      + '</span></div>';
+
+    if (!json.items.length) {
+      body.innerHTML = head + '<div class="text-center text-muted py-5">'
+        + 'Nothing matches that. Try a colour on its own - blue, gold, red - '
+        + 'or the kind of pattern.</div>';
+      return;
+    }
+
+    // The category is shown under each one, because a result from nowhere
+    // in particular is a result somebody cannot go back to.
+    body.innerHTML = head + '<div class="row g-3">' + json.items.map(it => {
+      const pic = it.hasThumb
+        ? '<img src="/api/envelope-linears/thumb/' + it.id + '" alt="">'
+        : '<i class="fas fa-image text-muted"></i>';
+      const label = it.code || it.name || ('Design ' + (it.page || ''));
+      const open = it.hasImage
+        ? '<div class="el-design" role="button" tabindex="0" onclick="el_lb(' + it.id + ')">'
+        : '<div class="el-design">';
+      return '<div class="col-6 col-sm-4 col-lg-3 col-xxl-2">'
+        + '<div class="el-tilewrap">' + open
+        + '<div class="el-pic">' + pic + '</div>'
+        + '<div class="el-lbl text-truncate">' + el_esc(label) + '</div>'
+        + '</div>'
+        + '<div class="el-where text-truncate" title="' + el_esc(it.category) + '" '
+        + 'onclick="el_pick(' + it.categoryId + ')">' + el_esc(it.category) + '</div>'
+        + '</div></div>';
+    }).join('') + '</div>';
+  } catch (e) {
+    document.getElementById('el_qHint').textContent = 'Could not search.';
+    body.innerHTML = '<div class="alert alert-danger m-0">Could not search.</div>';
+  }
+}
+
+function el_clearSearch() {
+  document.getElementById('el_q').value = '';
+  el_searchOn = false;
+  document.getElementById('el_qHint').textContent = 'Try a colour and a kind.';
+  el_render();
+  el_back();
 }
 
 // ── MANAGING ──────────────────────────────────────────────

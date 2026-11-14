@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../../config/db');
 const { requireLogin, requireRole, hasRole } = require('../../middleware/auth');
 const { codeFor } = require('../../utils/linerCode');
+const { tagsFor, matches, colourName } = require('../../utils/linerTags');
 
 // ══════════════════════════════════════════════════════
 // ENVELOPE LINEARS
@@ -82,6 +83,58 @@ router.get('/board', requireLogin, async (req, res) => {
     });
   } catch (err) {
     console.error('Envelope Linears board failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/envelope-linears/search?q=blue+flower
+ *
+ * Designs from anywhere, by what they look like and what they are.
+ *
+ * Matched in Node rather than in SQL. A LIKE would find "blue" inside
+ * "bluebell" and would know nothing about "flower" meaning floral, and the
+ * rule for both lives in utils/linerTags.js - the same rule the tagging
+ * script uses, so what is searched for is what was written down. Three
+ * hundred rows of short text is nothing to read through; if this ever
+ * becomes thirty thousand it wants a proper index, not a cleverer LIKE.
+ */
+router.get('/search', requireLogin, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim().slice(0, 120);
+    if (q.length < 2) return res.json({ success: true, q, items: [] });
+
+    const [rows] = await db.query(
+      `SELECT i.id, i.code, i.name, i.source_page, i.file_url, i.tags,
+              i.thumb IS NOT NULL AS has_thumb,
+              i.bytes IS NOT NULL AS has_image,
+              c.id AS category_id, c.section, c.category
+         FROM envelope_linear_items i
+         JOIN envelope_linears c ON c.id = i.category_id
+        WHERE i.is_active = 1 AND c.is_active = 1
+        ORDER BY c.section_order, c.sort_order, i.sort_order`);
+
+    const hits = rows.filter(r => matches(q, String(r.tags || '').split(' ')));
+
+    res.json({
+      success: true,
+      q,
+      found: hits.length,
+      // Capped, and lower than it first was. At 120 the browser was asked
+      // for a hundred and twenty thumbnails in one breath and a third of
+      // them had not arrived by the time somebody looked - which reads as
+      // "the search is broken", not "the network is busy". Sixty is about a
+      // screen and a half, and `found` above says how many there really
+      // were so nobody is misled about it.
+      items: hits.slice(0, 60).map(r => ({
+        id: r.id, code: r.code, name: r.name, page: r.source_page,
+        url: r.file_url, categoryId: r.category_id,
+        section: r.section, category: r.category,
+        hasThumb: !!r.has_thumb, hasImage: !!r.has_image,
+      })),
+    });
+  } catch (err) {
+    console.error('Envelope Linears search failed:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -451,14 +504,24 @@ router.post('/:id/items', requireLogin, canManage, async (req, res) => {
     const nextNumber = Math.max(Number(cat.code_next) || 0, Number(used.n) || 0) + 1;
     const code = clean(b.code, 60) || codeFor(cat.section, cat.category, nextNumber);
 
+    // The words it will be found by. The browser sends the colours it saw
+    // on the canvas as plain numbers and they are named here, so there is
+    // one definition of "teal" rather than one per end of the wire.
+    const seen = Array.isArray(b.colours) ? b.colours.slice(0, 8) : [];
+    const colours = [...new Set(seen
+      .filter(c => Array.isArray(c) && c.length >= 3)
+      .map(c => colourName(c[0], c[1], c[2])))];
+    const tags = tagsFor({ section: cat.section, category: cat.category, colours })
+      .join(' ').slice(0, 500);
+
     const [out] = await db.query(
       `INSERT INTO envelope_linear_items
          (category_id, code, name, source_file, mime_type, bytes, thumb,
-          width, height, sort_order, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          width, height, sort_order, tags, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [id, code, clean(b.name, 255), clean(b.sourceFile, 255),
        full.mime, full.bytes, thumb.bytes,
-       Number(b.width) || 0, Number(b.height) || 0, Number(last.n) + 1]);
+       Number(b.width) || 0, Number(b.height) || 0, Number(last.n) + 1, tags]);
 
     // Remembered before anything else can be added, so two designs arriving
     // close together cannot be handed the same number.
