@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../config/db');
-const { requireLogin, requireRole } = require('../../middleware/auth');
+const { requireLogin, requireRole, hasRole } = require('../../middleware/auth');
 
 // ══════════════════════════════════════════════════════
 // ENVELOPE LINEARS
@@ -11,11 +11,16 @@ const { requireLogin, requireRole } = require('../../middleware/auth');
 // is the pages pulled apart - somebody looking for a liner wants to see
 // liners, not to page through a document hunting for one.
 //
-// Built like the design catalogue to look at and deliberately not like it
-// underneath. catalogue_items renders every page of every volume into MySQL
-// and is 54MB of a 60MB dump, which is why a nightly backup went from 8MB to
-// 127MB. Here the design is in Drive and the database keeps a thumbnail:
-// 3MB for all three hundred, against the 69MB the designs themselves weigh.
+// The design itself is kept here, next to its thumbnail, the same way the
+// design catalogue keeps its pictures - a Drive link opened a Drive page in
+// a new tab, which is not what somebody flicking through liners is after.
+// About 69MB for the three hundred, so envelope_linear_items is on the
+// nightly backup's heavy list beside catalogue_items: the structure goes
+// into every dump, the rows only into the weekly full one. Every byte of it
+// can be made again from the PDFs in a few minutes.
+//
+// The grid only ever fetches thumbnails, which is why the page is quick; the
+// full picture is fetched for the one design somebody actually opened.
 //
 // TWO REQUESTS, NOT ONE. The board is the shelf - sections and their
 // categories - and the designs in a category are fetched when somebody opens
@@ -23,7 +28,10 @@ const { requireLogin, requireRole } = require('../../middleware/auth');
 // megabyte before anybody had decided what they were looking for.
 // ══════════════════════════════════════════════════════
 
-const canManage = requireRole('SuperAdmin', 'Head');
+// One list, used twice: as the gate on every route that changes something,
+// and as the answer the board gives the screen about which buttons to draw.
+const MANAGERS = ['SuperAdmin', 'Head'];
+const canManage = requireRole(...MANAGERS);
 
 /**
  * GET /api/envelope-linears/board
@@ -66,6 +74,10 @@ router.get('/board', requireLogin, async (req, res) => {
       sections,
       categories: rows.length,
       designs: rows.reduce((n, r) => n + (Number(r.items) || 0), 0),
+      // Answered here rather than worked out in the browser from a role name:
+      // the rule lives in canManage, and a screen that keeps its own copy of
+      // it is a screen that will one day show a button the server refuses.
+      canManage: hasRole(req.session.user, ...MANAGERS),
     });
   } catch (err) {
     console.error('Envelope Linears board failed:', err);
@@ -188,6 +200,37 @@ router.get('/', requireLogin, canManage, async (req, res) => {
 
 const clean = (v, max = 255) => String(v == null ? '' : v).trim().slice(0, max);
 
+// The design routes are declared above the category ones because the more
+// particular path reads better first, NOT because it is required: "/:id"
+// matches a single segment, so "/item/7" was never in danger of landing on
+// it. Checked, after I had claimed otherwise.
+/** PUT /api/envelope-linears/item/:id — give a design a code, or hide it. */
+router.put('/item/:id', requireLogin, canManage, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ success: false, error: 'No such design.' });
+    }
+    const b = req.body || {};
+    const fields = {};
+    if (b.code !== undefined) fields.code = clean(b.code, 60);
+    if (b.name !== undefined) fields.name = clean(b.name, 255);
+    if (b.isActive !== undefined) fields.is_active = b.isActive ? 1 : 0;
+    if (b.sortOrder !== undefined) fields.sort_order = Number(b.sortOrder) || 0;
+
+    const keys = Object.keys(fields);
+    if (!keys.length) return res.json({ success: true, changed: 0 });
+
+    const [out] = await db.query(
+      'UPDATE envelope_linear_items SET ' + keys.map(k => `${k} = ?`).join(', ') + ' WHERE id = ?',
+      [...keys.map(k => fields[k]), id]);
+    res.json({ success: true, changed: out.affectedRows });
+  } catch (err) {
+    console.error('Envelope Linears item update failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 /** PUT /api/envelope-linears/:id — rename a category, or take it down. */
 router.put('/:id', requireLogin, canManage, async (req, res) => {
   try {
@@ -221,31 +264,194 @@ router.put('/:id', requireLogin, canManage, async (req, res) => {
   }
 });
 
-/** PUT /api/envelope-linears/item/:id — give a design a code, or hide it. */
-router.put('/item/:id', requireLogin, canManage, async (req, res) => {
+
+/**
+ * A picture arriving from a browser, checked before it reaches the database.
+ *
+ * It comes as a data URL because one request carrying the picture and its
+ * row together cannot half-succeed. The limit is the serverless one: Vercel
+ * refuses a request body over 4.5MB outright, and the refusal does not reach
+ * this code at all - so the screen shrinks the picture before sending and
+ * this is the backstop, not the rule.
+ */
+const MAX_PICTURE = 4 * 1024 * 1024;
+const PICTURE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+function decodePicture(dataUrl, what) {
+  const m = /^data:([a-z]+\/[a-z0-9.+-]+);base64,(.+)$/i.exec(String(dataUrl || ''));
+  if (!m) return { error: 'The ' + what + ' did not arrive as a picture.' };
+  const mime = m[1].toLowerCase();
+  if (!PICTURE_TYPES.includes(mime)) {
+    return { error: 'A ' + what + ' has to be a JPG, PNG or WebP.' };
+  }
+  let bytes;
+  try { bytes = Buffer.from(m[2], 'base64'); } catch (e) { bytes = null; }
+  if (!bytes || !bytes.length) return { error: 'The ' + what + ' was empty.' };
+  if (bytes.length > MAX_PICTURE) {
+    return { error: 'That ' + what + ' is ' + (bytes.length / 1048576).toFixed(1)
+      + 'MB. Four is the most that can go through in one go.' };
+  }
+  return { mime, bytes };
+}
+
+/**
+ * POST /api/envelope-linears — a new category, in a new section or an old one.
+ *
+ * The section is just a name on the row; there is no table of sections and
+ * deliberately so. A section exists for exactly as long as a category says it
+ * does, which means one can never be left behind empty for somebody to
+ * wonder about later.
+ */
+router.post('/', requireLogin, canManage, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const section = clean(b.section, 80);
+    const category = clean(b.category, 120);
+    if (!section) return res.status(400).json({ success: false, error: 'A section needs a name.' });
+    if (!category) return res.status(400).json({ success: false, error: 'A category needs a name.' });
+
+    // Two categories of the same name in the same section would be two tiles
+    // nobody could tell apart, and the designs would go into whichever one
+    // was clicked. Case and spacing do not make them different.
+    const [[clash]] = await db.query(
+      `SELECT id FROM envelope_linears
+        WHERE LOWER(TRIM(section)) = LOWER(TRIM(?))
+          AND LOWER(TRIM(category)) = LOWER(TRIM(?)) LIMIT 1`, [section, category]);
+    if (clash) {
+      return res.status(400).json({ success: false, error: 'That category is already in that section.' });
+    }
+
+    // A new section goes after the ones already there; a new category goes
+    // after the last one in its own section. Nothing has to be renumbered.
+    const [[where]] = await db.query(
+      `SELECT COALESCE(MAX(CASE WHEN LOWER(TRIM(section)) = LOWER(TRIM(?))
+                                THEN section_order END), -1) AS same_section,
+              COALESCE(MAX(section_order), -1) AS last_section,
+              COALESCE(MAX(CASE WHEN LOWER(TRIM(section)) = LOWER(TRIM(?))
+                                THEN sort_order END), -1) AS last_sort
+         FROM envelope_linears`, [section, section]);
+    const sectionOrder = where.same_section >= 0 ? where.same_section : where.last_section + 1;
+
+    const [out] = await db.query(
+      `INSERT INTO envelope_linears (section, category, section_order, sort_order, is_active)
+       VALUES (?, ?, ?, ?, 1)`,
+      [section, category, sectionOrder, Number(where.last_sort) + 1]);
+    res.json({ success: true, id: out.insertId, section, category });
+  } catch (err) {
+    console.error('Envelope Linears create failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// The design routes are declared above the category ones because the more
+// particular path reads better first, NOT because it is required: "/:id"
+// matches a single segment, so "/item/7" was never in danger of landing on
+// it. Checked, after I had claimed otherwise.
+/** DELETE /api/envelope-linears/item/:id — take one design out for good. */
+router.delete('/item/:id', requireLogin, canManage, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
       return res.status(400).json({ success: false, error: 'No such design.' });
     }
-    const b = req.body || {};
-    const fields = {};
-    if (b.code !== undefined) fields.code = clean(b.code, 60);
-    if (b.name !== undefined) fields.name = clean(b.name, 255);
-    if (b.isActive !== undefined) fields.is_active = b.isActive ? 1 : 0;
-    if (b.sortOrder !== undefined) fields.sort_order = Number(b.sortOrder) || 0;
+    const [[row]] = await db.query(
+      'SELECT category_id FROM envelope_linear_items WHERE id = ?', [id]);
+    if (!row) return res.status(404).json({ success: false, error: 'No such design.' });
 
-    const keys = Object.keys(fields);
-    if (!keys.length) return res.json({ success: true, changed: 0 });
-
-    const [out] = await db.query(
-      'UPDATE envelope_linear_items SET ' + keys.map(k => `${k} = ?`).join(', ') + ' WHERE id = ?',
-      [...keys.map(k => fields[k]), id]);
-    res.json({ success: true, changed: out.affectedRows });
+    await db.query('DELETE FROM envelope_linear_items WHERE id = ?', [id]);
+    // The cover was a copy of some design's thumbnail. If it was this one's,
+    // the tile would go on showing a design that is no longer in there - so
+    // the category takes the next one's instead, or none at all.
+    await db.query(
+      `UPDATE envelope_linears SET cover = (
+         SELECT thumb FROM envelope_linear_items
+          WHERE category_id = ? AND is_active = 1
+          ORDER BY sort_order, id LIMIT 1) WHERE id = ?`,
+      [row.category_id, row.category_id]);
+    res.json({ success: true });
   } catch (err) {
-    console.error('Envelope Linears item update failed:', err);
+    console.error('Envelope Linears item delete failed:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+/**
+ * DELETE /api/envelope-linears/:id — a category and everything in it.
+ *
+ * Really gone, not hidden: hiding is what the Hide switch is for, and a
+ * manage screen with two kinds of gone is a screen nobody trusts. The count
+ * goes back so the screen can say what it actually removed.
+ */
+router.delete('/:id', requireLogin, canManage, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ success: false, error: 'No such category.' });
+    }
+    const [[cat]] = await db.query(
+      'SELECT category FROM envelope_linears WHERE id = ?', [id]);
+    if (!cat) return res.status(404).json({ success: false, error: 'No such category.' });
+
+    const [[n]] = await db.query(
+      'SELECT COUNT(*) AS n FROM envelope_linear_items WHERE category_id = ?', [id]);
+    await db.query('DELETE FROM envelope_linear_items WHERE category_id = ?', [id]);
+    await db.query('DELETE FROM envelope_linears WHERE id = ?', [id]);
+    res.json({ success: true, category: cat.category, designs: Number(n.n || 0) });
+  } catch (err) {
+    console.error('Envelope Linears delete failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/envelope-linears/:id/items — put one design into a category.
+ *
+ * One design per request on purpose. Twenty pictures in one body is 4MB that
+ * either all arrives or all fails, and the one that fails takes the other
+ * nineteen with it; one at a time means the screen can say "14 of 20" and
+ * name the one that would not go.
+ */
+router.post('/:id/items', requireLogin, canManage, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ success: false, error: 'No such category.' });
+    }
+    const [[cat]] = await db.query(
+      'SELECT id FROM envelope_linears WHERE id = ?', [id]);
+    if (!cat) return res.status(404).json({ success: false, error: 'No such category.' });
+
+    const b = req.body || {};
+    const full = decodePicture(b.image, 'design');
+    if (full.error) return res.status(400).json({ success: false, error: full.error });
+    const thumb = decodePicture(b.thumb, 'thumbnail');
+    if (thumb.error) return res.status(400).json({ success: false, error: thumb.error });
+
+    const [[last]] = await db.query(
+      'SELECT COALESCE(MAX(sort_order), -1) AS n FROM envelope_linear_items WHERE category_id = ?', [id]);
+
+    const [out] = await db.query(
+      `INSERT INTO envelope_linear_items
+         (category_id, code, name, source_file, mime_type, bytes, thumb,
+          width, height, sort_order, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [id, clean(b.code, 60), clean(b.name, 255), clean(b.sourceFile, 255),
+       full.mime, full.bytes, thumb.bytes,
+       Number(b.width) || 0, Number(b.height) || 0, Number(last.n) + 1]);
+
+    // The tile shows its first design, so a category that had none now has a
+    // cover. Only when it has none: replacing it on every upload would make
+    // the shelf change under somebody for no reason they asked for.
+    await db.query(
+      `UPDATE envelope_linears SET cover = ? WHERE id = ? AND cover IS NULL`,
+      [thumb.bytes, id]);
+
+    res.json({ success: true, id: out.insertId });
+  } catch (err) {
+    console.error('Envelope Linears item create failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 module.exports = router;

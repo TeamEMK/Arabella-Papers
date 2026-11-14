@@ -292,6 +292,120 @@ const NL = String.fromCharCode(10);
   check('and the count on the board follows it at once', floral2.count === 1, floral2.count);
 
   // ──────────────────────────────────────────────
+  console.log(NL + 'Making and unmaking a category');
+  const made = await go('/api/envelope-linears', {
+    method: 'POST', headers: { cookie: jar, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ section: 'Suite Section', category: 'Suite Liners' }),
+  }).then(r => r.json());
+  check('a category can be made in a section that did not exist',
+    made.success === true && made.id > 0, made);
+
+  const withNew = await getJson('/api/envelope-linears/board');
+  const newSection = withNew.json.sections.find(x => x.section === 'Suite Section');
+  check('and the board shows the new section',
+    !!newSection && newSection.items.length === 1, newSection);
+
+  // Two tiles with the same name in the same section would be two things
+  // nobody could tell apart, and the designs would go into whichever one
+  // happened to be clicked.
+  const again = await go('/api/envelope-linears', {
+    method: 'POST', headers: { cookie: jar, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ section: 'suite section  ', category: '  SUITE LINERS' }),
+  });
+  check('the same name in the same section is refused, whatever the case',
+    again.status === 400, again.status);
+
+  const noName = await go('/api/envelope-linears', {
+    method: 'POST', headers: { cookie: jar, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ section: 'Suite Section', category: '   ' }),
+  });
+  check('and a category with no name is refused', noName.status === 400, noName.status);
+
+  // ──────────────────────────────────────────────
+  console.log(NL + 'Putting a design in through the API');
+  // A real 2x2 JPEG. Small, but a genuine one - the point is that the route
+  // reads a data URL and keeps the bytes, not that it can resize anything.
+  const JPEG = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a'
+    + 'HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAACAAIBAREA/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAA'
+    + 'AgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVW'
+    + 'V1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx'
+    + '8vP09fb3+Pn6/9oACAEBAAA/APn+iiiigD//2Q==';
+
+  const putIn = await go('/api/envelope-linears/' + made.id + '/items', {
+    method: 'POST', headers: { cookie: jar, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: JPEG, thumb: JPEG, name: 'Suite design', width: 2, height: 2 }),
+  }).then(r => r.json());
+  check('a design goes in', putIn.success === true && putIn.id > 0, putIn);
+
+  const nowIn = await getJson('/api/envelope-linears/category/' + made.id);
+  check('and comes back with a picture to open',
+    nowIn.json.items.length === 1 && nowIn.json.items[0].hasImage === true
+    && nowIn.json.items[0].hasThumb === true, nowIn.json.items[0]);
+
+  const pic = await get('/api/envelope-linears/image/' + putIn.id);
+  check('the full picture is served', pic.status === 200, pic.status);
+
+  // An empty category had no cover; the first design gives it one.
+  const covered = await getJson('/api/envelope-linears/board');
+  const stillNew = covered.json.sections.find(x => x.section === 'Suite Section');
+  check('and the tile now has a cover to show',
+    stillNew.items[0].hasCover === true && stillNew.items[0].count === 1, stillNew.items[0]);
+
+  // Anything that is not a picture must bounce before it reaches the column.
+  const junk = await go('/api/envelope-linears/' + made.id + '/items', {
+    method: 'POST', headers: { cookie: jar, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: 'hello', thumb: JPEG }),
+  });
+  check('something that is not a picture is refused', junk.status === 400, junk.status);
+
+  const wrongKind = await go('/api/envelope-linears/' + made.id + '/items', {
+    method: 'POST', headers: { cookie: jar, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: 'data:application/pdf;base64,JVBERi0=', thumb: JPEG }),
+  });
+  check('and a PDF dressed as one is refused too', wrongKind.status === 400, wrongKind.status);
+
+  // ──────────────────────────────────────────────
+  console.log(NL + 'Only a manager may change any of it');
+  const deeMake = await go('/api/envelope-linears', {
+    method: 'POST', headers: { cookie: deeJar, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ section: 'Dee', category: 'Dee' }),
+  });
+  check('a designer cannot make a category', deeMake.status === 403, deeMake.status);
+  const deeAdd = await go('/api/envelope-linears/' + made.id + '/items', {
+    method: 'POST', headers: { cookie: deeJar, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: JPEG, thumb: JPEG }),
+  });
+  check('nor put a design in one', deeAdd.status === 403, deeAdd.status);
+  const deeKill = await go('/api/envelope-linears/' + made.id, {
+    method: 'DELETE', headers: { cookie: deeJar },
+  });
+  check('nor take one away', deeKill.status === 403, deeKill.status);
+  const deeBoard2 = await getJson('/api/envelope-linears/board', deeJar);
+  check('and the board tells them so rather than offering the buttons',
+    deeBoard2.json.canManage === false, deeBoard2.json.canManage);
+  check('while a manager is told they may',
+    (await getJson('/api/envelope-linears/board')).json.canManage === true);
+
+  // ──────────────────────────────────────────────
+  console.log(NL + 'Taking it all away again');
+  const killItem = await go('/api/envelope-linears/item/' + putIn.id, {
+    method: 'DELETE', headers: { cookie: jar },
+  }).then(r => r.json());
+  check('a design can be taken out', killItem.success === true, killItem);
+  const bare = await getJson('/api/envelope-linears/board');
+  const bareCat = bare.json.sections.find(x => x.section === 'Suite Section').items[0];
+  check('and the tile stops showing a design it no longer holds',
+    bareCat.count === 0 && bareCat.hasCover === false, bareCat);
+
+  const killCat = await go('/api/envelope-linears/' + made.id, {
+    method: 'DELETE', headers: { cookie: jar },
+  }).then(r => r.json());
+  check('the category goes', killCat.success === true, killCat);
+  const gone = await getJson('/api/envelope-linears/board');
+  check('and the section goes with it, having nothing left in it',
+    !gone.json.sections.some(x => x.section === 'Suite Section'));
+
+  // ──────────────────────────────────────────────
   console.log(NL + 'It cannot quietly become another catalogue_items');
   const [cols] = await db.query(
     `SELECT table_name AS t, column_name AS c, data_type AS d

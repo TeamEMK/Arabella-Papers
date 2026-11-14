@@ -55,17 +55,29 @@ function requireLogin(req, res, next) {
 }
 
 // Require specific roles
+/**
+ * Does this user hold one of these roles?
+ *
+ * Pulled out of requireRole so that a screen can ASK the same question the
+ * gate will answer, instead of keeping its own copy of the rule. A second
+ * copy is how a button comes to be drawn for somebody the server then
+ * refuses - or worse, hidden from somebody it would have allowed.
+ */
+function hasRole(user, ...roles) {
+  const userRole = (user && user.role) || '';
+  const userDomain = (user && user.domain) || '';
+  return roles.some(r => {
+    if (r === 'Head') return userDomain === 'Head';
+    return userRole === r || userRole.includes(r);
+  });
+}
+
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.session || !req.session.user) {
       return refuse(req, res);
     }
-    const userRole = req.session.user.role || '';
-    const userDomain = req.session.user.domain || '';
-    const allowed = roles.some(r => {
-      if (r === 'Head') return userDomain === 'Head';
-      return userRole === r || userRole.includes(r);
-    });
+    const allowed = hasRole(req.session.user, ...roles);
     if (!allowed) {
       return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
@@ -79,4 +91,4 @@ function injectUser(req, res, next) {
   next();
 }
 
-module.exports = { requireLogin, requireRole, injectUser, safeNext };
+module.exports = { requireLogin, requireRole, hasRole, injectUser, safeNext };

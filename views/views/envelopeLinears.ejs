@@ -12,6 +12,10 @@
               type="button" onclick="el_toggleSide()">
         <i class="fas fa-list me-1"></i> Categories
       </button>
+      <button class="btn btn-outline-dark smooth-ui text-dark fw-bold d-none"
+              type="button" id="el_manageBtn" onclick="el_toggleManage()">
+        <i class="fas fa-pen me-1"></i> <span id="el_manageLbl">Manage</span>
+      </button>
       <button class="btn btn-outline-dark smooth-ui text-dark fw-bold"
               onclick="refreshBoard(this, el_fetch, 'designs')">
         <i class="fas fa-sync-alt me-1"></i> Refresh
@@ -26,6 +30,11 @@
         <div class="card-body p-2">
           <input type="text" id="el_q" class="form-control form-control-sm mb-2"
                  placeholder="Search a category..." oninput="el_render()">
+          <button type="button" id="el_newBtn"
+                  class="btn btn-sm btn-dark w-100 mb-2 fw-bold d-none"
+                  onclick="el_openNew()">
+            <i class="fas fa-plus me-1"></i> New category
+          </button>
           <div id="el_nav">
             <div class="text-center text-muted py-4">
               <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
@@ -42,6 +51,36 @@
         <div class="text-center text-muted py-5">
           <div class="spinner-border text-primary" role="status"></div>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%# Making a category, and the section it sits in. One box for both: a
+    section is only a name on a category, so there is nothing to make first. %>
+<div class="modal fade" id="el_newModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold text-dark" id="el_newTitle">New category</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label fw-bold small mb-1">Section</label>
+        <input type="text" id="el_newSection" class="form-control" list="el_sectionList"
+               placeholder="Pick one, or type a new name">
+        <datalist id="el_sectionList"></datalist>
+        <div class="form-text">Type a name that is not in the list and a new section is made.</div>
+
+        <label class="form-label fw-bold small mb-1 mt-3">Category</label>
+        <input type="text" id="el_newCategory" class="form-control"
+               placeholder="Floral &amp; Botanical">
+        <div class="text-danger small mt-2" id="el_newErr"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-dark fw-bold" id="el_newSave"
+                onclick="el_saveNew()">Save</button>
       </div>
     </div>
   </div>
@@ -102,6 +141,26 @@
   .el-design .el-pic img { max-width: 100%; max-height: 100%; object-fit: contain; }
   .el-design .el-lbl { padding: .35rem .5rem; font-size: .74rem; color: #8a8178; }
 
+  .el-catlink .el-x {
+    border: 0; background: none; color: inherit; opacity: .45;
+    font-size: .72rem; padding: 0 .15rem; line-height: 1;
+  }
+  .el-catlink .el-x:hover { opacity: 1; color: #dc3545; }
+  .el-catlink.on .el-x:hover { color: #ffb3bb; }
+  .el-design .el-del {
+    position: absolute; top: .25rem; right: .25rem;
+    background: rgba(255,255,255,.92); border: 1px solid rgba(0,0,0,.12);
+    border-radius: 50%; width: 1.6rem; height: 1.6rem; line-height: 1;
+    color: #dc3545; font-size: .75rem; padding: 0;
+  }
+  .el-design { position: relative; }
+  .el-drop {
+    border: 2px dashed rgba(0,0,0,.2); border-radius: 10px;
+    padding: 1.1rem; text-align: center; color: #8a8178;
+    background: #faf8f5; margin-bottom: .9rem;
+  }
+  .el-drop.over { border-color: #2f2c28; background: #f1ece5; color: #2f2c28; }
+
   /* 1055 is Bootstrap's modal, and other things on this app sit high too.
      Above all of it, or the click appears to do nothing at all. */
   .el-lb {
@@ -152,6 +211,12 @@ let el_pickedId = 0;
 // a picture: an arrow that lands on a blank is worse than one that skips it.
 let el_shown = [];
 let el_at = -1;
+// Whether this person is allowed to change anything, as answered by the
+// board. Not worked out here from a role name: the rule belongs to the
+// server, and a screen holding its own copy eventually draws a button the
+// server refuses.
+let el_canManage = false;
+let el_manage = false;
 
 function el_esc(v) {
   return String(v === null || v === undefined ? '' : v)
@@ -165,6 +230,10 @@ async function el_fetch() {
     const json = await res.json();
     if (!json.success) throw new Error(json.error || 'Could not load.');
     el_sections = json.sections || [];
+    el_canManage = !!json.canManage;
+    document.getElementById('el_manageBtn').classList.toggle('d-none', !el_canManage);
+    if (!el_canManage) el_manage = false;
+    el_paintManage();
     // Everything open to begin with: the whole list is 21 names and somebody
     // arriving wants to see what there is, not to go hunting for it.
     el_sections.forEach(s => el_openSet.add(s.section));
@@ -214,13 +283,23 @@ function el_render() {
     // A search opens whatever it found. Typing a name and being shown a
     // folded-up section with the answer hidden inside is not a search.
     const open = q ? true : el_openSet.has(s.section);
-    const rows = !open ? '' : items.map(it => `
+    const rows = !open ? '' : items.map(it => {
+      // The bin is its own button inside the row, so stopPropagation keeps a
+      // click on it from also opening the category behind it.
+      const bin = el_manage
+        ? `<button type="button" class="el-x" title="Remove this category"
+             onclick="event.stopPropagation();el_removeCategory(${it.id},
+               ${JSON.stringify(it.category).replace(/"/g, '&quot;')}, ${it.count || 0})">
+             <i class="fas fa-trash"></i></button>`
+        : '';
+      return `
         <button type="button"
                 class="el-catlink${it.id === el_pickedId ? ' on' : ''}"
                 data-id="${it.id}" onclick="el_pick(${it.id})">
-          <span>${el_esc(it.category)}</span>
-          <span class="el-n">${it.count || 0}</span>
-        </button>`).join('');
+          <span class="flex-grow-1">${el_esc(it.category)}</span>
+          <span class="el-n">${it.count || 0}</span>${bin}
+        </button>`;
+    }).join('');
 
     return `<div class="mb-1">
         <button type="button" class="el-sechead2${open ? ' open' : ''}"
@@ -273,13 +352,31 @@ async function el_pick(id) {
           ${json.items.length === 1 ? 'design' : 'designs'}</span>
       </div>`;
 
+    // The box that takes pictures. Above the grid rather than below it: in an
+    // empty category there is no grid to be below.
+    const adder = el_manage ? `
+      <div class="el-drop" id="el_drop"
+           ondragover="event.preventDefault();this.classList.add('over')"
+           ondragleave="this.classList.remove('over')"
+           ondrop="event.preventDefault();this.classList.remove('over');el_addFiles(event.dataTransfer.files)">
+        <i class="fas fa-images fa-lg d-block mb-2 opacity-50"></i>
+        Drop pictures here, or
+        <label class="fw-bold text-decoration-underline" style="cursor:pointer;">
+          choose them
+          <input type="file" accept="image/*" multiple class="d-none"
+                 onchange="el_addFiles(this.files);this.value='';">
+        </label>
+        <div class="small mt-1">JPG, PNG or WebP. Big ones are shrunk before they are sent.</div>
+        <div class="small fw-bold mt-1 text-dark" id="el_progress"></div>
+      </div>` : '';
+
     if (!json.items.length) {
-      body.innerHTML = head + '<div class="text-center text-muted py-5">'
+      body.innerHTML = head + adder + '<div class="text-center text-muted py-5">'
         + 'Nothing has been put in this category yet.</div>';
       return;
     }
 
-    body.innerHTML = head + '<div class="row g-3">' + json.items.map(it => {
+    body.innerHTML = head + adder + '<div class="row g-3">' + json.items.map(it => {
       // NOT lazy. A category is about twenty pictures and somebody who just
       // opened it wants all of them.
       const pic = it.hasThumb
@@ -296,13 +393,201 @@ async function el_pick(id) {
             ? `<a href="${el_esc(it.url)}" target="_blank" rel="noopener" class="el-design text-decoration-none">`
             : '<div class="el-design">');
       const close = it.hasImage ? '</div>' : (it.url ? '</a>' : '</div>');
+      // Outside the tile's own click, so removing one is never mistaken for
+      // opening it.
+      const bin = el_manage
+        ? `<button type="button" class="el-del" title="Remove this design"
+             onclick="event.stopPropagation();el_removeDesign(${it.id})">
+             <i class="fas fa-trash"></i></button>`
+        : '';
       return `<div class="col-6 col-sm-4 col-lg-3 col-xxl-2">
           ${open}<div class="el-pic">${pic}</div>
-          <div class="el-lbl text-truncate">${el_esc(label)}</div>${close}
+          <div class="el-lbl text-truncate">${el_esc(label)}</div>${close}${bin}
         </div>`;
     }).join('') + '</div>';
   } catch (e) {
     body.innerHTML = '<div class="alert alert-danger m-0">Could not load that category.</div>';
+  }
+}
+
+// ── MANAGING ──────────────────────────────────────────────
+
+function el_toggleManage() {
+  el_manage = !el_manage;
+  el_paintManage();
+  el_render();
+  // The designs panel carries the Add box and the delete buttons, so it has
+  // to be drawn again - but only if something is open.
+  if (el_pickedId) el_pick(el_pickedId);
+}
+
+function el_paintManage() {
+  const btn = document.getElementById('el_manageBtn');
+  if (btn) {
+    btn.classList.toggle('btn-dark', el_manage);
+    btn.classList.toggle('text-white', el_manage);
+    btn.classList.toggle('btn-outline-dark', !el_manage);
+    btn.classList.toggle('text-dark', !el_manage);
+    document.getElementById('el_manageLbl').textContent = el_manage ? 'Done' : 'Manage';
+  }
+  const add = document.getElementById('el_newBtn');
+  if (add) add.classList.toggle('d-none', !(el_canManage && el_manage));
+}
+
+function el_openNew() {
+  document.getElementById('el_newSection').value = '';
+  document.getElementById('el_newCategory').value = '';
+  document.getElementById('el_newErr').textContent = '';
+  document.getElementById('el_sectionList').innerHTML =
+    el_sections.map(s => '<option value="' + el_esc(s.section) + '">').join('');
+  new bootstrap.Modal(document.getElementById('el_newModal')).show();
+}
+
+async function el_saveNew() {
+  const section = document.getElementById('el_newSection').value.trim();
+  const category = document.getElementById('el_newCategory').value.trim();
+  const err = document.getElementById('el_newErr');
+  err.textContent = '';
+  if (!section || !category) {
+    err.textContent = 'Both a section and a category name, please.';
+    return;
+  }
+  const btn = document.getElementById('el_newSave');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/envelope-linears', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ section, category }),
+    });
+    const j = await res.json();
+    if (!j.success) { err.textContent = j.error || 'Could not save that.'; return; }
+    bootstrap.Modal.getInstance(document.getElementById('el_newModal')).hide();
+    await el_fetch();
+    el_openSet.add(section);
+    el_render();
+    el_pick(j.id);                 // straight into the empty one, ready for pictures
+  } catch (e) {
+    err.textContent = 'Server error.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function el_removeCategory(id, name, count) {
+  const warn = count
+    ? name + ' and its ' + count + (count === 1 ? ' design' : ' designs')
+    : name;
+  if (!confirm('Remove ' + warn + '? This cannot be undone.')) return;
+  try {
+    const res = await fetch('/api/envelope-linears/' + id, { method: 'DELETE' });
+    const j = await res.json();
+    if (!j.success) { alert(j.error || 'Could not remove that.'); return; }
+    if (el_pickedId === id) {
+      el_pickedId = 0;
+      document.getElementById('el_body').innerHTML =
+        '<div class="text-center text-muted py-5">Pick a category.</div>';
+    }
+    await el_fetch();
+  } catch (e) { alert('Server error.'); }
+}
+
+async function el_removeDesign(id) {
+  if (!confirm('Remove this design? This cannot be undone.')) return;
+  try {
+    const res = await fetch('/api/envelope-linears/item/' + id, { method: 'DELETE' });
+    const j = await res.json();
+    if (!j.success) { alert(j.error || 'Could not remove that.'); return; }
+    const open = el_pickedId;
+    await el_fetch();          // the count in the side list follows it
+    el_pickedId = open;
+    el_pick(open);
+  } catch (e) { alert('Server error.'); }
+}
+
+// ── PICTURES ──────────────────────────────────────────────
+//
+// Shrunk here, in the browser, before anything is sent. Two reasons and both
+// of them matter: a phone camera JPEG is 6MB and Vercel refuses a request
+// body over 4.5MB outright - the refusal never reaches our code, so the only
+// cure is not to send it - and three hundred unshrunk designs would put
+// hundreds of megabytes into a database that is dumped every night.
+const EL_MAX_SIDE = 2000;     // enough to look at full screen
+const EL_THUMB = 280;         // what the grid shows
+const EL_QUALITY = 0.85;
+
+function el_drawn(img, maxSide, quality) {
+  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+  c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const ctx = c.getContext('2d');
+  // White underneath: a PNG with a transparent background becomes black when
+  // it is turned into a JPEG, and a liner on black is not the liner.
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', quality);
+}
+
+function el_readImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('not a picture')); };
+    img.src = url;
+  });
+}
+
+async function el_addFiles(files) {
+  if (!files || !files.length) return;
+  const id = el_pickedId;
+  const box = document.getElementById('el_progress');
+  const list = Array.from(files);
+  let done = 0;
+  const failed = [];
+
+  for (const file of list) {
+    if (box) {
+      box.textContent = 'Adding ' + (done + 1) + ' of ' + list.length + ' — ' + file.name;
+    }
+    try {
+      if (!/^image\//.test(file.type)) throw new Error('not a picture');
+      const img = await el_readImage(file);
+      const image = el_drawn(img, EL_MAX_SIDE, EL_QUALITY);
+      const thumb = el_drawn(img, EL_THUMB, 0.72);
+      const res = await fetch('/api/envelope-linears/' + id + '/items', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image, thumb, sourceFile: file.name,
+          name: file.name.replace(/\.[^.]+$/, ''),
+          width: img.naturalWidth, height: img.naturalHeight,
+        }),
+      });
+      const j = await res.json();
+      if (!j.success) throw new Error(j.error || 'refused');
+      done++;
+    } catch (e) {
+      // Named, not swallowed. Twenty pictures where two would not go should
+      // say which two rather than quietly adding eighteen.
+      failed.push(file.name + ' (' + e.message + ')');
+    }
+  }
+
+  if (box) {
+    box.textContent = done + ' added'
+      + (failed.length ? ', ' + failed.length + ' would not go: ' + failed.join(', ') : '');
+  }
+  await el_fetch();
+  el_pickedId = id;
+  await el_pick(id);
+  if (failed.length) {
+    const after = document.getElementById('el_progress');
+    if (after) {
+      after.innerHTML = '<span class="text-danger">' + el_esc(failed.length
+        + (failed.length === 1 ? ' picture would not go: ' : ' pictures would not go: ')
+        + failed.join(', ')) + '</span>';
+    }
   }
 }
 
