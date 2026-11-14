@@ -207,6 +207,58 @@ const NL = String.fromCharCode(10);
     /src="\/js\/sectionSlug\.js"/.test(shell));
   check('and loads it before the script that uses it',
     shell.indexOf('/js/sectionSlug.js') < shell.indexOf('window.ArabellaSections'));
+  // ──────────────────────────────────────────────
+  // THE ONE THAT BIT.
+  //
+  // Every one of these is a plain <script> on the same page, so they all
+  // share one scope. sectionSlug.js and orderId.js both declared a top-level
+  // `api`, and the second to load died on "Identifier 'api' has already been
+  // declared" before it could put its own name on window. Nothing 404s and
+  // nothing looks wrong in the network tab - the Corrections box simply
+  // stopped reacting to a typed order number, because the function behind it
+  // had never been defined.
+  //
+  // Not checked by reading the files: a name at column one inside a wrapper
+  // is harmless, and a clever indent would make a broken file pass. They are
+  // RUN, in one shared context, the way the page runs them.
+  console.log(NL + 'The shared browser scripts keep to themselves');
+  const vm = require('vm');
+  const SHARED = [
+    ['utils/sectionSlug.js', 'ArabellaSections'],
+    ['utils/orderId.js', 'ArabellaOrderId'],
+    ['utils/productionStages.js', 'ArabellaStages'],
+  ];
+
+  // A stand-in for the page: `window` is the context itself, as in a browser,
+  // and there is no `module`, so each file takes its browser path.
+  const sandbox = { console };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+
+  let blewUp = null;
+  for (const [rel] of SHARED) {
+    try {
+      vm.runInContext(fs.readFileSync(path.join(ROOT, rel), 'utf8'), sandbox, { filename: rel });
+    } catch (e) {
+      blewUp = blewUp || (rel + ': ' + e.message);
+    }
+  }
+  check('all three run together without one killing the next', blewUp === null, blewUp);
+
+  // What each one is FOR must survive, or "nothing leaked" would also be
+  // true of three empty files.
+  for (const [rel, name] of SHARED) {
+    check(rel.replace('utils/', '') + ' still puts its one name on window',
+      sandbox[name] && typeof sandbox[name] === 'object', typeof sandbox[name]);
+  }
+  check('the order-number rule the Corrections box calls is there',
+    typeof (sandbox.ArabellaOrderId || {}).parseOrderIds === 'function');
+
+  // Everything else they define must have stayed inside them.
+  const expected = new Set(['console', 'window', ...SHARED.map(x => x[1])]);
+  const leaked = Object.keys(sandbox).filter(k => !expected.has(k));
+  check('and nothing else of theirs is in the shared scope', leaked.length === 0, leaked);
+
   check('nothing hand-builds a tab address any more',
     !/searchParams\.set\(['"]tab['"]/.test(shell));
   check('there is one builder and one reader',

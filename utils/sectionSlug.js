@@ -17,6 +17,20 @@
 // That also means the two cannot drift, because there is only one function.
 // ══════════════════════════════════════════════════════
 
+// Everything below is inside a function on purpose.
+//
+// Both of the files the browser is handed this way - this one and its
+// neighbour - ended up declaring a top-level `const api`, and the second
+// script to load died on "Identifier 'api' has already been declared"
+// before it could set its own name on window. Nothing 404s and nothing
+// looks wrong; the page simply has a function missing, and the symptom was
+// a Corrections box where typing an order number did nothing at all.
+//
+// A plain <script> shares one scope with every other plain <script> on the
+// page. So this one keeps its workings to itself and puts exactly one name
+// where anybody can see it.
+(function () {
+
 /**
  * tillApproval -> till-approval, productionBD -> production-bd, scot -> scot.
  *
@@ -103,3 +117,4 @@ var api = {
 // reachable at one spelling and linked at another.
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 if (typeof window !== 'undefined') window.ArabellaSections = api;
+}());
