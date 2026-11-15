@@ -19,14 +19,18 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 const { codeFor, clashes } = require('../utils/linerCode');
+const { connectLive } = require('../utils/liveDb');
 
 const WRITE = process.argv.includes('--write');
+// Live only when it is asked for in so many words. There is no default
+// that reaches it and no flag that reaches it by accident.
+const LIVE = process.argv.includes('--live');
 const dbArg = process.argv.indexOf('--db');
 const DB = dbArg > -1 ? process.argv[dbArg + 1] : process.env.DB_NAME;
 const NL = String.fromCharCode(10);
 
 (async () => {
-  const conn = await mysql.createConnection({
+  const conn = LIVE ? await connectLive(mysql) : await mysql.createConnection({
     host: process.env.DB_HOST,
     port: process.env.DB_PORT || 3306,
     user: process.env.DB_USER,
@@ -34,7 +38,7 @@ const NL = String.fromCharCode(10);
     database: DB,
   });
 
-  console.log('Database: ' + DB);
+  console.log('Database: ' + (LIVE ? 'LIVE' : DB));
 
   const [cats] = await conn.query(
     `SELECT id, section, category FROM envelope_linears

@@ -349,30 +349,53 @@ def main():
     # ── Write ──
     print()
     print('Writing...')
-    with conn.cursor() as cur:
-        for _, cat, _ in plan:
+    # ONE TRANSACTION PER CATEGORY, NOT ONE FOR ALL OF THEM.
+    #
+    # All three hundred designs used to go in under a single commit, which
+    # is the right shape for a database on this machine and the wrong one
+    # for Railway over an office line. Sixty-nine megabytes held open until
+    # the last row is a transaction that only has to be unlucky once; the
+    # link drops with ETIMEDOUT or ER_NET_READ_INTERRUPTED often enough to
+    # measure - two tries in five on 15 November - and every image sent so
+    # far is thrown away with it.
+    #
+    # A category at a time is twenty-one smaller bets. A drop costs the one
+    # category being written, and the ones already in stay in. Re-running
+    # picks up where it stopped, because a category is replaced rather than
+    # added to - which was already true and is what makes this safe.
+    by_cat = {}
+    for row in rows:
+        by_cat.setdefault(row[0], []).append(row)
+
+    done = 0
+    for _, cat, _ in plan:
+        mine = by_cat.get(cat['id'], [])
+        with conn.cursor() as cur:
             # A category is replaced, not added to, so a corrected PDF can
             # simply be put through again.
             cur.execute('DELETE FROM envelope_linear_items WHERE category_id = %s',
                         (cat['id'],))
-        for cat_id, sort, name, src, page, w, h in rows:
-            cur.execute(
-                'INSERT INTO envelope_linear_items '
-                '(category_id, source_file, source_page, file_url, width, height, '
-                ' mime_type, bytes, thumb, sort_order, is_active) '
-                'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)',
-                (cat_id, src, page, links.get(name, ''), w, h,
-                 fulls[name][0], fulls[name][1], thumbs[name], sort))
-        # The category tile shows its first design, so the cover is simply
-        # that thumbnail again rather than a third size of the same picture.
-        for _, cat, _ in plan:
+            for cat_id, sort, name, src, page, w, h in mine:
+                cur.execute(
+                    'INSERT INTO envelope_linear_items '
+                    '(category_id, source_file, source_page, file_url, width, height, '
+                    ' mime_type, bytes, thumb, sort_order, is_active) '
+                    'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)',
+                    (cat_id, src, page, links.get(name, ''), w, h,
+                     fulls[name][0], fulls[name][1], thumbs[name], sort))
+            # The category tile shows its first design, so the cover is
+            # simply that thumbnail again rather than a third size of the
+            # same picture.
             cur.execute(
                 'UPDATE envelope_linears SET cover = ('
                 '  SELECT thumb FROM envelope_linear_items '
                 '   WHERE category_id = %s AND is_active = 1 '
                 '   ORDER BY sort_order, id LIMIT 1) WHERE id = %s',
                 (cat['id'], cat['id']))
-    conn.commit()
+        conn.commit()
+        done += len(mine)
+        print('  %-36s %3d designs   (%d of %d)'
+              % (cat['category'][:36], len(mine), done, len(rows)))
 
     # ── Name them ──
     # Handed to the Node side rather than worked out here. The rule for what
@@ -380,16 +403,21 @@ def main():
     # in Python is two rules that agree until the day one of them is edited.
     print()
     print('Naming...')
+    # The same database this script just wrote to, said the same way. With
+    # --live it must be --live: passing --db None would quietly name the
+    # designs in the dev copy instead and report success.
+    naming_where = ['--live'] if args.live else ['--db', args.db or '']
     naming = subprocess.run(
-        ['node', os.path.join('scripts', 'code-envelope-linears.js'), '--write',
-         '--db', args.db],
+        ['node', os.path.join('scripts', 'code-envelope-linears.js'), '--write']
+        + naming_where,
         cwd=ROOT, capture_output=True, text=True)
     for line in (naming.stdout or '').splitlines()[-3:]:
         print('  ' + line)
     if naming.returncode != 0:
         print('  Naming failed, so the designs are in but unnamed:')
         print('  ' + (naming.stderr or '').strip()[:400])
-        print('  Run: node scripts/code-envelope-linears.js --write --db ' + args.db)
+        print('  Run: node scripts/code-envelope-linears.js --write '
+              + ' '.join(naming_where))
 
     with conn.cursor() as cur:
         cur.execute('SELECT COUNT(*) FROM envelope_linear_items WHERE is_active = 1')

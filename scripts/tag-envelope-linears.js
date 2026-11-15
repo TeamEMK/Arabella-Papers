@@ -23,9 +23,13 @@ const path = require('path');
 const mysql = require('mysql2/promise');
 const { spawnSync } = require('child_process');
 const { colourName, tagsFor } = require('../utils/linerTags');
+const { connectLive, liveSettings } = require('../utils/liveDb');
 
 const WRITE = process.argv.includes('--write');
 const ALL = process.argv.includes('--all');
+// Live only when it is asked for in so many words. There is no default that
+// reaches it and no flag that reaches it by accident.
+const LIVE = process.argv.includes('--live');
 const dbArg = process.argv.indexOf('--db');
 const DB = dbArg > -1 ? process.argv[dbArg + 1] : process.env.DB_NAME;
 const NL = String.fromCharCode(10);
@@ -90,11 +94,11 @@ const PIXELS = [
 ].join(String.fromCharCode(10));
 
 (async () => {
-  const conn = await mysql.createConnection({
+  const conn = LIVE ? await connectLive(mysql) : await mysql.createConnection({
     host: process.env.DB_HOST, port: process.env.DB_PORT || 3306,
     user: process.env.DB_USER, password: process.env.DB_PASSWORD, database: DB,
   });
-  console.log('Database: ' + DB);
+  console.log('Database: ' + (LIVE ? 'LIVE' : DB));
 
   const [rows] = await conn.query(
     `SELECT i.id, i.tags, c.section, c.category
@@ -113,7 +117,16 @@ const PIXELS = [
     cwd: ROOT,
     encoding: 'utf8',
     maxBuffer: 1 << 26,
-    env: Object.assign({}, process.env, {
+    // The Python half opens its OWN connection, so it is handed the same
+    // settings this half used. Letting it read .env for itself is how Node
+    // ends up tagging live while Python reads the pictures off the dev copy.
+    env: Object.assign({}, process.env, LIVE ? (function () {
+      const L = liveSettings();
+      return {
+        H: L.host, P: String(L.port), U: L.user, W: L.password, D: L.database,
+        IDS: JSON.stringify(todo.map(r => r.id)),
+      };
+    }()) : {
       H: process.env.DB_HOST, P: String(process.env.DB_PORT || 3306),
       U: process.env.DB_USER, W: process.env.DB_PASSWORD, D: DB,
       IDS: JSON.stringify(todo.map(r => r.id)),
