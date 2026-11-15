@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
-const { matches } = require('../utils/linerTags');
+const { matches, words, looksLikeCode, codeMatches } = require('../utils/linerTags');
 
 // ══════════════════════════════════════════════════════
 // ENVELOPE LINEARS — the public half
@@ -130,7 +130,25 @@ router.get('/api/search', async (req, res) => {
         WHERE i.is_active = 1 AND c.is_active = 1
         ORDER BY c.section_order, c.sort_order, i.sort_order`);
 
-    const hits = rows.filter(r => matches(q, String(r.tags || '').split(' ')));
+    // A NAME, OR A DESCRIPTION. Not both at once.
+    //
+    // "CT-TS-07" is somebody naming one design; "blue flower" is somebody
+    // describing a kind. Telling them apart matters more than it looks:
+    // broken into words, "CT-TS-07" is "ct", "ts" and "07", every one of
+    // them too short to search on - and a phrase with nothing searchable
+    // left in it matches EVERYTHING. A search for one design would have
+    // answered with the whole book.
+    //
+    // "CT-FB" has no number and no words long enough to search on either,
+    // and it is still obviously a name - half of one. So a phrase with
+    // nothing searchable left in it falls back to the codes rather than
+    // matching everything: typing half a code lists that category, which is
+    // what somebody doing it meant.
+    const byName = looksLikeCode(q);
+    const usable = words(q);
+    const hits = (byName || !usable.length)
+      ? rows.filter(r => codeMatches(q, r.code))
+      : rows.filter(r => matches(q, String(r.tags || '').split(' ')));
     res.json({
       success: true,
       q,

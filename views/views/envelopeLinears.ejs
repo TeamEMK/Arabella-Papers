@@ -47,7 +47,7 @@
       <div class="card bg-light-glass shadow-sm el-sidecard">
         <div class="card-body p-2">
           <input type="text" id="el_q" class="form-control form-control-sm mb-1"
-                 placeholder="blue flower, red damask, monogram..."
+                 placeholder="blue flower, red damask, CT-FB-07..."
                  oninput="el_searchSoon()">
           <div class="form-text small mb-2" id="el_qHint">Try a colour and a kind.</div>
           <button type="button" id="el_newBtn"
@@ -120,7 +120,14 @@
   /* Stays put while the designs beside it are scrolled - the whole point of
      putting the list down the side rather than above. */
   @media (min-width: 992px) {
-    .el-sidecard { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
+    .el-sidecard {
+      position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto;
+      /* Scrolls, but without a bar down the middle of the page. Nothing is
+         taken away but the sight of it: wheel, trackpad and keyboard all
+         work as they did. */
+      scrollbar-width: none; -ms-overflow-style: none;
+    }
+    .el-sidecard::-webkit-scrollbar { width: 0; height: 0; display: none; }
   }
   .el-sechead2 {
     width: 100%; text-align: left; border: 0; background: none;
@@ -265,6 +272,8 @@ let el_canManage = false;
 // What the search box is showing, so the panel knows whether it is looking
 // at a category or at the answer to a question.
 let el_searchOn = false;
+// What the next design dropped into the open category will be called.
+let el_nextCode = '';
 let el_searchTimer = null;
 let el_manage = false;
 
@@ -444,6 +453,8 @@ async function el_pick(id) {
 
     // The box that takes pictures. Above the grid rather than below it: in an
     // empty category there is no grid to be below.
+    el_nextCode = json.nextCode || '';
+
     const adder = el_manage ? `
       <div class="el-drop" id="el_drop"
            ondragover="event.preventDefault();this.classList.add('over')"
@@ -457,12 +468,17 @@ async function el_pick(id) {
                  onchange="el_addFiles(this.files);this.value='';">
         </label>
         <div class="small mt-1">JPG, PNG or WebP. Big ones are shrunk before they are sent.</div>
+        <%# Said before anybody uploads rather than after: a code somebody
+            is about to live with is worth seeing while there is still
+            time to object to it. %>
+        <div class="small fw-bold mt-1" id="el_nextCode"></div>
         <div class="small fw-bold mt-1 text-dark" id="el_progress"></div>
       </div>` : '';
 
     if (!json.items.length) {
       body.innerHTML = head + adder + '<div class="text-center text-muted py-5">'
         + 'Nothing has been put in this category yet.</div>';
+      el_sayNextCode();
       return;
     }
 
@@ -504,9 +520,16 @@ async function el_pick(id) {
           </div>
         </div>`;
     }).join('') + '</div>';
+    el_sayNextCode();
   } catch (e) {
     body.innerHTML = '<div class="alert alert-danger m-0">Could not load that category.</div>';
   }
+}
+
+function el_sayNextCode() {
+  const box = document.getElementById('el_nextCode');
+  if (!box) return;             // not in manage mode, so there is no box
+  box.textContent = el_nextCode ? 'The next one will be ' + el_nextCode : '';
 }
 
 // ── SEARCHING ─────────────────────────────────────────────

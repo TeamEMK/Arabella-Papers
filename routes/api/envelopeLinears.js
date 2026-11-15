@@ -3,7 +3,9 @@ const router = express.Router();
 const db = require('../../config/db');
 const { requireLogin, requireRole, hasRole } = require('../../middleware/auth');
 const { codeFor } = require('../../utils/linerCode');
-const { tagsFor, matches, colourName } = require('../../utils/linerTags');
+const {
+  tagsFor, matches, colourName, words, looksLikeCode, codeMatches,
+} = require('../../utils/linerTags');
 
 // ══════════════════════════════════════════════════════
 // ENVELOPE LINEARS
@@ -114,7 +116,25 @@ router.get('/search', requireLogin, async (req, res) => {
         WHERE i.is_active = 1 AND c.is_active = 1
         ORDER BY c.section_order, c.sort_order, i.sort_order`);
 
-    const hits = rows.filter(r => matches(q, String(r.tags || '').split(' ')));
+    // A NAME, OR A DESCRIPTION. Not both at once.
+    //
+    // "CT-TS-07" is somebody naming one design; "blue flower" is somebody
+    // describing a kind. Telling them apart matters more than it looks:
+    // broken into words, "CT-TS-07" is "ct", "ts" and "07", every one of
+    // them too short to search on - and a phrase with nothing searchable
+    // left in it matches EVERYTHING. A search for one design would have
+    // answered with the whole book.
+    //
+    // "CT-FB" has no number and no words long enough to search on either,
+    // and it is still obviously a name - half of one. So a phrase with
+    // nothing searchable left in it falls back to the codes rather than
+    // matching everything: typing half a code lists that category, which is
+    // what somebody doing it meant.
+    const byName = looksLikeCode(q);
+    const usable = words(q);
+    const hits = (byName || !usable.length)
+      ? rows.filter(r => codeMatches(q, r.code))
+      : rows.filter(r => matches(q, String(r.tags || '').split(' ')));
 
     res.json({
       success: true,
@@ -147,7 +167,8 @@ router.get('/category/:id', requireLogin, async (req, res) => {
       return res.status(400).json({ success: false, error: 'No such category.' });
     }
     const [[cat]] = await db.query(
-      'SELECT id, section, category FROM envelope_linears WHERE id = ? AND is_active = 1', [id]);
+      `SELECT id, section, category, code_next FROM envelope_linears
+        WHERE id = ? AND is_active = 1`, [id]);
     if (!cat) return res.status(404).json({ success: false, error: 'No such category.' });
 
     const [rows] = await db.query(
@@ -158,10 +179,22 @@ router.get('/category/:id', requireLogin, async (req, res) => {
         WHERE category_id = ? AND is_active = 1
         ORDER BY sort_order, id`, [id]);
 
+    // What the NEXT design put in here will be called, worked out the same
+    // way the upload itself works it out - off the counter that only goes
+    // up, not off how many are in the category. Sent so the screen can say
+    // it BEFORE anybody uploads: a code somebody is about to live with is
+    // worth seeing while there is still time to object to it.
+    const used = rows.reduce((top, r) => {
+      const m = /-(\d+)$/.exec(String(r.code || ''));
+      return m ? Math.max(top, Number(m[1])) : top;
+    }, 0);
+
     res.json({
       success: true,
       section: cat.section,
       category: cat.category,
+      nextCode: codeFor(cat.section, cat.category,
+        Math.max(Number(cat.code_next) || 0, used) + 1),
       items: rows.map(r => ({
         id: r.id, code: r.code, name: r.name, page: r.source_page,
         url: r.file_url, width: r.width, height: r.height,

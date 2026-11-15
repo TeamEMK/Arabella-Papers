@@ -247,6 +247,60 @@ function freePort() {
     const where = await ev("document.querySelector('#field .piece .cap').innerText");
     check('and says where each one lives', /floral/i.test(where || ''), where);
 
+    console.log(NL + 'Looking one up by its own name');
+    const typeIt = async (text) => {
+      await ev("var b=document.getElementById('q');b.value=" + JSON.stringify(text)
+        + ";b.dispatchEvent(new Event('input',{bubbles:true}));");
+      for (let i = 0; i < 60; i++) {
+        const note = await ev("document.getElementById('qnote').innerText");
+        if (note && !/Looking/.test(note)) break;
+        await sleep(200);
+      }
+      await sleep(350);
+      return ev("JSON.stringify([...document.querySelectorAll('#field .piece .cap b')]"
+        + ".map(e=>e.innerText))").then(JSON.parse);
+    };
+    const one = await typeIt('CT-TS-07');
+    check('a whole code finds exactly that design',
+      one.length === 1 && one[0] === 'CT-TS-07', one);
+    const tail = await typeIt('ts-07');
+    check('and the end of one finds it too, however it is typed',
+      tail.length === 1 && tail[0] === 'CT-TS-07', tail);
+    // Half a code is still obviously a name, so it lists that category
+    // rather than falling through to the words and matching everything.
+    const half = await typeIt('CT-FB');
+    check('half a code lists that category',
+      half.length > 1 && half.every(c => /^CT-FB-/.test(c)), half.slice(0, 4));
+    const none = await typeIt('zzzqqq');
+    check('and nonsense still finds nothing', none.length === 0, none);
+    await ev('clearSeek();');
+    await sleep(600);
+
+    console.log(NL + 'No scrollbars, but it still scrolls');
+    // Hidden, not disabled. The page has to be taller than the window for
+    // this to mean anything, which it is with eighteen liners on it.
+    check('the page is longer than the window',
+      (await ev('document.documentElement.scrollHeight')) >
+      (await ev('window.innerHeight')));
+    // Asked of the STYLE, not of the window width. Headless Chrome draws
+    // overlay scrollbars that take no width at all, so measuring the gap
+    // between innerWidth and clientWidth passed just as happily with the
+    // rule deleted - a check that proves nothing is worse than no check,
+    // because it is believed.
+    const barWidth = await ev(
+      "getComputedStyle(document.documentElement, '::-webkit-scrollbar').width");
+    const barStyle = await ev("getComputedStyle(document.documentElement).scrollbarWidth");
+    check('the page scrollbar is styled away',
+      barWidth === '0px' || barStyle === 'none', { barWidth, barStyle });
+    const railBar = await ev(
+      "getComputedStyle(document.querySelector('.rail'), '::-webkit-scrollbar').width");
+    check('and so is the one down the side list', railBar === '0px', railBar);
+    await ev('window.scrollTo(0, 400);');
+    await sleep(300);
+    check('the wheel still works', (await ev('window.scrollY')) > 0,
+      await ev('window.scrollY'));
+    await ev('window.scrollTo(0, 0);');
+
     console.log(NL + 'Opening one full size');
     await ev("document.querySelector('#field .piece').click();");
     for (let i = 0; i < 60; i++) {

@@ -18,6 +18,14 @@ const check = (name, ok, extra) => {
 };
 const NL = String.fromCharCode(10);
 
+// What the word search would do with a phrase on its own, used to show
+// why a code must never reach it.
+const { matches } = require('../utils/linerTags');
+function matchesEverything(q) {
+  return matches(q, ['classic', 'traditional', 'floral', 'botanical']) === true
+    && matches(q, ['speciality', 'statement', 'embossed']) === true;
+}
+
 console.log(NL + 'The letters come off the name');
 check('two words give two letters', initials('Classic & Traditional') === 'CT',
   initials('Classic & Traditional'));
@@ -96,6 +104,31 @@ check('and the message says which two',
 check('the same name in two sections is not a clash',
   clashes([['Classic Traditional', 'Floral Botanical'],
            ['Modern Contemporary', 'Floral Botanical']]).length === 0);
+
+console.log(NL + 'Looking a design up by its own name');
+const { looksLikeCode, codeMatches, words: tagWords } = require('../utils/linerTags');
+
+check('a code is recognised as one', looksLikeCode('CT-TS-07'));
+check('however it is spaced or cased', looksLikeCode('ct ts 07') && looksLikeCode('ctts07'));
+check('a description is not', !looksLikeCode('blue flower'));
+// Bare digits are not a name either - there is a 07 in every category.
+check('and neither is a number on its own', !looksLikeCode('07'));
+
+check('the whole code finds the design', codeMatches('CT-TS-07', 'CT-TS-07'));
+check('and so does the end of it', codeMatches('TS-07', 'CT-TS-07'));
+check('punctuation and case are ignored',
+  codeMatches('ct ts 07', 'CT-TS-07') && codeMatches('ctts07', 'CT-TS-07'));
+check('a different design is not found', !codeMatches('CT-TS-07', 'CT-FB-07'));
+
+// THE TRAP THIS EXISTS TO AVOID. Broken into words, a code is two-letter
+// scraps and a number, every one of them too short to search on - and the
+// word search treats a phrase with nothing searchable left in it as no
+// phrase at all, which matches everything. A search for one design would
+// have answered with the whole book.
+check('a code has no searchable words in it', tagWords('CT-TS-07').length === 0,
+  tagWords('CT-TS-07'));
+check('and the word search alone would have matched anything at all',
+  matchesEverything('CT-TS-07'));
 
 console.log(NL + 'The parts that do the naming agree on where it lives');
 const fs = require('fs');

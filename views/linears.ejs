@@ -34,6 +34,16 @@
     }
     .serif { font-family: 'Cormorant Garamond', Georgia, serif; }
     ::selection { background: var(--gold); color: #000; }
+
+    /* THE SCROLLBAR IS GONE, THE SCROLLING IS NOT.
+       Two grey bars down a page like this one are the only parts of it
+       the browser drew. Hidden rather than styled: a thin dark one still
+       reads as a mechanism, and there is nothing here to operate.
+       Everything still scrolls - wheel, trackpad, touch, Page Down and
+       the keyboard - so nothing is taken away but the sight of it. */
+    html, body, .rail { scrollbar-width: none; -ms-overflow-style: none; }
+    html::-webkit-scrollbar, body::-webkit-scrollbar,
+    .rail::-webkit-scrollbar { width: 0; height: 0; display: none; }
     a { color: inherit; }
 
     /* ── the rail ─────────────────────────────── */
@@ -147,7 +157,8 @@
 
   <div class="seek">
     <i class="fas fa-search"></i>
-    <input type="text" id="q" autocomplete="off" placeholder="blue flower, gold geometric...">
+    <input type="text" id="q" autocomplete="off"
+           placeholder="blue flower, gold geometric, CT-TS-07...">
   </div>
   <div class="seek-note" id="qnote"></div>
 

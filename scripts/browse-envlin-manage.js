@@ -279,6 +279,18 @@ const CATEGORY = 'Probe Liners';
 
     // ──────────────────────────────────────────────
     // ──────────────────────────────────────────────
+    // The code a design will be given is worth seeing BEFORE it is given,
+    // while there is still time to object to it.
+    console.log(NL + 'It says what the next one will be called');
+    const said = await ev("document.getElementById('el_nextCode').innerText");
+    check('the box says the next code',
+      /The next one will be PS-PL-02/.test(said || ''), said);
+    const stored = await db.query(
+      'SELECT code FROM envelope_linear_items WHERE category_id = ?', [madeRow.id]);
+    check('and the one just added took the one before it',
+      stored[0][0] && stored[0][0].code === 'PS-PL-01', stored[0][0]);
+
+    // ──────────────────────────────────────────────
     // A button inside a button is not HTML a browser accepts: the parser
     // closes the outer one, and the bin ends up on a line of its own under
     // the row. It looked like a styling problem and was a nesting one, so

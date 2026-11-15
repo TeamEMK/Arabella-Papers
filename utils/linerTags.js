@@ -217,6 +217,41 @@ function matches(query, tags) {
   });
 }
 
+/**
+ * Stripped to the letters and digits: "ct-ts-07" and "CT TS 07" and
+ * "ctts07" are all the same thing somebody is trying to type.
+ */
+function bareCode(v) {
+  return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+/**
+ * Is this somebody typing a design's own name rather than describing one?
+ *
+ * Letters AND a digit. "blue flower" has no digit, "07" has no letters, and
+ * "CT-TS-07" has both - which is what a liner is called.
+ */
+function looksLikeCode(query) {
+  const bare = bareCode(query);
+  return bare.length >= 3 && /[A-Z]/.test(bare) && /[0-9]/.test(bare);
+}
+
+/**
+ * Does this design answer to that name?
+ *
+ * Anywhere in the code, not only at the front, so "TS-07" finds CT-TS-07
+ * without anybody having to remember which section it was in. Kept apart
+ * from the words search on purpose: "CT-TS-07" broken into words is "ct",
+ * "ts" and "07", all too short to search on, and a phrase with nothing
+ * searchable in it matches EVERYTHING - which is how a search for one
+ * design would have returned the whole book.
+ */
+function codeMatches(query, code) {
+  const want = bareCode(query);
+  if (!want) return false;
+  return bareCode(code).includes(want);
+}
+
 // NODE ONLY, and that is the whole point of how the upload works.
 //
 // The browser has the picture on a canvas already, so it is the only thing
@@ -225,4 +260,8 @@ function matches(query, tags) {
 // this file would have to be served to it, and then there would be two
 // definitions of "teal" waiting to disagree. Numbers travel; opinions stay
 // here.
-module.exports = { colourName, tagsFor, matches, words, COLOUR_FAMILY, WORD_FAMILY };
+module.exports = {
+  colourName, tagsFor, matches, words,
+  bareCode, looksLikeCode, codeMatches,
+  COLOUR_FAMILY, WORD_FAMILY,
+};
