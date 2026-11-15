@@ -176,6 +176,26 @@ const CATEGORY = 'Probe Liners';
       (await ev("document.getElementById('el_manageLbl').innerText")) === 'Done');
 
     // ──────────────────────────────────────────────
+    // CHECKED FIRST, on purpose. A confirm() put back into the tab stops
+    // the page dead and this suite then hangs until something kills it -
+    // a failure, but a useless one that says nothing about why. Read the
+    // file before touching the screen and it fails in a line.
+    console.log(NL + 'None of it is the browser talking');
+    const view = fs.readFileSync(
+      path.join(ROOT, 'views/views/envelopeLinears.ejs'), 'utf8');
+    // confirm() and alert() draw a grey box headed with the address bar's
+    // name, which is the browser talking rather than this system.
+    //
+    // Comments are stripped first. Without that this failed on the comment
+    // ABOVE the fix explaining what was wrong with confirm() - a check that
+    // cannot tell an explanation from the thing it explains.
+    const code = view
+      .replace(/<%#[\s\S]*?%>/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1');
+    const stillThere = (code.match(/(^|[^.\w])(confirm|alert)\s*\(/g) || []);
+    check('no confirm() or alert() left in the tab', stillThere.length === 0, stillThere.slice(0, 3));
+
     console.log(NL + 'A section that did not exist');
     const sectionsBefore = await ev('el_sections.length');
     await ev('el_openNew();');
@@ -336,8 +356,33 @@ const CATEGORY = 'Probe Liners';
 
     // ──────────────────────────────────────────────
     console.log(NL + 'Taking the design away');
-    await ev("window.confirm = function(){ return true; };");
-    await ev('el_removeDesign(' + row.id + ');');
+    // The dialog is the app's own now, not the browser's, so there is no
+    // window.confirm to stub - and that is worth something: stubbing it
+    // would have gone on passing after the dialog stopped appearing at
+    // all. This waits for the real one and presses the real button.
+    const askAndSay = async (call, expectIn) => {
+      // Started, NOT awaited. The call does not finish until the dialog is
+      // answered, and the dialog cannot be answered until this returns - so
+      // awaiting it is a deadlock, and the suite sat there until it was
+      // killed. `void` throws the promise away so evaluate comes straight
+      // back and the clicking can happen.
+      await ev('void (async function(){ ' + call + ' })();');
+      let seen = '';
+      for (let i = 0; i < 60; i++) {
+        seen = await ev("(document.querySelector('.swal2-popup')||{}).innerText || ''");
+        if (seen) break;
+        await sleep(150);
+      }
+      const asked = !!seen;
+      const named = expectIn ? new RegExp(expectIn).test(seen) : true;
+      await ev("(document.querySelector('.swal2-confirm')||{click(){}}).click();");
+      await sleep(400);
+      return { asked, named, seen };
+    };
+
+    const askDesign = await askAndSay('el_removeDesign(' + row.id + ');', row.code);
+    check('it asks before removing a design', askDesign.asked, askDesign.seen);
+    check('and names the one being removed', askDesign.named, askDesign.seen);
     for (let i = 0; i < 60; i++) {
       const [[n]] = await db.query(
         'SELECT COUNT(*) AS n FROM envelope_linear_items WHERE category_id = ?', [madeRow.id]);
@@ -354,7 +399,11 @@ const CATEGORY = 'Probe Liners';
 
     // ──────────────────────────────────────────────
     console.log(NL + 'Taking the category away');
-    await ev('el_removeCategory(' + madeRow.id + ', ' + JSON.stringify(CATEGORY) + ', 0);');
+    const askCat = await askAndSay(
+      'el_removeCategory(' + madeRow.id + ', ' + JSON.stringify(CATEGORY) + ', 0);',
+      CATEGORY);
+    check('it asks before removing a category', askCat.asked, askCat.seen);
+    check('and names that one too', askCat.named, askCat.seen);
     for (let i = 0; i < 60; i++) {
       const [[n]] = await db.query(
         'SELECT COUNT(*) AS n FROM envelope_linears WHERE id = ?', [madeRow.id]);

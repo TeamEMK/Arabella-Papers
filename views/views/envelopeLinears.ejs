@@ -697,35 +697,63 @@ async function el_saveNew() {
   }
 }
 
+// The app's own dialog, not the browser's.
+//
+// confirm() and alert() draw a grey box with the address bar's name on it -
+// "localhost:3500 says" - which is the browser talking, not this system, and
+// it stops everything until somebody clicks. Every other screen here asks
+// with Swal and answers with a toast, and a destructive question is the last
+// place to look like a different program.
+async function el_askFirst(title, text, confirmText) {
+  const go = await Swal.fire({
+    title: title,
+    text: text,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: confirmText || 'Remove',
+    confirmButtonColor: '#dc3545',
+    cancelButtonText: 'Keep it',
+    reverseButtons: true,
+  });
+  return go.isConfirmed;
+}
+
 async function el_removeCategory(id, name, count) {
   const warn = count
-    ? name + ' and its ' + count + (count === 1 ? ' design' : ' designs')
-    : name;
-  if (!confirm('Remove ' + warn + '? This cannot be undone.')) return;
+    ? 'It takes its ' + count + (count === 1 ? ' design' : ' designs') + ' with it, for good.'
+    : 'It is empty, so nothing goes with it.';
+  if (!await el_askFirst('Remove ' + name + '?', warn)) return;
   try {
     const res = await fetch('/api/envelope-linears/' + id, { method: 'DELETE' });
     const j = await res.json();
-    if (!j.success) { alert(j.error || 'Could not remove that.'); return; }
+    if (!j.success) { showToast('error', j.error || 'Could not remove that.'); return; }
     if (el_pickedId === id) {
       el_pickedId = 0;
       document.getElementById('el_body').innerHTML =
         '<div class="text-center text-muted py-5">Pick a category.</div>';
     }
     await el_fetch();
-  } catch (e) { alert('Server error.'); }
+    showToast('success', name + ' removed');
+  } catch (e) { showToast('error', 'Server error.'); }
 }
 
 async function el_removeDesign(id) {
-  if (!confirm('Remove this design? This cannot be undone.')) return;
+  // Named in the question. "Remove this design?" is a question about
+  // whichever one the mouse happened to be over, and the bins sit on top of
+  // pictures that look alike.
+  const which = (el_shown.find(function (x) { return x.id === id; }) || {}).code;
+  if (!await el_askFirst('Remove ' + (which || 'this design') + '?',
+    'It goes for good.')) return;
   try {
     const res = await fetch('/api/envelope-linears/item/' + id, { method: 'DELETE' });
     const j = await res.json();
-    if (!j.success) { alert(j.error || 'Could not remove that.'); return; }
+    if (!j.success) { showToast('error', j.error || 'Could not remove that.'); return; }
     const open = el_pickedId;
     await el_fetch();          // the count in the side list follows it
     el_pickedId = open;
-    el_pick(open);
-  } catch (e) { alert('Server error.'); }
+    await el_pick(open);
+    showToast('success', (which || 'Design') + ' removed');
+  } catch (e) { showToast('error', 'Server error.'); }
 }
 
 // ── PICTURES ──────────────────────────────────────────────
