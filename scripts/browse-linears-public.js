@@ -314,6 +314,27 @@ function freePort() {
     check('it is the full-size one, not the thumbnail',
       /\/linears\/image\/\d+$/.test(big.src || '') && big.w > 400, big);
 
+    // The three things the office most wants a customer to know. They sit
+    // outside #field, which is rewritten on every category and every search
+    // - inside it they would vanish the moment anybody clicked anything.
+    console.log(NL + 'What the office wants them to know');
+    const offer = await ev("(document.querySelector('.offer')||{}).innerText || ''");
+    check('all three promises are on the page',
+      /Colour Options/i.test(offer) && /Customisation/i.test(offer)
+      && /Printing Techniques/i.test(offer), (offer || '').slice(0, 120));
+    check('the email is a link somebody can press, not just words',
+      (await ev("!!document.querySelector('.offer a[href^=\"mailto:\"]')")));
+    check('and it is the office address',
+      /info@arabellapapers\.com/.test(
+        await ev("(document.querySelector('.offer a[href^=\"mailto:\"]')||{}).href || ''")));
+    // Opening a category must not take them away with it.
+    await ev("openCat(document.querySelector('.cat').getAttribute('onclick')"
+      + ".replace(/[^0-9]/g,''));");
+    await sleep(900);
+    check('they survive a category being opened',
+      /Printing Techniques/i.test(
+        await ev("(document.querySelector('.offer')||{}).innerText || ''")));
+
     console.log(NL + 'Nothing shouted');
     const noisy = errors.filter(l => l && !/favicon/i.test(l));
     check('no console errors on this page', noisy.length === 0, noisy.slice(0, 3));

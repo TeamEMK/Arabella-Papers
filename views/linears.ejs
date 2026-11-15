@@ -137,6 +137,26 @@
     .lb .prev { left: 20px; top: 50%; transform: translateY(-50%); font-size: 2.6rem; }
     .lb .next { right: 20px; top: 50%; transform: translateY(-50%); font-size: 2.6rem; }
 
+    /* The three promises. A quiet band rather than a loud one: it sits under
+       the liners because somebody scrolls to the end of a category and then
+       wonders what else is possible, which is exactly when these answer. */
+    .offer {
+      margin-left: var(--rail); padding: 10px 40px 34px;
+      display: grid; gap: 34px; grid-template-columns: repeat(3, 1fr);
+      border-top: 1px solid var(--hair);
+    }
+    .offer-one h2 {
+      margin: 26px 0 10px; font-family: Jost, sans-serif; font-weight: 400;
+      font-size: .66rem; letter-spacing: .26em; text-transform: uppercase;
+      color: var(--gold);
+    }
+    .offer-one p {
+      margin: 0; font-size: .82rem; line-height: 1.7; color: #b8b3a7;
+      max-width: 38ch;
+    }
+    .offer-one a { color: var(--gold-lit); text-decoration: none; border-bottom: 1px solid var(--hair); }
+    .offer-one a:hover { border-bottom-color: var(--gold-lit); }
+
     .foot { margin-left: var(--rail); padding: 0 40px 40px; color: var(--dim); font-size: .7rem; letter-spacing: .1em; }
 
     @media (max-width: 900px) {
@@ -145,7 +165,8 @@
         position: static; width: auto; inset: auto;
         border-right: 0; border-bottom: 1px solid var(--hair); padding: 22px 18px;
       }
-      .field, .foot { margin-left: 0; padding-left: 18px; padding-right: 18px; }
+      .field, .foot, .offer { margin-left: 0; padding-left: 18px; padding-right: 18px; }
+      .offer { grid-template-columns: 1fr; gap: 0; }
       .lb { padding: 46px 12px; }
     }
   </style>
@@ -170,6 +191,33 @@
     <div class="empty">Loading…</div>
   </div>
 </main>
+
+<%# The three things the office most wants a customer to know. Outside
+    #field on purpose: that panel is rewritten every time a category is
+    opened or a search is run, and these are true of every liner on the
+    page, not of whichever one is showing. %>
+<section class="offer">
+  <div class="offer-one">
+    <h2>Unlimited Colour Options</h2>
+    <p>Every envelope liner in our collection is available in any colour of your
+      choice. Our ink library is extensive, so we don't want to limit you to a
+      predefined palette. Simply give us the uncoated side of the Pantone colour
+      you want, and we'll customise it for you.</p>
+  </div>
+  <div class="offer-one">
+    <h2>Complimentary Customisation</h2>
+    <p>Every design is fully customisable at no additional cost. Increase or
+      decrease the scale of a pattern, adjust individual elements, change
+      colours, or modify the design in any other way — we're happy to
+      accommodate your preferences.</p>
+  </div>
+  <div class="offer-one">
+    <h2>Printing Techniques</h2>
+    <p>To discuss the printing techniques available for a particular envelope
+      liner, write to us at
+      <a href="mailto:info@arabellapapers.com">info@arabellapapers.com</a>.</p>
+  </div>
+</section>
 
 <div class="foot">Shown here is what is currently in stock as a liner. Ask the office for anything you cannot see.</div>
 
