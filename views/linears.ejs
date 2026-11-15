@@ -52,45 +52,80 @@
       background: var(--rail-bg); border-right: 1px solid var(--hair);
       padding: 28px 22px; overflow-y: auto; z-index: 20;
     }
-    .mark { font-size: 1.55rem; letter-spacing: .04em; color: var(--paper); }
+    /* The name is set wide and small rather than big and tight. A letter-
+       spaced serif cap reads as a press mark; the same words at 2rem read
+       as a logo somebody made in a hurry. */
+    .mark {
+      font-size: 1.12rem; letter-spacing: .22em; text-transform: uppercase;
+      color: var(--gold-lit); text-align: center; line-height: 1.5;
+    }
     .mark small {
-      display: block; font-family: Jost, sans-serif; font-size: .64rem;
-      letter-spacing: .34em; text-transform: uppercase; color: var(--gold);
-      margin-top: 6px;
+      display: block; font-family: Jost, sans-serif; font-size: .56rem;
+      letter-spacing: .3em; text-transform: uppercase; color: var(--dim);
+      margin-top: 8px;
     }
-    .seek { position: relative; margin: 26px 0 6px; }
+    .mark-rule { height: 1px; background: var(--hair); margin: 20px 0 0; }
+    .seek-label {
+      font-size: .58rem; letter-spacing: .28em; text-transform: uppercase;
+      color: var(--gold); margin: 26px 0 8px; font-style: italic;
+    }
+    /* A rule under the words rather than a box around them. A box is a
+       form; a rule is a line somebody writes on. */
+    .seek { position: relative; border-bottom: 1px solid var(--hair); }
     .seek input {
-      width: 100%; background: #0d0f11; border: 1px solid var(--hair);
-      color: var(--paper); font-family: inherit; font-size: .86rem;
-      padding: 10px 12px 10px 32px; outline: none;
+      width: 100%; background: none; border: 0;
+      color: var(--paper); font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 1rem; font-style: italic;
+      padding: 2px 0 9px 20px; outline: none;
     }
-    .seek input:focus { border-color: var(--gold); }
+    .seek input::placeholder { color: var(--dim); opacity: 1; }
+    .seek:focus-within { border-bottom-color: var(--gold); }
     .seek i {
-      position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
-      color: var(--gold); font-size: .78rem;
+      position: absolute; left: 0; top: 7px;
+      color: var(--gold); font-size: .7rem;
     }
     .seek-note { font-size: .68rem; color: var(--dim); letter-spacing: .04em; min-height: 1em; }
 
-    .sec { margin-top: 20px; }
+    .sec { margin-top: 26px; }
     .sec-name {
-      font-size: .62rem; letter-spacing: .26em; text-transform: uppercase;
-      color: var(--gold); padding-bottom: 7px; border-bottom: 1px solid var(--hair);
+      font-size: .58rem; letter-spacing: .26em; text-transform: uppercase;
+      color: var(--gold); padding: 0 0 10px; border-top: 1px solid var(--hair);
+      padding-top: 16px;
     }
+    /* No rule between the rows. Twenty-one hairlines down a column is a
+       spreadsheet; the section rules above are enough to group them. */
     .cat {
       display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
-      padding: 7px 2px; cursor: pointer; color: #cfcabd; font-size: .86rem;
-      border-bottom: 1px solid rgba(255,255,255,.04);
+      padding: 5px 0 5px 12px; cursor: pointer; color: #cfcabd;
+      font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.02rem;
+      transition: color .15s ease;
     }
     .cat:hover { color: var(--paper); }
     .cat.on { color: var(--gold-lit); }
-    .cat span:last-child { font-size: .68rem; color: var(--dim); flex: none; }
+    .cat span:last-child {
+      font-size: .8rem; color: var(--dim); flex: none;
+      font-variant-numeric: tabular-nums;
+    }
 
     /* ── the field ────────────────────────────── */
     .field { margin-left: var(--rail); padding: 34px 40px 70px; }
-    .head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
-    .head h1 { margin: 0; font-size: 2rem; font-weight: 400; color: var(--paper); letter-spacing: .01em; }
-    .head .where { font-size: .66rem; letter-spacing: .26em; text-transform: uppercase; color: var(--gold); }
-    .head .tally { margin-left: auto; font-size: .74rem; color: var(--dim); }
+    .head { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; margin-bottom: 6px; }
+    .head h1 {
+      margin: 0; font-size: 3rem; font-weight: 300; color: var(--paper);
+      letter-spacing: .005em; line-height: 1.05;
+    }
+    /* A rule that takes whatever width is left, so the title and the far
+       label are tied together rather than floating apart. */
+    .head .rule { flex: 1 1 60px; height: 1px; background: var(--hair); }
+    .head .where { font-size: .62rem; letter-spacing: .28em; text-transform: uppercase; color: var(--gold); }
+    .head .tally {
+      font-size: .62rem; letter-spacing: .24em; text-transform: uppercase;
+      color: var(--dim); flex: none;
+    }
+    .sub {
+      font-family: "Cormorant Garamond", Georgia, serif; font-style: italic;
+      font-size: 1.05rem; color: var(--dim); margin: 0 0 30px;
+    }
     .back {
       background: none; border: 1px solid var(--hair); color: var(--dim);
       font-family: inherit; font-size: .72rem; letter-spacing: .16em;
@@ -98,21 +133,33 @@
     }
     .back:hover { border-color: var(--gold); color: var(--gold-lit); }
 
-    .grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+    .grid { display: grid; gap: 34px 30px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
     .piece { cursor: zoom-in; }
+    /* A GOLD FRAME ON A CREAM MAT.
+       The liners are printed on paper and this is the one move that says
+       so: a thin gold edge, a margin of the paper colour, and the pattern
+       sitting inside it like a mounted swatch rather than a tile in a
+       grid. It costs nothing and it is the whole difference between a
+       stock page and a stationer\u2019s. */
     .piece .mat {
       background: var(--paper); aspect-ratio: 1 / 1; overflow: hidden;
-      display: flex; align-items: center; justify-content: center;
-      border: 1px solid rgba(255,255,255,.06);
-      transition: border-color .18s ease, transform .18s ease;
+      border: 1px solid var(--gold); padding: 9px;
+      box-shadow: 0 10px 26px rgba(0,0,0,.45);
+      transition: transform .22s ease, box-shadow .22s ease;
     }
-    .piece:hover .mat { border-color: var(--gold); transform: translateY(-2px); }
+    .piece:hover .mat {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 34px rgba(0,0,0,.6);
+    }
     .piece img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .piece .cap {
-      margin-top: 8px; font-size: .68rem; letter-spacing: .14em;
-      text-transform: uppercase; color: var(--dim);
+      margin-top: 13px; font-size: .64rem; letter-spacing: .2em;
+      text-transform: uppercase; color: var(--dim); text-align: center;
     }
-    .piece .cap b { display: block; color: #cfcabd; font-weight: 400; letter-spacing: .12em; }
+    .piece .cap b {
+      display: block; color: var(--gold-lit); font-weight: 400;
+      letter-spacing: .26em; margin-bottom: 3px;
+    }
 
     .empty { padding: 70px 0; text-align: center; color: var(--dim); }
 
@@ -164,7 +211,16 @@
       .rail {
         position: static; width: auto; inset: auto;
         border-right: 0; border-bottom: 1px solid var(--hair); padding: 22px 18px;
+        /* THE LINERS HAVE TO BE ON THE FIRST SCREEN.
+           Stacked above them, twenty-one category names filled a phone
+           entirely - somebody opening the link was shown a list of words
+           and had to scroll before a single pattern appeared, which is the
+           opposite of what this page is for. The list keeps its own
+           scrolling area and the liners start just under it. */
+        max-height: 44vh; overflow-y: auto;
       }
+      .mark { font-size: 1rem; }
+      .sec { margin-top: 18px; }
       .field, .foot, .offer { margin-left: 0; padding-left: 18px; padding-right: 18px; }
       .offer { grid-template-columns: 1fr; gap: 0; }
       .lb { padding: 46px 12px; }
@@ -174,8 +230,13 @@
 <body>
 
 <aside class="rail">
-  <div class="mark serif">Arabella Papers<small>Envelope Liners</small></div>
+  <%# No town under the name. The reference this was drawn from said
+      "FINE STATIONERY · LONDON", which the office is not - and a false
+      address on the page a customer is sent is not a design decision. %>
+  <div class="mark serif">Arabella Papers<small>Fine Stationery</small></div>
+  <div class="mark-rule"></div>
 
+  <div class="seek-label">Search the collection</div>
   <div class="seek">
     <i class="fas fa-search"></i>
     <input type="text" id="q" autocomplete="off"
@@ -270,7 +331,8 @@ function drawRail() {
     for (var k = 0; k < s.items.length; k++) {
       var it = s.items[k];
       html += '<div class="cat' + (it.id === picked ? ' on' : '') + '" onclick="openCat(' + it.id + ')">'
-        + '<span>' + esc(it.category) + '</span><span>' + it.count + '</span></div>';
+        + '<span>' + esc(it.category) + '</span>'
+        + '<span>(' + it.count + ')</span></div>';
     }
     html += '</div>';
   }
@@ -296,9 +358,11 @@ async function openCat(id) {
     at = -1;
     field.innerHTML =
       '<div class="head"><h1 class="serif">' + esc(j.category) + '</h1>'
+      + '<span class="rule"></span>'
       + '<span class="where">' + esc(j.section) + '</span>'
       + '<span class="tally">' + j.items.length
       + (j.items.length === 1 ? ' design' : ' designs') + '</span></div>'
+      + '<p class="sub">Each of these may be had in any colour, at any scale.</p>'
       + tiles(j.items, false);
   } catch (e) {
     field.innerHTML = '<div class="empty">Could not load that just now.</div>';
@@ -355,6 +419,7 @@ async function seek(q) {
       '<div class="head">'
       + '<button class="back" onclick="clearSeek()">&larr; All liners</button>'
       + '<h1 class="serif">' + esc(q) + '</h1>'
+      + '<span class="rule"></span>'
       + '<span class="tally">' + j.found + (j.found === 1 ? ' design' : ' designs')
       + (j.found > j.items.length ? ', showing ' + j.items.length : '') + '</span></div>'
       + (j.items.length ? tiles(j.items, true)
