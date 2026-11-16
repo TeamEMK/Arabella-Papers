@@ -133,10 +133,16 @@ function freePort() {
     check('the page itself opens', (await bare('/liners')).status === 200);
     check('so does the shelf', (await bare('/liners/api/board')).status === 200);
     check('and the search', (await bare('/liners/api/search?q=blue')).status === 200);
-    // The first spelling was read out over the phone and sent in a chat
-    // before the word was corrected, so it has to keep answering.
-    check('the old spelling still answers', (await bare('/linears')).status === 200);
-    check('and so does its shelf', (await bare('/linears/api/board')).status === 200);
+    // The first spelling was sent in a chat before the word was corrected.
+    // It is no longer a page - it points at the one that is.
+    const moved = await bare('/linears');
+    check('the old spelling points at the new one',
+      moved.status === 301 && moved.headers.get('location') === '/liners',
+      moved.status + ' -> ' + moved.headers.get('location'));
+    const movedApi = await bare('/linears/api/board');
+    check('and so does everything under it',
+      movedApi.status === 301 && movedApi.headers.get('location') === '/liners/api/board',
+      movedApi.status + ' -> ' + movedApi.headers.get('location'));
     // The portal's own routes must stay shut to the same stranger.
     const portal = await bare('/api/envelope-linears/board');
     check('the staff version is still shut', [302, 401, 403].includes(portal.status), portal.status);
@@ -148,14 +154,14 @@ function freePort() {
       [302, 401, 403].includes(manage.status), manage.status);
 
     console.log(NL + 'Hidden means hidden');
-    const hiddenPic = await bare('/linears/thumb/' + secret.id);
+    const hiddenPic = await bare('/liners/thumb/' + secret.id);
     check('a hidden design serves no picture', hiddenPic.status === 404, hiddenPic.status);
-    const hiddenFull = await bare('/linears/image/' + secret.id);
+    const hiddenFull = await bare('/liners/image/' + secret.id);
     check('nor a full-size one', hiddenFull.status === 404, hiddenFull.status);
-    const inClosed = await bare('/linears/thumb/' + hiddenInClosed.id);
+    const inClosed = await bare('/liners/thumb/' + hiddenInClosed.id);
     check('a design in a closed category serves nothing either',
       inClosed.status === 404, inClosed.status);
-    const board = await (await bare('/linears/api/board')).json();
+    const board = await (await bare('/liners/api/board')).json();
     check('the closed category is not even listed',
       !board.sections.some(s => s.items.some(i => i.category === 'Playful & Whimsical')));
     const chin = board.sections
@@ -163,7 +169,7 @@ function freePort() {
     check('and the count drops by the one taken down', chin && chin.count === 14, chin);
 
     // Nothing about the business may ride along in the reply.
-    const cat = await (await bare('/linears/api/category/' + secret.cat)).json();
+    const cat = await (await bare('/liners/api/category/' + secret.cat)).json();
     const asText = JSON.stringify(cat);
     check('the reply carries no tags, no file names, no internals',
       !/tags|source_file|sourceFile|file_url/.test(asText), asText.slice(0, 200));

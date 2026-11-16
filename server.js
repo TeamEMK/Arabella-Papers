@@ -146,13 +146,13 @@ app.use('/track', trackRoutes);
 app.use('/catalogue', catalogueRoutes);
 // The liner book, for a customer. No login: see the note at the top of
 // routes/linears.js for exactly what that opens up.
-//
-// TWO ADDRESSES, ON PURPOSE. The word is "liners" and that is the one
-// given out. /linears was the first spelling and it has already been
-// opened on a phone and read out, so it keeps working rather than
-// turning into a dead link in somebody's chat.
 app.use('/liners', linearsRoutes);
-app.use('/linears', linearsRoutes);
+// THE OLD SPELLING IS NOT A SECOND PAGE, ONLY A SIGNPOST. /linears was
+// the first spelling and it is already in somebody's chat, so instead of
+// serving the book twice it says, once and permanently, where the book
+// moved to. Everything under it comes along: /linears/api/board becomes
+// /liners/api/board.
+app.use('/linears', (req, res) => res.redirect(301, '/liners' + req.url.replace(/^\/?$/, '')));
 // Two public links, one per brand - see routes/quote.js.
 app.use('/quote', quoteRoutes);
 app.use('/', authRoutes);
