@@ -12,7 +12,7 @@
               type="button" onclick="el_toggleSide()">
         <i class="fas fa-list me-1"></i> Categories
       </button>
-      <a class="btn btn-outline-dark smooth-ui fw-bold" href="/linears"
+      <a class="btn btn-outline-dark smooth-ui fw-bold" href="/liners"
          target="_blank" rel="noopener">
         <i class="fas fa-up-right-from-square me-1"></i> Open the public page
       </a>
@@ -885,10 +885,10 @@ document.addEventListener('keydown', ev => {
   else if (ev.key === 'ArrowLeft') el_lbStep(null, -1);
 }, true);
 
-document.getElementById('el_link').textContent = window.location.origin + '/linears';
+document.getElementById('el_link').textContent = window.location.origin + '/liners';
 
 function el_copyLink() {
-  navigator.clipboard.writeText(window.location.origin + '/linears')
+  navigator.clipboard.writeText(window.location.origin + '/liners')
     .then(function () { showToast('success', 'Link copied'); })
     .catch(function () { showToast('warning', 'Could not copy - select it by hand'); });
 }

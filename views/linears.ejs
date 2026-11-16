@@ -291,6 +291,11 @@
 </div>
 
 <script>
+// The page answers to two addresses - /liners, which is the one given
+// out, and /linears, the first spelling, kept alive because it is
+// already in somebody's chat. Everything it asks for is asked of the
+// address it was opened at, so neither one has to know about the other.
+var BASE = location.pathname.replace(/\/+$/, '');
 var sections = [];
 var picked = 0;
 var shown = [];
@@ -305,7 +310,7 @@ function esc(v) {
 
 async function boot() {
   try {
-    var r = await fetch('/linears/api/board');
+    var r = await fetch(BASE + '/api/board');
     var j = await r.json();
     if (!j.success) throw new Error('no');
     sections = j.sections || [];
@@ -350,7 +355,7 @@ async function openCat(id) {
   var field = document.getElementById('field');
   field.innerHTML = '<div class="empty">Loading…</div>';
   try {
-    var r = await fetch('/linears/api/category/' + id);
+    var r = await fetch(BASE + '/api/category/' + id);
     var j = await r.json();
     if (!j.success) throw new Error('no');
     if (picked !== id) return;      // somebody picked another while this came
@@ -378,7 +383,7 @@ function tiles(items, withCategory) {
     // scrolled, which is what lazy loading is for, while the one picture
     // somebody has just asked to see must start loading at once.
     var pic = it.hasThumb
-      ? '<img src="/linears/thumb/' + it.id + '" alt="' + esc(it.code) + '" loading="lazy">'
+      ? '<img src="' + BASE + '/thumb/' + it.id + '" alt="' + esc(it.code) + '" loading="lazy">'
       : '';
     html += '<div class="piece" onclick="lb(' + it.id + ')">'
       + '<div class="mat">' + pic + '</div>'
@@ -402,7 +407,7 @@ function seekSoon() {
 async function seek(q) {
   var field = document.getElementById('field');
   try {
-    var r = await fetch('/linears/api/search?q=' + encodeURIComponent(q));
+    var r = await fetch(BASE + '/api/search?q=' + encodeURIComponent(q));
     var j = await r.json();
     if (!j.success) throw new Error('no');
     var now = (document.getElementById('q').value || '').trim();
@@ -444,7 +449,7 @@ function clearSeek() {
 function lbShow(i) {
   if (i < 0 || i >= shown.length) return;
   at = i;
-  document.getElementById('lbImg').src = '/linears/image/' + shown[i].id;
+  document.getElementById('lbImg').src = BASE + '/image/' + shown[i].id;
   document.getElementById('lbCap').textContent = shown[i].code
     + (shown.length > 1 ? '  ·  ' + (i + 1) + ' of ' + shown.length : '');
   document.getElementById('lb').classList.add('on');

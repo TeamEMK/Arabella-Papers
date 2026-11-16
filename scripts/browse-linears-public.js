@@ -130,9 +130,13 @@ function freePort() {
     // ── Before the browser: what answers to a stranger with a URL ──
     console.log(NL + 'With no session at all');
     const bare = (u) => fetch(BASE + u, { redirect: 'manual' });
-    check('the page itself opens', (await bare('/linears')).status === 200);
-    check('so does the shelf', (await bare('/linears/api/board')).status === 200);
-    check('and the search', (await bare('/linears/api/search?q=blue')).status === 200);
+    check('the page itself opens', (await bare('/liners')).status === 200);
+    check('so does the shelf', (await bare('/liners/api/board')).status === 200);
+    check('and the search', (await bare('/liners/api/search?q=blue')).status === 200);
+    // The first spelling was read out over the phone and sent in a chat
+    // before the word was corrected, so it has to keep answering.
+    check('the old spelling still answers', (await bare('/linears')).status === 200);
+    check('and so does its shelf', (await bare('/linears/api/board')).status === 200);
     // The portal's own routes must stay shut to the same stranger.
     const portal = await bare('/api/envelope-linears/board');
     check('the staff version is still shut', [302, 401, 403].includes(portal.status), portal.status);
@@ -199,7 +203,7 @@ function freePort() {
 
     await send('Runtime.enable');
     await send('Page.enable');
-    await send('Page.navigate', { url: BASE + '/linears' });
+    await send('Page.navigate', { url: BASE + '/liners' });
     for (let i = 0; i < 80; i++) {
       if (await ev("!!document.querySelector('#field .piece')").catch(() => false)) break;
       await sleep(250);
@@ -312,7 +316,7 @@ function freePort() {
     const big = await ev("JSON.stringify((function(){var i=document.getElementById('lbImg');"
       + "return {src:i.getAttribute('src'),w:i.naturalWidth};})())").then(JSON.parse);
     check('it is the full-size one, not the thumbnail',
-      /\/linears\/image\/\d+$/.test(big.src || '') && big.w > 400, big);
+      /\/liners\/image\/\d+$/.test(big.src || '') && big.w > 400, big);
 
     // The three things the office most wants a customer to know. They sit
     // outside #field, which is rewritten on every category and every search

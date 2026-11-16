@@ -146,6 +146,12 @@ app.use('/track', trackRoutes);
 app.use('/catalogue', catalogueRoutes);
 // The liner book, for a customer. No login: see the note at the top of
 // routes/linears.js for exactly what that opens up.
+//
+// TWO ADDRESSES, ON PURPOSE. The word is "liners" and that is the one
+// given out. /linears was the first spelling and it has already been
+// opened on a phone and read out, so it keeps working rather than
+// turning into a dead link in somebody's chat.
+app.use('/liners', linearsRoutes);
 app.use('/linears', linearsRoutes);
 // Two public links, one per brand - see routes/quote.js.
 app.use('/quote', quoteRoutes);
