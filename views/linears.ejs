@@ -367,7 +367,7 @@ async function openCat(id) {
       + '<span class="where">' + esc(j.section) + '</span>'
       + '<span class="tally">' + j.items.length
       + (j.items.length === 1 ? ' design' : ' designs') + '</span></div>'
-      + '<p class="sub">Each of these may be had in any colour, at any scale.</p>'
+      + '<p class="sub">Each design may be customised in any colour and to any scale.</p>'
       + tiles(j.items, false);
   } catch (e) {
     field.innerHTML = '<div class="empty">Could not load that just now.</div>';
