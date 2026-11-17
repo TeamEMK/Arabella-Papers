@@ -383,15 +383,18 @@
        card harder to read. Fixed, so it does not slide about under them. */
     body.inside-page {
       background:
-        linear-gradient(180deg, rgba(21,23,26,.955), rgba(21,23,26,.975)),
-        url('/portal/hero.jpg') center/cover no-repeat fixed,
+        linear-gradient(180deg, rgba(19,21,24,.975), rgba(19,21,24,.99)),
+        url('/portal/hero-wide.jpg') center/cover no-repeat fixed,
         var(--void);
     }
-    .doors { display: grid; gap: 22px; width: 100%; max-width: 1000px;
+    .doors { display: grid; gap: clamp(20px, 1.6vw, 36px); width: 100%;
+             max-width: clamp(960px, 72vw, 1500px);
              grid-template-columns: repeat(3, 1fr); }
     .door {
-      position: relative; background: rgba(25,28,32,.92);
-      border: 1px solid var(--hair); padding: 32px 26px 28px;
+      position: relative; background: rgba(23,26,30,.94);
+      border: 1px solid rgba(201,162,39,.34);
+      padding: clamp(32px, 2.2vw, 56px) clamp(26px, 1.9vw, 46px)
+               clamp(28px, 1.8vw, 44px);
       text-decoration: none; display: block;
       transition: border-color .18s, transform .18s, box-shadow .18s;
     }
@@ -407,18 +410,21 @@
       box-shadow: 0 22px 50px rgba(0,0,0,.45);
     }
     .door:hover::after { border-color: rgba(201,162,39,.28); }
-    .door i { color: var(--gold); font-size: 1.28rem; }
+    .door i { color: var(--gold); font-size: clamp(1.28rem, 1.4vw, 2rem); }
     .door h2 {
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
-      font-size: 1.3rem; margin: 16px 0 9px; color: var(--paper);
+      font-size: clamp(1.3rem, 1.5vw, 2.1rem); margin: 18px 0 10px;
+      color: var(--paper);
     }
-    .door p { margin: 0; font-size: .84rem; color: var(--dim); line-height: 1.6; }
+    .door p { margin: 0; font-size: clamp(.84rem, .9vw, 1.2rem);
+              color: var(--dim); line-height: 1.6; }
     .door .go { margin-top: 18px; font-family: Italiana, Georgia, serif;
                 font-size: .56rem; letter-spacing: .28em;
                 text-transform: uppercase; color: var(--gold); }
     .welcome { text-align: center; margin-bottom: 34px; }
-    .welcome .serif { font-size: 1.72rem; color: var(--paper); }
-    .welcome div { color: var(--dim); font-size: .82rem; margin-top: 7px; }
+    .welcome .serif { font-size: clamp(1.72rem, 2.1vw, 3rem); color: var(--paper); }
+    .welcome div { color: var(--dim); font-size: clamp(.82rem, .88vw, 1.15rem);
+                   margin-top: 8px; }
     /* The same ruled lozenge that heads the sign-in card, so the two sides
        of the portal are obviously one place. */
     .welcome .crest { margin-bottom: 18px; }
@@ -451,9 +457,9 @@
     <div class="doors">
       <a class="door" href="/liners" target="_blank" rel="noopener">
         <i class="fa-solid fa-envelope-open"></i>
-        <h2>Envelope Liner Book</h2>
-        <p>Every liner we print, by collection, with its own code — and a search
-           that understands "blue floral" as well as it understands CT-FB-01.</p>
+        <h2>Envelope Liners</h2>
+        <p>316 liners in five collections, each with a code of its own,
+           and a search that understands “blue floral”.</p>
         <div class="go">Open the book &nbsp;&rsaquo;</div>
       </a>
       <a class="door" href="/catalogue" target="_blank" rel="noopener">
@@ -466,8 +472,8 @@
       <a class="door" href="<%= quoteHref %>" target="_blank" rel="noopener">
         <i class="fa-solid fa-calculator"></i>
         <h2>Price Calculator</h2>
-        <p>Price a job yourself — quantities, cards, finishes — and take the
-           estimate away as a PDF.</p>
+        <p>Price a job while they are still with you, on your own rates,
+           and send the estimate as a PDF.</p>
         <div class="go">Open the calculator &nbsp;&rsaquo;</div>
       </a>
     </div>
