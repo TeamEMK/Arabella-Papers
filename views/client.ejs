@@ -83,7 +83,7 @@
        in to - and this link is sent cold, to somebody who has never seen
        the inside of it. */
     .stage {
-      display: grid; grid-template-columns: 1.55fr 1fr;
+      display: grid; grid-template-columns: 1.72fr 1fr;
       min-height: 100vh; width: 100%;
     }
     /* THE PHOTOGRAPH IS THE HALF, NOT A BLOCK INSIDE IT.
@@ -100,19 +100,28 @@
          in an acre of black. Each measure below is a clamp: a floor
          for a laptop, a ceiling so nothing becomes a poster, and vw
          in between so the page grows with the glass. */
-      padding: clamp(40px, 3.2vw, 90px) clamp(44px, 4vw, 110px)
-               clamp(30px, 2.6vw, 70px);
+      padding: clamp(34px, 2.8vw, 84px) clamp(44px, 4vw, 110px)
+               clamp(24px, 2.2vw, 60px);
       display: flex; flex-direction: column; justify-content: center;
       border-right: 1px solid var(--hair); overflow: hidden;
-      --panel: clamp(370px, 29vw, 820px);
-      background:
-        linear-gradient(90deg,
-          rgba(18,20,23,.99) 0,
-          rgba(18,20,23,.97) var(--panel),
-          rgba(18,20,23,.30) calc(var(--panel) + 190px),
-          rgba(18,20,23,0)   calc(var(--panel) + 430px)),
-        url('/portal/hero.jpg') center 30%/cover no-repeat,
-        var(--void);
+      --panel: clamp(320px, 23vw, 640px);
+      background: var(--void);
+    }
+    /* THE BOX IS THE PICTURE. Contained inside a taller box, the
+       photograph sat in the middle of it with its own edges well inside
+       the mask - so the mask faded the empty black and left the straight
+       edge of the plate showing. Given the picture's own proportion, the
+       two edges are the same edge and there is nothing to see. */
+    .plate {
+      position: absolute; left: var(--panel); right: 0;
+      top: 50%; transform: translateY(-50%);
+      aspect-ratio: 1448 / 1086;
+      background: url('/portal/hero.jpg') center/cover no-repeat;
+      pointer-events: none;
+      -webkit-mask-image:
+        radial-gradient(ellipse 66% 62% at 54% 50%, #000 42%, transparent 92%);
+      mask-image:
+        radial-gradient(ellipse 66% 62% at 54% 50%, #000 42%, transparent 92%);
     }
     /* A breath of gold across it, so the half is not a flat rectangle of
        the same black as the one beside it. */
@@ -122,6 +131,7 @@
       pointer-events: none;
     }
     .showing > * { position: relative; }
+    .showing > .plate { position: absolute; }
     /* THE MARK AS A PRESS MARK, NOT A LINE OF TYPE.
        A sprig over the name and the trade between two rules - which is how
        the office's own printed matter is set, and what the reference
@@ -152,27 +162,27 @@
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
       font-size: clamp(2.1rem, 3.6vw, 5.4rem); line-height: 1.04;
       letter-spacing: .015em; text-transform: uppercase; color: var(--paper);
-      margin: 26px 0 16px; max-width: 13ch;
+      margin: 22px 0 14px; max-width: 13ch;
     }
     .shout em { font-style: italic; color: var(--gold-lit); letter-spacing: .01em; }
     /* A rule that stops in a lozenge, the way a printer ends a flourish. */
-    .flourish { display: flex; align-items: center; margin: 22px 0 26px;
+    .flourish { display: flex; align-items: center; margin: 18px 0 20px;
                 max-width: clamp(220px, 15vw, 400px); }
     .flourish::before { content: ''; flex: 1; height: 1px; background: var(--gold); opacity: .55; }
     .flourish i { color: var(--gold); font-size: .5rem; margin-left: 8px; }
     .shout-sub {
       color: var(--dim); font-size: clamp(.95rem, 1.05vw, 1.5rem);
-      line-height: 1.7; max-width: 46ch; margin: 0 0 30px;
+      line-height: 1.6; max-width: 46ch; margin: 0 0 22px;
     }
     .points { list-style: none; margin: 0; padding: 0; max-width: 46ch; }
     /* Held to a column so the lines do not run out over the brightest part
        of the photograph, where cream paper and grey type meet. */
     .shout, .shout-sub, .points, .signoff,
-    .showing > .flourish { max-width: min(44ch, calc(var(--panel) - 2.2vw)); }
+    .showing > .flourish { max-width: min(44ch, calc(var(--panel) - 5vw)); }
     /* The mark is given its own width - the column that suits a paragraph
        is narrower than the name. */
     .showing > .crest-mark { max-width: min(26rem, calc(var(--panel) - 2.2vw)); }
-    .points li { display: flex; gap: 17px; margin-bottom: 16px; align-items: flex-start; }
+    .points li { display: flex; gap: 17px; margin-bottom: 14px; align-items: flex-start; }
     .points i {
       color: var(--gold); font-size: clamp(.92rem, .95vw, 1.3rem);
       width: clamp(40px, 2.8vw, 62px); height: clamp(40px, 2.8vw, 62px);
@@ -189,7 +199,7 @@
        /portal/hero.jpg has not been put there yet - the <img> takes itself
        off the page and the half reads as a column of words, which is what
        it was before anybody drew anything. */
-    .signoff { margin-top: auto; padding-top: 26px; color: var(--dim);
+    .signoff { margin-top: auto; padding-top: 18px; color: var(--dim);
                font-size: clamp(.66rem, .7vw, .95rem); letter-spacing: .14em; }
 
     /* IT WAS A CARD IN A FIELD OF BLACK. Three things were added and none
@@ -270,6 +280,7 @@
                  background:
                    linear-gradient(180deg, rgba(21,23,26,.95), rgba(21,23,26,.90)),
                    url('/portal/hero.jpg') center/cover no-repeat, var(--void); }
+      .plate { display: none; }
       .whisper { display: none; }
       .gate { padding: 34px 22px 50px; }
       .gate .oval { display: none; }
@@ -482,6 +493,8 @@
             formal read as a sticker. %>
         <div class="trade"><span><%= pill ? pill + ' · ' : '' %>Fine Stationery</span></div>
       </div>
+
+      <div class="plate" aria-hidden="true"></div>
 
       <h1 class="shout">Bespoke<br>Wedding<br><em>Stationery</em></h1>
       <p class="shout-sub">
