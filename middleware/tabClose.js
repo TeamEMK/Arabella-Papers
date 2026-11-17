@@ -40,7 +40,7 @@
  * gate again the moment they sign back in.
  */
 const db = require('../config/db');
-const { ipOf, locationOf } = require('../utils/whereFrom');
+const { ipOf, locationOf, fixFrom } = require('../utils/whereFrom');
 const { SECTIONS } = require('../utils/nav');
 
 // How long a marked session has to prove it is still alive. It must comfortably
@@ -71,11 +71,18 @@ async function closing(req, res) {
     if (!user || (req.session.closing && req.session.closing.at)) return res.status(204).end();
 
     const screen = screenName(req.body && req.body.screen);
+    // The browser's own position, if this session was ever given one. Not
+    // asked for here: a prompt at pagehide has nobody left to answer it, so
+    // what the page already knows is what there is - see askWhere in
+    // views/app.ejs. Checked through the same rule as a login, so a nonsense
+    // pair sent by hand is dropped rather than drawn on a map.
+    const [lat, lng, acc] = fixFrom(req.body);
     const [row] = await db.query(
-      `INSERT INTO activity_log (email, action, role, domain, ip_address, location, screen)
-       VALUES (?,?,?,?,?,?,?)`,
+      `INSERT INTO activity_log (email, action, role, domain, ip_address, location,
+                                 screen, latitude, longitude, accuracy_m)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
       [user.email, 'Logout (tab closed)', user.role, user.domain,
-        ipOf(req), locationOf(req), screen]);
+        ipOf(req), locationOf(req), screen, lat, lng, acc]);
 
     req.session.closing = { at: Date.now(), logId: row.insertId, screen };
     // Saved before answering. The page is gone a moment later and nothing

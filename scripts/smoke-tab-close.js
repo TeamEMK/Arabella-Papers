@@ -184,7 +184,64 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
       (await logoutRows()).length === 0, await logoutRows());
 
     // ──────────────────────────────────────────────
+    // A row that says "Jaipur" is a city worked out from an IP. A row with a
+    // pin is the browser's own fix, and it is the only thing in this log that
+    // can point at a building. Both ways out now carry it.
+    console.log(NL + 'The pin comes out with them');
+    await db.query("DELETE FROM activity_log WHERE action LIKE 'Logout%'");
+    jar = await signIn();
+    const fix = { screen: 'dashboard', lat: 26.9124, lng: 75.7873, acc: 18 };
+    await go('/api/session/closing', {
+      method: 'POST', headers: { cookie: jar, 'Content-Type': 'application/json' },
+      body: JSON.stringify(fix),
+    });
+    await sleep(600);
+    let [[pinned]] = await db.query(
+      "SELECT latitude, longitude, accuracy_m FROM activity_log WHERE action LIKE 'Logout%'");
+    check('a closed tab carries the exact spot',
+      pinned && Number(pinned.latitude) === fix.lat && Number(pinned.longitude) === fix.lng,
+      pinned);
+    check('and how good the browser said it was',
+      pinned && Number(pinned.accuracy_m) === 18, pinned);
+
+    // Checked through the same rule a login is, so a pair typed by hand into
+    // the beacon cannot put a point on a map.
+    await db.query("DELETE FROM activity_log WHERE action LIKE 'Logout%'");
+    jar = await signIn();
+    await go('/api/session/closing', {
+      method: 'POST', headers: { cookie: jar, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ screen: 'dashboard', lat: 999, lng: 'here', acc: -5 }),
+    });
+    await sleep(600);
+    [[pinned]] = await db.query(
+      "SELECT latitude, longitude FROM activity_log WHERE action LIKE 'Logout%'");
+    check('nonsense is no pin at all, not a point off Africa',
+      pinned && pinned.latitude === null && pinned.longitude === null, pinned);
+
+    // The menu's Logout is a plain form. The shell fills three hidden fields
+    // on it when the browser has given this session a position.
+    await db.query("DELETE FROM activity_log WHERE action LIKE 'Logout%'");
+    jar = await signIn();
+    await go('/logout', {
+      method: 'POST', headers: { cookie: jar, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ lat: '26.9124', lng: '75.7873', acc: '12' }),
+    });
+    const [[byHand]] = await db.query(
+      "SELECT action, latitude, accuracy_m FROM activity_log WHERE action = 'Logout'");
+    check('signing out from the menu carries it too',
+      byHand && Number(byHand.latitude) === 26.9124 && Number(byHand.accuracy_m) === 12, byHand);
+
+    const shellSrc = require('fs').readFileSync(path.join(ROOT, 'views/app.ejs'), 'utf8');
+    check('and the form really has the fields to carry it',
+      shellSrc.includes('id="logoutLat"') && shellSrc.includes("put('logoutLat'"));
+    // A browser that has been told no prompts nobody and fails silently; the
+    // only sign is a log of cities with no pins.
+    check('a blocked browser says so instead of failing quietly',
+      shellSrc.includes("name: 'geolocation'") && shellSrc.includes('Location is blocked'));
+
+    // ──────────────────────────────────────────────
     console.log(NL + 'Nothing leaks');
+    await db.query("DELETE FROM activity_log WHERE action LIKE 'Logout%'");
     const nobody = await go('/api/session/closing', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ screen: 'dashboard' }),

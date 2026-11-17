@@ -134,6 +134,9 @@ function freePort() {
     return { id: target.id, ws, send, ev };
   };
 
+  // Jaipur, give or take twenty metres - a believable phone.
+  const PIN = { lat: 26.9124, lng: 75.7873, acc: 20 };
+
   const tabs = () => fetch('http://127.0.0.1:' + dbg + '/json/list').then(r => r.json());
   const openTab = async (url) => {
     const t = await fetch('http://127.0.0.1:' + dbg + '/json/new?' + encodeURIComponent(url),
@@ -169,6 +172,16 @@ function freePort() {
     }
 
     const first = await attach(list.find(t => t.webSocketDebuggerUrl));
+    // A REAL BROWSER THAT HAS BEEN ALLOWED TO SAY WHERE IT IS.
+    //
+    // Headless Chrome refuses geolocation by default, which is the same
+    // silence as a person clicking Block - so without these two lines this
+    // suite would prove the pin works by never testing it. Granted, and then
+    // given a position to report.
+    await first.send('Browser.grantPermissions',
+      { origin: BASE, permissions: ['geolocation'] });
+    await first.send('Emulation.setGeolocationOverride',
+      { latitude: PIN.lat, longitude: PIN.lng, accuracy: PIN.acc });
     await first.send('Page.navigate', { url: BASE + '/login' });
     await sleep(1200);
     await first.ev("document.querySelector('input[type=email],input[name=email]').value='"
@@ -220,6 +233,12 @@ function freePort() {
 
     const rows = await logoutRows();
     check('a row was written', rows.length === 1, rows);
+    const [[spot]] = await db.query(
+      "SELECT latitude, longitude, accuracy_m FROM activity_log"
+      + " WHERE action LIKE 'Logout%' ORDER BY id DESC LIMIT 1");
+    check('and it carries the spot the browser reported',
+      spot && Math.abs(Number(spot.latitude) - PIN.lat) < 0.001
+      && Math.abs(Number(spot.longitude) - PIN.lng) < 0.001, spot);
     check('it says the tab closed',
       rows[0] && rows[0].action === 'Logout (tab closed)', rows[0]);
     // The screen the LAST tab was on - Production, not the dashboard the
@@ -246,7 +265,7 @@ function freePort() {
     // put on by hand, which is exactly what the office's rows carry.
     await db.query(
       "UPDATE activity_log SET location = 'Jaipur, RJ, IN', ip_address = '103.54.13.254'"
-      + " WHERE action LIKE 'Logout%'");
+      + " WHERE action LIKE 'Logout%'");  // the pin on the row is the browser's own
 
     await back.send('Page.navigate', { url: BASE + '/login' });
     await sleep(1200);
@@ -271,6 +290,21 @@ function freePort() {
       })()
     `);
     await sleep(2500);
+
+    const pinned = await back.ev(`
+      (function () {
+        var tr = Array.from(document.querySelectorAll('tbody tr'))
+          .find(function (r) { return r.innerText.indexOf('tab closed') > -1; });
+        if (!tr) return null;
+        var a = tr.querySelector('a[href*="maps?q="]');
+        return a ? { text: a.textContent, href: a.getAttribute('href') } : null;
+      })()
+    `);
+    check('the exact spot is a link on the row', !!pinned, pinned);
+    check('it opens that very point',
+      !!pinned && pinned.href.indexOf(String(PIN.lat)) > -1, pinned && pinned.href);
+    check('and says how good the fix was, so a 3km guess is not read as a doorstep',
+      !!pinned && /±\d/.test(pinned.text), pinned && pinned.text);
 
     const row = await back.ev(`
       (function () {

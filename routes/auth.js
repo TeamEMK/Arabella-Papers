@@ -95,9 +95,16 @@ router.post('/login', async (req, res) => {
 async function recordLogout(req) {
   const user = req.session?.user;
   if (!user) return;
+  // The logout form carries the position the browser gave this session, in
+  // three hidden fields the shell fills if it ever got one. A GET logout -
+  // somebody following the link - carries nothing, and the town from the IP
+  // still stands.
   await db.query(
-    'INSERT INTO activity_log (email, action, role, domain, ip_address, location) VALUES (?,?,?,?,?,?)',
-    [user.email, 'Logout', user.role, user.domain, ipOf(req), locationOf(req)]
+    `INSERT INTO activity_log (email, action, role, domain, ip_address, location,
+                               latitude, longitude, accuracy_m)
+     VALUES (?,?,?,?,?,?,?,?,?)`,
+    [user.email, 'Logout', user.role, user.domain, ipOf(req), locationOf(req),
+      ...fixFrom(req.body)]
   ).catch(() => {});
 }
 

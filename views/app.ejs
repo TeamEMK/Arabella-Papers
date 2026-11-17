@@ -78,7 +78,13 @@
         </li>
       </ul>
     </div>
-    <form method="POST" action="/logout" onsubmit="return vd_leaving(event)">
+    <form method="POST" action="/logout" onsubmit="return vd_leaving(event)" id="logoutForm">
+      <%# Filled in only if the browser has given this session a position -
+          see askWhere below. Empty otherwise, and the server reads an empty
+          one as no fix rather than as a point off the coast of Africa. %>
+      <input type="hidden" name="lat" id="logoutLat">
+      <input type="hidden" name="lng" id="logoutLng">
+      <input type="hidden" name="acc" id="logoutAcc">
       <button type="submit" class="side-logout" title="Logout">
         <i class="fas fa-right-from-bracket side-icon"></i><span class="side-label">Logout</span>
       </button>
@@ -902,8 +908,10 @@
     if (tabsLive(all, TAB_ID).length) return;
     if (!navigator.sendBeacon) return;
     try {
+      var say = { screen: screenNow };
+      if (lastFix) { say.lat = lastFix.lat; say.lng = lastFix.lng; say.acc = lastFix.acc; }
       navigator.sendBeacon('/api/session/closing',
-        new Blob([JSON.stringify({ screen: screenNow })], { type: 'application/json' }));
+        new Blob([JSON.stringify(say)], { type: 'application/json' }));
     } catch (e) { /* nothing can be done from a page that is already going */ }
   });
 
@@ -967,11 +975,42 @@
   // without prompting, so asking on each sign-in costs the person nothing
   // either way. The server does the rest of the guarding - it fills a login
   // row once and leaves it alone afterwards.
+  // Kept for the rest of the visit, because the LEAVING rows want it too: a
+  // logout and a closed tab both say where somebody was, and asking the
+  // browser again as the page dies would be too late to get an answer.
+  var lastFix = null;
+
   (function askWhere() {
     if (!navigator.geolocation || !window.isSecureContext) return;
 
+    // SAID OUT LOUD WHEN THE BROWSER IS REFUSING. A blocked site prompts
+    // nobody and fails silently, and the only sign of it is a log full of
+    // rows with a city and no pin - which reads as "we cannot do this"
+    // rather than "this browser was told not to". Nothing here can lift the
+    // block; only the person can, from the padlock in the address bar.
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then(function (p) {
+        if (p.state === 'denied' && window.showToast) {
+          showToast('warning', 'Location is blocked for this site, so the log '
+            + 'can only record your city. Allow it from the padlock in the address bar.');
+        }
+      }).catch(function () { /* older browser - the prompt still happens */ });
+    }
+
     navigator.geolocation.getCurrentPosition(
       function (pos) {
+        lastFix = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          acc: Math.round(pos.coords.accuracy || 0),
+        };
+        var put = function (id, v) {
+          var el = document.getElementById(id);
+          if (el) el.value = String(v);
+        };
+        put('logoutLat', lastFix.lat);
+        put('logoutLng', lastFix.lng);
+        put('logoutAcc', lastFix.acc);
         fetch('/api/account/where', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
