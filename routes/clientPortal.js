@@ -190,6 +190,13 @@ function requireClient(req, res, next) {
     res.locals.portalWho = {
       name: client.name || '', email: client.email, company: client.company || '',
     };
+    // NOT KEPT BY THE BROWSER. Two reasons, and the second is the one that
+    // was reported: a page behind a session should not sit in the cache
+    // for whoever opens that laptop next, and a room that was cached
+    // BEFORE somebody signed in comes back showing the gate it had then -
+    // which looks exactly like a change that never shipped.
+    res.set('Cache-Control', 'no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
     return next();
   }
   res.redirect('/client/' + brand.slug);

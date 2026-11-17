@@ -238,6 +238,14 @@ const NL = String.fromCharCode(10);
       !/class="door"[^>]*target=/.test(homeHtml));
     check('and the sign-in is no longer on the page', !/Forgotten your password/.test(homeHtml));
 
+    // A room is not kept by the browser: it would come back from the cache
+    // for whoever opens that laptop next, and a copy cached before somebody
+    // signed in comes back showing the sign-in it had then.
+    const roomHead = await go('/client/arabella/quote', { headers: { cookie: jar } });
+    check('a room tells the browser not to keep it',
+      /no-store/.test(roomHead.headers.get('cache-control') || ''),
+      roomHead.headers.get('cache-control'));
+
     // ── THE WHOLE POINT OF A SEPARATE TABLE ──
     console.log(NL + 'A customer is not staff');
     const asStaff = await go('/api/orders', { headers: { cookie: jar } });
