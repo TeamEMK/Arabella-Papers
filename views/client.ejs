@@ -105,23 +105,25 @@
       display: flex; flex-direction: column; justify-content: center;
       border-right: 1px solid var(--hair); overflow: hidden;
       --panel: clamp(320px, 23vw, 640px);
-      background: var(--void);
-    }
-    /* THE BOX IS THE PICTURE. Contained inside a taller box, the
-       photograph sat in the middle of it with its own edges well inside
-       the mask - so the mask faded the empty black and left the straight
-       edge of the plate showing. Given the picture's own proportion, the
-       two edges are the same edge and there is nothing to see. */
-    .plate {
-      position: absolute; left: var(--panel); right: 0;
-      top: 50%; transform: translateY(-50%);
-      aspect-ratio: 1448 / 1086;
-      background: url('/portal/hero.jpg') center/cover no-repeat;
-      pointer-events: none;
-      -webkit-mask-image:
-        radial-gradient(ellipse 66% 62% at 54% 50%, #000 42%, transparent 92%);
-      mask-image:
-        radial-gradient(ellipse 66% 62% at 54% 50%, #000 42%, transparent 92%);
+      /* FULL BLEED, AS THE DRAWING HAS IT. The photograph ran to all four
+         sides of its half there; here it was a panel floating in black,
+         which is honest about the crop and nothing like the render.
+         It could not bleed before because the subject sits in the MIDDLE
+         of the frame: filling a tall half put the liners straight under
+         the words. So the picture was changed rather than the layout -
+         hero-wide.jpg is the same plate with the photograph's own black
+         carried out to the left for the words to sit on, and bands top
+         and bottom bringing the canvas to the shape half a 16:9 window
+         actually is. What a narrow window crops is the bands, which is
+         nothing anybody would miss. */
+      background:
+        linear-gradient(90deg,
+          rgba(18,20,23,.90) 0,
+          rgba(18,20,23,.74) calc(var(--panel) * .72),
+          rgba(18,20,23,.10) var(--panel),
+          rgba(18,20,23,0)   calc(var(--panel) + 120px)),
+        url('/portal/hero-wide.jpg') center/cover no-repeat,
+        var(--void);
     }
     /* A breath of gold across it, so the half is not a flat rectangle of
        the same black as the one beside it. */
@@ -131,7 +133,6 @@
       pointer-events: none;
     }
     .showing > * { position: relative; }
-    .showing > .plate { position: absolute; }
     /* THE MARK AS A PRESS MARK, NOT A LINE OF TYPE.
        A sprig over the name and the trade between two rules - which is how
        the office's own printed matter is set, and what the reference
@@ -280,7 +281,6 @@
                  background:
                    linear-gradient(180deg, rgba(21,23,26,.95), rgba(21,23,26,.90)),
                    url('/portal/hero.jpg') center/cover no-repeat, var(--void); }
-      .plate { display: none; }
       .whisper { display: none; }
       .gate { padding: 34px 22px 50px; }
       .gate .oval { display: none; }
@@ -318,7 +318,7 @@
     .crest i { color: var(--gold); font-size: .56rem; vertical-align: middle; }
     .card h1 {
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
-      font-size: clamp(2.1rem, 2.5vw, 3.8rem); margin: 0 0 6px; color: var(--paper);
+      font-size: clamp(2.3rem, 2.9vw, 4.2rem); margin: 0 0 6px; color: var(--paper);
       letter-spacing: .005em; line-height: 1.05;
     }
     .card p.sub { margin: 0 0 28px; color: #bdb6a6;
@@ -330,13 +330,15 @@
             letter-spacing: .26em; text-transform: uppercase; color: var(--gold);
             margin: 0 0 8px; text-align: left; }
     input {
-      width: 100%; background: #111316; border: 1px solid var(--hair);
+      width: 100%; background: rgba(13,15,18,.72);
+      border: 1px solid rgba(201,162,39,.45);
       color: #e8e4da; font-family: 'Tenor Sans', sans-serif;
       padding: clamp(12px, .95vw, 20px) clamp(14px, 1vw, 22px);
       font-size: clamp(.92rem, .95vw, 1.3rem);
       margin-bottom: clamp(16px, 1.1vw, 26px); transition: border-color .15s;
     }
-    input:focus { outline: none; border-color: var(--gold); }
+    input:focus { outline: none; border-color: var(--gold-lit);
+                  box-shadow: 0 0 0 1px rgba(201,162,39,.25); }
     /* The six digits are read off a phone and typed one at a time. Wide and
        spaced so a 6 and an 8 are not the same shape at a glance. */
     input.code {
@@ -344,14 +346,15 @@
       padding-left: .48em; font-family: 'Cormorant Garamond', Georgia, serif;
     }
     .btn {
-      width: 100%; background: var(--gold); color: #15171a; border: 0;
+      width: 100%; color: #15171a; border: 0;
+      background: linear-gradient(176deg, #e0b65c 0%, var(--gold) 46%, #b9872f 100%);
       padding: clamp(14px, 1.05vw, 24px) 14px;
       font-family: Italiana, Georgia, serif; font-weight: 400;
       font-size: clamp(.84rem, .9vw, 1.25rem); letter-spacing: .24em;
       text-transform: uppercase;
       cursor: pointer; transition: background .15s;
     }
-    .btn:hover { background: var(--gold-lit); }
+    .btn:hover { background: linear-gradient(176deg, #ecc472 0%, var(--gold-lit) 50%, #c79337 100%); }
     .btn[disabled] { opacity: .5; cursor: default; }
     .btn-quiet {
       background: none; color: var(--dim); border: 1px solid var(--hair);
@@ -493,8 +496,6 @@
             formal read as a sticker. %>
         <div class="trade"><span><%= pill ? pill + ' · ' : '' %>Fine Stationery</span></div>
       </div>
-
-      <div class="plate" aria-hidden="true"></div>
 
       <h1 class="shout">Bespoke<br>Wedding<br><em>Stationery</em></h1>
       <p class="shout-sub">
