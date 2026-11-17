@@ -14,6 +14,7 @@ const { notifyClientDispatched } = require('../../utils/notify');
 const { raiseRemake, rootOrderId } = require('../../utils/remake');
 // The three fault labels, from the page that owns them.
 const { FAULTS } = require('./corrections');
+const urgency = require('../../utils/urgency');
 const { requireLogin } = require('../../middleware/auth');
 const vectorGate = require('../../utils/vectorGate');
 // Which orders are production's work - the SQL behind both production boards.
@@ -276,7 +277,8 @@ router.get('/till-approval', requireLogin, async (req, res) => {
       SELECT order_id, timestamp, actual_1, actual_4,
              india_designer, overseas_designer, dealer_name, client_name,
              design_approval_status_from_client, remarks, remake_of,
-             status_4, production_board, order_type, dispatch_days
+             status_4, production_board, order_type, dispatch_days,
+             delivery_due_date
       FROM orders
       WHERE is_deleted = 0
         AND ${LOCAL_ORDER_OFF_BOARDS}
@@ -311,6 +313,10 @@ router.get('/till-approval', requireLogin, async (req, res) => {
       // instead of asking again from blank.
       Order_Type: r.order_type || '',
       Dispatch_Days: r.dispatch_days === null || r.dispatch_days === undefined ? '' : r.dispatch_days,
+      // The day the CLIENT was promised it, taken at the punch. Sent as a
+      // plain YYYY-MM-DD and not as a formatted date, because the browser
+      // counts the days left from it - see utils/urgency.js.
+      Delivery_Due: urgency.day(r.delivery_due_date),
       // Where this one is sitting now. The approval box uses both to say what
       // saving will do, since an approval here moves the order off whichever
       // board it is on and that is not visible from this screen.
@@ -400,6 +406,13 @@ function orderTypeColumns(status, body) {
   if (body.dispatchDays !== undefined) {
     const n = parseInt(body.dispatchDays, 10);
     cols.dispatch_days = Number.isInteger(n) && n >= 0 ? n : null;
+  }
+  // The client's promised day, taken at the punch and changeable here. Only
+  // written when it is sent, so an approval box from an older tab cannot
+  // blank a date the punch set.
+  if (body.deliveryDue !== undefined) {
+    const d = String(body.deliveryDue || '').trim();
+    cols.delivery_due_date = /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
   }
   return Object.keys(cols).length ? cols : null;
 }
@@ -771,7 +784,7 @@ router.get('/production', requireLogin, async (req, res) => {
       SELECT order_id, timestamp, actual_2, remake_of,
              dealer_name, client_name, india_designer, overseas_designer,
              design_approval_status_from_client, status_4,
-             order_type, dispatch_days,
+             order_type, dispatch_days, delivery_due_date,
              guest_name, paper_cutting, dye_status, block_status,
              printing, printing_type, edges, laser_cutting, output,
              card_assembly, remark, reason_for_delay
@@ -872,6 +885,10 @@ router.get('/production', requireLogin, async (req, res) => {
       // ten.
       Order_Type: r.order_type || '',
       Dispatch_Days: r.dispatch_days === null || r.dispatch_days === undefined ? '' : r.dispatch_days,
+      // The client's own date, from the punch. Not the same thing as the
+      // dispatch date below: this is the day it has to be with them, that is
+      // the day it has to leave here.
+      Delivery_Due: urgency.day(r.delivery_due_date),
       // The day it was promised for and how far past it we are, worked out
       // here rather than in the browser: the board prints its dates already
       // formatted, and parsing '04/10/2026, 4:17:04 pm' back into a date to
@@ -1009,6 +1026,19 @@ router.put('/production/:id', requireLogin, async (req, res) => {
     if (u.Order_Type !== undefined) {
       const t = String(u.Order_Type || '').trim();
       updates.order_type = ORDER_TYPES.includes(t) ? t : null;
+    }
+    // The client's promised day. Blank clears it - an order that stops being
+    // a rush should not leave a date behind for a board to count down from -
+    // and anything that is not a plain YYYY-MM-DD is refused rather than
+    // quietly stored, because every board does arithmetic on this.
+    if (u.Delivery_Due !== undefined) {
+      const d = String(u.Delivery_Due || '').trim();
+      if (!d) updates.delivery_due_date = null;
+      else if (/^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(d + 'T00:00:00Z'))) {
+        updates.delivery_due_date = d;
+      } else {
+        return res.status(400).json({ success: false, error: 'That delivery date could not be read.' });
+      }
     }
     if (u.Dispatch_Days !== undefined) {
       const n = parseInt(u.Dispatch_Days, 10);

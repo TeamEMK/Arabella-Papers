@@ -54,6 +54,9 @@ const COLUMN_MIGRATIONS = [
   // The pricing module grew a rush fee after the quotes table had already
   // been deployed, and CREATE TABLE IF NOT EXISTS does not add a column to a
   // table that is already there.
+  // Urgent orders got a promised date at the punch, after the orders table
+  // had been live for a year.
+  { table: 'orders', column: 'delivery_due_date', type: 'DATE NULL' },
   { table: 'pricing_quotes', column: 'rush_fee_percent', type: 'DECIMAL(6,2) DEFAULT 0' },
   { table: 'pricing_quotes', column: 'source', type: "VARCHAR(20) DEFAULT 'internal'" },
   { table: 'pricing_quotes', column: 'customer_email', type: 'VARCHAR(255) DEFAULT NULL' },

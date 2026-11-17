@@ -63,6 +63,9 @@ const REACHED_ON = 'COALESCE(actual_2, timestamp)';
 // A mail that long is deleted unread on the first morning. So the rule is:
 // if it is not on the board somebody opens, it is not in the mail.
 const board = require('./productionBoard');
+// How many days an urgent order has left, counted the same way every board
+// counts it.
+const urgency = require('./urgency');
 
 /**
  * The orders still owing stages this morning.
@@ -73,7 +76,7 @@ async function pending() {
   const today = todayIST();
 
   const [rows] = await db.query(
-    `SELECT order_id, dealer_name, client_name, order_type,
+    `SELECT order_id, dealer_name, client_name, order_type, delivery_due_date,
             india_designer, overseas_designer,
             ${REACHED_ON} AS reached,
             guest_name, paper_cutting, dye_status, block_status,
@@ -105,7 +108,11 @@ async function pending() {
       orderId: r.order_id,
       dealer: r.dealer_name || '',
       client: r.client_name || '',
-      rush: /rush/i.test(String(r.order_type || '')),
+      rush: urgency.isRush(r.order_type),
+      // "Due in 2 days", by the same arithmetic the boards use, so the mail
+      // and the screen cannot disagree about the same order on the same
+      // morning. Null on anything not urgent, or urgent with no date.
+      due: urgency.isRush(r.order_type) ? urgency.describe(r.delivery_due_date, today) : null,
       designer: (r.india_designer || r.overseas_designer || '').trim(),
       reached: day(r.reached),
       // How many days it has been sitting, in the office's days. One is
@@ -143,6 +150,7 @@ function html(report) {
     <tr>
       <td style="padding:10px 12px;border-bottom:1px solid #eee;vertical-align:top;white-space:nowrap;">
         <b>${esc(o.orderId)}</b>${o.rush ? ' <span style="color:#b02a37;font-size:11px;font-weight:700;">RUSH</span>' : ''}
+        ${o.due ? `<div style="color:#b02a37;font-size:12px;font-weight:700;margin-top:2px;">${esc(o.due.label)} <span style="font-weight:400;">(to client ${esc(o.due.pretty)})</span></div>` : ''}
         <div style="color:#888;font-size:12px;margin-top:2px;">
           ${esc(o.reached)} &nbsp;·&nbsp; ${o.waiting} day${o.waiting === 1 ? '' : 's'}
         </div>
@@ -189,7 +197,7 @@ function html(report) {
 
 function text(report) {
   const lines = report.orders.map(o =>
-    `${o.orderId}${o.rush ? ' (RUSH)' : ''} — ${o.client || o.dealer || '-'}`
+    `${o.orderId}${o.rush ? ' (RUSH)' : ''}${o.due ? ' [' + o.due.label + ']' : ''} — ${o.client || o.dealer || '-'}`
     + ` — ${o.waiting} day${o.waiting === 1 ? '' : 's'}`
     + ` — still to do: ${o.pending.map(s => s.label).join(', ')}`);
   return `Production stages still open\n\n`

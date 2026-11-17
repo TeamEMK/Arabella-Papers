@@ -146,6 +146,17 @@ async function po_load() {
 }
 var po_wantStep = null;
 
+// What an urgent order has left, in the words every other board uses.
+// Nothing at all on a normal order: a line that appears on every row is a
+// line nobody reads.
+function po_dueLine(o) {
+  if (!ArabellaUrgency.isRush(o.order_type)) return '';
+  var d = ArabellaUrgency.describe(o.delivery_due);
+  if (!d) return '';
+  return '<div class="small fw-bold ' + (d.overdue || d.dueToday ? 'text-danger' : 'text-muted')
+    + '">' + po_esc(d.label) + ' · to client ' + po_esc(d.pretty) + '</div>';
+}
+
 function po_draw() {
   Array.prototype.forEach.call(document.querySelectorAll('#po_tabs .nav-link'), function (a) {
     a.classList.toggle('active', a.getAttribute('data-tab') === po_filter);
@@ -160,8 +171,13 @@ function po_draw() {
   var step = document.getElementById('po_step').value;
   if (step) list = list.filter(function (o) { return String(o.step_order) === step; });
 
+  // THIS FILTER USED TO FIND NOTHING. The options said "RUSH" and "Normal"
+  // and the column holds "RUSH Order" and "Normal Order", so an exact match
+  // never hit and picking RUSH emptied the table. Asked through the one rule
+  // now, which is the same rule the badges and the morning mail use.
   var type = document.getElementById('po_type').value;
-  if (type) list = list.filter(function (o) { return (o.order_type || '') === type; });
+  if (type === 'RUSH') list = list.filter(function (o) { return ArabellaUrgency.isRush(o.order_type); });
+  else if (type === 'Normal') list = list.filter(function (o) { return !ArabellaUrgency.isRush(o.order_type); });
 
   var q = (document.getElementById('po_q').value || '').trim().toLowerCase();
   if (q) {
@@ -205,7 +221,8 @@ function po_draw() {
     return '<tr' + (o.late > 0 ? ' class="prod-late"' : '') + '>'
       + '<td><span class="fw-bold">' + po_esc(o.order_id) + '</span>'
       + '<div class="small text-muted">' + po_esc(o.dealer_name || '')
-      + (o.order_type ? ' · ' + po_esc(o.order_type) : '') + '</div></td>'
+      + (o.order_type ? ' · ' + po_esc(o.order_type) : '') + '</div>'
+      + po_dueLine(o) + '</td>'
       + '<td>' + po_esc(o.client_name || '')
       + '<div class="small text-muted">' + po_esc(o.designer || '') + '</div></td>'
       + '<td>' + (o.step_order

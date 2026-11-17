@@ -295,6 +295,27 @@
             </select>
             <input type="text" class="form-control mt-2 d-none" id="punchDesignTimeCustom" maxlength="40" placeholder="How long? e.g. 3 Hours, Tomorrow 11 am" oninput="dt_clearInvalid(this)">
           </div>
+          <!-- URGENT, ASKED AT THE PUNCH.
+               The office learns a job is urgent on the telephone, which is
+               this moment - not at the approval box days later, which is
+               where it used to be asked first. No default on purpose: a
+               pre-picked "No" is an answer nobody gave. -->
+          <div class="col-md-6">
+            <label class="form-label text-dark fw-bold">Urgent Order?</label>
+            <select id="punchUrgent" class="form-select" required onchange="punchUrgentSync()">
+              <option value="" disabled selected>Select...</option>
+              <option value="Yes">Yes - urgent</option>
+              <option value="No">No</option>
+            </select>
+          </div>
+          <!-- Only on a Yes, and compulsory there. An urgent order with no
+               date is just a word: the boards count the days left from this,
+               so there has to be a day to count from. -->
+          <div class="col-md-6 d-none" id="punchDueWrap">
+            <label class="form-label text-dark fw-bold">Delivery to client by*</label>
+            <input type="date" class="form-control" id="punchDueDate">
+            <div class="form-text">The day the client has been promised it.</div>
+          </div>
           <div class="col-12">
             <label class="form-label text-dark fw-bold">Upload Files</label>
             <div class="file-box text-center">
@@ -904,7 +925,21 @@ function renderNextBatch() {
     let dateStr = order.Timestamp || '';
     if(order.Raw_Timestamp) { const d = new Date(order.Raw_Timestamp); if(!isNaN(d)) dateStr = d.toLocaleDateString('en-GB'); }
     row.insertCell().textContent = dateStr;
-    row.insertCell().textContent = order.ID;
+    // The number, and under it the one thing that changes what anybody does
+    // with this row. No new column: the table is already twelve wide and the
+    // office reads it on a laptop.
+    const idCell = row.insertCell();
+    idCell.textContent = order.ID;
+    const urg = ArabellaUrgency.isRush(order.Order_Type)
+      && ArabellaUrgency.describe(order.Delivery_Due);
+    if (ArabellaUrgency.isRush(order.Order_Type)) {
+      const tag = document.createElement('div');
+      tag.className = 'small fw-bold text-danger';
+      tag.style.fontSize = '.7rem';
+      tag.textContent = urg ? 'RUSH · ' + urg.label : 'RUSH';
+      if (urg) tag.title = 'To the client by ' + urg.pretty;
+      idCell.appendChild(tag);
+    }
     row.insertCell().textContent = order.Email;
     row.insertCell().textContent = order.Order_punch_by;
     row.insertCell().textContent = order.Dealer_name || '';
@@ -1076,8 +1111,13 @@ async function handleFormSubmit() {
   const remarks = document.getElementById('punchRemarks').value;
   const designTime = dt_value('punchDesignTime');
 
+  const urgent = document.getElementById('punchUrgent').value;
+  const dueDate = document.getElementById('punchDueDate').value;
+
   if(!dt_demandCustom('punchDesignTime')) { showToast('warning','Type how long the design will take.'); return; }
   if(!dealer || !designer || !client || !remarks || !designTime) { showToast('warning','Please fill all required fields.'); return; }
+  if(!urgent) { showToast('warning','Say whether this order is urgent.'); return; }
+  if(urgent === 'Yes' && !dueDate) { showToast('warning','An urgent order needs the date it must reach the client.'); return; }
 
 
   const btn = document.getElementById('btnSubmit');
@@ -1093,6 +1133,8 @@ async function handleFormSubmit() {
   formData.append('remarks', remarks);
   formData.append('designer', designer);
   formData.append('designTime', designTime);
+  formData.append('urgent', urgent);
+  if (urgent === 'Yes') formData.append('deliveryDueDate', dueDate);
   // The files go to Drive first and the form carries the tickets. Nothing
   // large is ever inside this request, which is why a 69MB .ai now works
   // where it used to be refused at four.
@@ -1662,6 +1704,20 @@ function renderAddOnRows() {
     </div>`).join('');
 }
 
+// Shows the date only on a Yes, and forgets anything typed on the way to a
+// No - so an order that stopped being urgent cannot carry a date nobody
+// meant to give. Today is the earliest: a promise for last Tuesday is a
+// typing mistake, not a deadline.
+function punchUrgentSync() {
+  const yes = document.getElementById('punchUrgent').value === 'Yes';
+  const wrap = document.getElementById('punchDueWrap');
+  const date = document.getElementById('punchDueDate');
+  wrap.classList.toggle('d-none', !yes);
+  if (!yes) date.value = '';
+  else date.min = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    .toISOString().slice(0, 10);
+}
+
 function resetForm() {
   document.getElementById('punchEmail').value = APP_USER.email;
   const teamRadio = document.querySelector('input[name="punchedBy"][value="India Team"]');
@@ -1673,6 +1729,9 @@ function resetForm() {
   // designer field means anything - it opens ready to use.
   updateDesigners('India');
   dt_set('punchDesignTime', '');
+  document.getElementById('punchUrgent').value = '';
+  document.getElementById('punchDueDate').value = '';
+  punchUrgentSync();
   document.getElementById('fileInput').value = '';
   document.getElementById('fileText').textContent = 'Click or Drag files here';
   document.getElementById('fileText').style.color = '#6c757d';

@@ -248,6 +248,10 @@ const check = (name, ok, extra) => {
     body: new URLSearchParams({
       email: process.env.ADMIN_EMAIL, punchedBy: 'India Team', dealer: 'Someone',
       client: 'A Client', remarks: '', designer: 'Rakesh', designTime: '1 Hour',
+      // The punch asks whether the order is urgent and will not take one
+      // that does not say. Not what this suite is about - it is about the
+      // files - so it answers and moves on.
+      urgent: 'No',
       fileTokens: JSON.stringify([a.token, b.token]),
     }),
   }).then(r => r.json());

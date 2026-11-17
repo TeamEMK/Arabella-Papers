@@ -326,7 +326,16 @@ CREATE TABLE IF NOT EXISTS orders (
   -- urgently this run has to go, and how many days it has been given. The
   -- days are optional - the office often knows a job is a rush before it
   -- knows the date - so a blank here means not settled, not zero.
+  -- Asked again at the punch, as a plain yes or no, because the office knows
+  -- on the telephone that a job is urgent - long before anyone opens the
+  -- approval box. Both answers write this one column, so there is one idea of
+  -- urgent and every board reads it the same way.
   order_type VARCHAR(20),
+  -- The day the CLIENT has been promised it. Compulsory when the punch says
+  -- urgent and blank otherwise: a date on a normal order would be a guess,
+  -- and a board counting days down from a guess is worse than one that does
+  -- not count at all.
+  delivery_due_date DATE,
   dispatch_days INT,
   actual_2 DATETIME,
   approval_updated_by VARCHAR(150),

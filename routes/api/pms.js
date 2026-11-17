@@ -14,6 +14,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../config/db');
 const { requireLogin } = require('../../middleware/auth');
+const urgency = require('../../utils/urgency');
 const clock = require('../../utils/pms/clock');
 const engine = require('../../utils/pms/engine');
 
@@ -417,6 +418,7 @@ router.get('/board', requireLogin, async (req, res) => {
     // the Completed tab permanently empty.
     const [rows] = await db.query(
       `SELECT o.order_id, o.dealer_name, o.client_name, o.order_type,
+              o.delivery_due_date,
               o.timestamp, o.india_designer, o.overseas_designer,
               o.dispatch_days, o.actual_2,
               cur.step_order, cur.step_name, cur.planned_at, cur.opened_at,
@@ -442,6 +444,10 @@ router.get('/board', requireLogin, async (req, res) => {
       return {
         ...row,
         designer: r.india_designer || r.overseas_designer || '',
+        // The day the client was promised it, on a RUSH order. Sent as a
+        // plain YYYY-MM-DD; the browser counts the days with the same rule
+        // every other board uses - see utils/urgency.js.
+        delivery_due: urgency.day(r.delivery_due_date),
         running,
         late,
         untimed: running && !row.planned_at,

@@ -13,6 +13,7 @@ const { notifyDesignerAssigned } = require('../../utils/notify');
 const { logOrderUpdate, logOrderEvent } = require('../../utils/auditlog');
 const pmsEngine = require('../../utils/pms/engine');
 const { recordPunchedOrder } = require('../../utils/scot');
+const urgency = require('../../utils/urgency');
 const { requireLogin } = require('../../middleware/auth');
 const vectorGate = require('../../utils/vectorGate');
 // Dates are stored as IST wall-clock and read back through a +05:30
@@ -112,7 +113,8 @@ router.get('/', requireLogin, async (req, res) => {
       SELECT order_id, timestamp, email_address, order_punched_by,
              dealer_name, client_name, possible_design_time,
              india_designer, overseas_designer, design_status, remarks,
-             design_approval_status_from_client, status_4, actual_4
+             design_approval_status_from_client, status_4, actual_4,
+             order_type, delivery_due_date
         FROM orders
        WHERE is_deleted = 0
          AND remake_of IS NULL
@@ -151,6 +153,11 @@ router.get('/', requireLogin, async (req, res) => {
       // a time - it is fetched on demand now. Remarks stays because the edit
       // form needs it without a round trip.
       Remarks: r.remarks,
+      // Urgent, and the day the client was promised it. Asked at the punch,
+      // so this list holds it from the moment the order is taken - which is
+      // the whole point of asking there rather than at the approval.
+      Order_Type: r.order_type || '',
+      Delivery_Due: urgency.day(r.delivery_due_date),
     }));
 
     // The screen needs to know what it is holding, so it can tell the person
@@ -231,9 +238,40 @@ function parseAddOns(raw) {
   return { rows };
 }
 
+/**
+ * Urgent, as the punch form asks it: a plain yes or no, and on a yes the day
+ * the client has been promised it.
+ *
+ * The yes becomes 'RUSH Order' in the same column the approval box writes,
+ * which is the whole point - the red badge on the production board, the RUSH
+ * filter on PMS Orders and the morning stage report all already read that
+ * column, so an order punched urgent is urgent everywhere from the moment it
+ * is taken.
+ *
+ * Returns { orderType, dueDate } or { error }. The date is checked here and
+ * not only in the browser: the form is one way into this route and a request
+ * is another.
+ */
+function parseUrgency(raw, rawDate) {
+  const answer = String(raw || '').trim().toLowerCase();
+  if (answer !== 'yes' && answer !== 'no') {
+    return { error: 'Say whether this order is urgent.' };
+  }
+  if (answer === 'no') return { orderType: 'Normal Order', dueDate: null };
+
+  const date = String(rawDate || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date + 'T00:00:00Z'))) {
+    return { error: 'An urgent order needs the date it must reach the client.' };
+  }
+  return { orderType: 'RUSH Order', dueDate: date };
+}
+
 router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
   try {
     const { email, punchedBy, dealer, client, remarks, designer, designTime } = req.body;
+
+    const urgency = parseUrgency(req.body.urgent, req.body.deliveryDueDate);
+    if (urgency.error) return res.status(400).json({ success: false, error: urgency.error });
 
     // The quantity and the add-on cards are not asked for here any more. At the
     // moment an order is taken the quantity is often not settled and the cards
@@ -266,15 +304,24 @@ router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
       INSERT INTO orders 
         (order_id, email_address, order_punched_by, dealer_name, dealer_email,
          client_name, india_designer, overseas_designer, possible_design_time,
-         special_remarks, upload_design_file, design_status)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+         special_remarks, upload_design_file, design_status,
+         order_type, delivery_due_date)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
       orderId, email, punchedBy, dealer, dealerEmail,
       client, indiaDesigner, overseasDesigner, designTime,
-      remarks, finalLinks, 'Fresh Design'
+      remarks, finalLinks, 'Fresh Design',
+      urgency.orderType, urgency.dueDate
     ]);
 
     await logOrderEvent(orderId, 'Created', (dealer || '-') + ' / ' + (client || '-'), req.session.user);
+    // Said separately in the log, because "who made this urgent and when"
+    // is the question asked afterwards, and the Created line is already
+    // carrying the dealer and the client.
+    if (urgency.orderType === 'RUSH Order') {
+      await logOrderEvent(orderId, 'Marked urgent at punch',
+        'Delivery to client by ' + urgency.dueDate, req.session.user);
+    }
 
     // The calling sheet counts orders by the day they were punched, so this is
     // the moment it changes. Awaited for the same reason the designer's mail

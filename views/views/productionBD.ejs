@@ -106,6 +106,10 @@ document.getElementById('prodRoot').innerHTML = `
       <div class="row g-3 mb-3">
         <div class="col-md-6"><label class="small fw-bold">Type of Order</label><select class="form-select" name="Order_Type"><option value="">Not set</option><option value="RUSH Order">RUSH Order</option><option value="Normal Order">Normal Order</option></select></div>
         <div class="col-md-6"><label class="small fw-bold">Days for Dispatch</label><input type="number" class="form-control" name="Dispatch_Days" min="0" max="365" step="1" placeholder="not set"></div>
+        <!-- The client's own date, taken at the punch and changeable here:
+             the floor is who hears that a job has become a rush, and a rush
+             without the day it is promised for cannot be counted down. -->
+        <div class="col-md-6"><label class="small fw-bold">Delivery to client by</label><input type="date" class="form-control" name="Delivery_Due"><div class="form-text">Needed on a RUSH order.</div></div>
       </div>
       <div class="mb-3"><label class="form-label fw-bold">Remark</label><textarea class="form-control" name="Remark" rows="2"></textarea></div>
       <div class="mb-3"><label class="form-label fw-bold">Reason For Delay</label><textarea class="form-control" name="Reason_For_Delay" rows="2"></textarea></div>
@@ -128,7 +132,7 @@ var prod_data = [], prod_filtered = [], prod_selected = new Set(), prod_editId =
 // var, not const: loadPage() re-runs this whole block every time the tab is
 // opened, and a repeat `const` is a parse error that kills the script before it
 // can fill #prodRoot — leaving the page blank until a full reload.
-var PROD_COLS = ['Guest_Name','Paper_Cutting','Dye_Status','Block_Status','Printing','Printing_Type','Edges','Laser_Cutting','Output','Card_Assembly','Order_Type','Dispatch_Days','Remark','Reason_For_Delay'];
+var PROD_COLS = ['Guest_Name','Paper_Cutting','Dye_Status','Block_Status','Printing','Printing_Type','Edges','Laser_Cutting','Output','Card_Assembly','Order_Type','Dispatch_Days','Delivery_Due','Remark','Reason_For_Delay'];
 
 async function fetchProductionData() {
   try {
@@ -176,7 +180,7 @@ function prod_download(btn) {
   const cols = ['Production Date', 'Order ID', 'Repeat of', 'Dealer', 'Client', 'Designer',
     'GNA', 'Paper Cutting', 'Dye Status', 'Block Status',
     'Printing', 'Printing Type', 'Edges', 'Laser Cutting', 'Output', 'Card Assembly',
-    'Type of Order', 'Days for Dispatch', 'Remark', 'Reason For Delay'];
+    'Type of Order', 'Days for Dispatch', 'Delivery To Client By', 'Remark', 'Reason For Delay'];
   const rows = (prod_filtered || []).map(o => [
     o.Production_Date || '', o.Display_ID || o.ID || '', o.Remake_Of || '',
     o.Dealer_name || '', o.Client_name || '', o.Designer || '',
@@ -184,6 +188,7 @@ function prod_download(btn) {
     o.Dye_Status || '', o.Block_Status || '', o.Printing || '', o.Printing_Type || '',
     o.Edges || '', o.Laser_Cutting || '', o.Output || '', o.Card_Assembly || '',
     o.Order_Type || '', o.Dispatch_Days === '' || o.Dispatch_Days === null || o.Dispatch_Days === undefined ? '' : o.Dispatch_Days,
+    o.Delivery_Due || '',
     o.Remark || '', o.Reason_For_Delay || '',
   ]);
   downloadXlsx(PROD_ARCHIVE ? 'Backup Production' : 'Production', cols, rows, btn);
@@ -401,8 +406,20 @@ function prod_daysCell(o) {
 function prod_typeCell(o) {
   const t = String((o && o.Order_Type) || '').trim();
   if (!t) return '<span class="text-muted">-</span>';
-  if (t === 'RUSH Order') return '<span class="badge bg-danger">RUSH</span>';
-  return '<span class="badge bg-light text-dark border">Normal</span>';
+  if (t !== 'RUSH Order') return '<span class="badge bg-light text-dark border">Normal</span>';
+  // The client's own date under the badge, counted in days rather than
+  // printed as a date: "Due in 2 days" is the thing the floor acts on, and a
+  // date on its own has to be worked out against today by the person reading
+  // it. Orders punched urgent before the date was asked for have none, and
+  // they simply show the badge.
+  const due = window.ArabellaUrgency && window.ArabellaUrgency.describe(o.Delivery_Due);
+  const line = due
+    ? '<div style="font-size:.7rem;font-weight:700;" class="'
+      + (due.overdue || due.dueToday ? 'text-danger' : 'text-muted')
+      + '">' + prodEsc(due.label) + '</div>'
+      + '<div class="text-muted" style="font-size:.65rem;">to client ' + prodEsc(due.pretty) + '</div>'
+    : '';
+  return '<span class="badge bg-danger">RUSH</span>' + line;
 }
 
 function prod_rowHtml(o, sr) {
@@ -534,7 +551,7 @@ function prod_stageValue(raw) {
 // stage reading.
 // Not steps of making the order, so they are never stamped with a time and
 // never read as 'Pending' - they are two facts about the job.
-var PROD_NOT_A_STAGE = ['Printing_Type', 'Order_Type', 'Dispatch_Days'];
+var PROD_NOT_A_STAGE = ['Printing_Type', 'Order_Type', 'Dispatch_Days', 'Delivery_Due'];
 
 function prod_setSelect(sel, raw, plain) {
   const v = plain ? String(raw || '').trim() : prod_stageValue(raw);
@@ -571,6 +588,14 @@ function prod_openEdit(id) {
 // not save, so callers can stop rather than carry on with stale stages.
 async function prod_saveEdit() {
   const modal = document.getElementById('prod_editModal');
+  // Same rule the punch is held to: urgent means a date to be urgent about.
+  // Asked here too because this box can turn a normal order into a rush, and
+  // a rush with no date would sit on the board saying nothing.
+  if (modal.querySelector('[name="Order_Type"]').value === 'RUSH Order'
+      && !modal.querySelector('[name="Delivery_Due"]').value) {
+    showToast('warning', 'A RUSH order needs the date it must reach the client.');
+    return false;
+  }
   const updateData = { userEmail: APP_USER.email };
   PROD_COLS.forEach(col => {
     const input = modal.querySelector(`[name="${col}"]`);

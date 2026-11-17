@@ -102,6 +102,16 @@ document.getElementById('tillApprovalRoot').innerHTML = `
       </div>
       <!-- Waits for the type: it is the second half of one answer, and both
            on screen at once reads as a form rather than a question. -->
+      <!-- The client's own date. Taken at the punch, shown here so a final
+           approval opens holding it, and compulsory on a RUSH: the boards
+           count the days left from this, so a rush without it says nothing.
+           Not the same thing as the dispatch days below - this is the day it
+           has to be WITH the client. -->
+      <div class="mb-3 d-none" id="ta_dueWrap">
+        <label class="form-label text-dark fw-bold">Delivery to client by*</label>
+        <input type="date" class="form-control" id="ta_deliveryDue">
+        <div class="form-text">The day the client has been promised it.</div>
+      </div>
       <div class="mb-3 d-none" id="ta_daysWrap">
         <label class="form-label text-dark fw-bold">Number of days for dispatch</label>
         <input type="number" class="form-control" id="ta_dispatchDays" min="0" max="365" step="1" placeholder="e.g. 7">
@@ -335,7 +345,7 @@ function ta_rowHtml(o, sr) {
       <td>${o.Actual_1||''}</td>
       <td class="fw-bold">${o.Display_ID || o.ID}${o.Remake_Of
         ? '<div class="text-muted fw-normal" style="font-size:.72rem;">repeat run</div>' : ''}${
-        ta_goneBadge(o)}</td>
+        ta_urgentLine(o)}${ta_goneBadge(o)}</td>
       <td>${o.Designer||''}</td>
       <td>${o.Dealer_name||''}</td>
       <td>${o.Client_name||''}</td>
@@ -343,6 +353,17 @@ function ta_rowHtml(o, sr) {
     </tr>`;
   }
 }
+// Urgent, under the number, from the moment the order was punched - not
+// from the approval that used to be the first place anybody was asked.
+// Whoever is chasing the client for a decision can see which ones cannot
+// wait.
+function ta_urgentLine(o) {
+  if (!ArabellaUrgency.isRush(o.Order_Type)) return '';
+  const d = ArabellaUrgency.describe(o.Delivery_Due);
+  return '<div class="text-danger" style="font-size:.72rem;">RUSH'
+    + (d ? ' · ' + d.label : '') + '</div>';
+}
+
 function ta_getStatusBadge(s) {
   if(!s) s = 'Proofing Done';
   const l = s.toLowerCase();
@@ -481,6 +502,7 @@ function ta_openEdit(id) {
   });
   document.getElementById('ta_dispatchDays').value =
     (o && o.Dispatch_Days !== null && o.Dispatch_Days !== undefined && o.Dispatch_Days !== '') ? o.Dispatch_Days : '';
+  document.getElementById('ta_deliveryDue').value = (o && o.Delivery_Due) || '';
   document.querySelectorAll('input[name="ta_approvalStatus"]').forEach(r => {
     r.onchange = function () { ta_syncDispatchNotice(); ta_syncOrderType(); };
   });
@@ -645,6 +667,10 @@ function ta_syncOrderType() {
   const st = document.querySelector('input[name="ta_approvalStatus"]:checked')?.value || '';
   const on = st === 'Final Approval For Production';
   document.getElementById('ta_typeWrap').classList.toggle('d-none', !on);
+  // The date is asked only of a rush. A normal order delivered "by" a day
+  // nobody promised is a number the boards would start counting down.
+  document.getElementById('ta_dueWrap').classList
+    .toggle('d-none', !on || ta_orderType() !== 'RUSH Order');
   document.getElementById('ta_daysWrap').classList.toggle('d-none', !on || !ta_orderType());
 }
 
@@ -658,7 +684,14 @@ async function taHandleApprovalSubmit() {
   formData.append('remark', remark);
   if (approvalStatus === 'Final Approval For Production') {
     if (!ta_orderType()) { showToast('warning', 'Say whether this is a RUSH or a Normal order.'); return; }
+    const due = document.getElementById('ta_deliveryDue').value;
+    if (ta_orderType() === 'RUSH Order' && !due) {
+      showToast('warning', 'A RUSH order needs the date it must reach the client.'); return;
+    }
     formData.append('orderType', ta_orderType());
+    // A normal order sends a blank, which clears any date left over from a
+    // punch that said urgent and an approval that decided otherwise.
+    formData.append('deliveryDue', ta_orderType() === 'RUSH Order' ? due : '');
     // Sent even when empty, so clearing the days is possible once they have
     // been set. The server reads a blank as "not settled", not as zero.
     formData.append('dispatchDays', document.getElementById('ta_dispatchDays').value);

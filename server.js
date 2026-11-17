@@ -95,6 +95,16 @@ app.get('/js/productionStages.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'utils', 'productionStages.js'));
 });
 
+// And again for how long an urgent order has left. The boards colour a RUSH
+// order from this and the morning mail counts the same days, so an order
+// cannot read "due tomorrow" on screen and "overdue" in an inbox.
+require('./utils/urgency');
+app.get('/js/urgency.js', (req, res) => {
+  res.type('application/javascript');
+  res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=86400');
+  res.sendFile(path.join(__dirname, 'utils', 'urgency.js'));
+});
+
 // And again for the section slugs. Express decides from this which paths
 // serve the shell; the shell decides from it what to put in the address bar.
 // Two copies of that rule would mean a page reachable at one spelling and
