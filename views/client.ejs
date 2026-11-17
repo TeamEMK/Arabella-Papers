@@ -100,11 +100,11 @@
          in an acre of black. Each measure below is a clamp: a floor
          for a laptop, a ceiling so nothing becomes a poster, and vw
          in between so the page grows with the glass. */
-      padding: clamp(34px, 2.8vw, 84px) clamp(44px, 4vw, 110px)
-               clamp(24px, 2.2vw, 60px);
+      padding: clamp(34px, 2.8vw, 252px) clamp(44px, 4vw, 330px)
+               clamp(24px, 2.2vw, 180px);
       display: flex; flex-direction: column; justify-content: center;
       border-right: 1px solid var(--hair); overflow: hidden;
-      --panel: clamp(320px, 23vw, 980px);
+      --panel: clamp(320px, 23vw, 2940px);
       /* FULL BLEED, AS THE DRAWING HAS IT. The photograph ran to all four
          sides of its half there; here it was a panel floating in black,
          which is honest about the crop and nothing like the render.
@@ -142,14 +142,14 @@
     .crest-mark .sprig { color: var(--gold); opacity: .9; margin-bottom: 14px; }
     .crest-mark .nm {
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
-      font-size: clamp(1.4rem, 1.55vw, 3.2rem);
+      font-size: clamp(1.4rem, 1.55vw, 9.6rem);
       letter-spacing: .3em; text-transform: uppercase;
       color: var(--paper); line-height: 1.2;
     }
     .crest-mark .trade {
       display: flex; align-items: center; gap: 14px; margin-top: 14px;
       font-family: Italiana, Georgia, serif;
-      font-size: clamp(.6rem, .6vw, 1.5rem);
+      font-size: clamp(.6rem, .6vw, 4.5rem);
       letter-spacing: .42em; text-transform: uppercase; color: var(--gold);
     }
     .crest-mark .trade::before, .crest-mark .trade::after {
@@ -161,39 +161,47 @@
        title page rather than as a sentence. */
     .shout {
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
-      font-size: clamp(2.1rem, 3.6vw, 7rem); line-height: 1.04;
+      font-size: clamp(2.1rem, 3.6vw, 21rem); line-height: 1.04;
       letter-spacing: .015em; text-transform: uppercase; color: var(--paper);
       margin: 22px 0 14px; max-width: 13ch;
     }
     .shout em { font-style: italic; color: var(--gold-lit); letter-spacing: .01em; }
     /* A rule that stops in a lozenge, the way a printer ends a flourish. */
     .flourish { display: flex; align-items: center; margin: 18px 0 20px;
-                max-width: clamp(220px, 15vw, 640px); }
+                max-width: clamp(220px, 15vw, 1920px); }
     .flourish::before { content: ''; flex: 1; height: 1px; background: var(--gold); opacity: .55; }
     .flourish i { color: var(--gold); font-size: .5rem; margin-left: 8px; }
     .shout-sub {
-      color: var(--dim); font-size: clamp(.95rem, 1.05vw, 2.4rem);
+      color: var(--dim); font-size: clamp(.95rem, 1.05vw, 7.2rem);
       line-height: 1.6; max-width: 46ch; margin: 0 0 22px;
     }
     .points { list-style: none; margin: 0; padding: 0; max-width: 46ch; }
     /* Held to a column so the lines do not run out over the brightest part
        of the photograph, where cream paper and grey type meet. */
     .shout, .shout-sub, .points, .signoff,
-    .showing > .flourish { max-width: min(60ch, calc(var(--panel) - 4vw)); }
+    /* MEASURED IN THE SAME UNIT AS THE TYPE.
+       A column capped in ch does not grow when the type does - ch is a
+       fraction of the font the element itself is set in, and these are set
+       in vw. At 25% zoom the result was 70px words wrapping four to a line
+       in a column still sized for a laptop. The panel is the measure now,
+       and the panel is a fraction of the window like everything else. */
+    .showing > .flourish { max-width: calc(var(--panel) - 4vw); }
     /* The mark is given its own width - the column that suits a paragraph
        is narrower than the name. */
-    .showing > .crest-mark { max-width: min(26rem, calc(var(--panel) - 2.2vw)); }
+    /* The same measure as the words under it. Capped in rem it stopped
+       growing with the type, and the trade line broke over two lines. */
+    .showing > .crest-mark { max-width: calc(var(--panel) - 4vw); }
     .points li { display: flex; gap: 17px; margin-bottom: 14px; align-items: flex-start; }
     .points i {
-      color: var(--gold); font-size: clamp(.92rem, .95vw, 2rem);
-      width: clamp(40px, 2.8vw, 76px); height: clamp(40px, 2.8vw, 76px);
-      flex: 0 0 clamp(40px, 2.8vw, 76px);
+      color: var(--gold); font-size: clamp(.92rem, .95vw, 6rem);
+      width: clamp(40px, 2.8vw, 228px); height: clamp(40px, 2.8vw, 228px);
+      flex: 0 0 clamp(40px, 2.8vw, 228px);
       border: 1px solid rgba(201,162,39,.4); display: grid; place-items: center;
     }
     .points b { display: block; font-family: 'Bodoni Moda', Georgia, serif; font-weight: 500;
-                font-size: clamp(.9rem, .95vw, 1.7rem); letter-spacing: .16em;
+                font-size: clamp(.9rem, .95vw, 5.1rem); letter-spacing: .16em;
                 text-transform: uppercase; color: var(--paper); margin-bottom: 5px; }
-    .points span { font-size: clamp(.84rem, .9vw, 1.5rem); color: var(--dim);
+    .points span { font-size: clamp(.84rem, .9vw, 4.5rem); color: var(--dim);
                    line-height: 1.55; }
 
     /* THE PICTURE IS OPTIONAL ON PURPOSE. Nothing here breaks if
@@ -201,7 +209,7 @@
        off the page and the half reads as a column of words, which is what
        it was before anybody drew anything. */
     .signoff { margin-top: auto; padding-top: 18px; color: var(--dim);
-               font-size: clamp(.66rem, .7vw, 1.4rem); letter-spacing: .14em; }
+               font-size: clamp(.66rem, .7vw, 4.2rem); letter-spacing: .14em; }
 
     /* IT WAS A CARD IN A FIELD OF BLACK. Three things were added and none
        of them is decoration for its own sake: an engraved oval behind the
@@ -228,7 +236,7 @@
     .gate .oval svg { width: 100%; height: 100%; }
     .help {
       margin-top: 30px; text-align: center; color: var(--dim);
-      font-size: clamp(.74rem, .8vw, 1.6rem);
+      font-size: clamp(.74rem, .8vw, 4.8rem);
       letter-spacing: .04em; position: relative;
     }
     .help a { color: var(--gold); text-decoration: none; border-bottom: 1px solid var(--hair); }
@@ -243,7 +251,7 @@
     }
     .inside span {
       flex: 1; text-align: center; font-family: Italiana, Georgia, serif;
-      font-size: clamp(.58rem, .62vw, 1.35rem); letter-spacing: .18em;
+      font-size: clamp(.58rem, .62vw, 4.05rem); letter-spacing: .18em;
       text-transform: uppercase;
       color: #a9a294; line-height: 1.7;
     }
@@ -251,11 +259,11 @@
        to the gap, and a border on each would draw three boxes. */
     .inside span + span { border-left: 1px solid var(--hair); }
     .inside i { display: block; color: var(--gold); margin-bottom: 8px;
-                font-size: clamp(.95rem, 1vw, 2rem); }
+                font-size: clamp(.95rem, 1vw, 6rem); }
     /* The lozenge rule above the three, as in the drawing. */
     .inside-rule { margin-top: 24px; text-align: center; }
     .inside-rule::before, .inside-rule::after {
-      content: ''; display: inline-block; width: clamp(150px, 9vw, 260px); height: 1px;
+      content: ''; display: inline-block; width: clamp(150px, 9vw, 780px); height: 1px;
       background: var(--hair); vertical-align: middle; margin: 0 10px;
     }
     .inside-rule i { color: var(--gold); font-size: .48rem; vertical-align: middle; }
@@ -298,11 +306,11 @@
        rectangle standing in the dark with the arcs of a much larger oval
        passing behind it - a plate in a frame, not a form in a box. */
     .card {
-      width: 100%; max-width: clamp(430px, 30vw, 1150px);
+      width: 100%; max-width: clamp(430px, 30vw, 3450px);
       background: rgba(20,23,26,.90);
       border: 1px solid rgba(201,162,39,.5);
-      padding: clamp(38px, 2.4vw, 64px) clamp(32px, 2.1vw, 56px)
-               clamp(30px, 1.9vw, 48px);
+      padding: clamp(38px, 2.4vw, 192px) clamp(32px, 2.1vw, 168px)
+               clamp(30px, 1.9vw, 144px);
       position: relative; backdrop-filter: blur(2px);
       box-shadow: 0 30px 90px rgba(0,0,0,.5);
     }
@@ -310,7 +318,7 @@
        heading. Drawn in CSS so there is no third image to load. */
     .crest { text-align: center; margin: 0 0 20px; }
     .crest::before, .crest::after {
-      content: ''; display: inline-block; width: clamp(104px, 7vw, 190px); height: 1px;
+      content: ''; display: inline-block; width: clamp(104px, 7vw, 570px); height: 1px;
       background: linear-gradient(90deg, transparent, var(--gold));
       vertical-align: middle; margin: 0 12px; opacity: .8;
     }
@@ -318,24 +326,24 @@
     .crest i { color: var(--gold); font-size: .56rem; vertical-align: middle; }
     .card h1 {
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
-      font-size: clamp(2.3rem, 2.9vw, 6.5rem); margin: 0 0 6px; color: var(--paper);
+      font-size: clamp(2.3rem, 2.9vw, 19.5rem); margin: 0 0 6px; color: var(--paper);
       letter-spacing: .005em; line-height: 1.05;
     }
     .card p.sub { margin: 0 0 28px; color: #bdb6a6;
-                  font-size: clamp(1rem, 1.05vw, 2.2rem); font-style: italic;
+                  font-size: clamp(1rem, 1.05vw, 6.6rem); font-style: italic;
                   font-family: 'Cormorant Garamond', Georgia, serif; line-height: 1.5; }
 
     label { display: block; font-family: Italiana, Georgia, serif;
-            font-size: clamp(.62rem, .66vw, 1.4rem);
+            font-size: clamp(.62rem, .66vw, 4.2rem);
             letter-spacing: .26em; text-transform: uppercase; color: var(--gold);
             margin: 0 0 8px; text-align: left; }
     input {
       width: 100%; background: rgba(13,15,18,.72);
       border: 1px solid rgba(201,162,39,.45);
       color: #e8e4da; font-family: 'Tenor Sans', sans-serif;
-      padding: clamp(12px, .95vw, 20px) clamp(14px, 1vw, 22px);
-      font-size: clamp(.92rem, .95vw, 1.9rem);
-      margin-bottom: clamp(16px, 1.1vw, 34px); transition: border-color .15s;
+      padding: clamp(12px, .95vw, 60px) clamp(14px, 1vw, 66px);
+      font-size: clamp(.92rem, .95vw, 5.7rem);
+      margin-bottom: clamp(16px, 1.1vw, 102px); transition: border-color .15s;
     }
     input:focus { outline: none; border-color: var(--gold-lit);
                   box-shadow: 0 0 0 1px rgba(201,162,39,.25); }
@@ -348,9 +356,9 @@
     .btn {
       width: 100%; color: #15171a; border: 0;
       background: linear-gradient(176deg, #e0b65c 0%, var(--gold) 46%, #b9872f 100%);
-      padding: clamp(14px, 1.05vw, 24px) 14px;
+      padding: clamp(14px, 1.05vw, 72px) 14px;
       font-family: Italiana, Georgia, serif; font-weight: 400;
-      font-size: clamp(.84rem, .9vw, 1.9rem); letter-spacing: .24em;
+      font-size: clamp(.84rem, .9vw, 5.7rem); letter-spacing: .24em;
       text-transform: uppercase;
       cursor: pointer; transition: background .15s;
     }
@@ -361,7 +369,7 @@
       margin-top: 10px;
     }
     .btn-quiet:hover { background: rgba(201,162,39,.07); color: var(--paper); }
-    .linkline { margin-top: 18px; font-size: clamp(.8rem, .85vw, 1.7rem);
+    .linkline { margin-top: 18px; font-size: clamp(.8rem, .85vw, 5.1rem);
                 color: var(--dim); text-align: center; }
     .linkline a { color: var(--gold); text-decoration: none; border-bottom: 1px solid var(--hair);
                   cursor: pointer; }
@@ -387,14 +395,14 @@
         url('/portal/hero-wide.jpg') center/cover no-repeat fixed,
         var(--void);
     }
-    .doors { display: grid; gap: clamp(20px, 1.6vw, 36px); width: 100%;
-             max-width: clamp(960px, 72vw, 2300px);
+    .doors { display: grid; gap: clamp(20px, 1.6vw, 108px); width: 100%;
+             max-width: clamp(960px, 72vw, 6900px);
              grid-template-columns: repeat(3, 1fr); }
     .door {
       position: relative; background: rgba(23,26,30,.94);
       border: 1px solid rgba(201,162,39,.34);
-      padding: clamp(32px, 2.2vw, 56px) clamp(26px, 1.9vw, 46px)
-               clamp(28px, 1.8vw, 44px);
+      padding: clamp(32px, 2.2vw, 168px) clamp(26px, 1.9vw, 138px)
+               clamp(28px, 1.8vw, 132px);
       text-decoration: none; display: block;
       transition: border-color .18s, transform .18s, box-shadow .18s;
     }
@@ -410,20 +418,20 @@
       box-shadow: 0 22px 50px rgba(0,0,0,.45);
     }
     .door:hover::after { border-color: rgba(201,162,39,.28); }
-    .door i { color: var(--gold); font-size: clamp(1.28rem, 1.4vw, 3rem); }
+    .door i { color: var(--gold); font-size: clamp(1.28rem, 1.4vw, 9rem); }
     .door h2 {
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
-      font-size: clamp(1.3rem, 1.5vw, 3.2rem); margin: 18px 0 10px;
+      font-size: clamp(1.3rem, 1.5vw, 9.6rem); margin: 18px 0 10px;
       color: var(--paper);
     }
-    .door p { margin: 0; font-size: clamp(.84rem, .9vw, 1.8rem);
+    .door p { margin: 0; font-size: clamp(.84rem, .9vw, 5.4rem);
               color: var(--dim); line-height: 1.6; }
     .door .go { margin-top: 18px; font-family: Italiana, Georgia, serif;
                 font-size: .56rem; letter-spacing: .28em;
                 text-transform: uppercase; color: var(--gold); }
     .welcome { text-align: center; margin-bottom: 34px; }
-    .welcome .serif { font-size: clamp(1.72rem, 2.1vw, 4.4rem); color: var(--paper); }
-    .welcome div { color: var(--dim); font-size: clamp(.82rem, .88vw, 1.7rem);
+    .welcome .serif { font-size: clamp(1.72rem, 2.1vw, 13.2rem); color: var(--paper); }
+    .welcome div { color: var(--dim); font-size: clamp(.82rem, .88vw, 5.1rem);
                    margin-top: 8px; }
     /* The same ruled lozenge that heads the sign-in card, so the two sides
        of the portal are obviously one place. */
