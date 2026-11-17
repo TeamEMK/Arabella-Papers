@@ -182,14 +182,36 @@ app.get('/catalogue', toPortal('/client/arabella/catalogue'));
 app.get('/quote/arabella', toPortal('/client/arabella/quote'));
 app.get('/quote/kpc', toPortal('/client/kpc/quote'));
 
-// The routers themselves still answer below, because the portal mounts
-// them: what is closed is the ADDRESS a customer was given, not the page.
-// Their own sub-paths - /catalogue/image/12, /liners/api/board - stay open
-// so a page already in front of somebody does not break mid-use.
-app.use('/catalogue', catalogueRoutes);
+// AND EVERYTHING UNDERNEATH THEM IS SHUT.
+//
+// The pages were the addresses people were given; these are what those
+// pages used to ask for - /liners/api/board, /catalogue/api/items,
+// /quote/<brand>/api/send. Left open they are the same book, the same
+// catalogue and the same quote-writing endpoint, reachable by anybody who
+// has ever looked at the page they came from. The rooms inside the portal
+// do not use them: each asks its own address, under /client/<brand>/...
+//
+// ONE EXCEPTION, AND IT IS NOT AN OVERSIGHT. The catalogue email embeds
+// <img src=".../catalogue/image/12">. Closing that route would empty every
+// mail the office has already sent, in inboxes it cannot reach. A picture
+// id is not an address anybody was given and it opens nothing but that one
+// picture, which is already in the mail.
+const shut = (req, res) => res.status(404).json({
+  success: false,
+  error: 'This address has moved. Your account is at /client/arabella.',
+});
+app.use('/liners', shut);
+app.use('/quote', shut);
+app.use('/catalogue/api', shut);
+app.get('/catalogue/image/:id', (req, res, next) => {
+  // Handed to the router the way a mount would hand it over: it matches on
+  // the whole url, and '/catalogue/image/12' matches none of its routes.
+  req.url = '/image/' + req.params.id;
+  catalogueRoutes(req, res, next);
+});
+app.use('/catalogue', shut);
 // The liner book, for a customer. No login: see the note at the top of
 // routes/linears.js for exactly what that opens up.
-app.use('/liners', linearsRoutes);
 // THE OLD SPELLING IS NOT A SECOND PAGE, ONLY A SIGNPOST. /linears was
 // the first spelling and it is already in somebody's chat, so instead of
 // serving the book twice it says, once and permanently, where the book
@@ -202,7 +224,6 @@ app.use('/linears', (req, res) => res.redirect(301, '/liners' + req.url.replace(
 // under their own key - see routes/clientPortal.js.
 app.use('/client', require('./routes/clientPortal'));
 // Two public links, one per brand - see routes/quote.js.
-app.use('/quote', quoteRoutes);
 app.use('/', authRoutes);
 app.use('/', indexRoutes);
 app.use('/views', viewsRoutes);

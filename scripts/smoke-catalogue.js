@@ -34,8 +34,10 @@ require.cache[mailerPath] = {
 };
 
 let BASE = '';
-const get = async (url) => {
-  const res = await fetch(BASE + url, { headers: { 'X-Forwarded-Proto': 'https' }, redirect: 'manual' });
+const get = async (url, cookie) => {
+  const headers = { 'X-Forwarded-Proto': 'https' };
+  if (cookie) headers.cookie = cookie;
+  const res = await fetch(BASE + url, { headers, redirect: 'manual' });
   const text = await res.text();
   let json = null;
   try { json = JSON.parse(text); } catch (e) {}
@@ -144,16 +146,19 @@ const PNG = Buffer.from(
 
   console.log('\nThe page, and the address it used to have');
   // THE CATALOGUE IS A ROOM IN THE CLIENT PORTAL NOW. The office gives out
-  // one link, so /catalogue sends whoever holds the old one to its door.
+  // one link: /catalogue sends whoever holds the old one to its door, and
+  // what that page used to ask for is shut behind the same door.
   r = await get('/catalogue');
   check('the old address points into the portal', r.status === 302, r.status);
-
-  // ITS PICTURES AND ITS LIST STAY OPEN, and that is not an oversight: the
-  // catalogue email embeds <img src=".../catalogue/image/12">, so closing
-  // that route would empty every mail the office has already sent.
   r = await get('/catalogue/api/items');
-  check('the list still answers, because the room inside the portal reads it',
-    r.json && r.json.success === true, r.status);
+  check('and its list is shut to a stranger', r.status === 404, r.status);
+
+  // Inside, the room reads it at its own address.
+  const { seat } = require(path.join(ROOT, 'scripts/lib/clientSeat.js'));
+  const jar = await seat(db, (u, o) => fetch(BASE + u, o), 'arabella');
+  const ROOM = '/client/arabella/catalogue';
+  r = await get(ROOM + '/api/items', jar);
+  check('the room lists the designs', r.json && r.json.success === true, r.status);
   check('lists the live design', r.json.data.length === 1, r.json);
   check('and names it', r.json.data[0].name === 'Peacock border', r.json.data);
 
@@ -172,21 +177,22 @@ const PNG = Buffer.from(
 
   console.log('\nShowing it again');
   await asAdmin('PUT', '/api/catalogue/' + hiddenId, { isActive: true });
-  r = await get('/catalogue/api/items');
+  r = await get(ROOM + '/api/items', jar);
   check('it comes back on the public page', r.json.data.length === 2, r.json.data.length);
 
   console.log('\nEmailing a selection');
   SENT.length = 0;
-  r = await get('/catalogue/api/items');
+  r = await get(ROOM + '/api/items', jar);
   const liveIds = r.json.data.map(x => x.id);
 
-  const mail = (body) => fetch(BASE + '/catalogue/api/email', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+  const mail = (body) => fetch(BASE + ROOM + '/api/email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie: jar },
     body: JSON.stringify(body),
   }).then(async x => ({ status: x.status, json: await x.json().catch(() => null) }));
 
   let m = await mail({ email: 'customer@example.com', ids: liveIds });
-  check('a customer can email their picks without logging in',
+  check('a signed-in customer can email their picks',
     m.json && m.json.success === true, m.json);
   check('the mail went to them', SENT.some(s => s.to === 'customer@example.com'),
     SENT.map(s => s.to));
@@ -235,12 +241,12 @@ const PNG = Buffer.from(
 
   console.log('\nA customer sending us their own design');
   SENT.length = 0;
-  const before = (await get('/catalogue/api/items')).json.data.length;
+  const before = (await get(ROOM + '/api/items', jar)).json.data.length;
   const theirs = (fields, files) => {
     const fd = new FormData();
     Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
     (files || []).forEach(f => fd.append('files', new Blob([f.body], { type: f.type }), f.name));
-    return fetch(BASE + '/catalogue/api/theirs', { method: 'POST', body: fd })
+    return fetch(BASE + ROOM + '/api/theirs', { method: 'POST', body: fd, headers: { cookie: jar } })
       .then(async x => ({ status: x.status, json: await x.json().catch(() => null) }));
   };
 
@@ -269,7 +275,7 @@ const PNG = Buffer.from(
   check('an executable is refused', t.json.success === false, t.json);
 
   // Nothing a stranger posts should end up sitting on the public page.
-  const after = (await get('/catalogue/api/items')).json.data.length;
+  const after = (await get(ROOM + '/api/items', jar)).json.data.length;
   check('and none of it lands in the catalogue', after === before, { before, after });
 
   // A refusal is not a send. Somebody who mistypes their address a few times
@@ -289,7 +295,7 @@ const PNG = Buffer.from(
   console.log('\nDeleting');
   r = await asAdmin('DELETE', '/api/catalogue/' + hiddenId);
   check('it goes', r.json.success === true, r.json);
-  r = await get('/catalogue/api/items');
+  r = await get(ROOM + '/api/items', jar);
   check('and the public page is down to one', r.json.data.length === 1, r.json.data.length);
 
   server.close();

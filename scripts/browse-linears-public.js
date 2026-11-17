@@ -130,10 +130,14 @@ function freePort() {
     // ── Before the browser: what answers to a stranger with a URL ──
     console.log(NL + 'With no session at all');
     const bare = (u) => fetch(BASE + u, { redirect: 'manual' });
-    // The sub-paths stay open - the room inside the portal reads them, and
-    // the catalogue's mail embeds its pictures - so what the checks below
-    // prove is that a HIDDEN design is hidden from them too.
-    const inRoom = bare;
+    // A seat in the portal, taken before anything is read: the book and
+    // everything under it live inside the client portal now, so the only
+    // way to ask it anything is to be somebody.
+    const { seat } = require(path.join(ROOT, 'scripts/lib/clientSeat.js'));
+    const jar = await seat(db, (u, o) => fetch(BASE + u, o), 'arabella');
+    // Same paths as before, under the room's own address.
+    const inRoom = (u) => fetch(BASE + '/client/arabella' + u,
+      { headers: { cookie: jar }, redirect: 'manual' });
     // THE BOOK IS A ROOM IN THE CLIENT PORTAL NOW. The office gives out one
     // link; /liners sends whoever holds the old one - and it is in a chat
     // and was read out over a telephone - to the door of the new one.
@@ -145,9 +149,12 @@ function freePort() {
     check('and the room turns a stranger away',
       shut.status === 302 && shut.headers.get('location') === '/client/arabella',
       shut.status + ' -> ' + shut.headers.get('location'));
-    check('the shelf still answers, because the room reads it',
-      (await bare('/liners/api/board')).status === 200);
-    check('and the search', (await bare('/liners/api/search?q=blue')).status === 200);
+    // And what the page used to ask for is shut with it. The room inside
+    // the portal asks its OWN address - /client/<brand>/liners/api/board -
+    // so nothing here needs the old one open.
+    check('the shelf it used to read is shut too',
+      (await bare('/liners/api/board')).status === 404);
+    check('and so is the search', (await bare('/liners/api/search?q=blue')).status === 404);
     // The first spelling was sent in a chat before the word was corrected.
     // It is no longer a page - it points at the one that is.
     const moved = await bare('/linears');
@@ -176,7 +183,7 @@ function freePort() {
     const inClosed = await inRoom('/liners/thumb/' + hiddenInClosed.id);
     check('a design in a closed category serves nothing either',
       inClosed.status === 404, inClosed.status);
-    const board = await (await bare('/liners/api/board')).json();
+    const board = await (await inRoom('/liners/api/board')).json();
     check('the closed category is not even listed',
       !board.sections.some(s => s.items.some(i => i.category === 'Playful & Whimsical')));
     const chin = board.sections
@@ -224,10 +231,8 @@ function freePort() {
 
     await send('Runtime.enable');
     await send('Page.enable');
-    // A seat in the portal, put into the browser as a cookie. The portal's
-    // own suite walks the sign-up and the code; this one is about the book.
-    const { seat } = require(path.join(ROOT, 'scripts/lib/clientSeat.js'));
-    const jar = await seat(db, (u, o) => fetch(BASE + u, o), 'arabella');
+    // The same seat, handed to the browser as a cookie. The portal's own
+    // suite walks the sign-up and the code; this one is about the book.
     const [cname, cval] = jar.split('=');
     await send('Network.enable');
     await send('Network.setCookie', {
