@@ -407,7 +407,7 @@
           + '<td class="small">' + (/online/i.test(r.store_type || '')
               ? '<span class="badge bg-warning text-dark">Online only</span>'
               : '<span class="text-muted">Shop</span>') + '</td>'
-          + '<td class="small">' + cc_statusBadge(r.status) + '</td>'
+          + '<td class="small">' + cc_statusBadge(r.status) + onProspects(r) + '</td>'
           // Long notes are cut here rather than left to stretch the row off
           // the side of the screen; the whole of it is in the edit box.
           + '<td class="small" style="max-width:18rem;white-space:normal;">'
@@ -425,6 +425,15 @@
   };
 
   // ── Status, selection, editing ──
+
+  // Already on the Prospects list, because somebody marked it Active. Said
+  // on the row so nobody wonders where it went: it is on both lists, and
+  // this one stays as the record of where the name came from.
+  function onProspects(r) {
+    return r.prospect_id
+      ? '<div class="small mt-1"><span class="badge bg-info text-dark">on Prospects</span></div>'
+      : '';
+  }
 
   function cc_statusBadge(v) {
     var st = String(v || '').toLowerCase();
@@ -484,7 +493,10 @@
       PICKS.clear();
       await cc_list();
       cc_boot();
-      if (window.showToast) showToast('success', j.changed + ' updated.');
+      if (window.showToast) {
+        showToast('success', j.changed + ' updated.'
+          + (j.openedProspects ? '  ' + j.openedProspects + ' opened on Prospects.' : ''));
+      }
     } catch (e) {
       if (window.showToast) showToast('error', e.message); else alert(e.message);
     }
@@ -549,7 +561,10 @@
       if (!j.success) throw new Error(j.error || 'Could not save it.');
       bootstrap.Modal.getInstance(document.getElementById('cc_editModal')).hide();
       await cc_list();
-      if (window.showToast) showToast('success', 'Saved.');
+      if (window.showToast) {
+        showToast('success', j.openedProspects
+          ? 'Saved. Opened on the Prospects list.' : 'Saved.');
+      }
     } catch (e) {
       if (window.showToast) showToast('error', e.message); else alert(e.message);
     }

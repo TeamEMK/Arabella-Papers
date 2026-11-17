@@ -924,6 +924,11 @@ CREATE TABLE IF NOT EXISTS bf_prospects (
   -- started, which is the question these two were protecting.
   address_edited_by VARCHAR(150) DEFAULT '',
   address_edited_at DATETIME DEFAULT NULL,
+  -- The prospect this dealer became. Marking one Active puts it on the
+  -- Prospects list, where the office tracks samples and outreach; this
+  -- remembers which row that is, so marking it Active twice - or in a batch
+  -- of two hundred - does not open a second one.
+  prospect_id INT DEFAULT NULL,
   -- The row it came from in the workbook, so a question about one can be
   -- traced back to the sheet.
   source_row INT DEFAULT NULL,
@@ -963,6 +968,9 @@ CREATE TABLE IF NOT EXISTS cc_prospects (
   -- who last changed it.
   address_edited_by VARCHAR(150) DEFAULT '',
   address_edited_at DATETIME DEFAULT NULL,
+  -- Same as on bf_prospects: the prospect this shop became when somebody
+  -- marked it Active.
+  prospect_id INT DEFAULT NULL,
   -- The row it came from in the workbook, so a question about one can be
   -- traced back to the sheet.
   source_row INT DEFAULT NULL,

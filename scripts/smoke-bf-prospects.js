@@ -247,6 +247,40 @@ const DEALERS = [
   check('marking a dealer does not wipe the address beside it',
     (await where(one.id)).address === 'Torres de las Americas, Torre B');
 
+  // ── ACTIVE OPENS IT ON THE PROSPECTS LIST ──
+  //
+  // Same rule as the Carlson Craft list: Active means somebody is going to
+  // work this one, and that work is recorded on Prospects.
+  console.log('\nActive opens it on the Prospects list');
+  const prospectOf = async (id) => (await db.query(
+    `SELECT p.* FROM prospects p
+       JOIN bf_prospects b ON b.prospect_id = p.id WHERE b.id = ?`, [id]))[0][0];
+
+  await db.query('DELETE FROM prospects');
+  await db.query('UPDATE bf_prospects SET status = NULL, prospect_id = NULL');
+
+  const [[live]] = await db.query(
+    "SELECT id FROM bf_prospects WHERE store_name = 'Fenwick & Vine'");
+  w = await put('/api/bf-prospects/' + live.id, { status: 'active' });
+  check('marking a dealer Active says one was opened',
+    w.json && w.json.openedProspects === 1, w.json);
+  const pr = await prospectOf(live.id);
+  check('it is on the Prospects list under its own name',
+    pr && pr.company_name === 'Fenwick & Vine', pr);
+  check('and says where it came from',
+    pr && pr.lead_source === 'Bella Figura Data', pr);
+  check('the dealer is still on this list too',
+    (await db.query(
+      'SELECT COUNT(*) n FROM bf_prospects WHERE id = ?', [live.id]))[0][0].n === 1);
+
+  w = await put('/api/bf-prospects/' + live.id, { status: 'active' });
+  check('marking it again opens nothing further',
+    w.json.openedProspects === 0
+    && (await db.query('SELECT COUNT(*) n FROM prospects'))[0][0].n === 1, w.json);
+
+  await db.query('UPDATE bf_prospects SET status = NULL, prospect_id = NULL');
+  await db.query('DELETE FROM prospects');
+
   console.log('\nMarking a batch');
   const [all] = await db.query('SELECT id FROM bf_prospects ORDER BY id');
   const three = all.slice(0, 3).map(r => r.id);
@@ -314,9 +348,17 @@ const DEALERS = [
 
   console.log('\nIt is a list of its own');
   const [[other]] = await db.query('SELECT COUNT(*) AS n FROM cc_prospects');
-  const [[ours]] = await db.query('SELECT COUNT(*) AS n FROM prospects');
   check('the Carlson Craft list is untouched', other.n === 0, other.n);
-  check('and the office\'s own 930 are too', ours.n === 0, ours.n);
+  // The office's own list is no longer untouched, and that is the point:
+  // marking a dealer Active opens it there. What still has to be true is
+  // that ONLY those appear, and that none of them left this list.
+  const [[ours]] = await db.query('SELECT COUNT(*) AS n FROM prospects');
+  const [[linked]] = await db.query(
+    'SELECT COUNT(*) AS n FROM bf_prospects WHERE prospect_id IS NOT NULL');
+  check('nothing is on Prospects that was not marked Active',
+    ours.n === linked.n, { ours: ours.n, linked: linked.n });
+  const [[stillHere]] = await db.query('SELECT COUNT(*) AS n FROM bf_prospects');
+  check('and nothing left this one', stillHere.n === DEALERS.length, stillHere.n);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   server.close();

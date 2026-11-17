@@ -388,7 +388,7 @@
           + '<td class="small">' + (r.visitor_policy
               ? '<span class="badge bg-warning text-dark">' + esc(r.visitor_policy) + '</span>'
               : '<span class="text-muted">—</span>') + '</td>'
-          + '<td class="small">' + bf_statusBadge(r.status) + '</td>'
+          + '<td class="small">' + bf_statusBadge(r.status) + onProspects(r) + '</td>'
           + '<td class="small" style="max-width:18rem;white-space:normal;">'
             + (r.remark
                 ? esc(String(r.remark).length > 120 ? String(r.remark).slice(0, 120) + '…' : r.remark)
@@ -402,6 +402,15 @@
       body.innerHTML = '<tr><td colspan="14" class="text-center py-4 text-danger">Server error.</td></tr>';
     }
   };
+
+  // Already on the Prospects list, because somebody marked it Active. Said
+  // on the row so nobody wonders where it went: it is on both lists, and
+  // this one stays as the record of where the name came from.
+  function onProspects(r) {
+    return r.prospect_id
+      ? '<div class="small mt-1"><span class="badge bg-info text-dark">on Prospects</span></div>'
+      : '';
+  }
 
   function bf_statusBadge(v) {
     var st = String(v || '').toLowerCase();
@@ -461,7 +470,10 @@
       PICKS.clear();
       await bf_list();
       bf_boot();
-      if (window.showToast) showToast('success', j.changed + ' updated.');
+      if (window.showToast) {
+        showToast('success', j.changed + ' updated.'
+          + (j.openedProspects ? '  ' + j.openedProspects + ' opened on Prospects.' : ''));
+      }
     } catch (e) {
       if (window.showToast) showToast('error', e.message); else alert(e.message);
     }
@@ -537,7 +549,10 @@
       if (!j.success) throw new Error(j.error || 'Could not save it.');
       bootstrap.Modal.getInstance(document.getElementById('bf_editModal')).hide();
       await bf_list();
-      if (window.showToast) showToast('success', 'Saved.');
+      if (window.showToast) {
+        showToast('success', j.openedProspects
+          ? 'Saved. Opened on the Prospects list.' : 'Saved.');
+      }
     } catch (e) {
       if (window.showToast) showToast('error', e.message); else alert(e.message);
     }

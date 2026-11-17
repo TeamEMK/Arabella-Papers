@@ -17,6 +17,7 @@ const db = require('../../config/db');
 const { requireLogin } = require('../../middleware/auth');
 const { canSee } = require('../../utils/access');
 const address = require('../../utils/prospectAddress');
+const toProspect = require('../../utils/toProspect');
 
 async function allowed(req, res, next) {
   try {
@@ -134,7 +135,7 @@ router.get('/', requireLogin, allowed, async (req, res) => {
       `SELECT id, retailer, state, state_code, region, city, address, suite, zip,
               phone, email, website, store_type, notes,
               status, remark, status_updated_by, status_updated_at,
-              address_edited_by, address_edited_at
+              address_edited_by, address_edited_at, prospect_id
          FROM cc_prospects${sql}
         ORDER BY state ASC, city ASC, retailer ASC
         LIMIT ${limit}`, args);
@@ -170,7 +171,8 @@ router.put('/:id', requireLogin, allowed, express.json(), async (req, res) => {
     const out = await writeStatus([id], req.body, req.session.user);
     if (out.error) return res.status(400).json({ success: false, error: out.error });
     if (!out.changed) return res.status(404).json({ success: false, error: 'No such row.' });
-    res.json({ success: true, status: out.status, remark: out.remark });
+    res.json({ success: true, status: out.status, remark: out.remark,
+               openedProspects: out.opened || 0 });
   } catch (err) {
     console.error('Saving a CC retailer failed:', err);
     res.status(500).json({ success: false, error: 'Could not save it.' });
@@ -202,7 +204,8 @@ router.put('/bulk/status', requireLogin, allowed, express.json(), async (req, re
     }
     const out = await writeStatus(ids, { status: req.body.status }, req.session.user, true);
     if (out.error) return res.status(400).json({ success: false, error: out.error });
-    res.json({ success: true, changed: out.changed, status: out.status });
+    res.json({ success: true, changed: out.changed, status: out.status,
+               openedProspects: out.opened || 0 });
   } catch (err) {
     console.error('Bulk status failed:', err);
     res.status(500).json({ success: false, error: 'Could not save them.' });
@@ -224,11 +227,34 @@ async function writeStatus(ids, body, user, statusOnly) {
   const status = raw || null;
   const who = (user && user.email) || '';
 
+  // ACTIVE MEANS SOMEBODY IS GOING TO WORK THIS ONE, and working a shop
+  // means samples, outreach and bounced mail - which live on the Prospects
+  // list and have nowhere to go on this table. So Active opens it there.
+  //
+  // After the status is written, not before: if the update finds nothing,
+  // nothing should have been opened. And it never throws out of here - a
+  // status the office just set must not fail to save because the Prospects
+  // list was unwell. Only Active does this; clearing a status afterwards
+  // leaves the prospect alone, because by then somebody may have written on
+  // it.
+  const openProspects = async () => {
+    if (status !== 'active') return 0;
+    try {
+      const [rows] = await db.query(
+        'SELECT * FROM cc_prospects WHERE id IN (?)', [ids]);
+      const made = await toProspect.open(db, 'cc', rows, user);
+      return made.size;
+    } catch (err) {
+      console.error('Opening prospects from cc_prospects failed:', err.message);
+      return 0;
+    }
+  };
+
   if (statusOnly) {
     const [r] = await db.query(
       `UPDATE cc_prospects SET status = ?, status_updated_by = ?, status_updated_at = NOW()
         WHERE id IN (?)`, [status, who, ids]);
-    return { changed: r.affectedRows, status };
+    return { changed: r.affectedRows, status, opened: await openProspects() };
   }
 
   const remark = String((body && body.remark) || '').trim().slice(0, 2000);
@@ -236,7 +262,7 @@ async function writeStatus(ids, body, user, statusOnly) {
     `UPDATE cc_prospects
         SET status = ?, remark = ?, status_updated_by = ?, status_updated_at = NOW()
       WHERE id IN (?)`, [status, remark || null, who, ids]);
-  return { changed: r.affectedRows, status, remark };
+  return { changed: r.affectedRows, status, remark, opened: await openProspects() };
 }
 
 /**

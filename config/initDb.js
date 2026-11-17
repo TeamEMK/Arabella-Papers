@@ -61,6 +61,10 @@ const COLUMN_MIGRATIONS = [
   { table: 'bf_prospects', column: 'address_edited_at', type: 'DATETIME NULL' },
   { table: 'cc_prospects', column: 'address_edited_by', type: "VARCHAR(150) DEFAULT ''" },
   { table: 'cc_prospects', column: 'address_edited_at', type: 'DATETIME NULL' },
+  // Marking a shop Active now opens it on the Prospects list, and the row
+  // remembers which one so a second marking does not open a second row.
+  { table: 'bf_prospects', column: 'prospect_id', type: 'INT NULL' },
+  { table: 'cc_prospects', column: 'prospect_id', type: 'INT NULL' },
   // The activity log learned to say which screen somebody was on when they
   // left, after it had been collecting rows for a year.
   { table: 'activity_log', column: 'screen', type: "VARCHAR(80) DEFAULT ''" },

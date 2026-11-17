@@ -289,6 +289,95 @@ const check = (name, ok, extra) => {
   check('marking a shop does not wipe its address',
     (await where(one.id)).address === '228 N Broad St');
 
+  // ── ACTIVE OPENS IT ON THE PROSPECTS LIST ──
+  //
+  // Marking a shop Active is the office saying it will work this one, and
+  // working a shop means samples, outreach and bounced mail - none of which
+  // this table has a column for. So the row is opened on Prospects, and it
+  // STAYS here: 7,041 that quietly becomes 6,800 is a list that can no
+  // longer be checked against the page it was read from.
+  console.log('\nActive opens it on the Prospects list');
+  const prospectOf = async (id) => (await db.query(
+    `SELECT p.* FROM prospects p
+       JOIN cc_prospects c ON c.prospect_id = p.id WHERE c.id = ?`, [id]))[0][0];
+
+  await db.query('DELETE FROM prospects');
+  await db.query('UPDATE cc_prospects SET prospect_id = NULL');
+
+  const [[fresh]] = await db.query(
+    "SELECT id FROM cc_prospects WHERE retailer = 'Marlowe Cards'");
+  check('nothing is on Prospects to start with',
+    (await db.query('SELECT COUNT(*) n FROM prospects'))[0][0].n === 0);
+
+  w = await put('/api/cc-prospects/' + fresh.id, { status: 'active' });
+  check('marking it Active says one was opened',
+    w.json && w.json.openedProspects === 1, w.json);
+  let pr = await prospectOf(fresh.id);
+  check('it is on the Prospects list under its own name',
+    pr && pr.company_name === 'Marlowe Cards', pr);
+  check('with the town and the ZIP it had here',
+    pr && pr.city === 'Kingston' && pr.zipcode === '12401', pr);
+  check('and the email, which is the point of working it at all',
+    pr && pr.email === 'hi@marlowe.example', pr);
+  check('it says where the name came from',
+    pr && pr.lead_source === 'Carlson Craft List', pr);
+  check('and the shop is still on this list too',
+    (await db.query('SELECT COUNT(*) n FROM cc_prospects'))[0][0].n === rows.length);
+
+  // Marking it again - or in a batch - must not open a second one. Two rows
+  // for one shop is how two people send the same samples a week apart.
+  w = await put('/api/cc-prospects/' + fresh.id, { status: 'active', remark: 'again' });
+  check('marking it Active twice opens nothing further',
+    w.json.openedProspects === 0
+    && (await db.query('SELECT COUNT(*) n FROM prospects'))[0][0].n === 1, w.json);
+
+  // Somebody writes on the prospect. Nothing here may overwrite that.
+  await db.query(
+    "UPDATE prospects SET status = 'Active', outreach_note = 'Samples sent' WHERE id = ?",
+    [pr.id]);
+  await put('/api/cc-prospects/' + fresh.id, { status: 'active' });
+  pr = await prospectOf(fresh.id);
+  check('what the office wrote on the prospect is left alone',
+    pr.status === 'Active' && pr.outreach_note === 'Samples sent', pr);
+
+  // Inactive is not a reason to open anything, and clearing a status is not
+  // a reason to take a prospect back - by then somebody may be working it.
+  const [[aloha]] = await db.query(
+    "SELECT id FROM cc_prospects WHERE retailer = 'Aloha Invites'");
+  w = await put('/api/cc-prospects/' + aloha.id, { status: 'inactive' });
+  check('Inactive opens nothing', w.json.openedProspects === 0
+    && (await db.query('SELECT COUNT(*) n FROM prospects'))[0][0].n === 1, w.json);
+  await put('/api/cc-prospects/' + fresh.id, { status: '' });
+  check('and clearing a status does not take the prospect away',
+    (await db.query('SELECT COUNT(*) n FROM prospects'))[0][0].n === 1);
+
+  // A company the office is ALREADY working is linked, not copied.
+  const [already] = await db.query(
+    "INSERT INTO prospects (company_name, city) VALUES ('Quill & Press', 'Dallas')");
+  const [[quill]] = await db.query(
+    "SELECT id FROM cc_prospects WHERE retailer = 'Quill & Press'");
+  await put('/api/cc-prospects/' + quill.id, { status: 'active' });
+  check('a shop already on the Prospects list is linked to it, not duplicated',
+    (await db.query(
+      "SELECT COUNT(*) n FROM prospects WHERE company_name = 'Quill & Press'"))[0][0].n === 1);
+  check('and the two rows now know about each other',
+    (await prospectOf(quill.id)).id === already.insertId, already.insertId);
+
+  // The batch does it too, because that is how seven thousand get worked.
+  const [batch] = await db.query(
+    'SELECT id FROM cc_prospects WHERE prospect_id IS NULL LIMIT 3');
+  w = await put('/api/cc-prospects/bulk/status',
+    { ids: batch.map(r => r.id), status: 'active' });
+  check('a batch marked Active opens them all',
+    w.json.openedProspects === 3, w.json);
+  check('and every one of them is linked',
+    (await db.query(
+      'SELECT COUNT(*) n FROM cc_prospects WHERE prospect_id IS NOT NULL'))[0][0].n === 5);
+
+  // Put the list back as the checks below expect to find it.
+  await db.query('UPDATE cc_prospects SET status = NULL, prospect_id = NULL');
+  await db.query('DELETE FROM prospects');
+
   console.log('\nMarking a batch');
   const [all] = await db.query('SELECT id FROM cc_prospects ORDER BY id');
   const half = all.slice(0, 3).map(r => r.id);
@@ -364,11 +453,19 @@ const check = (name, ok, extra) => {
   check('and a link or a tick box inside it is left alone',
     view.includes("closest('a, button, input, label')"));
 
-  console.log('\nIt is a separate list');
-  // `prospects` is the office's own 930, worked for years. Mixing the two
-  // would lose which is which.
-  const [[other]] = await db.query('SELECT COUNT(*) AS n FROM prospects');
-  check('the other prospect list is untouched', other.n === 0, other.n);
+  console.log('\nIt is still a separate list');
+  // `prospects` is the office's own 930, worked for years, and this is
+  // 7,041 names off a public page. They are not merged: only the ones
+  // somebody marked Active are opened over there, and every one of those is
+  // still here as well, which is what lets the list be checked against the
+  // page it was read from.
+  const [[overThere]] = await db.query('SELECT COUNT(*) AS n FROM prospects');
+  const [[linked]] = await db.query(
+    'SELECT COUNT(*) AS n FROM cc_prospects WHERE prospect_id IS NOT NULL');
+  check('nothing is on Prospects that was not marked Active',
+    overThere.n === linked.n, { overThere: overThere.n, linked: linked.n });
+  const [[stillHere]] = await db.query('SELECT COUNT(*) AS n FROM cc_prospects');
+  check('and nothing left this one', stillHere.n === rows.length, stillHere.n);
 
   server.close();
   await db.end().catch(() => {});
