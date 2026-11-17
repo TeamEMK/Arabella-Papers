@@ -75,16 +75,28 @@
       display: grid; grid-template-columns: 1.08fr .92fr;
       min-height: 100vh; width: 100%;
     }
+    /* THE PHOTOGRAPH IS THE HALF, NOT A BLOCK INSIDE IT.
+       Set as a block in the flow it ran past the bottom of the window and
+       was cut in two by the fold - and a picture half off the screen is
+       worse than none. As the background of the half it is always whole,
+       always the right size, and the words sit on it.
+       It is shot on near-black already, so the veil over it is only enough
+       to keep the text readable where the cream paper is brightest. */
     .showing {
       position: relative; padding: 46px 56px 40px;
       display: flex; flex-direction: column; justify-content: center;
       border-right: 1px solid var(--hair); overflow: hidden;
+      background:
+        linear-gradient(100deg, rgba(21,23,26,.97) 0%, rgba(21,23,26,.93) 38%,
+                                rgba(21,23,26,.72) 68%, rgba(21,23,26,.55) 100%),
+        url('/portal/hero.jpg') center/cover no-repeat,
+        var(--void);
     }
-    /* A breath of gold behind the picture, so the left half is not a flat
-       rectangle of the same black as the right. */
+    /* A breath of gold across it, so the half is not a flat rectangle of
+       the same black as the one beside it. */
     .showing::before {
       content: ''; position: absolute; inset: -30% -40% auto -20%; height: 90%;
-      background: radial-gradient(ellipse at 40% 40%, rgba(201,154,59,.13), transparent 62%);
+      background: radial-gradient(ellipse at 40% 40%, rgba(201,154,59,.10), transparent 62%);
       pointer-events: none;
     }
     .showing > * { position: relative; }
@@ -101,6 +113,9 @@
       margin: 0 0 30px;
     }
     .points { list-style: none; margin: 0; padding: 0; max-width: 46ch; }
+    /* Held to a column so the lines do not run out over the brightest part
+       of the photograph, where cream paper and grey type meet. */
+    .showing > .mark, .showing .pill, .shout, .shout-sub, .points, .signoff { max-width: 50ch; }
     .points li { display: flex; gap: 15px; margin-bottom: 19px; }
     .points i {
       color: var(--gold); font-size: .96rem; width: 34px; height: 34px; flex: 0 0 34px;
@@ -114,11 +129,6 @@
        /portal/hero.jpg has not been put there yet - the <img> takes itself
        off the page and the half reads as a column of words, which is what
        it was before anybody drew anything. */
-    .plate { margin: 34px 0 0; max-width: 560px; }
-    .plate img {
-      display: block; width: 100%; height: auto;
-      border: 1px solid var(--hair); padding: 10px; background: #101215;
-    }
     .signoff { margin-top: auto; padding-top: 34px; color: var(--dim);
                font-size: .66rem; letter-spacing: .14em; }
 
@@ -135,8 +145,10 @@
     @media (max-width: 1040px) {
       .stage { grid-template-columns: 1fr; }
       .showing { border-right: 0; border-bottom: 1px solid var(--hair);
-                 padding: 38px 26px 30px; }
-      .plate { display: none; }
+                 padding: 38px 26px 30px;
+                 background:
+                   linear-gradient(180deg, rgba(21,23,26,.95), rgba(21,23,26,.90)),
+                   url('/portal/hero.jpg') center/cover no-repeat, var(--void); }
       .whisper { display: none; }
       .gate { padding: 34px 22px 50px; }
     }
@@ -311,11 +323,6 @@
           </div>
         </li>
       </ul>
-
-      <div class="plate">
-        <img src="/portal/hero.jpg" alt=""
-             onerror="this.parentNode.remove()">
-      </div>
 
       <div class="signoff">&copy; <%= new Date().getFullYear() %> <%= wordmark %></div>
     </section>
