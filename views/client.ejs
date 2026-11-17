@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= signedIn ? 'Your studio' : 'Sign in' %> — <%= wordmark %></title>
+  <%# Standalone, like the liner book and the catalogue: there is no office
+      session out here, so the portal's shell cannot be reused. The same
+      dark and gold as those two on purpose - a customer sent all three
+      links should not feel they have arrived at three companies. %>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+  <style>
+    :root {
+      --void: #15171a;
+      --card: #191c20;
+      --gold: #c99a3b;
+      --gold-lit: #d8ad55;
+      --paper: #f7f4ed;
+      --dim: #8a8578;
+      --hair: rgba(201,162,39,.22);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    /* The whole window, so the card sits in the middle of the screen and the
+       sign-off sits on the bottom of it. Without this the page is only as
+       tall as the card and leaves a band of dead black underneath, which
+       reads as a page that failed to finish loading. */
+    body {
+      min-height: 100vh;
+      background: var(--void);
+      color: #e8e4da;
+      font-family: Jost, 'Segoe UI', sans-serif;
+      font-weight: 300;
+      -webkit-font-smoothing: antialiased;
+      display: flex; flex-direction: column;
+    }
+    .serif { font-family: 'Cormorant Garamond', Georgia, serif; }
+    ::selection { background: var(--gold); color: #000; }
+    /* The scrollbar is gone, the scrolling is not - as on the liner book. */
+    html, body { scrollbar-width: none; -ms-overflow-style: none; }
+    html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display: none; }
+    a { color: inherit; }
+
+    /* ── the mark ─────────────────────────────── */
+    header { padding: 42px 22px 0; text-align: center; }
+    .mark {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 1.5rem; letter-spacing: .26em; text-transform: uppercase;
+      color: var(--gold-lit); line-height: 1.5;
+    }
+    .mark small {
+      display: block; font-family: Jost, sans-serif; font-size: .58rem;
+      letter-spacing: .32em; text-transform: uppercase; color: var(--dim);
+      margin-top: 10px;
+    }
+    .pill {
+      display: inline-block; margin-top: 14px; padding: 3px 12px;
+      border: 1px solid var(--hair); border-radius: 999px;
+      font-size: .56rem; letter-spacing: .3em; color: var(--gold);
+    }
+    .rule { height: 1px; background: var(--hair); max-width: 440px; margin: 26px auto 0; }
+
+    main { flex: 1 0 auto; display: flex; align-items: center; justify-content: center;
+           padding: 34px 22px 60px; }
+
+    /* ── the card ─────────────────────────────── */
+    .card {
+      width: 100%; max-width: 430px; background: var(--card);
+      border: 1px solid var(--hair); padding: 34px 30px 30px;
+    }
+    .card h1 {
+      font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400;
+      font-size: 1.72rem; margin: 0 0 6px; color: var(--paper);
+    }
+    .card p.sub { margin: 0 0 24px; color: var(--dim); font-size: .86rem; font-style: italic;
+                  font-family: 'Cormorant Garamond', Georgia, serif; }
+
+    label { display: block; font-size: .56rem; letter-spacing: .26em;
+            text-transform: uppercase; color: var(--gold); margin: 0 0 7px; }
+    input {
+      width: 100%; background: #111316; border: 1px solid var(--hair);
+      color: #e8e4da; padding: 11px 13px; font-family: Jost, sans-serif;
+      font-size: .94rem; font-weight: 300; margin-bottom: 16px;
+    }
+    input:focus { outline: none; border-color: var(--gold); }
+    /* The six digits are read off a phone and typed one at a time. Wide and
+       spaced so a 6 and an 8 are not the same shape at a glance. */
+    input.code {
+      text-align: center; font-size: 1.5rem; letter-spacing: .48em;
+      padding-left: .48em; font-family: 'Cormorant Garamond', Georgia, serif;
+    }
+    .btn {
+      width: 100%; background: var(--gold); color: #15171a; border: 0;
+      padding: 12px 14px; font-family: Jost, sans-serif; font-weight: 500;
+      font-size: .74rem; letter-spacing: .22em; text-transform: uppercase;
+      cursor: pointer; transition: background .15s;
+    }
+    .btn:hover { background: var(--gold-lit); }
+    .btn[disabled] { opacity: .5; cursor: default; }
+    .btn-quiet {
+      background: none; color: var(--dim); border: 1px solid var(--hair);
+      margin-top: 10px;
+    }
+    .btn-quiet:hover { background: rgba(201,162,39,.07); color: var(--paper); }
+    .linkline { margin-top: 18px; font-size: .8rem; color: var(--dim); text-align: center; }
+    .linkline a { color: var(--gold); text-decoration: none; border-bottom: 1px solid var(--hair);
+                  cursor: pointer; }
+    .linkline a:hover { color: var(--gold-lit); }
+
+    .says { font-size: .82rem; line-height: 1.5; margin: 0 0 16px; padding: 10px 12px;
+            border-left: 2px solid var(--gold); background: rgba(201,162,39,.06);
+            color: var(--paper); display: none; }
+    .says.bad { border-left-color: #b4544a; background: rgba(180,84,74,.08); }
+    .says.on { display: block; }
+
+    .panel { display: none; }
+    .panel.on { display: block; }
+
+    /* ── the three doors ──────────────────────── */
+    .doors { display: grid; gap: 20px; width: 100%; max-width: 980px;
+             grid-template-columns: repeat(3, 1fr); }
+    .door {
+      background: var(--card); border: 1px solid var(--hair); padding: 30px 24px 26px;
+      text-decoration: none; display: block; transition: border-color .18s, transform .18s;
+    }
+    .door:hover { border-color: var(--gold); transform: translateY(-2px); }
+    .door i { color: var(--gold); font-size: 1.28rem; }
+    .door h2 {
+      font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400;
+      font-size: 1.34rem; margin: 16px 0 8px; color: var(--paper);
+    }
+    .door p { margin: 0; font-size: .84rem; color: var(--dim); line-height: 1.6; }
+    .door .go { margin-top: 18px; font-size: .56rem; letter-spacing: .28em;
+                text-transform: uppercase; color: var(--gold); }
+    .welcome { text-align: center; margin-bottom: 30px; }
+    .welcome .serif { font-size: 1.6rem; color: var(--paper); }
+    .welcome div { color: var(--dim); font-size: .82rem; margin-top: 6px; }
+
+    footer { flex: 0 0 auto; padding: 0 22px 34px; text-align: center;
+             color: var(--dim); font-size: .7rem; letter-spacing: .12em; }
+    footer a { color: var(--gold); text-decoration: none; cursor: pointer; }
+
+    @media (max-width: 860px) { .doors { grid-template-columns: 1fr; max-width: 430px; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="mark"><%= wordmark %><small>Fine Stationery</small></div>
+  <% if (pill) { %><div class="pill"><%= pill %></div><% } %>
+  <div class="rule"></div>
+</header>
+
+<main>
+<% if (signedIn) { %>
+  <div style="width:100%;max-width:980px;">
+    <div class="welcome">
+      <div class="serif">Welcome back<%= who && who.name ? ', ' + who.name.split(' ')[0] : '' %></div>
+      <div><%= who ? who.email : '' %></div>
+    </div>
+    <div class="doors">
+      <a class="door" href="/liners" target="_blank" rel="noopener">
+        <i class="fa-solid fa-envelope-open"></i>
+        <h2>Envelope Liner Book</h2>
+        <p>Every liner we print, by collection, with its own code — and a search
+           that understands "blue floral" as well as it understands CT-FB-01.</p>
+        <div class="go">Open the book &nbsp;&rsaquo;</div>
+      </a>
+      <a class="door" href="/catalogue" target="_blank" rel="noopener">
+        <i class="fa-solid fa-feather-pointed"></i>
+        <h2>Design Catalogue</h2>
+        <p>Forms, motifs and patterns — the shapes a card can take and the
+           work that can go on it.</p>
+        <div class="go">Open the catalogue &nbsp;&rsaquo;</div>
+      </a>
+      <a class="door" href="<%= quoteHref %>" target="_blank" rel="noopener">
+        <i class="fa-solid fa-calculator"></i>
+        <h2>Price Calculator</h2>
+        <p>Price a job yourself — quantities, cards, finishes — and take the
+           estimate away as a PDF.</p>
+        <div class="go">Open the calculator &nbsp;&rsaquo;</div>
+      </a>
+    </div>
+  </div>
+<% } else { %>
+  <div class="card">
+    <div class="says" id="says"></div>
+
+    <!-- ── sign in ── -->
+    <div class="panel on" id="p-in">
+      <h1>Sign in</h1>
+      <p class="sub">The liner book, the catalogue and the calculator, in one place.</p>
+      <label for="in-email">Email</label>
+      <input id="in-email" type="email" autocomplete="email" placeholder="you@company.com">
+      <label for="in-pass">Password</label>
+      <input id="in-pass" type="password" autocomplete="current-password">
+      <button class="btn" onclick="signIn(this)">Sign in</button>
+      <div class="linkline"><a onclick="show('p-forgot')">Forgotten your password?</a></div>
+      <div class="linkline">No account yet? <a onclick="show('p-up')">Register</a></div>
+    </div>
+
+    <!-- ── register ── -->
+    <div class="panel" id="p-up">
+      <h1>Register</h1>
+      <p class="sub">We will send a six-digit code to your email to confirm it.</p>
+      <label for="up-name">Your name</label>
+      <input id="up-name" autocomplete="name">
+      <label for="up-company">Company <span style="color:var(--dim);">(optional)</span></label>
+      <input id="up-company" autocomplete="organization">
+      <label for="up-email">Email</label>
+      <input id="up-email" type="email" autocomplete="email">
+      <label for="up-pass">Password</label>
+      <input id="up-pass" type="password" autocomplete="new-password"
+             placeholder="At least eight characters">
+      <button class="btn" onclick="register(this)">Send me a code</button>
+      <div class="linkline">Already registered? <a onclick="show('p-in')">Sign in</a></div>
+    </div>
+
+    <!-- ── the code ── -->
+    <div class="panel" id="p-code">
+      <h1>Your code</h1>
+      <p class="sub" id="code-sub">Six digits, sent to your email. It is good for ten minutes.</p>
+      <label for="code">Code</label>
+      <input id="code" class="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+      <button class="btn" onclick="verify(this)">Confirm</button>
+      <button class="btn btn-quiet" id="again" onclick="resend(this)">Send another code</button>
+      <div class="linkline"><a onclick="show('p-in')">Back to sign in</a></div>
+    </div>
+
+    <!-- ── forgotten ── -->
+    <div class="panel" id="p-forgot">
+      <h1>Forgotten password</h1>
+      <p class="sub">Give the address you registered with and we will send a code.</p>
+      <label for="fg-email">Email</label>
+      <input id="fg-email" type="email" autocomplete="email">
+      <button class="btn" onclick="forgot(this)">Send me a code</button>
+      <div class="linkline"><a onclick="show('p-in')">Back to sign in</a></div>
+    </div>
+
+    <!-- ── new password ── -->
+    <div class="panel" id="p-reset">
+      <h1>New password</h1>
+      <p class="sub">Type the code from your email and the password you would like.</p>
+      <label for="rs-code">Code</label>
+      <input id="rs-code" class="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+      <label for="rs-pass">New password</label>
+      <input id="rs-pass" type="password" autocomplete="new-password"
+             placeholder="At least eight characters">
+      <button class="btn" onclick="reset(this)">Set it and sign in</button>
+      <button class="btn btn-quiet" onclick="resend(this, 'reset')">Send another code</button>
+      <div class="linkline"><a onclick="show('p-in')">Back to sign in</a></div>
+    </div>
+  </div>
+<% } %>
+</main>
+
+<footer>
+  <% if (signedIn) { %>
+    <a onclick="signOut()">Sign out</a> &nbsp;·&nbsp;
+  <% } %>
+  <%= wordmark %><% if (pill) { %> · <%= pill %><% } %>
+</footer>
+
+<script>
+(function () {
+  var BRAND = <%- JSON.stringify(brand) %>;
+  var API = '/client/' + BRAND + '/api/';
+  var signedIn = <%- signedIn ? 'true' : 'false' %>;
+  var waiting = '';   // the address the code on screen belongs to
+
+  function say(text, bad) {
+    var box = document.getElementById('says');
+    if (!box) return;
+    box.textContent = text || '';
+    box.className = 'says' + (text ? ' on' : '') + (bad ? ' bad' : '');
+  }
+  window.show = function (id) {
+    say('');
+    var all = document.querySelectorAll('.panel');
+    for (var i = 0; i < all.length; i++) all[i].classList.toggle('on', all[i].id === id);
+    var first = document.querySelector('#' + id + ' input');
+    if (first) first.focus();
+  };
+
+  // Every call goes through here, so a button cannot be pressed twice while
+  // the first press is still in the air - which on a register button is two
+  // accounts, and on a code button is two codes.
+  async function ask(path, body, btn) {
+    var was = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'One moment…'; }
+    try {
+      var r = await fetch(API + path, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      var j = await r.json();
+      return j || {};
+    } catch (e) {
+      return { success: false, error: 'The connection dropped. Please try again.' };
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = was; }
+    }
+  }
+
+  var val = function (id) { return (document.getElementById(id).value || '').trim(); };
+
+  window.register = async function (btn) {
+    var email = val('up-email');
+    var j = await ask('register', {
+      name: val('up-name'), company: val('up-company'),
+      email: email, password: document.getElementById('up-pass').value,
+    }, btn);
+    if (!j.success) return say(j.error, true);
+    waiting = email;
+    show('p-code');
+    document.getElementById('code-sub').textContent =
+      'Six digits, sent to ' + email + '. It is good for ten minutes.';
+    // An address that already has an account is told nothing here. It is
+    // sent the same way as everybody else and will simply have no code -
+    // which is what the sign-in page and the forgotten-password door are
+    // for, and is the whole point of not saying.
+    say(j.known ? 'If that address has an account, a code is on its way to it.' : '');
+  };
+
+  window.verify = async function (btn) {
+    var j = await ask('verify', { email: waiting, code: val('code') }, btn);
+    if (!j.success) return say(j.error, true);
+    location.reload();
+  };
+
+  window.resend = async function (btn, purpose) {
+    var j = await ask('resend', { email: waiting, purpose: purpose || 'verify' }, btn);
+    say(j.success ? 'Another code is on its way.' : j.error, !j.success);
+  };
+
+  window.signIn = async function (btn) {
+    var email = val('in-email');
+    var j = await ask('login', {
+      email: email, password: document.getElementById('in-pass').value,
+    }, btn);
+    if (!j.success) return say(j.error, true);
+    if (j.step === 'verify') {
+      // Signed up but never finished. The password was right, so this is
+      // them - they are shown the code step rather than a refusal.
+      waiting = email;
+      show('p-code');
+      say('Your email has not been confirmed yet. A code is on its way to ' + email + '.');
+      return;
+    }
+    location.reload();
+  };
+
+  window.forgot = async function (btn) {
+    var email = val('fg-email');
+    var j = await ask('forgot', { email: email }, btn);
+    if (!j.success) return say(j.error, true);
+    waiting = email;
+    show('p-reset');
+    say(j.message || 'If that address has an account, a code is on its way to it.');
+  };
+
+  window.reset = async function (btn) {
+    var j = await ask('reset', {
+      email: waiting, code: val('rs-code'),
+      password: document.getElementById('rs-pass').value,
+    }, btn);
+    if (!j.success) return say(j.error, true);
+    location.reload();
+  };
+
+  window.signOut = async function () {
+    await ask('logout', {});
+    location.reload();
+  };
+
+  // Enter sends the panel that is open, because nothing here is a <form> -
+  // a form would reload the page and lose which address the code belongs to.
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || signedIn) return;
+    var open = document.querySelector('.panel.on');
+    if (!open) return;
+    var go = open.querySelector('.btn');
+    if (go) { e.preventDefault(); go.click(); }
+  });
+}());
+</script>
+</body>
+</html>

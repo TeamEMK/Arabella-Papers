@@ -171,6 +171,11 @@ app.use('/liners', linearsRoutes);
 // moved to. Everything under it comes along: /linears/api/board becomes
 // /liners/api/board.
 app.use('/linears', (req, res) => res.redirect(301, '/liners' + req.url.replace(/^\/?$/, '')));
+// The client portal: two links, each opening the liner book, the design
+// catalogue and that brand's price calculator behind a sign-in of the
+// customer's own. Accounts live in client_users and are kept on the session
+// under their own key - see routes/clientPortal.js.
+app.use('/client', require('./routes/clientPortal'));
 // Two public links, one per brand - see routes/quote.js.
 app.use('/quote', quoteRoutes);
 app.use('/', authRoutes);

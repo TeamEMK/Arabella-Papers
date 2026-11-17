@@ -1350,3 +1350,63 @@ CREATE TABLE IF NOT EXISTS pms_order_steps (
   INDEX idx_pms_os_planned (planned_at),
   INDEX idx_pms_os_doer (doer_email)
 );
+
+-- =============================================
+-- THE CLIENT PORTAL
+--
+-- Two links a customer can be sent - one priced from the Arabella list, one
+-- from KPC - each opening the same three things behind a sign-in: the
+-- envelope liner book, the design catalogue and that brand's price
+-- calculator.
+--
+-- ITS OWN TABLE, NOT `users`. That one is the office: it carries roles,
+-- domains and access rules, and every screen in the portal decides what to
+-- show from them. A customer who signed up on a public page has none of
+-- that and must never be able to acquire it by accident. Two tables cannot
+-- be confused for one another by a missing WHERE.
+--
+-- Anybody may register; the office asked for that in those words. The email
+-- is proved by a code before the account works, so an address somebody
+-- mistyped - or somebody else's - cannot be signed in to.
+-- =============================================
+CREATE TABLE IF NOT EXISTS client_users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  -- Which link they signed up through: 'arabella' or 'kpc'. The two price
+  -- lists are different, so an account belongs to the one it was opened on
+  -- and the same address may hold an account on each.
+  brand VARCHAR(20) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  name VARCHAR(150) DEFAULT '',
+  company VARCHAR(200) DEFAULT '',
+  -- bcrypt, like the office's own. Never the password itself.
+  password_hash VARCHAR(255) NOT NULL,
+
+  -- Null until the code sent to that address has been typed back. An
+  -- unverified account can be signed up again - the new code replaces the
+  -- old one - so a typed address nobody owns does not block the real one
+  -- for ever.
+  verified_at DATETIME DEFAULT NULL,
+
+  -- THE CODE IS NOT STORED. Only its hash, like a password: this table is
+  -- the one a leak would reach, and a column of live six-digit codes beside
+  -- the addresses they belong to is a column that signs people in.
+  otp_hash VARCHAR(255) DEFAULT NULL,
+  otp_expires_at DATETIME DEFAULT NULL,
+  otp_sent_at DATETIME DEFAULT NULL,
+  -- Counted so a six-digit code cannot be guessed a million times. Reset
+  -- whenever a new code is sent.
+  otp_tries INT DEFAULT 0,
+  -- 'verify' or 'reset'. One code at a time per account, and what it is for
+  -- is written down - a code sent to prove an address must not also set a
+  -- new password.
+  otp_purpose VARCHAR(20) DEFAULT NULL,
+
+  last_login_at DATETIME DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  -- One account per address per brand. The database says so as well as the
+  -- code, because two rows for one address is two passwords that both work.
+  UNIQUE KEY uq_client_user (brand, email),
+  INDEX idx_client_email (email)
+);
