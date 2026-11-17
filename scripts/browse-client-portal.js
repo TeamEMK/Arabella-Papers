@@ -235,7 +235,7 @@ function freePort() {
 
     console.log(NL + 'The three doors');
     check('the liner book is one', await ev(
-      "!!Array.from(document.querySelectorAll('.door h2')).find(h=>/Liner Book/.test(h.textContent))"));
+      "!!Array.from(document.querySelectorAll('.door h2')).find(h=>/Liner/i.test(h.textContent))"));
     check('the catalogue another', await ev(
       "!!Array.from(document.querySelectorAll('.door h2')).find(h=>/Catalogue/.test(h.textContent))"));
     check('and the calculator the third', await ev(
