@@ -146,6 +146,66 @@ function seat(req, user, brand) {
   };
 }
 
+// ══ THE THREE ROOMS, INSIDE THE SAME LINK ═════════════
+//
+// The doors used to open /liners, /catalogue and /quote/<brand> in a new
+// tab - three more addresses for a customer to be given, lose and ask about,
+// and none of them knowing who had signed in. They are served here instead,
+// under the link the customer already has:
+//
+//   /client/<brand>/liners      /client/<brand>/catalogue
+//   /client/<brand>/quote
+//
+// THE SAME ROUTERS, NOT COPIES. routes/linears.js, routes/catalogue.js and
+// routes/quote.js are mounted again at these paths. Two copies of a page
+// are two pages, and the second one is always the one nobody remembers to
+// fix.
+//
+// Each page asks its own address for everything it fetches - see the BASE
+// line at the top of each view - so the same file serves correctly at both
+// mounts without knowing which one it is at.
+const linearsRoutes = require('./linears');
+const catalogueRoutes = require('./catalogue');
+const quoteRoutes = require('./quote');
+
+/**
+ * Nobody reaches the rooms without a seat in the portal they belong to.
+ *
+ * A page answers with a redirect rather than a 401: these are opened by a
+ * person clicking a tile, not by a script, and somebody whose session has
+ * quietly expired should land on the sign-in they recognise with the door
+ * they wanted remembered.
+ */
+function requireClient(req, res, next) {
+  const brand = brandOf(req);
+  if (!brand) return next();
+  const client = req.session && req.session.client;
+  if (client && client.brand === brand.slug) {
+    // The way back out, drawn by each page when it is being served here.
+    res.locals.portalHome = '/client/' + brand.slug;
+    res.locals.portalBrand = brand.wordmark;
+    return next();
+  }
+  res.redirect('/client/' + brand.slug);
+}
+
+router.use('/:brand/liners', requireClient, linearsRoutes);
+router.use('/:brand/catalogue', requireClient, catalogueRoutes);
+
+// The calculator's own router is written around /:brand, so the request is
+// pointed back at the path it expects. Rewritten rather than re-routed: the
+// brand in the address IS the price list, and a second way of choosing it
+// is a second way of getting it wrong.
+router.get('/:brand/quote', requireClient, (req, res, next) => {
+  req.url = '/' + brandOf(req).slug;
+  quoteRoutes(req, res, next);
+});
+router.post('/:brand/quote/api/send', requireClient, express.json({ limit: '256kb' }),
+  (req, res, next) => {
+    req.url = '/' + brandOf(req).slug + '/api/send';
+    quoteRoutes(req, res, next);
+  });
+
 // ══ THE PAGE ══════════════════════════════════════════
 router.get('/:brand', (req, res, next) => {
   const brand = brandOf(req);

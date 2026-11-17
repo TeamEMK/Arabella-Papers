@@ -130,8 +130,23 @@ function freePort() {
     // ── Before the browser: what answers to a stranger with a URL ──
     console.log(NL + 'With no session at all');
     const bare = (u) => fetch(BASE + u, { redirect: 'manual' });
-    check('the page itself opens', (await bare('/liners')).status === 200);
-    check('so does the shelf', (await bare('/liners/api/board')).status === 200);
+    // The sub-paths stay open - the room inside the portal reads them, and
+    // the catalogue's mail embeds its pictures - so what the checks below
+    // prove is that a HIDDEN design is hidden from them too.
+    const inRoom = bare;
+    // THE BOOK IS A ROOM IN THE CLIENT PORTAL NOW. The office gives out one
+    // link; /liners sends whoever holds the old one - and it is in a chat
+    // and was read out over a telephone - to the door of the new one.
+    const moved0 = await bare('/liners');
+    check('the old address points into the portal',
+      moved0.status === 302 && moved0.headers.get('location') === '/client/arabella/liners',
+      moved0.status + ' -> ' + moved0.headers.get('location'));
+    const shut = await bare('/client/arabella/liners');
+    check('and the room turns a stranger away',
+      shut.status === 302 && shut.headers.get('location') === '/client/arabella',
+      shut.status + ' -> ' + shut.headers.get('location'));
+    check('the shelf still answers, because the room reads it',
+      (await bare('/liners/api/board')).status === 200);
     check('and the search', (await bare('/liners/api/search?q=blue')).status === 200);
     // The first spelling was sent in a chat before the word was corrected.
     // It is no longer a page - it points at the one that is.
@@ -154,11 +169,11 @@ function freePort() {
       [302, 401, 403].includes(manage.status), manage.status);
 
     console.log(NL + 'Hidden means hidden');
-    const hiddenPic = await bare('/liners/thumb/' + secret.id);
+    const hiddenPic = await inRoom('/liners/thumb/' + secret.id);
     check('a hidden design serves no picture', hiddenPic.status === 404, hiddenPic.status);
-    const hiddenFull = await bare('/liners/image/' + secret.id);
+    const hiddenFull = await inRoom('/liners/image/' + secret.id);
     check('nor a full-size one', hiddenFull.status === 404, hiddenFull.status);
-    const inClosed = await bare('/liners/thumb/' + hiddenInClosed.id);
+    const inClosed = await inRoom('/liners/thumb/' + hiddenInClosed.id);
     check('a design in a closed category serves nothing either',
       inClosed.status === 404, inClosed.status);
     const board = await (await bare('/liners/api/board')).json();
@@ -169,7 +184,7 @@ function freePort() {
     check('and the count drops by the one taken down', chin && chin.count === 14, chin);
 
     // Nothing about the business may ride along in the reply.
-    const cat = await (await bare('/liners/api/category/' + secret.cat)).json();
+    const cat = await (await inRoom('/liners/api/category/' + secret.cat)).json();
     const asText = JSON.stringify(cat);
     check('the reply carries no tags, no file names, no internals',
       !/tags|source_file|sourceFile|file_url/.test(asText), asText.slice(0, 200));
@@ -209,7 +224,16 @@ function freePort() {
 
     await send('Runtime.enable');
     await send('Page.enable');
-    await send('Page.navigate', { url: BASE + '/liners' });
+    // A seat in the portal, put into the browser as a cookie. The portal's
+    // own suite walks the sign-up and the code; this one is about the book.
+    const { seat } = require(path.join(ROOT, 'scripts/lib/clientSeat.js'));
+    const jar = await seat(db, (u, o) => fetch(BASE + u, o), 'arabella');
+    const [cname, cval] = jar.split('=');
+    await send('Network.enable');
+    await send('Network.setCookie', {
+      name: cname, value: cval, domain: '127.0.0.1', path: '/',
+    });
+    await send('Page.navigate', { url: BASE + '/client/arabella/liners' });
     for (let i = 0; i < 80; i++) {
       if (await ev("!!document.querySelector('#field .piece')").catch(() => false)) break;
       await sleep(250);

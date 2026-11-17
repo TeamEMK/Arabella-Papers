@@ -221,6 +221,20 @@
 </style>
 </head>
 <body>
+<%# Only inside the portal: served on its own, this page has nothing
+    to go back to. portalHome is set by the mount in routes/clientPortal.js. %>
+<% if (typeof portalHome !== 'undefined' && portalHome) { %>
+<a href="<%= portalHome %>" style="
+   position:fixed;top:0;left:0;right:0;z-index:999;display:block;
+   background:rgba(16,18,21,.94);border-bottom:1px solid rgba(201,162,39,.28);
+   color:#c99a3b;text-decoration:none;font-family:Jost,'Segoe UI',sans-serif;
+   font-size:.62rem;letter-spacing:.26em;text-transform:uppercase;
+   padding:9px 20px;backdrop-filter:blur(3px);">
+  &lsaquo;&nbsp;&nbsp;Back to your account
+</a>
+<div style="height:34px;"></div>
+<% } %>
+
 
 <%# Ours while the gate is up. Once the calculator mounts, the build draws
     its own masthead and this gets out of the way - two headers on one page
@@ -291,6 +305,12 @@
 <script src="/<%= assets %>/js/pricing-engine.js"></script>
 <script src="/<%= assets %>/js/pricing-ui.js"></script>
 <script>
+// THE PAGE ASKS ITS OWN ADDRESS, NOT A FIXED ONE.
+// It is served at two: on its own, and inside the client portal at
+// /client/<brand>/... Hard-coded paths worked only at the first, so
+// everything it fetches hangs off the address it was actually opened at.
+var BASE = location.pathname.replace(/\/+$/, '');
+
 (function () {
   var BRAND = <%- JSON.stringify(brandCode) %>;
   var SLUG = <%- JSON.stringify(brandSlug) %>;
@@ -407,7 +427,7 @@
     buttons.forEach(function (b) { b.disabled = true; });
     q_note('One moment…');
     try {
-      var res = await fetch('/quote/' + SLUG + '/api/send', {
+      var res = await fetch(BASE + '/api/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

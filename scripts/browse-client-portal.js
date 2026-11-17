@@ -243,8 +243,71 @@ function freePort() {
     check('it greets them by name',
       /Rosa/.test(await ev("document.querySelector('.welcome').textContent")));
     check('the calculator opens this brand, not the other',
-      (await ev("document.querySelectorAll('.door')[2].getAttribute('href')")) === '/quote/arabella');
+      (await ev("document.querySelectorAll('.door')[2].getAttribute('href')"))
+        === '/client/arabella/quote');
+    // IN THE SAME TAB, AT THIS LINK. A new tab is a second window to find
+    // the way back from, and the page it opened would not know who had
+    // signed in.
+    check('and none of the three opens a second window', await ev(
+      "Array.from(document.querySelectorAll('.door')).every(function(a){"
+      + "return !a.getAttribute('target');})"));
     await shot('4-signed-in');
+
+    // ──────────────────────────────────────────────
+    console.log(NL + 'The three rooms open inside the link');
+    for (const [room, what, mark] of [
+      ['liners', 'the liner book', /Envelope Liners|Collection/i],
+      ['catalogue', 'the design catalogue', /Catalogue|Forms/i],
+      ['quote', 'the price calculator', /estimate|quantit/i],
+    ]) {
+      await send('Page.navigate', { url: BASE + '/client/arabella/' + room });
+      await sleep(2000);
+      const where = await ev('location.pathname');
+      check(what + ' opens at /client/arabella/' + room,
+        where === '/client/arabella/' + room, where);
+      const text = await ev('document.body.innerText');
+      check('  and it is really that page', mark.test(String(text || '')),
+        String(text || '').slice(0, 80));
+      // The way back out. Without it the only road home is the browser's
+      // own button, which is not something a page should make somebody
+      // reach for.
+      check('  with a way back to the account', await ev(
+        "!!Array.from(document.querySelectorAll('a')).find(function(a){"
+        + "return a.getAttribute('href') === '/client/arabella';})"));
+    }
+
+    // ── WHAT A PAGE INSIDE THE PORTAL ASKS FOR ──
+    // Each room fetches off its own address, so the same file serves at
+    // both mounts. If that broke, the room would draw empty and say
+    // nothing about why.
+    await send('Page.navigate', { url: BASE + '/client/arabella/liners' });
+    await sleep(2200);
+    check('the liner book really loaded its shelf, not an empty page',
+      await ev("!!document.querySelector('#rail .coll, .rail, #field')"));
+
+    // ── THE OLD ADDRESSES ──
+    console.log(NL + 'One link to give out, not four');
+    for (const [old_, lands] of [
+      ['/liners', '/client/arabella/liners'],
+      ['/catalogue', '/client/arabella/catalogue'],
+      ['/quote/arabella', '/client/arabella/quote'],
+      ['/quote/kpc', '/client/kpc/quote'],
+    ]) {
+      const r = await fetch(BASE + old_, { redirect: 'manual' });
+      check(old_ + ' now points into the portal',
+        r.status === 302 && r.headers.get('location') === lands,
+        r.status + ' -> ' + r.headers.get('location'));
+    }
+    // A redirect and not a dead end: the liner book link is already in
+    // somebody's chat and was read out over a telephone.
+    check('and none of them is a dead end',
+      (await fetch(BASE + '/liners', { redirect: 'manual' })).status !== 404);
+    // The page a client gives their OWN customers is not behind this door.
+    check('order tracking is still open to anybody',
+      (await fetch(BASE + '/track', { redirect: 'manual' })).status === 200);
+
+    await send('Page.navigate', { url: BASE + '/client/arabella' });
+    await sleep(1500);
 
     console.log(NL + 'Coming back');
     await send('Page.navigate', { url: BASE + '/client/arabella' });

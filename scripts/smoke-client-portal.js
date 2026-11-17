@@ -222,11 +222,14 @@ const NL = String.fromCharCode(10);
     const jar = seated.cookie;
     const home = await go('/client/arabella', { headers: { cookie: jar } });
     const homeHtml = await home.text();
-    check('the liner book is one of them', /Envelope Liner Book/.test(homeHtml));
+    check('the liner book is one of them', /Envelope Liners/.test(homeHtml));
     check('the design catalogue is another', /Design Catalogue/.test(homeHtml));
     check('and the price calculator the third', /Price Calculator/.test(homeHtml));
-    check('the calculator is this brand\'s link, not the other one',
-      /\/quote\/arabella/.test(homeHtml) && !/\/quote\/kpc/.test(homeHtml));
+    // The doors open inside this link now, not at four public addresses.
+    check('the calculator is this brand\'s room, not the other one',
+      /\/client\/arabella\/quote/.test(homeHtml) && !/\/client\/kpc\//.test(homeHtml));
+    check('and all three open in the same tab',
+      !/class="door"[^>]*target=/.test(homeHtml));
     check('and the sign-in is no longer on the page', !/Forgotten your password/.test(homeHtml));
 
     // ── THE WHOLE POINT OF A SEPARATE TABLE ──

@@ -161,6 +161,31 @@ app.set('views', path.join(__dirname, 'views'));
 // Public: no session, no login. Mounted before the app's own
 // routes so nothing downstream can decide it needs one.
 app.use('/track', trackRoutes);
+
+// ── ONE LINK TO GIVE OUT, NOT FOUR ──
+//
+// The liner book, the design catalogue and the two price calculators used
+// to be four addresses a customer could be sent. They are rooms inside the
+// client portal now - see routes/clientPortal.js - and these four send
+// anybody holding an old link to the door of the right one.
+//
+// A redirect, not a dead end: the liner book link is already in somebody's
+// chat and read out over a telephone, and a 404 would make the office look
+// as though it had taken the book away.
+//
+// /track is deliberately NOT here. It is the page the CLIENT gives their
+// own customers to follow an order, and it has nothing behind it worth
+// signing in for.
+const toPortal = (where) => (req, res) => res.redirect(302, where);
+app.get('/liners', toPortal('/client/arabella/liners'));
+app.get('/catalogue', toPortal('/client/arabella/catalogue'));
+app.get('/quote/arabella', toPortal('/client/arabella/quote'));
+app.get('/quote/kpc', toPortal('/client/kpc/quote'));
+
+// The routers themselves still answer below, because the portal mounts
+// them: what is closed is the ADDRESS a customer was given, not the page.
+// Their own sub-paths - /catalogue/image/12, /liners/api/board - stay open
+// so a page already in front of somebody does not break mid-use.
 app.use('/catalogue', catalogueRoutes);
 // The liner book, for a customer. No login: see the note at the top of
 // routes/linears.js for exactly what that opens up.

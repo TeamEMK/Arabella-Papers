@@ -455,21 +455,24 @@
       <div><%= who ? who.email : '' %></div>
     </div>
     <div class="doors">
-      <a class="door" href="/liners" target="_blank" rel="noopener">
+      <%# In the same tab, at this portal's own address. A new tab is a
+           second window the customer has to find their way back from, and
+           the page they landed on would not know who had signed in. %>
+      <a class="door" href="/client/<%= brand %>/liners">
         <i class="fa-solid fa-envelope-open"></i>
         <h2>Envelope Liners</h2>
         <p>316 liners in five collections, each with a code of its own,
            and a search that understands “blue floral”.</p>
         <div class="go">Open the book &nbsp;&rsaquo;</div>
       </a>
-      <a class="door" href="/catalogue" target="_blank" rel="noopener">
+      <a class="door" href="/client/<%= brand %>/catalogue">
         <i class="fa-solid fa-feather-pointed"></i>
         <h2>Design Catalogue</h2>
         <p>Forms, motifs and patterns — the shapes a card can take and the
            work that can go on it.</p>
         <div class="go">Open the catalogue &nbsp;&rsaquo;</div>
       </a>
-      <a class="door" href="<%= quoteHref %>" target="_blank" rel="noopener">
+      <a class="door" href="/client/<%= brand %>/quote">
         <i class="fa-solid fa-calculator"></i>
         <h2>Price Calculator</h2>
         <p>Price a job while they are still with you, on your own rates,

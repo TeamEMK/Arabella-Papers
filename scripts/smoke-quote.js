@@ -56,7 +56,18 @@ const check = (name, ok, extra) => {
   const BASE = 'http://127.0.0.1:' + server.address().port;
   const H = { 'X-Forwarded-Proto': 'https' };
 
-  const get = (url) => fetch(BASE + url, { headers: H, redirect: 'manual' });
+  const get = (url, cookie) => fetch(BASE + url, {
+    headers: cookie ? Object.assign({ cookie }, H) : H, redirect: 'manual',
+  });
+
+  // THE CALCULATOR IS A ROOM IN THE CLIENT PORTAL NOW, not a public
+  // address. The office gives out one link; /quote/<brand> sends whoever
+  // holds an old one to the door. So these checks arrive the way a
+  // customer does - signed in - and the redirect gets a check of its own.
+  const { seat } = require(path.join(ROOT, 'scripts/lib/clientSeat.js'));
+  const jar = { arabella: await seat(db, (u, o) => fetch(BASE + u, o), 'arabella'),
+                kpc: await seat(db, (u, o) => fetch(BASE + u, o), 'kpc') };
+  const room = (slug) => get('/client/' + slug + '/quote', jar[slug]);
   // A fresh IP per call where it matters, so the limiter does not quietly
   // answer the checks that are about something else.
   let ipSeed = 0;
@@ -79,8 +90,21 @@ const check = (name, ok, extra) => {
   const kpc = pricing.forKpc.price({ brand: 'KPC', additionalDiscount: 0, items: ITEMS });
   const WHO = { name: 'Sarah Mitchell', email: 'sarah@example.com', store: 'Mitchell Paper' };
 
-  console.log('The pages, with nobody logged in');
-  let r = await get('/quote/arabella');
+  console.log('The old addresses send you to the door');
+  for (const [was, now] of [['/quote/arabella', '/client/arabella/quote'],
+                            ['/quote/kpc', '/client/kpc/quote']]) {
+    const moved = await get(was);
+    check(was + ' points into the portal',
+      moved.status === 302 && moved.headers.get('location') === now,
+      moved.status + ' -> ' + moved.headers.get('location'));
+  }
+  const shut = await get('/client/arabella/quote');
+  check('and the room itself turns a stranger away',
+    shut.status === 302 && shut.headers.get('location') === '/client/arabella',
+    shut.status + ' -> ' + shut.headers.get('location'));
+
+  console.log('The pages, opened by a signed-in client');
+  let r = await room('arabella');
   check('the Arabella link opens', r.status === 200, r.status);
   let html = await r.text();
   check('and is not a redirect to the login', !/name="password"/.test(html));
@@ -92,7 +116,7 @@ const check = (name, ok, extra) => {
     !/class="q-brand"/.test(html));
   check('and asks who you are before anything else', /id="gate"/.test(html) && /g_email/.test(html));
 
-  r = await get('/quote/kpc');
+  r = await room('kpc');
   html = await r.text();
   check('the KPC link opens', r.status === 200, r.status);
   // The office asked for this page to be signed Arabella Papers while the
@@ -170,11 +194,11 @@ const check = (name, ok, extra) => {
   }));
   check('and the office price is refused there', r.json && r.json.success === false, r.json);
 
-  r = await get('/quote/arabella');
+  r = await room('arabella');
   html = await r.text();
   check('the page loads the Arabella build', /\/pricing-arabella\/js\//.test(html));
   check('and nothing of the other brand', !/\/pricing-kpc\//.test(html));
-  r = await get('/quote/kpc');
+  r = await room('kpc');
   html = await r.text();
   check('and the KPC link has its own build too', /\/pricing-kpc\/js\//.test(html));
   check('with nothing of the Arabella one on it', !/\/pricing-arabella\//.test(html));
@@ -264,7 +288,7 @@ const check = (name, ok, extra) => {
 
   console.log('\nThe buttons the customer is offered');
   for (const slug of ['arabella', 'kpc']) {
-    const page = await (await get('/quote/' + slug)).text();
+    const page = await (await room(slug)).text();
     check(slug + ': the Download PDF button is gone', !/id="q_pdf"/.test(page));
     check(slug + ': Copy the quote is still there', /id="q_copy"/.test(page));
   }
@@ -272,7 +296,7 @@ const check = (name, ok, extra) => {
   // button that was removed puts a null in it, disabling a null throws, and
   // the customer is told "Something went wrong" about a quote that was never
   // attempted - which is exactly how a tidy-up turns into a bug report.
-  const page = await (await get('/quote/kpc')).text();
+  const page = await (await room('kpc')).text();
   check('and the code does not reach for a button that is not there',
     /\.filter\(Boolean\)/.test(page) && !/getElementById\('q_pdf'\)\]/.test(page));
 

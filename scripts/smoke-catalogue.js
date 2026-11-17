@@ -142,11 +142,19 @@ const PNG = Buffer.from(
   r = await asAdmin('POST', '/api/catalogue', noCat, true);
   check('an unknown category is refused', r.json.success === false, r.json);
 
-  console.log('\nThe public page, with nobody logged in');
+  console.log('\nThe page, and the address it used to have');
+  // THE CATALOGUE IS A ROOM IN THE CLIENT PORTAL NOW. The office gives out
+  // one link, so /catalogue sends whoever holds the old one to its door.
   r = await get('/catalogue');
-  check('opens without a login', r.status === 200, r.status);
+  check('the old address points into the portal', r.status === 302, r.status);
+
+  // ITS PICTURES AND ITS LIST STAY OPEN, and that is not an oversight: the
+  // catalogue email embeds <img src=".../catalogue/image/12">, so closing
+  // that route would empty every mail the office has already sent.
   r = await get('/catalogue/api/items');
-  check('lists the live design', r.json.success && r.json.data.length === 1, r.json);
+  check('the list still answers, because the room inside the portal reads it',
+    r.json && r.json.success === true, r.status);
+  check('lists the live design', r.json.data.length === 1, r.json);
   check('and names it', r.json.data[0].name === 'Peacock border', r.json.data);
 
   const body = JSON.stringify(r.json);

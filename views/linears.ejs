@@ -228,6 +228,20 @@
   </style>
 </head>
 <body>
+<%# Only inside the portal: served on its own, this page has nothing
+    to go back to. portalHome is set by the mount in routes/clientPortal.js. %>
+<% if (typeof portalHome !== 'undefined' && portalHome) { %>
+<a href="<%= portalHome %>" style="
+   position:fixed;top:0;left:0;right:0;z-index:999;display:block;
+   background:rgba(16,18,21,.94);border-bottom:1px solid rgba(201,162,39,.28);
+   color:#c99a3b;text-decoration:none;font-family:Jost,'Segoe UI',sans-serif;
+   font-size:.62rem;letter-spacing:.26em;text-transform:uppercase;
+   padding:9px 20px;backdrop-filter:blur(3px);">
+  &lsaquo;&nbsp;&nbsp;Back to your account
+</a>
+<div style="height:34px;"></div>
+<% } %>
+
 
 <aside class="rail">
   <%# No town under the name. The reference this was drawn from said
