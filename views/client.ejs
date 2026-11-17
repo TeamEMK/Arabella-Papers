@@ -94,13 +94,14 @@
        It is shot on near-black already, so the veil over it is only enough
        to keep the text readable where the cream paper is brightest. */
     .showing {
-      position: relative; padding: 46px 56px 40px;
+      position: relative; padding: 52px 60px 44px;
       display: flex; flex-direction: column; justify-content: center;
       border-right: 1px solid var(--hair); overflow: hidden;
       background:
-        linear-gradient(100deg, rgba(21,23,26,.97) 0%, rgba(21,23,26,.93) 38%,
-                                rgba(21,23,26,.72) 68%, rgba(21,23,26,.55) 100%),
-        url('/portal/hero.jpg') center/cover no-repeat,
+        linear-gradient(96deg, rgba(18,20,23,.99) 0%, rgba(18,20,23,.985) 42%,
+                               rgba(18,20,23,.90) 56%, rgba(18,20,23,.45) 74%,
+                               rgba(18,20,23,.16) 100%),
+        url('/portal/hero.jpg') 72% 22%/cover no-repeat,
         var(--void);
     }
     /* A breath of gold across it, so the half is not a flat rectangle of
@@ -111,14 +112,40 @@
       pointer-events: none;
     }
     .showing > * { position: relative; }
+    /* THE MARK AS A PRESS MARK, NOT A LINE OF TYPE.
+       A sprig over the name and the trade between two rules - which is how
+       the office's own printed matter is set, and what the reference
+       drawing asked for. */
+    .crest-mark { text-align: center; max-width: 430px; }
+    .crest-mark .sprig { color: var(--gold); opacity: .9; margin-bottom: 14px; }
+    .crest-mark .nm {
+      font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
+      font-size: 1.62rem; letter-spacing: .3em; text-transform: uppercase;
+      color: var(--paper); line-height: 1.2;
+    }
+    .crest-mark .trade {
+      display: flex; align-items: center; gap: 14px; margin-top: 14px;
+      font-family: Italiana, Georgia, serif; font-size: .64rem;
+      letter-spacing: .42em; text-transform: uppercase; color: var(--gold);
+    }
+    .crest-mark .trade::before, .crest-mark .trade::after {
+      content: ''; flex: 1; height: 1px; background: var(--hair);
+    }
+
+    /* The headline is set in capitals, three lines, the last one italic
+       gold - the shape the reference uses and the reason it reads as a
+       title page rather than as a sentence. */
     .shout {
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
-      font-size: clamp(2rem, 3.2vw, 2.9rem); line-height: 1.16; color: var(--paper);
-      /* Room above it: the wordmark is a mark, not the first line of the
-         sentence, and with no gap the two read as one block. */
-      margin: 30px 0 16px; max-width: 17ch;
+      font-size: clamp(2.1rem, 3.5vw, 3.4rem); line-height: 1.04;
+      letter-spacing: .015em; text-transform: uppercase; color: var(--paper);
+      margin: 34px 0 18px; max-width: 13ch;
     }
-    .shout em { font-style: italic; color: var(--gold-lit); }
+    .shout em { font-style: italic; color: var(--gold-lit); letter-spacing: .01em; }
+    /* A rule that stops in a lozenge, the way a printer ends a flourish. */
+    .flourish { display: flex; align-items: center; margin: 22px 0 26px; max-width: 220px; }
+    .flourish::before { content: ''; flex: 1; height: 1px; background: var(--gold); opacity: .55; }
+    .flourish i { color: var(--gold); font-size: .5rem; margin-left: 8px; }
     .shout-sub {
       color: var(--dim); font-size: .95rem; line-height: 1.7; max-width: 46ch;
       margin: 0 0 30px;
@@ -126,14 +153,15 @@
     .points { list-style: none; margin: 0; padding: 0; max-width: 46ch; }
     /* Held to a column so the lines do not run out over the brightest part
        of the photograph, where cream paper and grey type meet. */
-    .showing > .mark, .showing .pill, .shout, .shout-sub, .points, .signoff { max-width: 50ch; }
-    .points li { display: flex; gap: 15px; margin-bottom: 19px; }
+    .showing > .crest-mark, .shout, .shout-sub, .points, .signoff,
+    .showing > .flourish { max-width: 42ch; }
+    .points li { display: flex; gap: 17px; margin-bottom: 18px; align-items: flex-start; }
     .points i {
-      color: var(--gold); font-size: .96rem; width: 34px; height: 34px; flex: 0 0 34px;
-      border: 1px solid var(--hair); display: grid; place-items: center;
+      color: var(--gold); font-size: .92rem; width: 40px; height: 40px; flex: 0 0 40px;
+      border: 1px solid rgba(201,162,39,.4); display: grid; place-items: center;
     }
-    .points b { display: block; font-family: Italiana, Georgia, serif; font-weight: 400;
-                font-size: .92rem; letter-spacing: .1em; text-transform: uppercase;
+    .points b { display: block; font-family: 'Bodoni Moda', Georgia, serif; font-weight: 500;
+                font-size: .9rem; letter-spacing: .16em; text-transform: uppercase;
                 color: var(--paper); margin-bottom: 5px; }
     .points span { font-size: .84rem; color: var(--dim); line-height: 1.55; }
 
@@ -141,7 +169,7 @@
        /portal/hero.jpg has not been put there yet - the <img> takes itself
        off the page and the half reads as a column of words, which is what
        it was before anybody drew anything. */
-    .signoff { margin-top: auto; padding-top: 34px; color: var(--dim);
+    .signoff { margin-top: auto; padding-top: 26px; color: var(--dim);
                font-size: .66rem; letter-spacing: .14em; }
 
     /* IT WAS A CARD IN A FIELD OF BLACK. Three things were added and none
@@ -162,8 +190,9 @@
        cleared the card's top edge by an inch and read as a stray arc
        rather than as a frame around it. */
     .gate .oval {
-      position: absolute; top: 50%; left: 50%; width: 700px; height: 860px;
-      transform: translate(-50%, -52%); pointer-events: none; opacity: .34;
+      position: absolute; top: 50%; left: 50%;
+      width: min(720px, 94%); height: min(880px, 92vh);
+      transform: translate(-50%, -50%); pointer-events: none; opacity: .5;
     }
     .gate .oval svg { width: 100%; height: 100%; }
     .help {
@@ -177,16 +206,25 @@
        a hairline rather than as a sentence: it is a reminder of what is
        behind the door, not another thing to read. */
     .inside {
-      margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--hair);
-      display: flex; justify-content: space-between; gap: 10px;
+      margin-top: 26px; padding-top: 20px;
+      display: flex; justify-content: space-between; gap: 0;
     }
     .inside span {
       flex: 1; text-align: center; font-family: Italiana, Georgia, serif;
-      font-size: .58rem; letter-spacing: .16em; text-transform: uppercase;
-      color: var(--dim); line-height: 1.7;
+      font-size: .58rem; letter-spacing: .18em; text-transform: uppercase;
+      color: #a9a294; line-height: 1.7;
     }
-    .inside i { display: block; color: var(--gold); font-size: .82rem; margin-bottom: 7px;
-                font-family: 'Font Awesome 6 Free'; }
+    /* Hairlines between them rather than around them - the divider belongs
+       to the gap, and a border on each would draw three boxes. */
+    .inside span + span { border-left: 1px solid var(--hair); }
+    .inside i { display: block; color: var(--gold); font-size: .95rem; margin-bottom: 8px; }
+    /* The lozenge rule above the three, as in the drawing. */
+    .inside-rule { margin-top: 24px; text-align: center; }
+    .inside-rule::before, .inside-rule::after {
+      content: ''; display: inline-block; width: 150px; height: 1px;
+      background: var(--hair); vertical-align: middle; margin: 0 10px;
+    }
+    .inside-rule i { color: var(--gold); font-size: .48rem; vertical-align: middle; }
     /* The line the example calls a tagline: small, wide and quiet, up in the
        corner where it is read once and then ignored. */
     /* IN THE FLOW, NOT PINNED TO THE CORNER. Pinned, it sat behind the
@@ -222,31 +260,36 @@
        half-typed address belongs. */
     .card { text-align: center; }
     .card input { text-align: left; }
+    /* THE FRAME IS THE PANEL. In the reference the card is a tall gold
+       rectangle standing in the dark with the arcs of a much larger oval
+       passing behind it - a plate in a frame, not a form in a box. */
     .card {
-      width: 100%; max-width: 448px; background: rgba(25,28,32,.94);
-      border: 1px solid var(--hair); padding: 38px 34px 32px;
+      width: 100%; max-width: 470px; background: rgba(20,23,26,.90);
+      border: 1px solid rgba(201,162,39,.5); padding: 44px 40px 34px;
       position: relative; backdrop-filter: blur(2px);
-      box-shadow: 0 30px 80px rgba(0,0,0,.45);
+      box-shadow: 0 30px 90px rgba(0,0,0,.5);
     }
     /* A rule with a lozenge in the middle, the way a printer rules off a
        heading. Drawn in CSS so there is no third image to load. */
-    .crest { text-align: center; margin: 0 0 22px; }
+    .crest { text-align: center; margin: 0 0 20px; }
     .crest::before, .crest::after {
-      content: ''; display: inline-block; width: 52px; height: 1px;
-      background: var(--hair); vertical-align: middle; margin: 0 10px;
+      content: ''; display: inline-block; width: 104px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold));
+      vertical-align: middle; margin: 0 12px; opacity: .8;
     }
-    .crest i { color: var(--gold); font-size: .62rem; vertical-align: middle; }
+    .crest::after { background: linear-gradient(90deg, var(--gold), transparent); }
+    .crest i { color: var(--gold); font-size: .56rem; vertical-align: middle; }
     .card h1 {
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
-      font-size: 1.76rem; margin: 0 0 7px; color: var(--paper);
-      letter-spacing: .005em;
+      font-size: 2.5rem; margin: 0 0 6px; color: var(--paper);
+      letter-spacing: .005em; line-height: 1.05;
     }
-    .card p.sub { margin: 0 0 26px; color: var(--dim); font-size: .95rem; font-style: italic;
+    .card p.sub { margin: 0 0 28px; color: #bdb6a6; font-size: 1rem; font-style: italic;
                   font-family: 'Cormorant Garamond', Georgia, serif; line-height: 1.5; }
 
     label { display: block; font-family: Italiana, Georgia, serif; font-size: .62rem;
             letter-spacing: .26em; text-transform: uppercase; color: var(--gold);
-            margin: 0 0 8px; text-align: center; }
+            margin: 0 0 8px; text-align: left; }
     input {
       width: 100%; background: #111316; border: 1px solid var(--hair);
       color: #e8e4da; padding: 12px 14px; font-family: 'Tenor Sans', sans-serif;
@@ -388,28 +431,38 @@
     <!-- WHAT IS BEHIND THE DOOR. The link is sent cold, so the page says
          what it is before it asks for anything. -->
     <section class="showing">
-      <div class="mark" style="text-align:left;font-size:1.18rem;">
-        <%= wordmark %><small style="letter-spacing:.3em;">Fine Stationery</small>
+      <div class="crest-mark">
+        <%# A sprig over the name. Drawn, not photographed: it has to sit on
+            a dark panel at any size and a cut-out would carry an edge. %>
+        <svg class="sprig" width="86" height="26" viewBox="0 0 86 26" fill="none"
+             xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M43 25V9" stroke="currentColor" stroke-width="1"/>
+          <path d="M43 9c0-4 3-7 7-8-1 5-3 8-7 8zM43 9c0-4-3-7-7-8 1 5 3 8 7 8z"
+                fill="currentColor" fill-opacity=".65"/>
+          <path d="M43 17c0-3 3-6 8-7-1 4-4 7-8 7zM43 17c0-3-3-6-8-7 1 4 4 7 8 7z"
+                fill="currentColor" fill-opacity=".45"/>
+          <path d="M2 23h26M58 23h26" stroke="currentColor" stroke-opacity=".45" stroke-width="1"/>
+        </svg>
+        <div class="nm"><%= wordmark %></div>
+        <%# The trade between two rules, and the one word that tells the two
+            links apart folded in beside it - a pill under a mark this
+            formal read as a sticker. %>
+        <div class="trade"><span><%= pill ? pill + ' · ' : '' %>Fine Stationery</span></div>
       </div>
-      <%# The one word that tells the two links apart, as on the quote pages
-          and on the signed-in header. Kept as its own pill rather than
-          folded into the line above, so it is the same mark in both places
-          and there is something to point at when somebody asks which link
-          they are looking at. %>
-      <% if (pill) { %><div class="pill" style="margin-top:12px;"><%= pill %></div><% } %>
 
-      <h1 class="shout">The book, the catalogue and your <em>prices</em>.</h1>
+      <h1 class="shout">Bespoke<br>Wedding<br><em>Stationery</em></h1>
       <p class="shout-sub">
-        One place for everything you show a couple — every liner we print,
-        every design we draw, and a calculator that prices the job while
-        they are still sitting with you.
+        Artfully made invitations and paper for the days that matter — every
+        liner we print, every design we draw, and your own prices, in one
+        place.
       </p>
+      <div class="flourish"><i class="fa-solid fa-diamond"></i></div>
 
       <ul class="points">
         <li>
           <i class="fa-solid fa-envelope-open"></i>
           <div>
-            <b>Envelope Liner Book</b>
+            <b>Envelope Liners</b>
             <span>Every liner, by collection, each with its own code — and a
                   search that understands “blue floral” as well as CT-FB-01.</span>
           </div>
@@ -418,7 +471,7 @@
           <i class="fa-solid fa-feather-pointed"></i>
           <div>
             <b>Design Catalogue</b>
-            <span>Forms, motifs and patterns: the shapes a card can take and
+            <span>Forms, motifs and patterns — the shapes a card can take and
                   the work that can go on it.</span>
           </div>
         </li>
@@ -437,16 +490,26 @@
 
     <!-- THE DOOR -->
     <section class="gate">
-      <div class="whisper">Every liner. Every design. One link.</div>
       <%# The engraved oval off the cards in the photograph, drawn rather
           than photographed so it stays crisp at any size and costs nothing
           to load. Behind the card, barely there. %>
       <div class="oval" aria-hidden="true">
-        <svg viewBox="0 0 280 340" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <ellipse cx="140" cy="170" rx="104" ry="146" stroke="#c99a3b" stroke-opacity=".30" stroke-width="1"/>
-          <ellipse cx="140" cy="170" rx="96" ry="138" stroke="#c99a3b" stroke-opacity=".16" stroke-width="1"/>
-          <path d="M140 18 l7 10 -7 10 -7 -10 z" fill="#c99a3b" fill-opacity=".30"/>
-          <path d="M140 302 l7 10 -7 10 -7 -10 z" fill="#c99a3b" fill-opacity=".30"/>
+        <svg viewBox="0 0 300 380" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="150" cy="190" rx="132" ry="178" stroke="#c99a3b" stroke-opacity=".34" stroke-width="1"/>
+          <path d="M150 6 l8 11 -8 11 -8 -11 z" fill="#c99a3b" fill-opacity=".34"/>
+          <path d="M150 352 l8 11 -8 11 -8 -11 z" fill="#c99a3b" fill-opacity=".34"/>
+          <%# Two sprigs climbing the inside of the frame, as the drawing
+              has them: line art, so they stay hairline at any size. %>
+          <g stroke="#c99a3b" stroke-opacity=".30" stroke-width="1" fill="none">
+            <path d="M44 128c0 46 0 78 0 124"/>
+            <path d="M44 150c-11-2-18-9-20-19 11 1 18 8 20 19zM44 150c11-2 18-9 20-19-11 1-18 8-20 19z"/>
+            <path d="M44 188c-11-2-18-9-20-19 11 1 18 8 20 19zM44 188c11-2 18-9 20-19-11 1-18 8-20 19z"/>
+            <path d="M44 226c-11-2-18-9-20-19 11 1 18 8 20 19zM44 226c11-2 18-9 20-19-11 1-18 8-20 19z"/>
+            <path d="M256 128c0 46 0 78 0 124"/>
+            <path d="M256 150c-11-2-18-9-20-19 11 1 18 8 20 19zM256 150c11-2 18-9 20-19-11 1-18 8-20 19z"/>
+            <path d="M256 188c-11-2-18-9-20-19 11 1 18 8 20 19zM256 188c11-2 18-9 20-19-11 1-18 8-20 19z"/>
+            <path d="M256 226c-11-2-18-9-20-19 11 1 18 8 20 19zM256 226c11-2 18-9 20-19-11 1-18 8-20 19z"/>
+          </g>
         </svg>
       </div>
       <div class="card">
@@ -518,10 +581,11 @@
       <div class="linkline"><a onclick="show('p-in')">Back to sign in</a></div>
     </div>
 
+        <div class="inside-rule"><i class="fa-solid fa-diamond"></i></div>
         <div class="inside">
-          <span><i class="fa-solid fa-envelope-open"></i>Liner<br>book</span>
-          <span><i class="fa-solid fa-feather-pointed"></i>Design<br>catalogue</span>
-          <span><i class="fa-solid fa-calculator"></i>Price<br>calculator</span>
+          <span><i class="fa-regular fa-envelope-open"></i>Liner book</span>
+          <span><i class="fa-regular fa-images"></i>Design catalogue</span>
+          <span><i class="fa-regular fa-money-bill-1"></i>Price calculator</span>
         </div>
       </div>
 

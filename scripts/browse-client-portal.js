@@ -166,20 +166,24 @@ function freePort() {
     errors.length = 0;
     check('the card is there', await ev("!!document.querySelector('.card')"));
     check('signed Arabella Papers',
-      /ARABELLA PAPERS/.test(await ev("document.querySelector('.mark').textContent")));
-    // Premium is a look, and a look is a thing that has to be checked by
-    // eye - but the two that carry it are not an accident and can be.
-    // The front door is dressed better than the rooms behind it, asked for
-    // in those words. Playfair carries the headings, Cinzel the wordmark
-    // and the buttons - and a font that did not load falls back to Georgia
-    // or to the browser's sans, which is exactly how a page stops looking
-    // designed. So this asks what the browser actually used.
+      /ARABELLA PAPERS/i.test(await ev(
+        "document.querySelector('.crest-mark .nm').textContent")));
+    // Premium is a look, and a look has to be checked by eye - but the two
+    // faces that carry it are not an accident and can be. Bodoni cuts the
+    // headings and the wordmark; Italiana answers it in capitals on the
+    // trade line, the field labels and the buttons. A face that did not
+    // load falls back to Georgia or to the browser's sans, which is exactly
+    // how a page stops looking designed - so these ask what the browser
+    // actually used, not what the stylesheet asked for.
     check('the headings are set in Bodoni',
       /Bodoni/.test(await ev(
         "getComputedStyle(document.querySelector('.card h1')).fontFamily")));
-    check('the wordmark is set in wide thin capitals',
+    check('the wordmark is set in the Didone, like the headings',
+      /Bodoni/.test(await ev(
+        "getComputedStyle(document.querySelector('.crest-mark .nm')).fontFamily")));
+    check('and the trade line under it in wide thin capitals',
       /Italiana/.test(await ev(
-        "getComputedStyle(document.querySelector('.mark')).fontFamily")));
+        "getComputedStyle(document.querySelector('.crest-mark .trade')).fontFamily")));
     check('and all three faces really arrived, not just the fallbacks',
       await ev("document.fonts.ready.then(function(){"
         + "return ['Italiana','Bodoni Moda','Tenor Sans']"
@@ -249,8 +253,11 @@ function freePort() {
     console.log(NL + 'The other link');
     await send('Page.navigate', { url: BASE + '/client/kpc' });
     await sleep(1200);
+    // The pill is gone - under a mark set this formally it read as a
+    // sticker - so the word now sits in the trade line beside Fine
+    // Stationery. It still has to be there, and still only on this link.
     check('it is the only one of the two that says KPC',
-      (await ev("(document.querySelector('.pill')||{}).textContent")) === 'KPC');
+      /KPC/.test(await ev("document.querySelector('.crest-mark .trade').textContent")));
     await shot('5-kpc-sign-in');
 
     console.log(NL + 'Nothing shouted');
