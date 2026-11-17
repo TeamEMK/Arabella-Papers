@@ -54,6 +54,9 @@ const COLUMN_MIGRATIONS = [
   // The pricing module grew a rush fee after the quotes table had already
   // been deployed, and CREATE TABLE IF NOT EXISTS does not add a column to a
   // table that is already there.
+  // The activity log learned to say which screen somebody was on when they
+  // left, after it had been collecting rows for a year.
+  { table: 'activity_log', column: 'screen', type: "VARCHAR(80) DEFAULT ''" },
   // Urgent orders got a promised date at the punch, after the orders table
   // had been live for a year.
   { table: 'orders', column: 'delivery_due_date', type: 'DATE NULL' },

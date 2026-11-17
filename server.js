@@ -143,6 +143,14 @@ app.use(session({
   },
 }));
 
+// Closing the tab ends the session. The beacon is answered before anything
+// else can redirect it, and every other request is checked for a tab that
+// never came back - see middleware/tabClose.js for why it is done this way
+// round and not with a shorter cookie.
+const tabClose = require('./middleware/tabClose');
+app.post('/api/session/closing', tabClose.closing);
+app.use(tabClose.enforce);
+
 app.use(injectUser);
 
 // ── VIEW ENGINE ──

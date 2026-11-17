@@ -49,6 +49,11 @@ CREATE TABLE IF NOT EXISTS activity_log (
   -- 20m is a phone with GPS, 3000m is a laptop working it out from the same
   -- network the IP came from, and the second is not worth calling a location.
   accuracy_m INT DEFAULT NULL,
+  -- Which screen the person was looking at. Written on the way out, because
+  -- "they were on Production BD when the tab closed" is the thing somebody
+  -- asks afterwards, and until now the log could only say that they left.
+  -- Blank on a login and on every row written before this.
+  screen VARCHAR(80) DEFAULT '',
   logged_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

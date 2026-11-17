@@ -826,6 +826,10 @@
   const _origLoadPage = loadPage;
   window.loadPage = function(page, opts) {
     localStorage.setItem('activeTab_arabella', page);
+    // Which screen THIS tab is on, for the row written when it closes. Kept
+    // here and not read back out of localStorage, which the other tabs are
+    // writing to as well.
+    screenNow = page;
     // `replace` on the first load and when coming back through history, so
     // the Back button does not have to be pressed twice to leave.
     if (window.history && history.pushState) {
@@ -840,6 +844,68 @@
     }
     _origLoadPage(page);
   };
+
+  // ── CLOSING THE TAB SIGNS YOU OUT ──
+  //
+  // The server half is middleware/tabClose.js, and the reasoning for the
+  // whole arrangement lives there. This half does two things it alone can
+  // do: it knows which screen THIS tab is on, and it knows whether any other
+  // tab of the app is still open.
+  //
+  // THE REGISTER OF OPEN TABS. Two tabs open and one closed is not somebody
+  // leaving, and the server cannot tell the difference - one session, one
+  // cookie. localStorage is shared by every tab on the site, so each tab
+  // writes itself in and stamps the time every few seconds; a tab that
+  // crashed stops stamping and is ignored within half a minute rather than
+  // keeping somebody signed in for ever. The stamping is local and costs no
+  // requests, which a heartbeat to the server would have, from every open
+  // tab, all day.
+  var TABS_KEY = 'openTabs_arabella';
+  var TAB_ID = String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8);
+  var TAB_BEAT_MS = 8000;
+  var TAB_STALE_MS = 30000;
+  var screenNow = '';
+
+  function tabsRead() {
+    try { return JSON.parse(localStorage.getItem(TABS_KEY) || '{}') || {}; }
+    catch (e) { return {}; }
+  }
+  function tabsWrite(all) {
+    try { localStorage.setItem(TABS_KEY, JSON.stringify(all)); } catch (e) { /* full or private */ }
+  }
+  function tabsLive(all, except) {
+    var now = Date.now(), live = [];
+    for (var id in all) {
+      if (id !== except && now - Number(all[id] || 0) < TAB_STALE_MS) live.push(id);
+    }
+    return live;
+  }
+  function tabHere() {
+    var all = tabsRead();
+    all[TAB_ID] = Date.now();
+    // Swept while we are here anyway, so the register cannot grow a row for
+    // every tab the office has ever opened.
+    var now = Date.now();
+    for (var id in all) if (now - Number(all[id] || 0) > TAB_STALE_MS) delete all[id];
+    tabsWrite(all);
+  }
+  tabHere();
+  setInterval(tabHere, TAB_BEAT_MS);
+
+  // pagehide, not beforeunload: beforeunload is ignored on phones, where the
+  // tab is closed by the operating system and never "unloads" at all.
+  window.addEventListener('pagehide', function () {
+    var all = tabsRead();
+    delete all[TAB_ID];
+    tabsWrite(all);
+    // Somebody else is still in the app. Nothing has been left.
+    if (tabsLive(all, TAB_ID).length) return;
+    if (!navigator.sendBeacon) return;
+    try {
+      navigator.sendBeacon('/api/session/closing',
+        new Blob([JSON.stringify({ screen: screenNow })], { type: 'application/json' }));
+    } catch (e) { /* nothing can be done from a page that is already going */ }
+  });
 
   // Rule 2: Back and Forward open what the address names and never push.
   // The state object is a convenience; the address is the truth, because an

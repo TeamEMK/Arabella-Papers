@@ -122,7 +122,8 @@ function ua_where(r) {
 // the ones worth marking - a wall of identical "Updated" rows with the odd
 // Login in it is hard to read otherwise.
 var UA_PILL = {
-  Login: 'primary', Logout: 'secondary', 'Bulk Import': 'info',
+  Login: 'primary', Logout: 'secondary', 'Logout (tab closed)': 'secondary',
+  'Bulk Import': 'info',
   Created: 'success', Updated: 'light', 'Correction raised': 'danger',
   'Correction done': 'success', 'Dispatch Notice': 'info',
 };
@@ -202,7 +203,13 @@ window.uaRender = function () {
     + '<td class="text-muted text-nowrap">' + ua_when(r.At) + '</td>'
     + '<td><span class="badge bg-' + (UA_PILL[r.Action] || 'light')
       + (UA_PILL[r.Action] && UA_PILL[r.Action] !== 'light' ? '' : ' text-dark')
-      + '">' + ua_esc(r.Action) + '</span></td>'
+      + '">' + ua_esc(r.Action) + '</span>'
+      // Which screen they were on. Under the action rather than in a column
+      // of its own: only the rows for a closed tab have one, and an empty
+      // column down the whole table would be asking a question nothing else
+      // can answer.
+      + (r.Screen ? '<div class="small text-muted mt-1">on ' + ua_esc(r.Screen) + '</div>' : '')
+      + '</td>'
     + '<td class="small text-muted">' + ua_where(r) + '</td>'
     + '<td class="fw-bold">' + (ua_esc(r.Order_ID) || '-') + '</td>'
     + '<td>' + (ua_esc(r.Field) || '-') + '</td>'

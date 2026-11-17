@@ -98,6 +98,7 @@ router.get('/', requireLogin, async (req, res) => {
                 '' AS old_value, '' AS new_value, a.role AS role,
                 IFNULL(a.ip_address,'') AS ip, IFNULL(a.location,'') AS place,
                 a.latitude AS lat, a.longitude AS lng, a.accuracy_m AS acc,
+                IFNULL(a.screen,'') AS screen,
                 a.logged_at AS at
            FROM activity_log a
           WHERE a.email = ?${act.sql}
@@ -105,7 +106,7 @@ router.get('/', requireLogin, async (req, res) => {
          SELECT 'Order' AS kind, o.action, o.order_id, IFNULL(o.field,''),
                 IFNULL(o.old_value,''), IFNULL(o.new_value,''), '' AS role,
                 '' AS ip, '' AS place,
-                NULL AS lat, NULL AS lng, NULL AS acc,
+                NULL AS lat, NULL AS lng, NULL AS acc, '' AS screen,
                 o.changed_at
            FROM order_logs o
           WHERE o.changed_by = ?${ord.sql}
@@ -168,6 +169,10 @@ router.get('/', requireLogin, async (req, res) => {
         Pin: (r.lat !== null && r.lng !== null)
           ? { lat: Number(r.lat), lng: Number(r.lng), accuracy: r.acc === null ? null : Number(r.acc) }
           : null,
+        // Which screen they were on when they left. Only a tab that closed
+        // carries one: a person who signs out does it from the menu, which
+        // is on every screen and says nothing about where they were.
+        Screen: r.screen || '',
         At: istText(r.at),
       })),
     });
