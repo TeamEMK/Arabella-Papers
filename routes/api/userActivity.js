@@ -161,7 +161,11 @@ router.get('/', requireLogin, async (req, res) => {
         // Only a login or a logout has a somewhere. An order change is made
         // from wherever that person already was, and the address would be the
         // same one repeated down the column.
-        Where: [r.place, r.ip].filter(Boolean).join(' · '),
+        // Kept apart rather than joined into one string: the town can be
+        // opened on a map and the address cannot, so the screen needs to
+        // know which half is which.
+        Place: r.place || '',
+        IP: r.ip || '',
         // The browser's own fix, where it was allowed. Sent as a map link
         // rather than a street address: turning coordinates into an address
         // needs a paid geocoding service on every row, and a map pin answers

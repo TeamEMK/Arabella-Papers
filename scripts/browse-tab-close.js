@@ -238,6 +238,62 @@ function freePort() {
     check('and the next tab lands on the login page, carrying the same cookie',
       where === '/login', where);
 
+    // ──────────────────────────────────────────────
+    // The same row, read back on the screen that exists to read it.
+    console.log(NL + 'User Activity shows where they were');
+    // Given a town. Nothing has one when this runs on a desk - the city is
+    // worked out by Vercel at the edge and there is no edge here - so it is
+    // put on by hand, which is exactly what the office's rows carry.
+    await db.query(
+      "UPDATE activity_log SET location = 'Jaipur, RJ, IN', ip_address = '103.54.13.254'"
+      + " WHERE action LIKE 'Logout%'");
+
+    await back.send('Page.navigate', { url: BASE + '/login' });
+    await sleep(1200);
+    await back.ev("document.querySelector('input[type=email],input[name=email]').value='"
+      + process.env.ADMIN_EMAIL + "';"
+      + "document.querySelector('input[type=password]').value='"
+      + process.env.ADMIN_PASSWORD + "';"
+      + "document.querySelector('form').submit();");
+    await sleep(2500);
+    await back.send('Page.navigate', { url: BASE + '/app/user-activity' });
+    await waitForShell(back);
+    for (let i = 0; i < 60; i++) {
+      if (await back.ev("!!document.getElementById('ua_user')").catch(() => false)) break;
+      await sleep(250);
+    }
+    await back.ev(`
+      (function () {
+        var sel = document.getElementById('ua_user');
+        sel.value = Array.from(sel.options).map(function (o) { return o.value; })
+          .filter(Boolean)[0];
+        sel.dispatchEvent(new Event('change'));
+      })()
+    `);
+    await sleep(2500);
+
+    const row = await back.ev(`
+      (function () {
+        var tr = Array.from(document.querySelectorAll('tbody tr'))
+          .find(function (r) { return /tab closed/.test(r.innerText); });
+        if (!tr) return null;
+        var a = tr.querySelector('a[href*="maps"]');
+        return { text: tr.innerText.split(String.fromCharCode(10)).join(' | '),
+                 href: a ? a.getAttribute('href') : '', link: a ? a.textContent : '' };
+      })()
+    `);
+    check('the closed-tab row is on the timeline', !!row, row);
+    check('it says which screen they were on',
+      !!row && /Production Dashboard/.test(row.text), row && row.text);
+    check('the town is a link', !!row && !!row.href, row);
+    check('and the link opens a map of that town',
+      !!row && row.href.indexOf('google.com/maps') > -1
+      && decodeURIComponent(row.href).indexOf('Jaipur') > -1, row && row.href);
+    // The address is beside it and is NOT a link: it is the line the town was
+    // worked out from, not a place anybody can open.
+    check('the address is shown but not clickable',
+      !!row && /103\.54\.13\.254/.test(row.text) && row.link.indexOf('103.54') === -1, row);
+
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {
     await tidy();

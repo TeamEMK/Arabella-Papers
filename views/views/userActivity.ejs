@@ -106,7 +106,19 @@ function ua_when(v) {
  */
 function ua_where(r) {
   var parts = [];
-  if (r.Where) parts.push(ua_esc(r.Where));
+  if (r.Place || r.IP) {
+    // The town opens a map; the address beside it does not, because it is
+    // not a place - it is the line the town was worked out FROM. Said on the
+    // link itself, so nobody reads a city off an IP as somebody's doorstep.
+    var town = r.Place
+      ? '<a href="https://www.google.com/maps/search/' + encodeURIComponent(r.Place)
+        + '" target="_blank" rel="noopener"'
+        + ' title="Opens a map of ' + ua_esc(r.Place)
+        + '. Worked out from the internet address, so it is the right town rather than the right building.">'
+        + ua_esc(r.Place) + '</a>'
+      : '';
+    parts.push([town, r.IP ? ua_esc(r.IP) : ''].filter(Boolean).join(' · '));
+  }
   if (r.Pin) {
     var m = Math.round(r.Pin.accuracy);
     var how = r.Pin.accuracy === null ? ''
