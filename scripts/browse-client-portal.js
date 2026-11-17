@@ -95,7 +95,11 @@ function freePort() {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'clientp-'));
   const chrome = spawn(CHROME, [
     '--headless=new', '--remote-debugging-port=' + dbg,
-    '--user-data-dir=' + profile, '--no-first-run', '--window-size=1400,980',
+    '--user-data-dir=' + profile, '--no-first-run',
+    // The size the office actually looks at it on. The split page is
+    // judged by eye from these screenshots, and a half judged at 1400
+    // crops the photograph far harder than the same half at 1920.
+    '--window-size=1920,1080',
     'about:blank',
   ], { stdio: 'ignore' });
 

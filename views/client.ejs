@@ -83,7 +83,7 @@
        in to - and this link is sent cold, to somebody who has never seen
        the inside of it. */
     .stage {
-      display: grid; grid-template-columns: 1.08fr .92fr;
+      display: grid; grid-template-columns: 1.55fr 1fr;
       min-height: 100vh; width: 100%;
     }
     /* THE PHOTOGRAPH IS THE HALF, NOT A BLOCK INSIDE IT.
@@ -94,14 +94,14 @@
        It is shot on near-black already, so the veil over it is only enough
        to keep the text readable where the cream paper is brightest. */
     .showing {
-      position: relative; padding: 52px 60px 44px;
+      position: relative; padding: 44px 60px 34px;
       display: flex; flex-direction: column; justify-content: center;
       border-right: 1px solid var(--hair); overflow: hidden;
       background:
-        linear-gradient(96deg, rgba(18,20,23,.99) 0%, rgba(18,20,23,.985) 42%,
-                               rgba(18,20,23,.90) 56%, rgba(18,20,23,.45) 74%,
-                               rgba(18,20,23,.16) 100%),
-        url('/portal/hero.jpg') 72% 22%/cover no-repeat,
+        linear-gradient(90deg, rgba(18,20,23,1) 0%, rgba(18,20,23,.97) 22%,
+                               rgba(18,20,23,.74) 33%, rgba(18,20,23,.22) 46%,
+                               rgba(18,20,23,0) 58%),
+        url('/portal/hero.jpg') center 30%/cover no-repeat,
         var(--void);
     }
     /* A breath of gold across it, so the half is not a flat rectangle of
@@ -117,6 +117,7 @@
        the office's own printed matter is set, and what the reference
        drawing asked for. */
     .crest-mark { text-align: center; max-width: 430px; }
+    .crest-mark .nm { white-space: nowrap; }
     .crest-mark .sprig { color: var(--gold); opacity: .9; margin-bottom: 14px; }
     .crest-mark .nm {
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
@@ -139,7 +140,7 @@
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
       font-size: clamp(2.1rem, 3.5vw, 3.4rem); line-height: 1.04;
       letter-spacing: .015em; text-transform: uppercase; color: var(--paper);
-      margin: 34px 0 18px; max-width: 13ch;
+      margin: 26px 0 16px; max-width: 13ch;
     }
     .shout em { font-style: italic; color: var(--gold-lit); letter-spacing: .01em; }
     /* A rule that stops in a lozenge, the way a printer ends a flourish. */
@@ -153,9 +154,12 @@
     .points { list-style: none; margin: 0; padding: 0; max-width: 46ch; }
     /* Held to a column so the lines do not run out over the brightest part
        of the photograph, where cream paper and grey type meet. */
-    .showing > .crest-mark, .shout, .shout-sub, .points, .signoff,
-    .showing > .flourish { max-width: 42ch; }
-    .points li { display: flex; gap: 17px; margin-bottom: 18px; align-items: flex-start; }
+    .shout, .shout-sub, .points, .signoff,
+    .showing > .flourish { max-width: 30ch; }
+    /* The mark is given its own width - the column that suits a paragraph
+       is narrower than the name. */
+    .showing > .crest-mark { max-width: 24rem; }
+    .points li { display: flex; gap: 17px; margin-bottom: 16px; align-items: flex-start; }
     .points i {
       color: var(--gold); font-size: .92rem; width: 40px; height: 40px; flex: 0 0 40px;
       border: 1px solid rgba(201,162,39,.4); display: grid; place-items: center;
