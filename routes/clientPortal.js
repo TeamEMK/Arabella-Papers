@@ -184,6 +184,12 @@ function requireClient(req, res, next) {
     // The way back out, drawn by each page when it is being served here.
     res.locals.portalHome = '/client/' + brand.slug;
     res.locals.portalBrand = brand.wordmark;
+    // Who is sitting here, for the rooms that would otherwise ask. The
+    // calculator's three questions are the account's own fields, and the
+    // session is a better answer than a box they could type anything into.
+    res.locals.portalWho = {
+      name: client.name || '', email: client.email, company: client.company || '',
+    };
     return next();
   }
   res.redirect('/client/' + brand.slug);
@@ -202,6 +208,16 @@ router.get('/:brand/quote', requireClient, (req, res, next) => {
 });
 router.post('/:brand/quote/api/send', requireClient, express.json({ limit: '256kb' }),
   (req, res, next) => {
+    // THE NAME ON THE QUOTE IS THE ACCOUNT'S, NOT THE PAGE'S. Out on the
+    // public address those three fields were all the office had; in here
+    // the person is signed in, and a box they could type anything into is
+    // a worse answer than the session they are sitting in.
+    const seated = req.session.client;
+    req.body = Object.assign({}, req.body, {
+      name: seated.name || seated.email,
+      email: seated.email,
+      store: seated.company || '',
+    });
     req.url = '/' + brandOf(req).slug + '/api/send';
     quoteRoutes(req, res, next);
   });

@@ -318,6 +318,28 @@ var BASE = location.pathname.replace(/\/+$/, '');
   var PAGE_TITLE = <%- JSON.stringify(pageTitle) %>;
   var who = null, lastQuote = null;
 
+  // ALREADY SIGNED IN? THEN WE KNOW WHO THEY ARE.
+  //
+  // The three questions in front of this page are how the office learned
+  // who was pricing what, back when it was a public address anybody could
+  // open. Inside the client portal that is the account, so asking again is
+  // asking a signed-in customer to introduce themselves - and whatever
+  // they typed would be less trustworthy than the session they are sitting
+  // in, because they could type anything.
+  var KNOWN = <%- JSON.stringify(typeof portalWho !== 'undefined' ? portalWho : null) %>;
+
+  // Opens the calculator for somebody we already know, with no gate in
+  // front of it.
+  function q_openKnown() {
+    who = { name: KNOWN.name || KNOWN.email, email: KNOWN.email, store: KNOWN.company || '' };
+    document.getElementById('q_whoName').textContent = who.name;
+    document.getElementById('q_whoEmail').textContent = who.email;
+    document.getElementById('gate').hidden = true;
+    document.getElementById('q_head').hidden = true;
+    document.getElementById('calc').hidden = false;
+    mount();
+  }
+
   window.q_open = function () {
     var name = (document.getElementById('g_name').value || '').trim();
     var email = (document.getElementById('g_email').value || '').trim();
@@ -479,6 +501,9 @@ var BASE = location.pathname.replace(/\/+$/, '');
       buttons.forEach(function (b) { b.disabled = false; });
     }
   };
+
+  // On load, because there is nothing to ask somebody already signed in.
+  if (KNOWN && KNOWN.email) q_openKnown();
 })();
 </script>
 </body>

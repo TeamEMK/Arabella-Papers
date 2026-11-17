@@ -276,6 +276,25 @@ function freePort() {
         + "return a.getAttribute('href') === '/client/arabella';})"));
     }
 
+    // ── THE CALCULATOR DOES NOT ASK WHO THEY ARE ──
+    //
+    // Those three questions are how the office learned who was pricing
+    // what, back when the calculator was a public address. In here the
+    // account answers them, and asking a signed-in customer to introduce
+    // themselves is the kind of thing that makes a portal feel like three
+    // websites in a coat.
+    console.log(NL + 'The calculator knows who is using it');
+    await send('Page.navigate', { url: BASE + '/client/arabella/quote' });
+    await sleep(2500);
+    check('no "before we begin" in front of it', await ev(
+      "(function(){var g=document.getElementById('gate');"
+      + "return !g || g.hidden || g.offsetParent === null;})()"));
+    check('the calculator itself is on screen', await ev(
+      "(function(){var c=document.getElementById('calc');"
+      + "return !!c && !c.hidden;})()"));
+    check('and it is pricing for the person who signed in', await ev(
+      "(document.getElementById('q_whoEmail')||{}).textContent") === 'rosa@example.com');
+
     // ── WHAT A PAGE INSIDE THE PORTAL ASKS FOR ──
     // Each room fetches off its own address, so the same file serves at
     // both mounts. If that broke, the room would draw empty and say
