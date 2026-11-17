@@ -130,6 +130,12 @@ const NL = String.fromCharCode(10);
     check('only the KPC one says KPC', /KPC/.test(kpcHtml) && !/KPC/.test(arbHtml));
     check('a link that is not one of the two is not a page',
       (await go('/client/somebody')).status === 404);
+    // Half a link - typed from memory, or cut short by a chat app. The
+    // person holding it is a customer, not a mistake.
+    const half = await go('/client');
+    check('and /client on its own opens a door rather than a 404',
+      half.status === 302 && half.headers.get('location') === '/client/arabella',
+      half.status + ' -> ' + half.headers.get('location'));
     check('the sign-in offers registering and a forgotten password',
       /Register/.test(arbHtml) && /Forgotten your password/.test(arbHtml));
     check('and shows none of the three doors to somebody not signed in',

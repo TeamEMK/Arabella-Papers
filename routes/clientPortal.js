@@ -207,6 +207,16 @@ router.post('/:brand/quote/api/send', requireClient, express.json({ limit: '256k
   });
 
 // ══ THE PAGE ══════════════════════════════════════════
+
+// /client on its own is half a link - somebody typing it from memory, or a
+// chat app that cut the last word off. It opens the Arabella door rather
+// than a 404, because the person holding half the address is a customer,
+// not a mistake.
+//
+// A brand that is not one of the two is still a 404 on purpose: the brand
+// IS the price list, and quietly serving the other one would be worse than
+// saying there is no such page.
+router.get('/', (req, res) => res.redirect(302, '/client/arabella'));
 router.get('/:brand', (req, res, next) => {
   const brand = brandOf(req);
   if (!brand) return next();
