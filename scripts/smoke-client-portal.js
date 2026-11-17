@@ -126,8 +126,17 @@ const NL = String.fromCharCode(10);
     const kpcHtml = await kpc.text();
     const arbHtml = await arb.text();
     check('both are signed Arabella Papers', /ARABELLA PAPERS/.test(kpcHtml) && /ARABELLA PAPERS/.test(arbHtml));
-    // The one word that tells the two apart, same as on the quote pages.
-    check('only the KPC one says KPC', /KPC/.test(kpcHtml) && !/KPC/.test(arbHtml));
+    // NEITHER PAGE SAYS KPC. Taken off at the office's request: a customer
+    // sent this link is a customer of Arabella Papers, and a three-letter
+    // code beside the name is the office's own filing showing through.
+    check('neither page says KPC', !/KPC/.test(kpcHtml) && !/KPC/.test(arbHtml));
+    // The two are still two price lists. What tells them apart is the
+    // address, the account, and which build the calculator loads - none of
+    // which a customer has to read.
+    // Signed out there are no doors on the page yet, so what says which
+    // link this is, is the brand the page was built for.
+    check('and the two are still two links',
+      /"kpc"/.test(kpcHtml) && /"arabella"/.test(arbHtml));
     check('a link that is not one of the two is not a page',
       (await go('/client/somebody')).status === 404);
     // Half a link - typed from memory, or cut short by a chat app. The

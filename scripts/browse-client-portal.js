@@ -339,11 +339,15 @@ function freePort() {
     console.log(NL + 'The other link');
     await send('Page.navigate', { url: BASE + '/client/kpc' });
     await sleep(1200);
-    // The pill is gone - under a mark set this formally it read as a
-    // sticker - so the word now sits in the trade line beside Fine
-    // Stationery. It still has to be there, and still only on this link.
-    check('it is the only one of the two that says KPC',
-      /KPC/.test(await ev("document.querySelector('.crest-mark .trade').textContent")));
+    // AND IT DOES NOT SAY KPC EITHER. The office had it taken off: a
+    // customer sent this link is a customer of Arabella Papers, and a
+    // three-letter code beside the name is the office's own filing
+    // showing through. The two links are told apart by their address.
+    check('this one does not say KPC anywhere on it',
+      !/KPC/.test(await ev('document.body.innerText')));
+    check('and it is still the KPC link', await ev(
+      "!!document.querySelector('a[href=\"/client/kpc/quote\"], form, .card')")
+      && (await ev('location.pathname')) === '/client/kpc');
     await shot('5-kpc-sign-in');
 
     console.log(NL + 'Nothing shouted');

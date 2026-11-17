@@ -40,7 +40,13 @@ const BRANDS = {
     calculator: 'Price calculator',
   },
   kpc: {
-    slug: 'kpc', wordmark: 'ARABELLA PAPERS', pill: 'KPC',
+    // NOTHING ON THIS PAGE SAYS KPC. The office asked for it off: a
+    // customer sent this link is a customer of Arabella Papers, and a
+    // three-letter code beside the name is the office's own filing
+    // showing through. The two links are still two price lists - that is
+    // the address, the account and the calculator's own build - and the
+    // calculator page keeps the small pill it was given.
+    slug: 'kpc', wordmark: 'ARABELLA PAPERS', pill: '',
     quote: '/quote/kpc',
     calculator: 'Price calculator',
   },
