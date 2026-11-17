@@ -174,15 +174,15 @@ function freePort() {
     // and the buttons - and a font that did not load falls back to Georgia
     // or to the browser's sans, which is exactly how a page stops looking
     // designed. So this asks what the browser actually used.
-    check('the headings are set in Playfair',
-      /Playfair/.test(await ev(
+    check('the headings are set in Bodoni',
+      /Bodoni/.test(await ev(
         "getComputedStyle(document.querySelector('.card h1')).fontFamily")));
-    check('the wordmark is cut from Roman capitals',
-      /Cinzel/.test(await ev(
+    check('the wordmark is set in wide thin capitals',
+      /Italiana/.test(await ev(
         "getComputedStyle(document.querySelector('.mark')).fontFamily")));
     check('and all three faces really arrived, not just the fallbacks',
       await ev("document.fonts.ready.then(function(){"
-        + "return ['Cinzel','Playfair Display','Tenor Sans']"
+        + "return ['Italiana','Bodoni Moda','Tenor Sans']"
         + ".every(function(f){return document.fonts.check('16px \"' + f + '\"');});})"));
     check('on the same near-black the liner book uses',
       (await ev("getComputedStyle(document.body).backgroundColor")) === 'rgb(21, 23, 26)');

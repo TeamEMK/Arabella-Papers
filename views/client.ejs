@@ -11,14 +11,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <%# THREE FACES, EACH WITH ONE JOB.
-      Cinzel is cut from Roman inscriptions and is what an engraver's name
-      looks like - the wordmark and the buttons. Playfair carries the
-      headlines: high contrast, the thin strokes thin, which is the whole
-      difference between a page that looks typeset and one that looks
-      typed. Tenor Sans reads the small print without arguing with either.
+      Bodoni Moda is a Didone - hairline thins against heavy stems, the cut
+      the fashion books have been set in for two hundred years - and it
+      carries every heading. Italiana is its opposite number in capitals,
+      wide and thin, for the wordmark, the buttons and the field labels.
+      Tenor Sans reads the small print without arguing with either.
       The liner book and the catalogue keep Cormorant; this page is the
       front door and is allowed to be dressed better than the rooms. %>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Tenor+Sans&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;1,6..96,400&family=Italiana&family=Tenor+Sans&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
   <style>
     :root {
@@ -45,10 +45,10 @@
       -webkit-font-smoothing: antialiased;
       display: flex; flex-direction: column;
     }
-    /* The welcome line on the signed-in page. Playfair, like every other
+    /* The welcome line on the signed-in page. Bodoni, like every other
        heading here - Cormorant stays only where it is doing the quiet
        italic work under a heading. */
-    .serif { font-family: 'Playfair Display', Georgia, serif; }
+    .serif { font-family: 'Bodoni Moda', Georgia, serif; }
     ::selection { background: var(--gold); color: #000; }
     /* The scrollbar is gone, the scrolling is not - as on the liner book. */
     html, body { scrollbar-width: none; -ms-overflow-style: none; }
@@ -58,8 +58,8 @@
     /* ── the mark ─────────────────────────────── */
     header { padding: 42px 22px 0; text-align: center; }
     .mark {
-      font-family: Cinzel, Georgia, serif; font-weight: 500;
-      font-size: 1.32rem; letter-spacing: .26em; text-transform: uppercase;
+      font-family: Italiana, Georgia, serif; font-weight: 400;
+      font-size: 1.44rem; letter-spacing: .26em; text-transform: uppercase;
       color: var(--gold-lit); line-height: 1.5;
     }
     .mark small {
@@ -112,7 +112,7 @@
     }
     .showing > * { position: relative; }
     .shout {
-      font-family: 'Playfair Display', Georgia, serif; font-weight: 400;
+      font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
       font-size: clamp(2rem, 3.2vw, 2.9rem); line-height: 1.16; color: var(--paper);
       /* Room above it: the wordmark is a mark, not the first line of the
          sentence, and with no gap the two read as one block. */
@@ -132,8 +132,8 @@
       color: var(--gold); font-size: .96rem; width: 34px; height: 34px; flex: 0 0 34px;
       border: 1px solid var(--hair); display: grid; place-items: center;
     }
-    .points b { display: block; font-family: Cinzel, Georgia, serif; font-weight: 500;
-                font-size: .86rem; letter-spacing: .1em; text-transform: uppercase;
+    .points b { display: block; font-family: Italiana, Georgia, serif; font-weight: 400;
+                font-size: .92rem; letter-spacing: .1em; text-transform: uppercase;
                 color: var(--paper); margin-bottom: 5px; }
     .points span { font-size: .84rem; color: var(--dim); line-height: 1.55; }
 
@@ -181,20 +181,26 @@
       display: flex; justify-content: space-between; gap: 10px;
     }
     .inside span {
-      flex: 1; text-align: center; font-family: Cinzel, Georgia, serif;
-      font-size: .52rem; letter-spacing: .16em; text-transform: uppercase;
+      flex: 1; text-align: center; font-family: Italiana, Georgia, serif;
+      font-size: .58rem; letter-spacing: .16em; text-transform: uppercase;
       color: var(--dim); line-height: 1.7;
     }
     .inside i { display: block; color: var(--gold); font-size: .82rem; margin-bottom: 7px;
                 font-family: 'Font Awesome 6 Free'; }
     /* The line the example calls a tagline: small, wide and quiet, up in the
        corner where it is read once and then ignored. */
+    /* IN THE FLOW, NOT PINNED TO THE CORNER. Pinned, it sat behind the
+       card the moment the card grew - the register panel is four fields
+       tall - and three lines of gold reading through a dark card is not a
+       detail anybody would have drawn on purpose. Above the card it is
+       the first thing read and it never collides with anything. */
     .whisper {
-      position: absolute; top: 40px; right: 46px; text-align: right;
-      font-family: Cinzel, Georgia, serif;
-      font-size: .54rem; letter-spacing: .3em; text-transform: uppercase;
-      color: var(--gold); line-height: 2.1; opacity: .8;
+      margin-bottom: 24px; text-align: center;
+      font-family: Italiana, Georgia, serif;
+      font-size: .62rem; letter-spacing: .34em; text-transform: uppercase;
+      color: var(--gold); line-height: 2; opacity: .85;
     }
+    .whisper br { display: none; }
 
     @media (max-width: 1040px) {
       .stage { grid-template-columns: 1fr; }
@@ -209,6 +215,13 @@
     }
 
     /* ── the card ─────────────────────────────── */
+    /* CENTRED, ASKED FOR IN THOSE WORDS. A form reads faster ranged left,
+       which is why it was - but this one is four fields on a dark card
+       with a rule and a lozenge over it, and ranged left it sat off to one
+       side of its own ornament. The inputs keep their text left, where a
+       half-typed address belongs. */
+    .card { text-align: center; }
+    .card input { text-align: left; }
     .card {
       width: 100%; max-width: 448px; background: rgba(25,28,32,.94);
       border: 1px solid var(--hair); padding: 38px 34px 32px;
@@ -224,16 +237,16 @@
     }
     .crest i { color: var(--gold); font-size: .62rem; vertical-align: middle; }
     .card h1 {
-      font-family: 'Playfair Display', Georgia, serif; font-weight: 400;
+      font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
       font-size: 1.76rem; margin: 0 0 7px; color: var(--paper);
       letter-spacing: .005em;
     }
     .card p.sub { margin: 0 0 26px; color: var(--dim); font-size: .95rem; font-style: italic;
                   font-family: 'Cormorant Garamond', Georgia, serif; line-height: 1.5; }
 
-    label { display: block; font-family: Cinzel, Georgia, serif; font-size: .56rem;
+    label { display: block; font-family: Italiana, Georgia, serif; font-size: .62rem;
             letter-spacing: .26em; text-transform: uppercase; color: var(--gold);
-            margin: 0 0 8px; }
+            margin: 0 0 8px; text-align: center; }
     input {
       width: 100%; background: #111316; border: 1px solid var(--hair);
       color: #e8e4da; padding: 12px 14px; font-family: 'Tenor Sans', sans-serif;
@@ -248,8 +261,8 @@
     }
     .btn {
       width: 100%; background: var(--gold); color: #15171a; border: 0;
-      padding: 14px 14px; font-family: Cinzel, Georgia, serif; font-weight: 600;
-      font-size: .76rem; letter-spacing: .24em; text-transform: uppercase;
+      padding: 14px 14px; font-family: Italiana, Georgia, serif; font-weight: 400;
+      font-size: .84rem; letter-spacing: .24em; text-transform: uppercase;
       cursor: pointer; transition: background .15s;
     }
     .btn:hover { background: var(--gold-lit); }
@@ -306,11 +319,11 @@
     .door:hover::after { border-color: rgba(201,162,39,.28); }
     .door i { color: var(--gold); font-size: 1.28rem; }
     .door h2 {
-      font-family: 'Playfair Display', Georgia, serif; font-weight: 400;
+      font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
       font-size: 1.3rem; margin: 16px 0 9px; color: var(--paper);
     }
     .door p { margin: 0; font-size: .84rem; color: var(--dim); line-height: 1.6; }
-    .door .go { margin-top: 18px; font-family: Cinzel, Georgia, serif;
+    .door .go { margin-top: 18px; font-family: Italiana, Georgia, serif;
                 font-size: .56rem; letter-spacing: .28em;
                 text-transform: uppercase; color: var(--gold); }
     .welcome { text-align: center; margin-bottom: 34px; }
@@ -424,7 +437,7 @@
 
     <!-- THE DOOR -->
     <section class="gate">
-      <div class="whisper">Every liner.<br>Every design.<br>One link.</div>
+      <div class="whisper">Every liner. Every design. One link.</div>
       <%# The engraved oval off the cards in the photograph, drawn rather
           than photographed so it stays crisp at any size and costs nothing
           to load. Behind the card, barely there. %>
