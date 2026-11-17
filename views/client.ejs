@@ -94,13 +94,23 @@
        It is shot on near-black already, so the veil over it is only enough
        to keep the text readable where the cream paper is brightest. */
     .showing {
-      position: relative; padding: 44px 60px 34px;
+      position: relative;
+      /* FLUID, NOT FIXED. At 50% browser zoom the window is 3840 CSS
+         pixels wide and every fixed size here became a postage stamp
+         in an acre of black. Each measure below is a clamp: a floor
+         for a laptop, a ceiling so nothing becomes a poster, and vw
+         in between so the page grows with the glass. */
+      padding: clamp(40px, 3.2vw, 90px) clamp(44px, 4vw, 110px)
+               clamp(30px, 2.6vw, 70px);
       display: flex; flex-direction: column; justify-content: center;
       border-right: 1px solid var(--hair); overflow: hidden;
+      --panel: clamp(370px, 29vw, 820px);
       background:
-        linear-gradient(90deg, rgba(18,20,23,1) 0%, rgba(18,20,23,.97) 22%,
-                               rgba(18,20,23,.74) 33%, rgba(18,20,23,.22) 46%,
-                               rgba(18,20,23,0) 58%),
+        linear-gradient(90deg,
+          rgba(18,20,23,.99) 0,
+          rgba(18,20,23,.97) var(--panel),
+          rgba(18,20,23,.30) calc(var(--panel) + 190px),
+          rgba(18,20,23,0)   calc(var(--panel) + 430px)),
         url('/portal/hero.jpg') center 30%/cover no-repeat,
         var(--void);
     }
@@ -121,12 +131,14 @@
     .crest-mark .sprig { color: var(--gold); opacity: .9; margin-bottom: 14px; }
     .crest-mark .nm {
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
-      font-size: 1.62rem; letter-spacing: .3em; text-transform: uppercase;
+      font-size: clamp(1.4rem, 1.55vw, 2.5rem);
+      letter-spacing: .3em; text-transform: uppercase;
       color: var(--paper); line-height: 1.2;
     }
     .crest-mark .trade {
       display: flex; align-items: center; gap: 14px; margin-top: 14px;
-      font-family: Italiana, Georgia, serif; font-size: .64rem;
+      font-family: Italiana, Georgia, serif;
+      font-size: clamp(.6rem, .6vw, .95rem);
       letter-spacing: .42em; text-transform: uppercase; color: var(--gold);
     }
     .crest-mark .trade::before, .crest-mark .trade::after {
@@ -138,43 +150,47 @@
        title page rather than as a sentence. */
     .shout {
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
-      font-size: clamp(2.1rem, 3.5vw, 3.4rem); line-height: 1.04;
+      font-size: clamp(2.1rem, 3.6vw, 5.4rem); line-height: 1.04;
       letter-spacing: .015em; text-transform: uppercase; color: var(--paper);
       margin: 26px 0 16px; max-width: 13ch;
     }
     .shout em { font-style: italic; color: var(--gold-lit); letter-spacing: .01em; }
     /* A rule that stops in a lozenge, the way a printer ends a flourish. */
-    .flourish { display: flex; align-items: center; margin: 22px 0 26px; max-width: 220px; }
+    .flourish { display: flex; align-items: center; margin: 22px 0 26px;
+                max-width: clamp(220px, 15vw, 400px); }
     .flourish::before { content: ''; flex: 1; height: 1px; background: var(--gold); opacity: .55; }
     .flourish i { color: var(--gold); font-size: .5rem; margin-left: 8px; }
     .shout-sub {
-      color: var(--dim); font-size: .95rem; line-height: 1.7; max-width: 46ch;
-      margin: 0 0 30px;
+      color: var(--dim); font-size: clamp(.95rem, 1.05vw, 1.5rem);
+      line-height: 1.7; max-width: 46ch; margin: 0 0 30px;
     }
     .points { list-style: none; margin: 0; padding: 0; max-width: 46ch; }
     /* Held to a column so the lines do not run out over the brightest part
        of the photograph, where cream paper and grey type meet. */
     .shout, .shout-sub, .points, .signoff,
-    .showing > .flourish { max-width: 30ch; }
+    .showing > .flourish { max-width: min(44ch, calc(var(--panel) - 2.2vw)); }
     /* The mark is given its own width - the column that suits a paragraph
        is narrower than the name. */
-    .showing > .crest-mark { max-width: 24rem; }
+    .showing > .crest-mark { max-width: min(26rem, calc(var(--panel) - 2.2vw)); }
     .points li { display: flex; gap: 17px; margin-bottom: 16px; align-items: flex-start; }
     .points i {
-      color: var(--gold); font-size: .92rem; width: 40px; height: 40px; flex: 0 0 40px;
+      color: var(--gold); font-size: clamp(.92rem, .95vw, 1.3rem);
+      width: clamp(40px, 2.8vw, 62px); height: clamp(40px, 2.8vw, 62px);
+      flex: 0 0 clamp(40px, 2.8vw, 62px);
       border: 1px solid rgba(201,162,39,.4); display: grid; place-items: center;
     }
     .points b { display: block; font-family: 'Bodoni Moda', Georgia, serif; font-weight: 500;
-                font-size: .9rem; letter-spacing: .16em; text-transform: uppercase;
-                color: var(--paper); margin-bottom: 5px; }
-    .points span { font-size: .84rem; color: var(--dim); line-height: 1.55; }
+                font-size: clamp(.9rem, .95vw, 1.3rem); letter-spacing: .16em;
+                text-transform: uppercase; color: var(--paper); margin-bottom: 5px; }
+    .points span { font-size: clamp(.84rem, .9vw, 1.2rem); color: var(--dim);
+                   line-height: 1.55; }
 
     /* THE PICTURE IS OPTIONAL ON PURPOSE. Nothing here breaks if
        /portal/hero.jpg has not been put there yet - the <img> takes itself
        off the page and the half reads as a column of words, which is what
        it was before anybody drew anything. */
     .signoff { margin-top: auto; padding-top: 26px; color: var(--dim);
-               font-size: .66rem; letter-spacing: .14em; }
+               font-size: clamp(.66rem, .7vw, .95rem); letter-spacing: .14em; }
 
     /* IT WAS A CARD IN A FIELD OF BLACK. Three things were added and none
        of them is decoration for its own sake: an engraved oval behind the
@@ -195,12 +211,13 @@
        rather than as a frame around it. */
     .gate .oval {
       position: absolute; top: 50%; left: 50%;
-      width: min(720px, 94%); height: min(880px, 92vh);
+      width: min(44vw, 1100px); height: min(92vh, 1400px);
       transform: translate(-50%, -50%); pointer-events: none; opacity: .5;
     }
     .gate .oval svg { width: 100%; height: 100%; }
     .help {
-      margin-top: 30px; text-align: center; font-size: .74rem; color: var(--dim);
+      margin-top: 30px; text-align: center; color: var(--dim);
+      font-size: clamp(.74rem, .8vw, 1.1rem);
       letter-spacing: .04em; position: relative;
     }
     .help a { color: var(--gold); text-decoration: none; border-bottom: 1px solid var(--hair); }
@@ -215,17 +232,19 @@
     }
     .inside span {
       flex: 1; text-align: center; font-family: Italiana, Georgia, serif;
-      font-size: .58rem; letter-spacing: .18em; text-transform: uppercase;
+      font-size: clamp(.58rem, .62vw, .9rem); letter-spacing: .18em;
+      text-transform: uppercase;
       color: #a9a294; line-height: 1.7;
     }
     /* Hairlines between them rather than around them - the divider belongs
        to the gap, and a border on each would draw three boxes. */
     .inside span + span { border-left: 1px solid var(--hair); }
-    .inside i { display: block; color: var(--gold); font-size: .95rem; margin-bottom: 8px; }
+    .inside i { display: block; color: var(--gold); margin-bottom: 8px;
+                font-size: clamp(.95rem, 1vw, 1.4rem); }
     /* The lozenge rule above the three, as in the drawing. */
     .inside-rule { margin-top: 24px; text-align: center; }
     .inside-rule::before, .inside-rule::after {
-      content: ''; display: inline-block; width: 150px; height: 1px;
+      content: ''; display: inline-block; width: clamp(150px, 9vw, 260px); height: 1px;
       background: var(--hair); vertical-align: middle; margin: 0 10px;
     }
     .inside-rule i { color: var(--gold); font-size: .48rem; vertical-align: middle; }
@@ -268,8 +287,11 @@
        rectangle standing in the dark with the arcs of a much larger oval
        passing behind it - a plate in a frame, not a form in a box. */
     .card {
-      width: 100%; max-width: 470px; background: rgba(20,23,26,.90);
-      border: 1px solid rgba(201,162,39,.5); padding: 44px 40px 34px;
+      width: 100%; max-width: clamp(430px, 30vw, 820px);
+      background: rgba(20,23,26,.90);
+      border: 1px solid rgba(201,162,39,.5);
+      padding: clamp(38px, 2.4vw, 64px) clamp(32px, 2.1vw, 56px)
+               clamp(30px, 1.9vw, 48px);
       position: relative; backdrop-filter: blur(2px);
       box-shadow: 0 30px 90px rgba(0,0,0,.5);
     }
@@ -277,7 +299,7 @@
        heading. Drawn in CSS so there is no third image to load. */
     .crest { text-align: center; margin: 0 0 20px; }
     .crest::before, .crest::after {
-      content: ''; display: inline-block; width: 104px; height: 1px;
+      content: ''; display: inline-block; width: clamp(104px, 7vw, 190px); height: 1px;
       background: linear-gradient(90deg, transparent, var(--gold));
       vertical-align: middle; margin: 0 12px; opacity: .8;
     }
@@ -285,19 +307,23 @@
     .crest i { color: var(--gold); font-size: .56rem; vertical-align: middle; }
     .card h1 {
       font-family: 'Bodoni Moda', Georgia, serif; font-weight: 400;
-      font-size: 2.5rem; margin: 0 0 6px; color: var(--paper);
+      font-size: clamp(2.1rem, 2.5vw, 3.8rem); margin: 0 0 6px; color: var(--paper);
       letter-spacing: .005em; line-height: 1.05;
     }
-    .card p.sub { margin: 0 0 28px; color: #bdb6a6; font-size: 1rem; font-style: italic;
+    .card p.sub { margin: 0 0 28px; color: #bdb6a6;
+                  font-size: clamp(1rem, 1.05vw, 1.45rem); font-style: italic;
                   font-family: 'Cormorant Garamond', Georgia, serif; line-height: 1.5; }
 
-    label { display: block; font-family: Italiana, Georgia, serif; font-size: .62rem;
+    label { display: block; font-family: Italiana, Georgia, serif;
+            font-size: clamp(.62rem, .66vw, .95rem);
             letter-spacing: .26em; text-transform: uppercase; color: var(--gold);
             margin: 0 0 8px; text-align: left; }
     input {
       width: 100%; background: #111316; border: 1px solid var(--hair);
-      color: #e8e4da; padding: 12px 14px; font-family: 'Tenor Sans', sans-serif;
-      font-size: .92rem; margin-bottom: 16px; transition: border-color .15s;
+      color: #e8e4da; font-family: 'Tenor Sans', sans-serif;
+      padding: clamp(12px, .95vw, 20px) clamp(14px, 1vw, 22px);
+      font-size: clamp(.92rem, .95vw, 1.3rem);
+      margin-bottom: clamp(16px, 1.1vw, 26px); transition: border-color .15s;
     }
     input:focus { outline: none; border-color: var(--gold); }
     /* The six digits are read off a phone and typed one at a time. Wide and
@@ -308,8 +334,10 @@
     }
     .btn {
       width: 100%; background: var(--gold); color: #15171a; border: 0;
-      padding: 14px 14px; font-family: Italiana, Georgia, serif; font-weight: 400;
-      font-size: .84rem; letter-spacing: .24em; text-transform: uppercase;
+      padding: clamp(14px, 1.05vw, 24px) 14px;
+      font-family: Italiana, Georgia, serif; font-weight: 400;
+      font-size: clamp(.84rem, .9vw, 1.25rem); letter-spacing: .24em;
+      text-transform: uppercase;
       cursor: pointer; transition: background .15s;
     }
     .btn:hover { background: var(--gold-lit); }
@@ -319,7 +347,8 @@
       margin-top: 10px;
     }
     .btn-quiet:hover { background: rgba(201,162,39,.07); color: var(--paper); }
-    .linkline { margin-top: 18px; font-size: .8rem; color: var(--dim); text-align: center; }
+    .linkline { margin-top: 18px; font-size: clamp(.8rem, .85vw, 1.15rem);
+                color: var(--dim); text-align: center; }
     .linkline a { color: var(--gold); text-decoration: none; border-bottom: 1px solid var(--hair);
                   cursor: pointer; }
     .linkline a:hover { color: var(--gold-lit); }
