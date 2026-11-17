@@ -186,10 +186,11 @@ const check = (name, ok, extra) => {
 
   // ── WORKING THE LIST ──
   //
-  // Status and remark are the only two things this screen may write. The rest
-  // of the row came out of the source workbook and is traceable back to it by
-  // source_row, so letting the screen edit a retailer's own name or address
-  // would quietly break that trace - and nothing on the page offers to.
+  // Status, remark and the five address fields are what this screen may
+  // write. The address was read off somebody else's find-a-retailer page and
+  // some of it is wrong, so it is correctable; the retailer's own name, the
+  // region and source_row still come from the workbook and are not, because
+  // they are what a row is traced back by.
   console.log('\nMarking a shop');
   const put = async (url, body) => {
     const r = await go(url, {
@@ -223,6 +224,70 @@ const check = (name, ok, extra) => {
 
   w = await put('/api/cc-prospects/999999', { status: 'active' });
   check('a row that does not exist is a 404', w.status === 404, w.status);
+
+  // ── CORRECTING AN ADDRESS ──
+  console.log('\nCorrecting an address');
+  const where = async (id) => (await db.query(
+    `SELECT address, suite, city, state, state_code, zip, address_edited_by
+       FROM cc_prospects WHERE id = ?`, [id]))[0][0];
+
+  w = await put('/api/cc-prospects/' + one.id, {
+    address: '228 N Broad St', suite: 'Suite 403', city: 'Albany',
+    state: 'New York', zip: '12205-1766',
+  });
+  check('an address can be corrected', w.json && w.json.success === true, w.json);
+  let a = await where(one.id);
+  check('the street is written', a.address === '228 N Broad St', a);
+  check('and the flat number, which this list never had a column for',
+    a.suite === 'Suite 403', a);
+  check('and the ZIP', a.zip === '12205-1766', a);
+  check('and the row says who corrected it',
+    a.address_edited_by === process.env.ADMIN_EMAIL, a);
+
+  // THE CODE FOLLOWS THE STATE. state_code is what the badge prints and what
+  // the board groups by; a row reading "Texas" with a code of "NY" would sit
+  // under the wrong heading on a board built from seven thousand rows.
+  w = await put('/api/cc-prospects/' + one.id, { state: 'Texas' });
+  a = await where(one.id);
+  check('moving a shop to another state moves its code with it',
+    a.state === 'Texas' && a.state_code === 'TX', a);
+  w = await put('/api/cc-prospects/' + one.id, { state: 'Nowhere' });
+  a = await where(one.id);
+  check('and a state the list has never seen carries no code at all, rather than the last one',
+    a.state === 'Nowhere' && a.state_code === null, a);
+  await put('/api/cc-prospects/' + one.id, { state: 'New York' });
+
+  // An empty box is a real answer - "no suite" - and has to be writable, or
+  // a mistake could never be taken back out.
+  w = await put('/api/cc-prospects/' + one.id, { suite: '' });
+  check('a flat number can be cleared again', (await where(one.id)).suite === null);
+  // But a shop has to be somewhere.
+  w = await put('/api/cc-prospects/' + one.id, { state: '' });
+  check('a shop cannot be left in no state', w.json && w.json.success === false, w.json);
+  check('and the state is left as it was', (await where(one.id)).state === 'New York');
+
+  w = await put('/api/cc-prospects/' + one.id, { zip: 'x'.repeat(40) });
+  check('something too long for the column is refused, not cut in half',
+    w.json && w.json.success === false, w.json);
+
+  // Nothing else on the row may be reached through the same door.
+  const beforeName = (await db.query(
+    'SELECT retailer, region FROM cc_prospects WHERE id = ?', [one.id]))[0][0];
+  await put('/api/cc-prospects/' + one.id, {
+    retailer: 'Somebody Else', region: 'Made Up', source_row: 9999,
+  });
+  const afterName = (await db.query(
+    'SELECT retailer, region FROM cc_prospects WHERE id = ?', [one.id]))[0][0];
+  check('the retailer name and region are still the workbook\'s',
+    afterName.retailer === beforeName.retailer && afterName.region === beforeName.region,
+    afterName);
+
+  // A request about the status alone must not blank an address, because the
+  // two go through the same route.
+  await put('/api/cc-prospects/' + one.id, { address: '228 N Broad St' });
+  await put('/api/cc-prospects/' + one.id, { status: 'active' });
+  check('marking a shop does not wipe its address',
+    (await where(one.id)).address === '228 N Broad St');
 
   console.log('\nMarking a batch');
   const [all] = await db.query('SELECT id FROM cc_prospects ORDER BY id');
@@ -258,7 +323,32 @@ const check = (name, ok, extra) => {
   console.log('\nThe screen');
   const view = require('fs').readFileSync(path.join(ROOT, 'views/views/ccProspects.ejs'), 'utf8');
   check('the "by state" subtitle is gone', !/Carlson Craft retailers, by state/.test(view));
+  // AS MANY CELLS AS THERE ARE HEADINGS.
+  //
+  // Four columns were added to a table of ten, and a row that builds one
+  // cell too few does not look broken - it looks like every value from
+  // there on is in the wrong column, which is the kind of thing somebody
+  // reads a ZIP out of and dials.
+  const headings = (view.match(/<thead[\s\S]*?<\/thead>/) || [''])[0];
+  // From the <tr> onwards, so the little cell() helper above it - which
+  // holds a <td> of its own - is not counted as a column.
+  const rowFn = view.slice(view.indexOf('body.innerHTML = ROWS.map'));
+  const rowOnly = rowFn.slice(rowFn.indexOf("return '<tr"), rowFn.indexOf('}).join'));
+  const heads = (headings.match(/<th[ >]/g) || []).length;
+  const cells = (rowOnly.match(/<td[ >]/g) || []).length
+    + (rowOnly.match(/\+ cell\(/g) || []).length;
+  check('every heading has a cell under it', heads === cells, { heads, cells });
   check('Status and Remark are columns', />Status</.test(view) && />Remark</.test(view));
+  // Asked for by name. They were squeezed under the retailer and under the
+  // town before, where a long street name pushed the row about.
+  for (const col of ['Street Name', 'Apartment No.', 'State', 'Zip Code']) {
+    check('"' + col + '" is a column of its own', view.includes('>' + col + '</th>'));
+  }
+  check('and each of them can be typed into',
+    /cc_editAddress/.test(view) && /cc_editSuite/.test(view)
+    && /cc_editState/.test(view) && /cc_editZip/.test(view));
+  check('the state is picked from the ones already on the board, not typed fresh',
+    /list="cc_stateList"/.test(view) && /cc_stateList.{0,200}STATES/s.test(view));
   check('there is a way to edit one', /cc_edit\(/.test(view) && /cc_saveEdit/.test(view));
   check('and a way to do a batch', /cc_bulk\(/.test(view) && /bulk\/status/.test(view));
   check('selection survives the list being refetched, because it is held by id',

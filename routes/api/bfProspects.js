@@ -22,6 +22,7 @@ const router = express.Router();
 const db = require('../../config/db');
 const { requireLogin } = require('../../middleware/auth');
 const { canSee } = require('../../utils/access');
+const address = require('../../utils/prospectAddress');
 
 async function allowed(req, res, next) {
   try {
@@ -129,9 +130,10 @@ router.get('/', requireLogin, allowed, async (req, res) => {
 
     const [[count]] = await db.query('SELECT COUNT(*) AS n FROM bf_prospects' + sql, args);
     const [rows] = await db.query(
-      `SELECT id, store_name, address, city, state, zip, country, phone, email,
+      `SELECT id, store_name, address, suite, city, state, zip, country, phone, email,
               website, instagram, facebook, visitor_policy,
-              status, remark, status_updated_by, status_updated_at
+              status, remark, status_updated_by, status_updated_at,
+              address_edited_by, address_edited_at
          FROM bf_prospects${sql}
         ORDER BY state ASC, city ASC, store_name ASC
         LIMIT ${limit}`, args);
@@ -144,11 +146,12 @@ router.get('/', requireLogin, allowed, async (req, res) => {
 });
 
 /**
- * PUT /api/bf-prospects/:id — the status and the remark on one dealer.
+ * PUT /api/bf-prospects/:id — the status, the remark, and the address.
  *
- * These two are all this route will write. The rest of the row came off
- * Bella Figura's map and is traceable back to it by source_row; letting the
- * screen edit a dealer's own name or address would quietly break that.
+ * The map showed only what each dealer chose to publish, and it published no
+ * flat numbers at all, so the five address fields may be corrected here -
+ * see utils/prospectAddress.js. The dealer's own name, the country and the
+ * source row still come off the map and are left alone.
  */
 router.put('/:id', requireLogin, allowed, express.json(), async (req, res) => {
   try {
@@ -156,6 +159,17 @@ router.put('/:id', requireLogin, allowed, express.json(), async (req, res) => {
     if (!Number.isInteger(id) || id <= 0) {
       return res.status(400).json({ success: false, error: 'No such row.' });
     }
+    const where = address.fromBody(req.body);
+    if (where.error) return res.status(400).json({ success: false, error: where.error });
+    const cols = Object.keys(where.set);
+    if (cols.length) {
+      await db.query(
+        `UPDATE bf_prospects SET ${cols.map(c => `\`${c}\` = ?`).join(', ')},
+                address_edited_by = ?, address_edited_at = NOW()
+          WHERE id = ?`,
+        [...cols.map(c => where.set[c]), (req.session.user && req.session.user.email) || '', id]);
+    }
+
     const out = await writeStatus([id], req.body, req.session.user);
     if (out.error) return res.status(400).json({ success: false, error: out.error });
     if (!out.changed) return res.status(404).json({ success: false, error: 'No such row.' });

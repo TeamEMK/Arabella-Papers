@@ -92,7 +92,11 @@
                        title="Select everything listed">
               </th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Retailer</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Street Name</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Apartment No.</th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">City</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">State</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Zip Code</th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Region</th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Phone</th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Email</th>
@@ -121,6 +125,37 @@
       </div>
       <div class="modal-body">
         <div class="text-muted small mb-3" id="cc_editWhere"></div>
+        <!-- THE ADDRESS IS CORRECTABLE, the rest of the row is not. These
+             were read off somebody else's find-a-retailer page, so some of
+             them are wrong, and that sheet never carried a flat number at
+             all. The retailer's own name, the region and the source row
+             still come from the workbook. -->
+        <div class="row g-2 mb-3">
+          <div class="col-12">
+            <label class="form-label fw-bold small">Street Name</label>
+            <input class="form-control form-control-sm" id="cc_editAddress" maxlength="400">
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">Apartment No.</label>
+            <input class="form-control form-control-sm" id="cc_editSuite" maxlength="120"
+                   placeholder="Suite 403">
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">Zip Code</label>
+            <input class="form-control form-control-sm" id="cc_editZip" maxlength="20">
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">City</label>
+            <input class="form-control form-control-sm" id="cc_editCity" maxlength="120">
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">State</label>
+            <input class="form-control form-control-sm" id="cc_editState" maxlength="80"
+                   list="cc_stateList">
+            <datalist id="cc_stateList"></datalist>
+            <div class="form-text">The board is grouped by this.</div>
+          </div>
+        </div>
         <div class="mb-3">
           <label class="form-label fw-bold">Status</label>
           <select class="form-select" id="cc_editStatus">
@@ -312,10 +347,10 @@
       limit: 2000,
     });
     var body = document.getElementById('cc_body');
-    body.innerHTML = '<tr><td colspan="10" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading…</td></tr>';
+    body.innerHTML = '<tr><td colspan="14" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading…</td></tr>';
     try {
       var j = await (await fetch('/api/cc-prospects?' + p)).json();
-      if (!j.success) { body.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">' + esc(j.error) + '</td></tr>'; return; }
+      if (!j.success) { body.innerHTML = '<tr><td colspan="14" class="text-center py-4 text-danger">' + esc(j.error) + '</td></tr>'; return; }
       ROWS = j.rows;
       // Named by what is actually being looked at, so somebody who clicked a
       // tile does not read it as the whole list.
@@ -335,23 +370,35 @@
         + ' — ' + (j.shown < j.total
           ? ('showing ' + n(j.shown) + ' of ' + n(j.total))
           : (n(j.total) + ' retailer' + (j.total === 1 ? '' : 's')));
-      if (!ROWS.length) { body.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">Nobody matches.</td></tr>'; return; }
+      if (!ROWS.length) { body.innerHTML = '<tr><td colspan="14" class="text-center py-4 text-muted">Nobody matches.</td></tr>'; return; }
 
       body.innerHTML = ROWS.map(function (r, i) {
-        var where = [r.address, r.suite].filter(Boolean).join(', ');
-        // The row opens the editor as well as the pen does. There are ten
-        // columns now and the pen is off the right-hand edge until somebody
-        // scrolls to it, which is not somewhere a button should hide.
+        // The street, the flat, the state and the ZIP used to be squeezed in
+        // under the name and under the town. They have columns of their own
+        // now, so each is printed once and in one place - a value in two
+        // cells is a value somebody will one day correct in only one of them.
+        var cell = function (v) {
+          return '<td class="small">' + (v ? esc(v) : '<span class="text-muted">-</span>') + '</td>';
+        };
+        // The row opens the editor as well as the pen does. There are
+        // fourteen columns now and the pen is off the right-hand edge until
+        // somebody scrolls to it, which is not somewhere a button should
+        // hide.
         return '<tr class="cc-row" data-i="' + i + '">'
           + '<td><input type="checkbox" class="form-check-input cc-pick" value="' + r.id
             + '" ' + (PICKS.has(r.id) ? 'checked' : '') + ' onchange="cc_pick(' + r.id + ', this.checked)"></td>'
-          + '<td class="fw-bold">' + esc(r.retailer)
-            + (where ? '<div class="small text-muted fw-normal">' + esc(where) + '</div>' : '')
-          + '</td>'
-          // Across all fifty, the town alone does not say where it is.
-          + '<td class="small">' + esc(r.city || '—')
-            + (PICKED ? '' : ' <span class="badge bg-light text-dark border">' + esc(r.state_code || r.state) + '</span>')
-            + (r.zip ? '<div class="text-muted">' + esc(r.zip) + '</div>' : '') + '</td>'
+          + '<td class="fw-bold">' + esc(r.retailer) + '</td>'
+          + cell(r.address)
+          + cell(r.suite)
+          + cell(r.city)
+          // The code beside the name: "AL" is what the office says and what
+          // the board is grouped by, and the full name is what an export has
+          // to carry.
+          + '<td class="small">' + (r.state
+              ? esc(r.state) + (r.state_code
+                  ? ' <span class="badge bg-light text-dark border">' + esc(r.state_code) + '</span>' : '')
+              : '<span class="text-muted">-</span>') + '</td>'
+          + cell(r.zip)
           + '<td class="small">' + esc(r.region || '—') + '</td>'
           + '<td class="small">' + (r.phone ? '<a href="tel:' + esc(r.phone) + '">' + esc(r.phone) + '</a>' : '<span class="text-muted">—</span>') + '</td>'
           + '<td class="small">' + (r.email ? '<a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a>' : '<span class="text-muted">—</span>')
@@ -373,7 +420,7 @@
       }).join('');
       cc_syncBar();
     } catch (e) {
-      body.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">Server error.</td></tr>';
+      body.innerHTML = '<tr><td colspan="14" class="text-center py-4 text-danger">Server error.</td></tr>';
     }
   };
 
@@ -463,10 +510,22 @@
     document.getElementById('cc_editName').textContent = EDITING.retailer;
     document.getElementById('cc_editWhere').textContent =
       [EDITING.city, EDITING.state, EDITING.region].filter(Boolean).join(' · ');
+    document.getElementById('cc_editAddress').value = EDITING.address || '';
+    document.getElementById('cc_editSuite').value = EDITING.suite || '';
+    document.getElementById('cc_editCity').value = EDITING.city || '';
+    document.getElementById('cc_editState').value = EDITING.state || '';
+    document.getElementById('cc_editZip').value = EDITING.zip || '';
+    // The states already on the board, so a correction is picked rather than
+    // typed: a state spelled a new way would open a fifty-first heading that
+    // nobody meant to create, with one shop under it.
+    document.getElementById('cc_stateList').innerHTML =
+      STATES.map(function (st) { return '<option value="' + esc(st.state) + '">'; }).join('');
     document.getElementById('cc_editStatus').value = String(EDITING.status || '').toLowerCase();
     document.getElementById('cc_editRemark').value = EDITING.remark || '';
-    document.getElementById('cc_editWho').textContent = EDITING.status_updated_by
-      ? ('Last changed by ' + EDITING.status_updated_by) : '';
+    var said = [];
+    if (EDITING.status_updated_by) said.push('Status last changed by ' + EDITING.status_updated_by);
+    if (EDITING.address_edited_by) said.push('Address last corrected by ' + EDITING.address_edited_by);
+    document.getElementById('cc_editWho').textContent = said.join(' \u00b7 ');
     new bootstrap.Modal(document.getElementById('cc_editModal')).show();
   };
 
@@ -480,6 +539,11 @@
         body: JSON.stringify({
           status: document.getElementById('cc_editStatus').value,
           remark: document.getElementById('cc_editRemark').value,
+          address: document.getElementById('cc_editAddress').value,
+          suite: document.getElementById('cc_editSuite').value,
+          city: document.getElementById('cc_editCity').value,
+          state: document.getElementById('cc_editState').value,
+          zip: document.getElementById('cc_editZip').value,
         }),
       })).json();
       if (!j.success) throw new Error(j.error || 'Could not save it.');
@@ -496,7 +560,7 @@
     // Status and Remark go in too: they are the office's own work on this
     // list, and an export that leaves them out is a copy of the source file
     // rather than a copy of what anybody has done with it.
-    var cols = ['Retailer', 'State', 'Region', 'City', 'Address', 'Suite', 'ZIP',
+    var cols = ['Retailer', 'State', 'Region', 'City', 'Street Name', 'Apartment No.', 'Zip Code',
                 'Phone', 'Email', 'Website', 'Kind', 'Status', 'Remark', 'Notes'];
     var rows = ROWS.map(function (r) {
       return [r.retailer, r.state, r.region, r.city, r.address, r.suite, r.zip,

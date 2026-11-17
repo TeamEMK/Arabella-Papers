@@ -16,6 +16,7 @@ const router = express.Router();
 const db = require('../../config/db');
 const { requireLogin } = require('../../middleware/auth');
 const { canSee } = require('../../utils/access');
+const address = require('../../utils/prospectAddress');
 
 async function allowed(req, res, next) {
   try {
@@ -132,7 +133,8 @@ router.get('/', requireLogin, allowed, async (req, res) => {
     const [rows] = await db.query(
       `SELECT id, retailer, state, state_code, region, city, address, suite, zip,
               phone, email, website, store_type, notes,
-              status, remark, status_updated_by, status_updated_at
+              status, remark, status_updated_by, status_updated_at,
+              address_edited_by, address_edited_at
          FROM cc_prospects${sql}
         ORDER BY state ASC, city ASC, retailer ASC
         LIMIT ${limit}`, args);
@@ -145,11 +147,12 @@ router.get('/', requireLogin, allowed, async (req, res) => {
 });
 
 /**
- * PUT /api/cc-prospects/:id — the status and the remark on one shop.
+ * PUT /api/cc-prospects/:id — the status, the remark, and the address.
  *
- * These two are all this route will write. The rest of the row came out of
- * the source workbook and is traceable back to it by source_row; letting the
- * screen edit the retailer's own name or address would quietly break that.
+ * The address was read off somebody else's find-a-retailer page and some of
+ * it is wrong, so the five address fields may be corrected here - see
+ * utils/prospectAddress.js. Everything else still comes from the workbook
+ * and is left alone: the retailer's own name, the region, the source row.
  */
 router.put('/:id', requireLogin, allowed, express.json(), async (req, res) => {
   try {
@@ -157,6 +160,13 @@ router.put('/:id', requireLogin, allowed, express.json(), async (req, res) => {
     if (!Number.isInteger(id) || id <= 0) {
       return res.status(400).json({ success: false, error: 'No such row.' });
     }
+    const where = address.fromBody(req.body);
+    if (where.error) return res.status(400).json({ success: false, error: where.error });
+    if (Object.keys(where.set).length) {
+      const saved = await writeAddress(id, where.set, req.session.user);
+      if (saved.error) return res.status(400).json({ success: false, error: saved.error });
+    }
+
     const out = await writeStatus([id], req.body, req.session.user);
     if (out.error) return res.status(400).json({ success: false, error: out.error });
     if (!out.changed) return res.status(404).json({ success: false, error: 'No such row.' });
@@ -227,6 +237,35 @@ async function writeStatus(ids, body, user, statusOnly) {
         SET status = ?, remark = ?, status_updated_by = ?, status_updated_at = NOW()
       WHERE id IN (?)`, [status, remark || null, who, ids]);
   return { changed: r.affectedRows, status, remark };
+}
+
+/**
+ * The corrected address, and the two-letter code that has to follow the state.
+ *
+ * THE CODE IS NOT TAKEN FROM THE SCREEN. state_code is what the badge on
+ * every row prints and what the board groups by, and a row carrying "Texas"
+ * with a code of "AL" would sit under the wrong state on a board built from
+ * 7,041 rows. So the code is looked up from the other rows in that state -
+ * the list already holds all fifty - and cleared when the state is one the
+ * list has never seen, which is honest where a stale code would not be.
+ */
+async function writeAddress(id, set, user) {
+  if (set.state !== undefined) {
+    if (!set.state) {
+      return { error: 'A shop has to be in a state.' };
+    }
+    const [[known]] = await db.query(
+      `SELECT state_code FROM cc_prospects
+        WHERE state = ? AND IFNULL(state_code,'') <> '' LIMIT 1`, [set.state]);
+    set.state_code = known ? known.state_code : null;
+  }
+  const cols = Object.keys(set);
+  await db.query(
+    `UPDATE cc_prospects SET ${cols.map(c => `\`${c}\` = ?`).join(', ')},
+            address_edited_by = ?, address_edited_at = NOW()
+      WHERE id = ?`,
+    [...cols.map(c => set[c]), (user && user.email) || '', id]);
+  return {};
 }
 
 module.exports = router;

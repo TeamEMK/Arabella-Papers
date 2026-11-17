@@ -54,6 +54,13 @@ const COLUMN_MIGRATIONS = [
   // The pricing module grew a rush fee after the quotes table had already
   // been deployed, and CREATE TABLE IF NOT EXISTS does not add a column to a
   // table that is already there.
+  // Both prospect lists learned to carry a flat/suite number and to say who
+  // last corrected an address, after they had been imported.
+  { table: 'bf_prospects', column: 'suite', type: 'VARCHAR(120) DEFAULT NULL' },
+  { table: 'bf_prospects', column: 'address_edited_by', type: "VARCHAR(150) DEFAULT ''" },
+  { table: 'bf_prospects', column: 'address_edited_at', type: 'DATETIME NULL' },
+  { table: 'cc_prospects', column: 'address_edited_by', type: "VARCHAR(150) DEFAULT ''" },
+  { table: 'cc_prospects', column: 'address_edited_at', type: 'DATETIME NULL' },
   // The activity log learned to say which screen somebody was on when they
   // left, after it had been collecting rows for a year.
   { table: 'activity_log', column: 'screen', type: "VARCHAR(80) DEFAULT ''" },

@@ -168,6 +168,10 @@ async function connect() {
     address VARCHAR(400) DEFAULT NULL,
     city VARCHAR(120) DEFAULT NULL,
     state VARCHAR(80) DEFAULT NULL,
+    -- Not in the sheet. The map published one address line and no flat
+    -- numbers, so this is filled in on screen afterwards - and an import
+    -- must not be the thing that leaves the column out.
+    suite VARCHAR(120) DEFAULT NULL,
     zip VARCHAR(20) DEFAULT NULL,
     country VARCHAR(60) DEFAULT NULL,
     phone VARCHAR(60) DEFAULT NULL,
@@ -180,6 +184,8 @@ async function connect() {
     remark TEXT,
     status_updated_by VARCHAR(150) DEFAULT '',
     status_updated_at DATETIME DEFAULT NULL,
+    address_edited_by VARCHAR(150) DEFAULT '',
+    address_edited_at DATETIME DEFAULT NULL,
     source_row INT DEFAULT NULL,
     INDEX idx_bf_state (state),
     INDEX idx_bf_store (store_name)

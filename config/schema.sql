@@ -897,6 +897,10 @@ CREATE TABLE IF NOT EXISTS bf_prospects (
   city VARCHAR(120) DEFAULT NULL,
   -- "State/Prov." in the sheet: a US state, a Canadian province, or blank.
   state VARCHAR(80) DEFAULT NULL,
+  -- The flat, suite or unit. The source sheet had no such column - it put
+  -- everything in one address line - so this starts empty on all 395 and is
+  -- filled by the office as they learn it.
+  suite VARCHAR(120) DEFAULT NULL,
   zip VARCHAR(20) DEFAULT NULL,
   -- 389 USA, 5 Canada, 1 Panama. Kept because a calling round is planned
   -- by country first and the five Canadian ones are not a US state.
@@ -915,6 +919,11 @@ CREATE TABLE IF NOT EXISTS bf_prospects (
   remark TEXT,
   status_updated_by VARCHAR(150) DEFAULT '',
   status_updated_at DATETIME DEFAULT NULL,
+  -- The address came out of the workbook and can now be corrected on screen,
+  -- so the row has to say who changed it. source_row still points at where it
+  -- started, which is the question these two were protecting.
+  address_edited_by VARCHAR(150) DEFAULT '',
+  address_edited_at DATETIME DEFAULT NULL,
   -- The row it came from in the workbook, so a question about one can be
   -- traced back to the sheet.
   source_row INT DEFAULT NULL,
@@ -950,6 +959,10 @@ CREATE TABLE IF NOT EXISTS cc_prospects (
   remark TEXT,
   status_updated_by VARCHAR(150) DEFAULT '',
   status_updated_at DATETIME DEFAULT NULL,
+  -- Same as on bf_prospects: the address is editable now, so the row says
+  -- who last changed it.
+  address_edited_by VARCHAR(150) DEFAULT '',
+  address_edited_at DATETIME DEFAULT NULL,
   -- The row it came from in the workbook, so a question about one can be
   -- traced back to the sheet.
   source_row INT DEFAULT NULL,

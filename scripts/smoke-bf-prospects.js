@@ -202,6 +202,51 @@ const DEALERS = [
   check('a row that does not exist is a 404',
     (await put('/api/bf-prospects/999999', { status: 'active' })).status === 404);
 
+  // ── CORRECTING AN ADDRESS ──
+  //
+  // The map published one address line and no flat numbers at all, so every
+  // one of the 395 starts with an empty Apartment No. - the office fills it
+  // in as it learns them, and the column would be pointless without this.
+  console.log('\nCorrecting an address');
+  const where = async (id) => (await db.query(
+    `SELECT address, suite, city, state, zip, address_edited_by
+       FROM bf_prospects WHERE id = ?`, [id]))[0][0];
+
+  w = await put('/api/bf-prospects/' + one.id, {
+    address: 'Torres de las Americas, Torre B', suite: 'Suite 403',
+    city: 'Panama City', state: 'Panama', zip: '0801',
+  });
+  check('an address can be corrected', w.json && w.json.success === true, w.json);
+  let a = await where(one.id);
+  check('the flat number lands on a list that never had one',
+    a.suite === 'Suite 403', a);
+  check('and the street, the town, the state and the ZIP with it',
+    a.address === 'Torres de las Americas, Torre B' && a.city === 'Panama City'
+    && a.state === 'Panama' && a.zip === '0801', a);
+  check('and the row says who corrected it',
+    a.address_edited_by === process.env.ADMIN_EMAIL, a);
+
+  check('a flat number can be cleared again, so a mistake is not permanent',
+    (await put('/api/bf-prospects/' + one.id, { suite: '' })).json.success === true
+    && (await where(one.id)).suite === null);
+
+  w = await put('/api/bf-prospects/' + one.id, { zip: 'x'.repeat(40) });
+  check('something too long for the column is refused, not cut in half',
+    w.json && w.json.success === false, w.json);
+
+  const beforeName = (await db.query(
+    'SELECT store_name, country FROM bf_prospects WHERE id = ?', [one.id]))[0][0];
+  await put('/api/bf-prospects/' + one.id, { store_name: 'Somebody Else', country: 'Mars' });
+  const afterName = (await db.query(
+    'SELECT store_name, country FROM bf_prospects WHERE id = ?', [one.id]))[0][0];
+  check('the dealer name and country still come off the map',
+    afterName.store_name === beforeName.store_name && afterName.country === beforeName.country,
+    afterName);
+
+  await put('/api/bf-prospects/' + one.id, { status: 'active' });
+  check('marking a dealer does not wipe the address beside it',
+    (await where(one.id)).address === 'Torres de las Americas, Torre B');
+
   console.log('\nMarking a batch');
   const [all] = await db.query('SELECT id FROM bf_prospects ORDER BY id');
   const three = all.slice(0, 3).map(r => r.id);
@@ -239,8 +284,31 @@ const DEALERS = [
     /PICKS = new Set\(\)/.test(view) && /PICKS\.has\(r\.id\)/.test(view));
   // Half of them have no address. Saying so is better than an empty cell
   // that reads as a loading failure.
+  // AS MANY CELLS AS THERE ARE HEADINGS.
+  //
+  // Four columns were added to a table of ten, and a row that builds one
+  // cell too few does not look broken - it looks like every value from
+  // there on is in the wrong column, which is the kind of thing somebody
+  // reads a ZIP out of and dials.
+  const headings = (view.match(/<thead[\s\S]*?<\/thead>/) || [''])[0];
+  // From the <tr> onwards, so the little cell() helper above it - which
+  // holds a <td> of its own - is not counted as a column.
+  const rowFn = view.slice(view.indexOf('body.innerHTML = ROWS.map'));
+  const rowOnly = rowFn.slice(rowFn.indexOf("return '<tr"), rowFn.indexOf('}).join'));
+  const heads = (headings.match(/<th[ >]/g) || []).length;
+  const cells = (rowOnly.match(/<td[ >]/g) || []).length
+    + (rowOnly.match(/\+ cell\(/g) || []).length;
+  check('every heading has a cell under it', heads === cells, { heads, cells });
+  for (const col of ['Street Name', 'Apartment No.', 'State', 'Zip Code']) {
+    check('"' + col + '" is a column of its own', view.includes('>' + col + '</th>'));
+  }
+  check('and each of them can be typed into',
+    /bf_editAddress/.test(view) && /bf_editSuite/.test(view)
+    && /bf_editState/.test(view) && /bf_editZip/.test(view));
+  check('the flat number is in the export too, where it is new',
+    /'Apartment No\.'/.test(view) && /r\.suite/.test(view));
   check('a missing address says so rather than being left blank',
-    /no address published/.test(view));
+    /none published/.test(view));
   check('the export carries the office\'s own work, not just the source file',
     /'Status', 'Remark'/.test(view));
 

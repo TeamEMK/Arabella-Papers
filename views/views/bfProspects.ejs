@@ -93,7 +93,11 @@
                        title="Select everything listed">
               </th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Dealer</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Street Name</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Apartment No.</th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">City</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">State</th>
+              <th style="position:sticky;top:0;background:#212529;color:#fff;">Zip Code</th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Phone</th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Email</th>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Online</th>
@@ -123,6 +127,36 @@
       <div class="modal-body">
         <div class="text-muted small mb-2" id="bf_editWhere"></div>
         <div class="small mb-3" id="bf_editReach"></div>
+        <!-- THE ADDRESS IS CORRECTABLE, the rest of the row is not. The map
+             published one address line and no flat numbers at all, so this
+             is where the office puts what it learns. The dealer's own name,
+             the country and the source row still come from the map. -->
+        <div class="row g-2 mb-3">
+          <div class="col-12">
+            <label class="form-label fw-bold small">Street Name</label>
+            <input class="form-control form-control-sm" id="bf_editAddress" maxlength="400">
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">Apartment No.</label>
+            <input class="form-control form-control-sm" id="bf_editSuite" maxlength="120"
+                   placeholder="Suite 403">
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">Zip Code</label>
+            <input class="form-control form-control-sm" id="bf_editZip" maxlength="20">
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">City</label>
+            <input class="form-control form-control-sm" id="bf_editCity" maxlength="120">
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">State</label>
+            <input class="form-control form-control-sm" id="bf_editState" maxlength="80"
+                   list="bf_stateList">
+            <datalist id="bf_stateList"></datalist>
+            <div class="form-text">A US state or a Canadian province.</div>
+          </div>
+        </div>
         <div class="mb-3">
           <label class="form-label fw-bold">Status</label>
           <select class="form-select" id="bf_editStatus">
@@ -286,10 +320,10 @@
       limit: 2000,
     });
     var body = document.getElementById('bf_body');
-    body.innerHTML = '<tr><td colspan="10" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading…</td></tr>';
+    body.innerHTML = '<tr><td colspan="14" class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Loading…</td></tr>';
     try {
       var j = await (await fetch('/api/bf-prospects?' + p)).json();
-      if (!j.success) { body.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">' + esc(j.error) + '</td></tr>'; return; }
+      if (!j.success) { body.innerHTML = '<tr><td colspan="14" class="text-center py-4 text-danger">' + esc(j.error) + '</td></tr>'; return; }
       ROWS = j.rows;
 
       // Named by what is actually being looked at, so somebody who clicked a
@@ -318,26 +352,36 @@
           ? ('showing ' + n(j.shown) + ' of ' + n(j.total))
           : (n(j.total) + ' dealer' + (j.total === 1 ? '' : 's')));
 
-      if (!ROWS.length) { body.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">Nobody matches.</td></tr>'; return; }
+      if (!ROWS.length) { body.innerHTML = '<tr><td colspan="14" class="text-center py-4 text-muted">Nobody matches.</td></tr>'; return; }
 
       body.innerHTML = ROWS.map(function (r, i) {
         var online = [];
         if (r.website) online.push('<a href="' + esc(link(r.website)) + '" target="_blank" rel="noopener">site</a>');
         if (r.instagram) online.push('<a href="' + esc(link(r.instagram)) + '" target="_blank" rel="noopener">instagram</a>');
         if (r.facebook) online.push('<a href="' + esc(link(r.facebook)) + '" target="_blank" rel="noopener">facebook</a>');
-        // The row opens the editor as well as the pen does: there are ten
-        // columns and the pen is off the right-hand edge until somebody
-        // scrolls to it.
+        // Each part of the address in its own cell, printed once. It used
+        // to be squeezed under the name and under the town, and a value in
+        // two places is one somebody will eventually correct in only one of
+        // them.
+        var cell = function (v) {
+          return '<td class="small">' + (v ? esc(v) : '<span class="text-muted">-</span>') + '</td>';
+        };
+        // The row opens the editor as well as the pen does: there are
+        // fourteen columns and the pen is off the right-hand edge until
+        // somebody scrolls to it.
         return '<tr class="bf-row" data-i="' + i + '">'
           + '<td><input type="checkbox" class="form-check-input bf-pick" value="' + r.id
             + '" ' + (PICKS.has(r.id) ? 'checked' : '') + ' onchange="bf_pick(' + r.id + ', this.checked)"></td>'
-          + '<td class="fw-bold">' + esc(r.store_name)
-            + (r.address ? '<div class="small text-muted fw-normal">' + esc(r.address) + '</div>'
-                         : '<div class="small text-muted fw-normal fst-italic">no address published</div>')
-          + '</td>'
-          + '<td class="small">' + esc(r.city || '—')
-            + (PICKED ? '' : ' <span class="badge bg-light text-dark border">' + esc(r.state || '—') + '</span>')
-            + (r.zip ? '<div class="text-muted">' + esc(r.zip) + '</div>' : '') + '</td>'
+          + '<td class="fw-bold">' + esc(r.store_name) + '</td>'
+          // The map showed only what each dealer chose to publish, and 72 of
+          // them published no address at all. Said in words rather than left
+          // as a dash, which would read as "we did not fetch it".
+          + '<td class="small">' + (r.address ? esc(r.address)
+              : '<span class="text-muted fst-italic">none published</span>') + '</td>'
+          + cell(r.suite)
+          + cell(r.city)
+          + cell(r.state)
+          + cell(r.zip)
           + '<td class="small">' + (r.phone ? '<a href="tel:' + esc(r.phone) + '">' + esc(r.phone) + '</a>' : '<span class="text-muted">—</span>') + '</td>'
           + '<td class="small">' + (r.email ? '<a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a>' : '<span class="text-muted">—</span>') + '</td>'
           + '<td class="small">' + (online.length ? online.join(' · ') : '<span class="text-muted">—</span>') + '</td>'
@@ -355,7 +399,7 @@
       }).join('');
       bf_syncBar();
     } catch (e) {
-      body.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">Server error.</td></tr>';
+      body.innerHTML = '<tr><td colspan="14" class="text-center py-4 text-danger">Server error.</td></tr>';
     }
   };
 
@@ -455,10 +499,21 @@
     document.getElementById('bf_editReach').innerHTML = reach.length
       ? reach.join(' &nbsp;·&nbsp; ')
       : '<span class="text-danger">Nothing published — no phone, no email, no website.</span>';
+    document.getElementById('bf_editAddress').value = EDITING.address || '';
+    document.getElementById('bf_editSuite').value = EDITING.suite || '';
+    document.getElementById('bf_editCity').value = EDITING.city || '';
+    document.getElementById('bf_editState').value = EDITING.state || '';
+    document.getElementById('bf_editZip').value = EDITING.zip || '';
+    // The ones already on the list, so a correction is picked rather than
+    // typed and "AL" does not become a second heading beside "Alabama".
+    document.getElementById('bf_stateList').innerHTML =
+      STATES.map(function (st) { return '<option value="' + esc(st.state) + '">'; }).join('');
     document.getElementById('bf_editStatus').value = String(EDITING.status || '').toLowerCase();
     document.getElementById('bf_editRemark').value = EDITING.remark || '';
-    document.getElementById('bf_editWho').textContent = EDITING.status_updated_by
-      ? ('Last changed by ' + EDITING.status_updated_by) : '';
+    var said = [];
+    if (EDITING.status_updated_by) said.push('Status last changed by ' + EDITING.status_updated_by);
+    if (EDITING.address_edited_by) said.push('Address last corrected by ' + EDITING.address_edited_by);
+    document.getElementById('bf_editWho').textContent = said.join(' \u00b7 ');
     new bootstrap.Modal(document.getElementById('bf_editModal')).show();
   };
 
@@ -472,6 +527,11 @@
         body: JSON.stringify({
           status: document.getElementById('bf_editStatus').value,
           remark: document.getElementById('bf_editRemark').value,
+          address: document.getElementById('bf_editAddress').value,
+          suite: document.getElementById('bf_editSuite').value,
+          city: document.getElementById('bf_editCity').value,
+          state: document.getElementById('bf_editState').value,
+          zip: document.getElementById('bf_editZip').value,
         }),
       })).json();
       if (!j.success) throw new Error(j.error || 'Could not save it.');
@@ -488,11 +548,11 @@
     // Status and Remark go in too: they are the office's own work on this
     // list, and an export without them is a copy of the source file rather
     // than a copy of what anybody has done with it.
-    var cols = ['Dealer', 'Address', 'City', 'State/Prov.', 'ZIP', 'Country',
+    var cols = ['Dealer', 'Street Name', 'Apartment No.', 'City', 'State/Prov.', 'ZIP', 'Country',
                 'Phone', 'Email', 'Website', 'Instagram', 'Facebook',
                 'Visitor policy', 'Status', 'Remark'];
     var rows = ROWS.map(function (r) {
-      return [r.store_name, r.address, r.city, r.state, r.zip, r.country,
+      return [r.store_name, r.address, r.suite, r.city, r.state, r.zip, r.country,
               r.phone, r.email, r.website, r.instagram, r.facebook,
               r.visitor_policy, r.status || '', r.remark || ''];
     });
