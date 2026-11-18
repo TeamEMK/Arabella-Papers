@@ -2,7 +2,9 @@ const express = require('express');
 const multer = require('multer');
 const router = express.Router();
 const db = require('../../config/db');
-const { FILE_FIELDS, ALLOWED_TYPES, saveFile } = require('../../utils/joiningForm');
+const { checkFile } = require('../../utils/fileKind');
+const DOC_KINDS = ['pdf', 'jpeg', 'png', 'heic', 'webp', 'doc', 'docx'];
+const { FILE_FIELDS, saveFile } = require('../../utils/joiningForm');
 
 // ══════════════════════════════════════════════════════
 // THE ONBOARDING FORM (/api/joining/*) — no login
@@ -156,8 +158,11 @@ router.post('/:token', receive, async (req, res) => {
 
     for (const field of FILE_FIELDS) {
       const f = files[field] && files[field][0];
-      if (f && !ALLOWED_TYPES.has(f.mimetype)) {
-        return res.status(400).json({ success: false, error: `${f.originalname}: only a PDF, a Word file or a photo (JPG, PNG, HEIC).` });
+      // The bytes decide, not the Content-Type the browser typed: these
+      // files are stored and later opened by whoever checks the form.
+      const kind = f && checkFile(f, DOC_KINDS);
+      if (f && !kind.ok) {
+        return res.status(400).json({ success: false, error: kind.error });
       }
     }
 

@@ -9,6 +9,8 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
+const { checkFile } = require('../../utils/fileKind');
+const FILE_KINDS = ['pdf', 'jpeg', 'png', 'webp', 'heic', 'gif', 'doc', 'docx', 'xlsx', 'csv'];
 const { uploadToDrive } = require('../../utils/drive');
 const { requireLogin } = require('../../middleware/auth');
 
@@ -171,7 +173,12 @@ router.get('/:fmsId/steps/:stepId/rows', requireLogin, async (req, res) => {
 router.post('/upload', requireLogin, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, error: 'No file.' });
-    const url = await uploadToDrive(req.file.buffer, req.file.originalname, req.file.mimetype);
+    // Whatever goes on Drive is opened by somebody in the office from a link
+    // in a cell. An .exe named like a photograph is exactly the thing that
+    // gets double-clicked, so the bytes are read here.
+    const kind = checkFile(req.file, FILE_KINDS);
+    if (!kind.ok) return res.status(400).json({ success: false, error: kind.error });
+    const url = await uploadToDrive(req.file.buffer, req.file.originalname, kind.mime);
     res.json({ success: true, url });
   } catch (err) {
     console.error('FMS upload failed:', err);

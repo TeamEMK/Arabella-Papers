@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../config/db');
+const { sniff, sendHeaders, KINDS } = require('../../utils/fileKind');
 const { archiveThenDelete } = require('../../utils/archive');
 const { requireLogin, requireRole, hasRole } = require('../../middleware/auth');
 const { codeFor } = require('../../utils/linerCode');
@@ -256,8 +257,7 @@ router.get('/image/:id', requireLogin, async (req, res) => {
       `SELECT mime_type, bytes FROM envelope_linear_items
         WHERE id = ? AND is_active = 1`, [id]);
     if (!row || !row.bytes) return res.status(404).end();
-    res.type(row.mime_type || 'image/jpeg');
-    res.setHeader('Content-Length', row.bytes.length);
+    sendHeaders(res, row.bytes, row.mime_type || 'image/jpeg', 'liner-' + id);
     // A design never changes under its id - a replacement is a new row - so
     // the browser can hold on to it. Private: these are behind a login.
     res.setHeader('Cache-Control', 'private, max-age=86400, immutable');
@@ -363,18 +363,22 @@ router.put('/:id', requireLogin, canManage, async (req, res) => {
  * this is the backstop, not the rule.
  */
 const MAX_PICTURE = 4 * 1024 * 1024;
-const PICTURE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const PICTURE_KINDS = ['jpeg', 'png', 'webp'];
 
 function decodePicture(dataUrl, what) {
   const m = /^data:([a-z]+\/[a-z0-9.+-]+);base64,(.+)$/i.exec(String(dataUrl || ''));
   if (!m) return { error: 'The ' + what + ' did not arrive as a picture.' };
-  const mime = m[1].toLowerCase();
-  if (!PICTURE_TYPES.includes(mime)) {
-    return { error: 'A ' + what + ' has to be a JPG, PNG or WebP.' };
-  }
   let bytes;
   try { bytes = Buffer.from(m[2], 'base64'); } catch (e) { bytes = null; }
   if (!bytes || !bytes.length) return { error: 'The ' + what + ' was empty.' };
+  // The type written into the data URL is whatever the page felt like
+  // saying. The bytes are read instead, and the type that goes into the
+  // database - and back out of the image route - comes from them.
+  const kind = sniff(bytes);
+  if (!kind || !PICTURE_KINDS.includes(kind)) {
+    return { error: 'A ' + what + ' has to be a JPG, PNG or WebP.' };
+  }
+  const mime = KINDS[kind].mime;
   if (bytes.length > MAX_PICTURE) {
     return { error: 'That ' + what + ' is ' + (bytes.length / 1048576).toFixed(1)
       + 'MB. Four is the most that can go through in one go.' };

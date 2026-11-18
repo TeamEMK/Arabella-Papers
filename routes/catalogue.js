@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
+const { checkFiles, sendHeaders } = require('../utils/fileKind');
 const { sendMail } = require('../utils/mailer');
 const { TRADING_NAME } = require('../utils/office');
 
@@ -58,8 +59,10 @@ router.get('/thumb/:id', async (req, res) => {
       'SELECT mime_type, IFNULL(thumb, bytes) AS bytes FROM catalogue_items WHERE id = ? AND is_active = 1',
       [parseInt(req.params.id, 10)]);
     if (!item || !item.bytes) return res.status(404).send('Not found.');
-    res.setHeader('Content-Type', item.mime_type || 'application/octet-stream');
-    res.setHeader('Content-Length', item.bytes.length);
+    // Told, and told not to guess. An SVG uploaded before fileKind.js
+    // existed goes out as bytes to save rather than a page to open, so its
+    // script cannot run on our own address.
+    sendHeaders(res, item.bytes, item.mime_type, 'design-' + req.params.id);
     // s-maxage, not just max-age. Without it Vercel's edge does not keep a
     // function's response at all, so every tile on every visit was waking a
     // function and asking the database for the same bytes again - which is
@@ -83,8 +86,7 @@ router.get('/image/:id', async (req, res) => {
     // the gap between the two says which ids are real.
     if (!item || !item.bytes) return res.status(404).send('Not found.');
 
-    res.setHeader('Content-Type', item.mime_type || 'application/octet-stream');
-    res.setHeader('Content-Length', item.bytes.length);
+    sendHeaders(res, item.bytes, item.mime_type, 'design-' + req.params.id);
     // A catalogue picture changes about never, and this page is meant to be
     // opened by a lot of people who are not paying for the bandwidth.
     // s-maxage, not just max-age. Without it Vercel's edge does not keep a
@@ -287,10 +289,7 @@ const sendUpload = multer({
   limits: { fileSize: 4 * 1024 * 1024, files: 3 },
 });
 
-const SEND_TYPES = [
-  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml',
-  'application/pdf', 'application/postscript',
-];
+const SEND_KINDS = ['jpeg', 'png', 'webp', 'gif', 'pdf'];
 
 const THEIRS = new Map();
 const THEIRS_MAX = 6;
@@ -324,13 +323,11 @@ router.post('/api/theirs', sendUpload.array('files', 3), async (req, res) => {
 
     const files = req.files || [];
     if (!files.length) return res.json({ success: false, error: 'Attach your design first.' });
-    const wrong = files.filter(f => !SEND_TYPES.includes(f.mimetype));
-    if (wrong.length) {
-      return res.json({
-        success: false,
-        error: 'We can take pictures and PDFs — ' + wrong.map(f => f.originalname).join(', '),
-      });
-    }
+    // These go straight into somebody's inbox in the office as an
+    // attachment, so what arrives has to BE a picture, not merely claim to
+    // be one. The bytes are read; the browser's label is ignored.
+    const kinds = checkFiles(files, SEND_KINDS);
+    if (!kinds.ok) return res.json({ success: false, error: kinds.error });
 
     const html = `
       <div style="font-family:Helvetica,Arial,sans-serif;color:#1b1f23;max-width:620px">

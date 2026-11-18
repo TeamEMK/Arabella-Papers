@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
+const { checkFile } = require('../../utils/fileKind');
 const { archiveThenDelete } = require('../../utils/archive');
 const { requireLogin, requireRole } = require('../../middleware/auth');
 
@@ -25,7 +26,12 @@ const CATEGORIES = ['Borders', 'Fonts', 'Monograms', 'Motifs', 'Patterns', 'Orde
 
 // Pictures only. This is a gallery - a PDF or a spreadsheet here would show
 // as a broken image on a page the client's customers are looking at.
-const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+// The kinds a catalogue design may be, decided by reading the file's first
+// bytes rather than by believing the browser - see utils/fileKind.js.
+// SVG IS GONE from this list on purpose: it is a document that can carry
+// <script>, and this picture is handed back out from our own address to
+// whoever opens the customer catalogue. A photograph of paper is a raster.
+const ALLOWED_KINDS = ['jpeg', 'png', 'webp', 'gif'];
 
 const canManage = requireRole('SuperAdmin', 'Head');
 
@@ -56,19 +62,15 @@ router.post('/', requireLogin, canManage, upload.single('image'), async (req, re
       return res.status(400).json({ success: false, error: 'Choose a category: ' + CATEGORIES.join(', ') });
     }
     if (!req.file) return res.status(400).json({ success: false, error: 'Attach a picture.' });
-    if (!ALLOWED.includes(req.file.mimetype)) {
-      return res.status(400).json({
-        success: false,
-        error: 'That is not a picture. Use a JPG, PNG, WEBP, GIF or SVG.',
-      });
-    }
+    const kind = checkFile(req.file, ALLOWED_KINDS);
+    if (!kind.ok) return res.status(400).json({ success: false, error: kind.error });
 
     const [r] = await db.query(
       `INSERT INTO catalogue_items
          (category, name, code, file_name, mime_type, bytes, sort_order, created_by)
        VALUES (?,?,?,?,?,?,?,?)`,
       [category, clean(req.body.name), clean(req.body.code, 60),
-       clean(req.file.originalname), req.file.mimetype, req.file.buffer,
+       clean(req.file.originalname), kind.mime, req.file.buffer,
        parseInt(req.body.sortOrder, 10) || 0, req.session.user.id],
     );
     res.json({ success: true, id: r.insertId });

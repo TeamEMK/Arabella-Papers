@@ -1,5 +1,10 @@
 const crypto = require('crypto');
 const db = require('../config/db');
+const { sniff, KINDS } = require('./fileKind');
+const mimeOf = (buf) => {
+  const k = sniff(buf);
+  return (k && KINDS[k].mime) || 'application/octet-stream';
+};
 const recruitEmail = require('./recruitEmail');
 
 // ══════════════════════════════════════════════════════
@@ -85,15 +90,10 @@ async function mailForm(candidate) {
   return result;
 }
 
-// A CV is a document; an ID card is usually a photograph of one. Anything
-// else is refused rather than stored — these are opened by people, not by a
-// sandbox.
-const ALLOWED_TYPES = new Set([
-  'application/pdf',
-  'image/jpeg', 'image/png', 'image/heic', 'image/webp',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-]);
+// A CV is a document; an ID card is usually a photograph of one. Which kinds
+// those are now lives in utils/fileKind.js, and the routes ask it before
+// anything is stored - the list that used to be here was a list of what the
+// browser SAID, which is not a fact about the file.
 
 /**
  * Put one document on a candidate's record.
@@ -114,7 +114,11 @@ async function saveFile(candidateId, field, file) {
      ON DUPLICATE KEY UPDATE file_name = VALUES(file_name), mime_type = VALUES(mime_type),
                              size_bytes = VALUES(size_bytes), bytes = VALUES(bytes),
                              uploaded_at = NOW()`,
-    [candidateId, field, clean(file.originalname), clean(file.mimetype, 120), file.size, file.buffer]);
+    // The type STORED is the one read out of the bytes, never the one the
+    // browser claimed - this column is what the download route hands to the
+    // browser later, so a wrong label here is a wrong label forever.
+    [candidateId, field, clean(file.originalname), mimeOf(file.buffer),
+     file.size, file.buffer]);
 }
 
-module.exports = { FILE_FIELDS, ALLOWED_TYPES, formUrl, ensureToken, logMessage, mailForm, saveFile };
+module.exports = { FILE_FIELDS, formUrl, ensureToken, logMessage, mailForm, saveFile };

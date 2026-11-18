@@ -6,7 +6,7 @@ const { archiveThenDelete } = require('../../utils/archive');
 const { requireLogin } = require('../../middleware/auth');
 const { canSee } = require('../../utils/access');
 const recruitEmail = require('../../utils/recruitEmail');
-const { FILE_FIELDS, ALLOWED_TYPES, formUrl, mailForm, logMessage, saveFile } = require('../../utils/joiningForm');
+const { FILE_FIELDS, formUrl, mailForm, logMessage, saveFile } = require('../../utils/joiningForm');
 const { buildOfferLetter } = require('../../utils/offerLetter');
 const { STATUSES, DEFAULT_STATUS } = require('../../utils/recruitStatus');
 
@@ -284,9 +284,10 @@ router.post('/candidates', requireLogin, upload.single('resume_file'), async (re
     // CV we already hold.
     let resume = null;
     if (req.file) {
-      if (!ALLOWED_TYPES.has(req.file.mimetype)) {
-        return res.status(400).json({ success: false, error: `${req.file.originalname}: a CV has to be a PDF, a Word file or a photo.` });
-      }
+      // Mailed to the office as an attachment, so it has to be what it
+      // says it is. utils/fileKind.js reads the first bytes.
+      const cvKind = checkFile(req.file, DOC_KINDS);
+      if (!cvKind.ok) return res.status(400).json({ success: false, error: cvKind.error });
       await saveFile(candidate.id, 'resume_file', req.file);
       resume = { filename: req.file.originalname, content: req.file.buffer, contentType: req.file.mimetype };
     }
@@ -377,9 +378,8 @@ router.post('/candidates/:id/cv', requireLogin, upload.single('resume_file'), as
     const [[c]] = await db.query('SELECT * FROM recruit_candidates WHERE id = ? AND is_deleted = 0', [id]);
     if (!c) return res.status(404).json({ success: false, error: 'Candidate not found.' });
     if (!req.file) return res.status(400).json({ success: false, error: 'No file came through.' });
-    if (!ALLOWED_TYPES.has(req.file.mimetype)) {
-      return res.status(400).json({ success: false, error: `${req.file.originalname}: a CV has to be a PDF, a Word file or a photo.` });
-    }
+    const cvKindAgain = checkFile(req.file, DOC_KINDS);
+    if (!cvKindAgain.ok) return res.status(400).json({ success: false, error: cvKindAgain.error });
 
     await saveFile(id, 'resume_file', req.file);
 
@@ -766,15 +766,13 @@ router.get('/joining-file/:id/:field', requireLogin, async (req, res) => {
       [parseInt(req.params.id, 10), field]);
     if (!doc) return res.status(404).send('Not uploaded.');
 
-    res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
-    // Stated rather than left to chunked encoding: a PDF viewer opening this
-    // in a tab wants to know how much there is before it starts drawing.
-    res.setHeader('Content-Length', doc.bytes.length);
-    // Shown in the browser rather than downloaded: whoever opens this is
-    // checking an Aadhaar against a form, not collecting files. The name still
-    // travels, so a Save As gets something better than a number.
-    res.setHeader('Content-Disposition',
-      `inline; filename="${String(doc.file_name || field).replace(/[^\w. -]+/g, '_')}"`);
+    // Shown in the browser rather than downloaded - whoever opens this is
+    // checking an Aadhaar against a form, not collecting files - but only
+    // for the types that are safe to open inline, and with nosniff so the
+    // browser does not decide for itself. The length is stated rather than
+    // left to chunked encoding: a PDF viewer wants to know how much there is
+    // before it starts drawing.
+    sendHeaders(res, doc.bytes, doc.mime_type, doc.file_name || field);
     // Never let a proxy or the browser keep a copy of somebody's ID card.
     res.setHeader('Cache-Control', 'private, no-store');
     res.end(doc.bytes);

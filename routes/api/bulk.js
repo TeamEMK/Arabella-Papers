@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
+const { checkFile } = require('../../utils/fileKind');
 const { logOrderEvent } = require('../../utils/auditlog');
 const { recordPunchedOrder } = require('../../utils/scot');
 const { requireRole } = require('../../middleware/auth');
@@ -524,6 +525,10 @@ router.post('/preview', canImport, upload.single('file'), async (req, res) => {
     const type = req.body.type;
     if (!TYPES[type]) return res.status(400).json({ success: false, error: 'Choose what you are importing.' });
     if (!req.file) return res.status(400).json({ success: false, error: 'Attach a .xlsx or .csv file.' });
+    // The parser is handed whatever arrives, so what arrives has to be a
+    // spreadsheet in fact and not only in name.
+    const kind = checkFile(req.file, ['xlsx', 'csv', 'doc']);
+    if (!kind.ok) return res.status(400).json({ success: false, error: kind.error });
 
     const { headers, rows, sheets } = await readRows(req.file.buffer, req.file.originalname);
     if (!rows.length) return res.status(400).json({ success: false, error: 'That file has headers but no data rows.' });

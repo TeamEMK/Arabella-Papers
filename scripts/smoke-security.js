@@ -395,7 +395,7 @@ const NL = String.fromCharCode(10);
     // an archive nobody can open. The row around them still is.
     await db.query(
       `INSERT INTO catalogue_items (category, name, bytes, mime_type)
-       VALUES ('Invitation', 'Archive Probe Design', ?, 'image/png')`,
+       VALUES ('Patterns', 'Archive Probe Design', ?, 'image/png')`,
       [Buffer.alloc(4096, 7)]);
     const [[pic]] = await db.query(
       "SELECT id FROM catalogue_items WHERE name = 'Archive Probe Design'");
@@ -428,6 +428,90 @@ const NL = String.fromCharCode(10);
     const nowWorks = await go('/api/orders/K-ARCH-2', { method: 'DELETE', headers: { cookie } });
     check('with the archive back, the same delete goes through',
       nowWorks.status === 200, nowWorks.status);
+
+    // ══════════════════════════════════════════════════
+    // 7. AN UPLOAD IS WHAT ITS BYTES SAY, NOT WHAT IT CLAIMS
+    //
+    // Every upload check read req.file.mimetype - a line the browser types
+    // into the request. So a Windows program posted as "image/png" was a
+    // catalogue design, a CV mailed to the office, a file on Drive for
+    // somebody to double-click.
+    //
+    // The attack here is exactly that: real executable bytes, labelled
+    // image/png, with a .png on the end. And the normal flow next to it: a
+    // real PNG, which must still go up.
+    console.log(NL + 'What an upload really is');
+
+    const EXE = Buffer.concat([Buffer.from('MZ'), Buffer.alloc(200, 0x41)]);
+    // A one-pixel PNG, header and all - a genuine file, not a stand-in.
+    const PNG = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+      'base64');
+
+    const postFile = async (url, field, name, type, bytes, extra) => {
+      const form = new FormData();
+      for (const [k, v] of Object.entries(extra || {})) form.append(k, v);
+      form.append(field, new Blob([bytes], { type }), name);
+      return go(url, { method: 'POST', headers: { cookie }, body: form });
+    };
+
+    const dressed = await postFile('/api/catalogue', 'image', 'design.png', 'image/png',
+      EXE, { category: 'Patterns', name: 'Dressed up' });
+    const dressedBody = await dressed.json().catch(() => ({}));
+    check('a program posted as image/png is refused',
+      dressed.status === 400, dressed.status);
+    check('and the sentence names the file, not the format it really is',
+      /design\.png/.test(String(dressedBody.error || ''))
+      && !/exe|executable|windows/i.test(String(dressedBody.error || '')), dressedBody);
+    const [[none]] = await db.query(
+      "SELECT COUNT(*) c FROM catalogue_items WHERE name = 'Dressed up'");
+    check('and nothing was stored', none.c === 0, none);
+
+    // The other way round: a real PNG wearing somebody else's extension.
+    const misnamed = await postFile('/api/catalogue', 'image', 'design.pdf', 'image/png',
+      PNG, { category: 'Patterns', name: 'Misnamed' });
+    check('a real PNG called .pdf is refused too', misnamed.status === 400, misnamed.status);
+
+    // An SVG is a document that can carry script, and this picture is handed
+    // back out from our own address. It is no longer a picture here at all.
+    const svg = await postFile('/api/catalogue', 'image', 'art.svg', 'image/svg+xml',
+      Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
+      { category: 'Patterns', name: 'Scripted' });
+    check('an SVG is refused', svg.status === 400, svg.status);
+
+    // ── AND THE NORMAL FLOW ──
+    const real = await postFile('/api/catalogue', 'image', 'design.png', 'image/png',
+      PNG, { category: 'Patterns', name: 'Genuine Design' });
+    const realBody = await real.json().catch(() => ({}));
+    check('a real PNG still goes up', real.status === 200 && !!realBody.id, realBody);
+    const [[saved]] = await db.query(
+      "SELECT mime_type FROM catalogue_items WHERE name = 'Genuine Design'");
+    check('and the type stored is the one read out of the bytes',
+      !!saved && saved.mime_type === 'image/png', saved);
+
+    // Handing it back: told what it is, and told not to guess.
+    const shown = await go('/catalogue/image/' + realBody.id);
+    check('the picture is served', shown.status === 200, shown.status);
+    check('with its type stated and sniffing turned off',
+      shown.headers.get('content-type') === 'image/png'
+      && shown.headers.get('x-content-type-options') === 'nosniff',
+      [shown.headers.get('content-type'), shown.headers.get('x-content-type-options')]);
+
+    // An SVG uploaded before any of this existed is still in the table. It
+    // must come back as bytes to save, never as a page the browser opens.
+    await db.query(
+      `INSERT INTO catalogue_items (category, name, file_name, mime_type, bytes)
+       VALUES ('Patterns', 'Old SVG', 'old.svg', 'image/svg+xml', ?)`,
+      [Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>')]);
+    const [[old]] = await db.query(
+      "SELECT id FROM catalogue_items WHERE name = 'Old SVG'");
+    const oldOne = await go('/catalogue/image/' + old.id);
+    check('an SVG already in the table is not served as one',
+      oldOne.headers.get('content-type') === 'application/octet-stream',
+      oldOne.headers.get('content-type'));
+    check('and the browser is told to save it, not open it',
+      /^attachment/.test(String(oldOne.headers.get('content-disposition'))),
+      oldOne.headers.get('content-disposition'));
 
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {
