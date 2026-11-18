@@ -255,13 +255,13 @@ function parseAddOns(raw) {
 function parseUrgency(raw, rawDate) {
   const answer = String(raw || '').trim().toLowerCase();
   if (answer !== 'yes' && answer !== 'no') {
-    return { error: 'Say whether this order is urgent.' };
+    return { error: 'Say whether this is a RUSH or a Normal order.' };
   }
   if (answer === 'no') return { orderType: 'Normal Order', dueDate: null };
 
   const date = String(rawDate || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date + 'T00:00:00Z'))) {
-    return { error: 'An urgent order needs the date it must reach the client.' };
+    return { error: 'A RUSH order needs the date it must reach the client.' };
   }
   return { orderType: 'RUSH Order', dueDate: date };
 }
@@ -319,7 +319,7 @@ router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
     // is the question asked afterwards, and the Created line is already
     // carrying the dealer and the client.
     if (urgency.orderType === 'RUSH Order') {
-      await logOrderEvent(orderId, 'Marked urgent at punch',
+      await logOrderEvent(orderId, 'Marked RUSH at punch',
         'Delivery to client by ' + urgency.dueDate, req.session.user);
     }
 

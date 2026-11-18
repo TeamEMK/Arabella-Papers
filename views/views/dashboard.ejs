@@ -295,22 +295,27 @@
             </select>
             <input type="text" class="form-control mt-2 d-none" id="punchDesignTimeCustom" maxlength="40" placeholder="How long? e.g. 3 Hours, Tomorrow 11 am" oninput="dt_clearInvalid(this)">
           </div>
-          <!-- URGENT, ASKED AT THE PUNCH.
-               The office learns a job is urgent on the telephone, which is
-               this moment - not at the approval box days later, which is
+          <!-- THE TYPE OF ORDER, ASKED AT THE PUNCH.
+               The office learns a job cannot wait on the telephone, which
+               is this moment - not at the approval box days later, which is
                where it used to be asked first. No default on purpose: a
-               pre-picked "No" is an answer nobody gave. -->
+               pre-picked "Normal Order" is an answer nobody gave.
+
+               RUSH and Normal, in the words the floor, the boards, the
+               approval box and the morning mail all use. It was "Urgent"
+               here, which was a word only this form said and one more thing
+               for somebody to translate. -->
           <div class="col-md-6">
-            <label class="form-label text-dark fw-bold">Urgent Order?</label>
+            <label class="form-label text-dark fw-bold">Type of Order*</label>
             <select id="punchUrgent" class="form-select" required onchange="punchUrgentSync()">
               <option value="" disabled selected>Select...</option>
-              <option value="Yes">Yes - urgent</option>
-              <option value="No">No</option>
+              <option value="Yes">RUSH Order</option>
+              <option value="No">Normal Order</option>
             </select>
           </div>
-          <!-- Only on a Yes, and compulsory there. An urgent order with no
-               date is just a word: the boards count the days left from this,
-               so there has to be a day to count from. -->
+          <!-- Only on a RUSH, and compulsory there. A RUSH with no date is
+               just a word: the boards count the days left from this, so
+               there has to be a day to count from. -->
           <div class="col-md-6 d-none" id="punchDueWrap">
             <label class="form-label text-dark fw-bold">Delivery to client by*</label>
             <input type="date" class="form-control" id="punchDueDate">
@@ -1116,8 +1121,8 @@ async function handleFormSubmit() {
 
   if(!dt_demandCustom('punchDesignTime')) { showToast('warning','Type how long the design will take.'); return; }
   if(!dealer || !designer || !client || !remarks || !designTime) { showToast('warning','Please fill all required fields.'); return; }
-  if(!urgent) { showToast('warning','Say whether this order is urgent.'); return; }
-  if(urgent === 'Yes' && !dueDate) { showToast('warning','An urgent order needs the date it must reach the client.'); return; }
+  if(!urgent) { showToast('warning','Say whether this is a RUSH or a Normal order.'); return; }
+  if(urgent === 'Yes' && !dueDate) { showToast('warning','A RUSH order needs the date it must reach the client.'); return; }
 
 
   const btn = document.getElementById('btnSubmit');
@@ -1705,7 +1710,7 @@ function renderAddOnRows() {
 }
 
 // Shows the date only on a Yes, and forgets anything typed on the way to a
-// No - so an order that stopped being urgent cannot carry a date nobody
+// Normal - so an order that stopped being a RUSH cannot carry a date nobody
 // meant to give. Today is the earliest: a promise for last Tuesday is a
 // typing mistake, not a deadline.
 function punchUrgentSync() {

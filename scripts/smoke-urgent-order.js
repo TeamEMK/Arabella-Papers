@@ -192,13 +192,13 @@ const NL = String.fromCharCode(10);
     // logOrderEvent puts its one line of detail in `field` - the table is
     // shaped for column changes and an event borrows it.
     const [log] = await db.query(
-      "SELECT action, field FROM order_logs WHERE order_id = ? AND action LIKE '%urgent%'",
+      "SELECT action, field FROM order_logs WHERE order_id = ? AND action LIKE '%RUSH%'",
       [yes.json.orderId]);
     check('the log says so', log.length === 1, log);
     check('and says which day was promised',
       log.length === 1 && String(log[0].field).includes(due), log[0]);
     const [quiet] = await db.query(
-      "SELECT id FROM order_logs WHERE order_id = ? AND action LIKE '%urgent%'",
+      "SELECT id FROM order_logs WHERE order_id = ? AND action LIKE '%RUSH%'",
       [no.json.orderId]);
     check('a normal order says nothing about urgency', quiet.length === 0, quiet);
 
