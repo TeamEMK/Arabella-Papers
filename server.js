@@ -130,8 +130,34 @@ app.use((req, res, next) => {
   ensureSchema().then(() => next(), next);
 });
 
+// ── THE SESSION SECRET, AND WHY THERE IS NO FALLBACK ──
+//
+// This string signs the cookie that says who you are. Anybody holding it can
+// mint a cookie for any account - the SuperAdmin included - without a
+// password, and this repository is on GitHub, so a literal written here is a
+// literal everybody has.
+//
+// So: live refuses to start without it. Not a warning, not a default - a
+// server that boots with a known secret is a server with no login at all,
+// and it would boot looking perfectly healthy.
+//
+// Off the platform (a laptop, a smoke test) it makes one up per run. That
+// signs out whoever was signed in when the process restarted, which is the
+// right trade on a machine where the alternative is developing against the
+// production secret.
+function sessionSecret() {
+  const set = String(process.env.SESSION_SECRET || '').trim();
+  if (set) return set;
+  if (isServerless || process.env.NODE_ENV === 'production') {
+    console.error('SESSION_SECRET is not set. Refusing to start: without it '
+      + 'the session cookie would be signed with a value anybody can read.');
+    process.exit(1);
+  }
+  return require('crypto').randomBytes(32).toString('hex');
+}
+
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'arabella-secret-key-2024',
+  secret: sessionSecret(),
   resave: false,
   saveUninitialized: false,
   store: sessionStore,
