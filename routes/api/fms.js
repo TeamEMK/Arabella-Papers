@@ -13,6 +13,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../config/db');
+const { archiveThenDelete } = require('../../utils/archive');
 const { requireLogin } = require('../../middleware/auth');
 const sheets = require('../../utils/sheets');
 const {
@@ -295,8 +296,10 @@ router.delete('/:id', requireLogin, requireAdmin, async (req, res) => {
       await db.query(`DELETE FROM fms_extra_rows WHERE step_id IN (${ph})`, ids);
       await db.query(`DELETE FROM fms_step_doers WHERE step_id IN (${ph})`, ids);
     }
-    await db.query('DELETE FROM fms_steps WHERE fms_id = ?', [req.params.id]);
-    await db.query('DELETE FROM fms_sheets WHERE id = ?', [req.params.id]);
+    await archiveThenDelete('fms_steps', 'fms_id = ?', [req.params.id], req,
+      'steps of a deleted FMS mapping');
+    await archiveThenDelete('fms_sheets', 'id = ?', [req.params.id], req,
+      'FMS mapping deleted');
     res.json({ success: true });
   } catch (err) {
     console.error('FMS delete failed:', err);

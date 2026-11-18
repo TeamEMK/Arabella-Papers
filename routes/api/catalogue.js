@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
+const { archiveThenDelete } = require('../../utils/archive');
 const { requireLogin, requireRole } = require('../../middleware/auth');
 
 // ══════════════════════════════════════════════════════
@@ -107,8 +108,12 @@ router.put('/:id', requireLogin, canManage, async (req, res) => {
 // the picture that was never meant to go up.
 router.delete('/:id', requireLogin, canManage, async (req, res) => {
   try {
-    const [r] = await db.query('DELETE FROM catalogue_items WHERE id = ?', [parseInt(req.params.id, 10)]);
-    res.json({ success: true, changed: r.affectedRows });
+    // The row is kept; the image bytes are not - see utils/archive.js. What
+    // comes back is the name, the category and who removed it, which is what
+    // anyone asking will want.
+    const r = await archiveThenDelete('catalogue_items', 'id = ?',
+      [parseInt(req.params.id, 10)], req, 'catalogue design deleted');
+    res.json({ success: true, changed: r.removed });
   } catch (err) {
     console.error('Catalogue delete failed:', err);
     res.status(500).json({ success: false, error: err.message });

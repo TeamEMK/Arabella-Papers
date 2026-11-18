@@ -13,6 +13,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../config/db');
+const { archiveThenDelete } = require('../../utils/archive');
 const { requireLogin } = require('../../middleware/auth');
 const urgency = require('../../utils/urgency');
 const clock = require('../../utils/pms/clock');
@@ -203,8 +204,9 @@ router.delete('/steps/:id', requireLogin, async (req, res) => {
     const [[row]] = await db.query('SELECT step_order FROM pms_steps WHERE id = ?', [id]);
     if (!row) return res.status(404).json({ success: false, error: 'No such step.' });
 
-    await db.query('DELETE FROM pms_steps WHERE id = ?', [id]);
-    await db.query('DELETE FROM pms_step_doers WHERE step_id = ?', [id]);
+    await archiveThenDelete('pms_steps', 'id = ?', [id], req, 'PMS step deleted');
+    await archiveThenDelete('pms_step_doers', 'step_id = ?', [id], req,
+      'doers of a deleted PMS step');
     // Close the gap, so the numbers the office reads stay 1..n.
     await db.query('UPDATE pms_steps SET step_order = step_order - 1 WHERE step_order > ?',
       [row.step_order]);

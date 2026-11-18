@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
+const { archiveThenDelete } = require('../../utils/archive');
 // No uploadToDrive here any more. The design files do not come through this
 // server at all - the browser puts them in Drive itself and sends back a
 // token, which is the only thing a form is trusted to carry. See
@@ -538,7 +539,14 @@ router.delete('/:id', requireLogin, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
     await logOrderEvent(req.params.id, 'Deleted', '', user);
-    await db.query('DELETE FROM orders WHERE order_id = ?', [req.params.id]);
+    // The whole row is copied into deleted_records first. A punched order is
+    // the one record in here nobody can reconstruct from memory - 130
+    // columns, months of dates - and this button removes it for good.
+    // utils/archive.js says why it is allowed to stop the delete.
+    await archiveThenDelete('order_add_ons', 'order_id = ?', [req.params.id], req,
+      'add-ons of a deleted order');
+    await archiveThenDelete('orders', 'order_id = ?', [req.params.id], req,
+      'order deleted by SuperAdmin');
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

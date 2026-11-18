@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../config/db');
+const { archiveThenDelete } = require('../../utils/archive');
 const { requireLogin, requireRole, hasRole } = require('../../middleware/auth');
 const { codeFor } = require('../../utils/linerCode');
 const {
@@ -445,7 +446,8 @@ router.delete('/item/:id', requireLogin, canManage, async (req, res) => {
       'SELECT category_id FROM envelope_linear_items WHERE id = ?', [id]);
     if (!row) return res.status(404).json({ success: false, error: 'No such design.' });
 
-    await db.query('DELETE FROM envelope_linear_items WHERE id = ?', [id]);
+    await archiveThenDelete('envelope_linear_items', 'id = ?', [id], req,
+      'liner design deleted');
     // The cover was a copy of some design's thumbnail. If it was this one's,
     // the tile would go on showing a design that is no longer in there - so
     // the category takes the next one's instead, or none at all.
@@ -481,8 +483,12 @@ router.delete('/:id', requireLogin, canManage, async (req, res) => {
 
     const [[n]] = await db.query(
       'SELECT COUNT(*) AS n FROM envelope_linear_items WHERE category_id = ?', [id]);
-    await db.query('DELETE FROM envelope_linear_items WHERE category_id = ?', [id]);
-    await db.query('DELETE FROM envelope_linears WHERE id = ?', [id]);
+    // A category takes every design in it. One click can remove dozens of
+    // rows, so every one of them is copied first.
+    await archiveThenDelete('envelope_linear_items', 'category_id = ?', [id], req,
+      'designs of a deleted liner category');
+    await archiveThenDelete('envelope_linears', 'id = ?', [id], req,
+      'liner category deleted');
     res.json({ success: true, category: cat.category, designs: Number(n.n || 0) });
   } catch (err) {
     console.error('Envelope Linears delete failed:', err);

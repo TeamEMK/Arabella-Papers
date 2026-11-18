@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
+const { archiveThenDelete } = require('../../utils/archive');
 const { startResumableUpload, claimUpload, vectorFolder } = require('../../utils/drive');
 const { resolveOne } = require('../../utils/uploadSession');
 const crypto = require('crypto');
@@ -1864,7 +1865,7 @@ router.delete('/add-ons/:id', requireLogin, async (req, res) => {
     }
     // Only off the list to choose from. Orders that already carry this card
     // keep it - order_add_ons holds the name, not a link to this row.
-    await db.query('DELETE FROM add_ons WHERE id = ?', [req.params.id]);
+    await archiveThenDelete('add_ons', 'id = ?', [req.params.id], req, 'add-on removed');
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -1996,7 +1997,7 @@ router.put('/dealers/:id', requireLogin, async (req, res) => {
 // DELETE /api/dashboards/dealers/:id
 router.delete('/dealers/:id', requireLogin, async (req, res) => {
   try {
-    await db.query('DELETE FROM dealers WHERE id=?', [req.params.id]);
+    await archiveThenDelete('dealers', 'id = ?', [req.params.id], req, 'dealer removed');
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -2037,7 +2038,7 @@ router.put('/designers/:id', requireLogin, async (req, res) => {
 // DELETE /api/dashboards/designers/:id
 router.delete('/designers/:id', requireLogin, async (req, res) => {
   try {
-    await db.query('DELETE FROM designers WHERE id=?', [req.params.id]);
+    await archiveThenDelete('designers', 'id = ?', [req.params.id], req, 'designer removed');
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

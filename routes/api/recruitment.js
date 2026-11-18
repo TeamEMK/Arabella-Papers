@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const router = express.Router();
 const db = require('../../config/db');
+const { archiveThenDelete } = require('../../utils/archive');
 const { requireLogin } = require('../../middleware/auth');
 const { canSee } = require('../../utils/access');
 const recruitEmail = require('../../utils/recruitEmail');
@@ -629,7 +630,8 @@ router.post('/messages/:id/retry', requireLogin, async (req, res) => {
 router.delete('/messages/:id', requireLogin, async (req, res) => {
   try {
     if (!(await guard(req, res))) return;
-    await db.query('DELETE FROM recruit_messages WHERE id = ?', [parseInt(req.params.id, 10)]);
+    await archiveThenDelete('recruit_messages', 'id = ?',
+      [parseInt(req.params.id, 10)], req, 'recruitment message deleted');
     res.json({ success: true });
   } catch (err) {
     console.error('Recruitment log delete failed:', err);

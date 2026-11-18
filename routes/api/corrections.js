@@ -11,6 +11,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../config/db');
+const { archiveThenDelete } = require('../../utils/archive');
 const { requireLogin } = require('../../middleware/auth');
 const { logOrderEvent } = require('../../utils/auditlog');
 // A number typed here names the job, and a job can have been made more than
@@ -149,7 +150,8 @@ router.delete('/gna/:id', requireLogin, async (req, res) => {
     if (!canAdminister(req.session.user)) {
       return res.status(403).json({ success: false, error: 'Only a SuperAdmin can change this list.' });
     }
-    await db.query('DELETE FROM gna_designers WHERE id = ?', [req.params.id]);
+    await archiveThenDelete('gna_designers', 'id = ?', [req.params.id], req,
+      'G&A designer removed');
     res.json({ success: true });
   } catch (err) {
     console.error('GNA delete failed:', err);
@@ -519,7 +521,10 @@ router.delete('/:id', requireLogin, async (req, res) => {
     }
     const row = await one('SELECT order_id FROM corrections WHERE id = ?', [req.params.id]);
     if (!row) return res.status(404).json({ success: false, error: 'Correction not found.' });
-    await db.query('DELETE FROM corrections WHERE id = ?', [req.params.id]);
+    // A correction is a record of someone's mistake, which is exactly the
+    // kind of row that goes missing quietly. Copied before it goes.
+    await archiveThenDelete('corrections', 'id = ?', [req.params.id], req,
+      'correction removed by SuperAdmin');
     await logOrderEvent(row.order_id, 'Correction removed', '', req.session.user);
     res.json({ success: true });
   } catch (err) {

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../../config/db');
+const { archiveThenDelete } = require('../../utils/archive');
 const { requireRole } = require('../../middleware/auth');
 
 const MIN_PASSWORD = 8;
@@ -133,10 +134,14 @@ router.delete('/:id', onlySuperAdmin, async (req, res) => {
       return res.status(400).json({ success: false, error: 'This is the last SuperAdmin — the app would be left unmanageable.' });
     }
 
-    await db.query('DELETE FROM users WHERE id = ?', [id]);
+    // Copied first. Which sections a person was granted is the part nobody
+    // remembers afterwards, and "who deleted this account" is a question
+    // that gets asked.
+    await archiveThenDelete('users', 'id = ?', [id], req, 'account deleted by SuperAdmin');
     // Nothing links these rows to the user for the database to clean up, and a
     // left-behind grant would attach itself to whoever next takes this id.
-    await db.query('DELETE FROM user_sections WHERE user_id = ?', [id]);
+    await archiveThenDelete('user_sections', 'user_id = ?', [id], req,
+      'grants of a deleted account');
     res.json({ success: true });
   } catch (err) {
     console.error('User delete failed:', err);

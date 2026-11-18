@@ -359,6 +359,76 @@ const NL = String.fromCharCode(10);
     const ok = await go('/api/orders', { headers: { cookie } });
     check('a working route still answers normally', ok.status === 200, ok.status);
 
+    // ══════════════════════════════════════════════════
+    // 6. A DELETE BUTTON THAT KEEPS THE COPY
+    //
+    // Fourteen endpoints end in DELETE FROM. Before this, a mistaken delete
+    // and a deliberate one left the same trace - none - and a punched order,
+    // 130 columns of it, could not be typed back in.
+    //
+    // Two halves, and the second is the one that matters: the copy has to be
+    // there, AND a delete that cannot be copied has to be refused.
+    console.log(NL + 'What a delete leaves behind');
+    await db.query(
+      `INSERT INTO orders (order_id, dealer_name, client_name, remarks, status_4)
+       VALUES ('K-ARCH-1', 'Dealer Archive', 'Client Archive', 'the remark', 'Ready')`);
+
+    const archGone = await go('/api/orders/K-ARCH-1', { method: 'DELETE', headers: { cookie } });
+    check('a SuperAdmin can still delete an order', archGone.status === 200, archGone.status);
+    const [[archStill]] = await db.query(
+      "SELECT COUNT(*) c FROM orders WHERE order_id = 'K-ARCH-1'");
+    check('and the order is really gone', archStill.c === 0, archStill);
+
+    const [[archKept]] = await db.query(
+      "SELECT * FROM deleted_records WHERE table_name = 'orders' AND record_key = 'K-ARCH-1'");
+    check('the row was kept', !!archKept);
+    check('with every field in it, readable',
+      !!archKept && /Client Archive/.test(archKept.payload) && /the remark/.test(archKept.payload),
+      archKept && archKept.payload && archKept.payload.slice(0, 120));
+    check('and the name of whoever pressed the button',
+      !!archKept && archKept.deleted_by_email === 'probe@test.local',
+      archKept && archKept.deleted_by_email);
+    check('and the route it came in on',
+      !!archKept && /DELETE .*orders\/K-ARCH-1/.test(archKept.route), archKept && archKept.route);
+
+    // Image bytes are deliberately NOT kept - a 16MB blob per deleted row is
+    // an archive nobody can open. The row around them still is.
+    await db.query(
+      `INSERT INTO catalogue_items (category, name, bytes, mime_type)
+       VALUES ('Invitation', 'Archive Probe Design', ?, 'image/png')`,
+      [Buffer.alloc(4096, 7)]);
+    const [[pic]] = await db.query(
+      "SELECT id FROM catalogue_items WHERE name = 'Archive Probe Design'");
+    const picGone = await go('/api/catalogue/' + pic.id, { method: 'DELETE', headers: { cookie } });
+    check('a catalogue design can still be deleted', picGone.status === 200, picGone.status);
+    const [[picKept]] = await db.query(
+      "SELECT payload FROM deleted_records WHERE table_name = 'catalogue_items' ORDER BY id DESC LIMIT 1");
+    check('its name was kept', !!picKept && /Archive Probe Design/.test(picKept.payload));
+    check('and its image bytes were not',
+      !!picKept && /bytes of binary, not kept/.test(picKept.payload)
+      && picKept.payload.length < 3000,
+      picKept && picKept.payload.length);
+
+    // ── THE HALF THAT MATTERS ──
+    // The archive is taken away, and the delete must refuse rather than go
+    // ahead uncopied. Without this check the whole item passes on a server
+    // where the copy quietly swallows its own failure.
+    await db.query(
+      `INSERT INTO orders (order_id, dealer_name, client_name, status_4)
+       VALUES ('K-ARCH-2', 'Dealer Two', 'Client Two', 'Ready')`);
+    await db.query('RENAME TABLE deleted_records TO deleted_records_hidden');
+    const blocked = await go('/api/orders/K-ARCH-2', { method: 'DELETE', headers: { cookie } });
+    check('with nowhere to keep the copy, the delete is refused',
+      blocked.status >= 500, blocked.status);
+    const [[survived]] = await db.query(
+      "SELECT COUNT(*) c FROM orders WHERE order_id = 'K-ARCH-2'");
+    check('and the order is still there', survived.c === 1, survived);
+    await db.query('RENAME TABLE deleted_records_hidden TO deleted_records');
+
+    const nowWorks = await go('/api/orders/K-ARCH-2', { method: 'DELETE', headers: { cookie } });
+    check('with the archive back, the same delete goes through',
+      nowWorks.status === 200, nowWorks.status);
+
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {
     try { server.close(); } catch (e) {}

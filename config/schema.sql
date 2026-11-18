@@ -45,6 +45,28 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   INDEX idx_login_attempts_lock (locked_until)
 );
 
+-- Every row a delete button has ever removed, kept before it went.
+-- See utils/archive.js for why: without this, a mistaken delete and a
+-- deliberate one leave exactly the same trace, which is none.
+CREATE TABLE IF NOT EXISTS deleted_records (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  table_name VARCHAR(64) NOT NULL,
+  -- The order_id, the numeric id, or the email - whichever that table calls
+  -- a record. Kept beside the payload so a row can be found without
+  -- reading every JSON blob.
+  record_key VARCHAR(191) DEFAULT '',
+  -- The whole row as it was. LONGTEXT because an order is 130 columns, and
+  -- image bytes are deliberately NOT in here.
+  payload LONGTEXT,
+  deleted_by VARCHAR(191) DEFAULT '',
+  deleted_by_email VARCHAR(191) DEFAULT '',
+  route VARCHAR(255) DEFAULT '',
+  reason VARCHAR(255) DEFAULT '',
+  deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_deleted_table (table_name, record_key),
+  INDEX idx_deleted_when (deleted_at)
+);
+
 CREATE TABLE IF NOT EXISTS activity_log (
   id INT AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(150),

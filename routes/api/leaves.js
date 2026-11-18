@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../config/db');
+const { archiveThenDelete } = require('../../utils/archive');
 const { requireLogin } = require('../../middleware/auth');
 
 // Arabella has no department or HOD hierarchy on its users, so there is nobody
@@ -174,7 +175,10 @@ router.delete('/:id', requireLogin, async (req, res) => {
       return res.status(403).json({ success: false, error: 'You cannot withdraw this request.' });
     }
 
-    await db.query('DELETE FROM leave_requests WHERE id = ?', [req.params.id]);
+    // Withdrawn or refused, the request itself is the record that it was
+    // ever asked for.
+    await archiveThenDelete('leave_requests', 'id = ?', [req.params.id], req,
+      'leave request withdrawn or removed');
     res.json({ success: true });
   } catch (err) {
     console.error('Leave delete failed:', err);
