@@ -18,6 +18,7 @@ const { sendVectorReport } = require('../../utils/vectorReport');
 const { sendStageReport } = require('../../utils/stageReport');
 
 const crypto = require('crypto');
+const { runOnce } = require('../../utils/cronOnce');
 
 /**
  * Only the scheduler, and only with the secret.
@@ -48,31 +49,60 @@ function authorised(req) {
   return crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want));
 }
 
+// ── ONCE A DAY, WHATEVER CALLS ──
+//
+// Both of these mail the whole office. The platform calls a function again
+// when it times out or answers 5xx, and the likeliest failure for a job
+// whose last act is sending mail is a timeout AFTER the mail has gone - so
+// the retry used to send it a second time. The day's run is claimed in the
+// database before any work happens; see utils/cronOnce.js.
+//
+// ?force=1 is the office asking for it again by hand, with the same token
+// the scheduler uses. It skips the guard and says so in the log.
+const forced = (req) => String(req.query.force || '') === '1';
+
+/** The claim could not be written. The platform should try again later. */
+const cannotClaim = (res, job, err) => {
+  console.error('[cron] could not claim ' + job + ':', err.message);
+  return res.status(503).json({
+    success: false,
+    error: 'Could not record this run. Not doing the work twice by accident.',
+  });
+};
+
 // GET /api/cron/vector-report — the evening list of who still owes files.
 router.get('/vector-report', async (req, res) => {
   if (!authorised(req)) return res.status(401).json({ success: false, error: 'Unauthorized' });
+  let out;
   try {
-    const out = await sendVectorReport();
-    console.log('[cron] vector report:', JSON.stringify(out));
-    res.json({ success: true, ...out });
+    out = await runOnce('vector-report', sendVectorReport, { force: forced(req) });
   } catch (err) {
+    if (err.sqlMessage || err.code === 'ER_NO_SUCH_TABLE') {
+      return cannotClaim(res, 'vector-report', err);
+    }
     console.error('[cron] vector report failed:', err);
-    res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: err.message });
   }
+  console.log('[cron] vector report:', JSON.stringify(out));
+  res.json({ success: true, ...out });
 });
 
 // GET /api/cron/stage-report — the morning list of orders with stages still
 // open. Nine o'clock IST, before the floor gets going.
 router.get('/stage-report', async (req, res) => {
   if (!authorised(req)) return res.status(401).json({ success: false, error: 'Unauthorized' });
+  let out;
   try {
-    const out = await sendStageReport();
-    console.log('[cron] stage report:', JSON.stringify(out));
-    res.json({ success: true, ...out });
+    out = await runOnce('stage-report', sendStageReport, { force: forced(req) });
   } catch (err) {
+    if (err.sqlMessage || err.code === 'ER_NO_SUCH_TABLE') {
+      return cannotClaim(res, 'stage-report', err);
+    }
     console.error('[cron] stage report failed:', err);
-    res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: err.message });
   }
+  console.log('[cron] stage report:', JSON.stringify(out));
+  res.json({ success: true, ...out });
 });
 
 module.exports = router;

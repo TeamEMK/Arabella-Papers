@@ -67,6 +67,21 @@ CREATE TABLE IF NOT EXISTS deleted_records (
   INDEX idx_deleted_when (deleted_at)
 );
 
+-- One row per scheduled job per day, written BEFORE the job does anything.
+-- A retry's insert collides with it and the job is skipped rather than
+-- mailing the whole office twice. See utils/cronOnce.js.
+CREATE TABLE IF NOT EXISTS cron_runs (
+  job VARCHAR(60) NOT NULL,
+  -- The day in IST, which is the day the office means. A forced re-run
+  -- carries its own key so it cannot overwrite the day's record.
+  run_key VARCHAR(40) NOT NULL,
+  started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  finished_at DATETIME DEFAULT NULL,
+  outcome VARCHAR(255) DEFAULT '',
+  PRIMARY KEY (job, run_key),
+  INDEX idx_cron_runs_when (started_at)
+);
+
 CREATE TABLE IF NOT EXISTS activity_log (
   id INT AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(150),

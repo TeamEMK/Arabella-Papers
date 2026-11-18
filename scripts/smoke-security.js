@@ -28,12 +28,16 @@ process.env.PORT = '0';
 // seen on the next call rather than up to half a minute later.
 process.env.ROLE_RECHECK_MS = '0';
 
+// Counted, not just stubbed: "the office was not mailed twice" is the whole
+// point of the cron block below, and a count is the only honest way to say
+// it.
+const mails = [];
 {
   const p = require.resolve(path.join(ROOT, 'utils/mailer.js'));
   require.cache[p] = {
     id: p, filename: p, loaded: true,
     exports: {
-      sendMail: async () => ({ sent: true }),
+      sendMail: async (msg) => { mails.push(msg || {}); return { sent: true }; },
       verifyMail: async () => ({ ok: true }),
       isMailConfigured: () => true,
     },
@@ -824,6 +828,98 @@ const NL = String.fromCharCode(10);
       !/type:\s*'anyone'/.test(driveSrc));
     check('and no permission is created at all',
       !/permissions\.create/.test(driveSrc));
+
+    // ══════════════════════════════════════════════════
+    // 12. THE NIGHTLY MAIL GOES OUT ONCE
+    //
+    // Both scheduled jobs did their work every time they were called and
+    // kept no record of having run. The platform calls a function again
+    // when it times out or answers 5xx - and for a job whose last act is
+    // sending mail, the likeliest failure is a timeout AFTER the mail has
+    // gone. The retry sent it again, to the whole office. Anybody who got
+    // hold of the token could do the same, as often as they liked.
+    console.log(NL + 'The nightly mail');
+
+    // An order that has been on the production floor since yesterday with
+    // stages still open - which is what this report is about.
+    await db.query(
+      `INSERT INTO orders (order_id, dealer_name, client_name, design_status,
+                           design_approval_status_from_client, actual_2, paper_cutting)
+       VALUES ('K-CRON-1','Dealer C','Client C','Approved',
+               'Final Approval For Production', NOW() - INTERVAL 2 DAY, NULL)`);
+
+    // Block 2 above called this route once, to prove the token checks, and
+    // that call claimed today. Cleared here so this block starts from a day
+    // nobody has run - which is what the scheduler sees at nine in the
+    // morning.
+    await db.query("DELETE FROM cron_runs WHERE job = 'stage-report'");
+
+    const asCron = (q) => go('/api/cron/stage-report' + (q || ''),
+      { headers: { authorization: 'Bearer ' + process.env.CRON_SECRET } });
+
+    const before = mails.length;
+    const first = await asCron();
+    const firstBody = await first.json();
+    check('the scheduler gets through', first.status === 200, first.status);
+    check('and the report goes out', firstBody.sent === true, firstBody);
+    const sentOnce = mails.length - before;
+    check('one mail, to the office', sentOnce === 1, sentOnce);
+
+    // THE RETRY. Same token, same day, immediately afterwards.
+    const second = await asCron();
+    const secondBody = await second.json();
+    check('a second call is told it already ran',
+      secondBody.alreadyRan === true, secondBody);
+    check('and no second mail went out',
+      mails.length - before === 1, mails.length - before);
+    check('it says which day it is talking about',
+      /^\d{4}-\d{2}-\d{2}$/.test(String(secondBody.day || '')), secondBody.day);
+
+    // A third and a fourth, because a retry storm is not two requests.
+    await asCron();
+    await asCron();
+    check('and nor did the ones after that',
+      mails.length - before === 1, mails.length - before);
+
+    const [[runs]] = await db.query(
+      "SELECT COUNT(*) c FROM cron_runs WHERE job = 'stage-report'");
+    check('one row written for the day, not four', runs.c === 1, runs);
+    const [runRows] = await db.query(
+      "SELECT finished_at, outcome FROM cron_runs WHERE job = 'stage-report'");
+    // Tolerant of there being no row at all, so this block reports failures
+    // rather than throwing when it is run against the old routes.
+    const run = runRows[0] || {};
+    check('and it records what happened',
+      !!run.finished_at && /sent/.test(String(run.outcome)), run);
+
+    // ── THE WAY BACK IN ──
+    // The office asking for the report again by hand, with the same token.
+    const again = await asCron('?force=1');
+    const againBody = await again.json();
+    check('a forced run is allowed through',
+      againBody.forced === true && againBody.sent === true, againBody);
+    check('and does send the mail', mails.length - before === 2, mails.length - before);
+    const [[afterForce]] = await db.query(
+      "SELECT COUNT(*) c FROM cron_runs WHERE job = 'stage-report'");
+    check('without overwriting the day it was already run',
+      afterForce.c === 2, afterForce);
+
+    // ── AND THE OTHER JOB IS NOT AFFECTED BY THIS ONE ──
+    const other = await go('/api/cron/vector-report',
+      { headers: { authorization: 'Bearer ' + process.env.CRON_SECRET } });
+    check('the evening job still runs on its own account',
+      other.status === 200, other.status);
+
+    // A claim that cannot be written is not an excuse to do the work.
+    // Counted from here, because the evening job just sent one of its own.
+    const beforeNoTable = mails.length;
+    await db.query('RENAME TABLE cron_runs TO cron_runs_hidden');
+    const noTable = await asCron();
+    check('with nowhere to record the run, the job is refused',
+      noTable.status === 503, noTable.status);
+    check('and no mail went out on that attempt',
+      mails.length === beforeNoTable, mails.length - beforeNoTable);
+    await db.query('RENAME TABLE cron_runs_hidden TO cron_runs');
 
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {
