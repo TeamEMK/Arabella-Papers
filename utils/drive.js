@@ -37,17 +37,38 @@ const vectorFolder = () => process.env.VECTOR_DRIVE_FOLDER_ID || process.env.DRI
  */
 const designFolder = () => process.env.DRIVE_FOLDER_ID;
 
-/** Anyone with the link can read it, which is how every file here is shared. */
-async function shareWithAnyone(drive, fileId) {
-  await drive.permissions.create({
-    fileId,
-    requestBody: { role: 'reader', type: 'anyone' },
-    supportsAllDrives: true,
-  });
-}
+// ── NOTHING NEW IS SHARED WITH THE WORLD ──
+//
+// Every file this app uploaded used to be made "anyone with the link can
+// read" the moment it landed. A Drive id is not guessable, but a link
+// travels: into a sheet cell, a mail, a WhatsApp message, a browser history
+// on a shared machine. Wherever it got to, the file went with it, with no
+// login in front of it.
+//
+// So the permission is not created any more, and the link handed back is
+// this app's own - routes/api/files.js, which checks the session and then
+// streams the bytes through the service account. The office opens the same
+// button; a stranger holding the link gets the login page.
+//
+// Files uploaded before this change are untouched: still public, still
+// pointing at Drive. Thousands of those links are in sheets and mails
+// already, and breaking them is a worse day than leaving them.
 
-const linkFor = (file) =>
-  file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`;
+/** The folders this app owns. Nothing outside them is served. */
+const ourFolders = () => [vectorFolder(), designFolder()]
+  .filter(Boolean)
+  .filter((v, i, all) => all.indexOf(v) === i);
+
+const APP_URL = () =>
+  (process.env.APP_URL || 'https://mis.arabellapapers.com').replace(/\/+$/, '');
+
+/**
+ * Where to send somebody to see this file.
+ *
+ * Absolute, because this link is written into Google Sheet cells and into
+ * mail as often as it is clicked inside the app.
+ */
+const linkFor = (file) => APP_URL() + '/api/files/' + file.id;
 
 /**
  * Upload a file buffer to Google Drive
@@ -70,7 +91,6 @@ async function uploadToDrive(buffer, fileName, mimeType) {
     supportsAllDrives: true,
   });
 
-  await shareWithAnyone(drive, response.data.id);
   return linkFor(response.data);
 }
 
@@ -182,19 +202,13 @@ async function claimUpload(fileId, expectedName, wantFolder) {
     throw new Error('That file is not in this app\'s Drive folder.');
   }
 
-  // Not fatal here, unlike on the way in above. The bytes are already in
-  // Drive by this point - fifty megabytes of somebody's afternoon - and
-  // throwing them away because a sharing policy said no would be the wrong
-  // trade. The folder is already readable by the office, so the link works
-  // for the people who need it either way; what would be lost is opening it
-  // from outside, and that is worth a line in the log, not the upload.
-  try {
-    await shareWithAnyone(drive, data.id);
-  } catch (err) {
-    console.error('[drive] uploaded but could not be shared by link:', err.message);
-  }
-
+  // Nothing is shared with the world here either - see the note above
+  // linkFor. The bytes are in Drive, the link is ours, and who may read it
+  // is a question this app answers rather than Google.
   return { url: linkFor(data), name: data.name, size: Number(data.size || 0) };
 }
 
-module.exports = { uploadToDrive, startResumableUpload, claimUpload, vectorFolder, designFolder };
+module.exports = {
+  uploadToDrive, startResumableUpload, claimUpload,
+  vectorFolder, designFolder, ourFolders, getDriveClient, linkFor,
+};

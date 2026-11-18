@@ -157,14 +157,17 @@ const SAFE_INLINE = new Set([
   'application/pdf',
 ]);
 
+// `bytes` may be the buffer itself or just its length - a file streamed out
+// of Drive has a size but no buffer of ours to measure.
 function sendHeaders(res, bytes, storedMime, fileName) {
   const safe = SAFE_INLINE.has(String(storedMime || '').toLowerCase());
   const clean = String(fileName || 'file').replace(/[^\w. -]+/g, '_').slice(0, 120);
+  const length = typeof bytes === 'number' ? bytes : (bytes && bytes.length);
   res.setHeader('Content-Type', safe ? storedMime : 'application/octet-stream');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Content-Disposition',
     (safe ? 'inline' : 'attachment') + '; filename="' + clean + '"');
-  res.setHeader('Content-Length', bytes.length);
+  if (length) res.setHeader('Content-Length', length);
   return res;
 }
 

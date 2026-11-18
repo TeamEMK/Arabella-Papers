@@ -765,6 +765,66 @@ const NL = String.fromCharCode(10);
       callerIp(pretend) === '9.9.9.9', callerIp(pretend));
     delete process.env.VERCEL;
 
+    // ══════════════════════════════════════════════════
+    // 11. NO MORE "ANYONE WITH THE LINK"
+    //
+    // Every file this app put on Drive was made world-readable the moment
+    // it landed - artwork, customer proofs, FMS attachments. The id is not
+    // guessable, but a link travels: a sheet cell, a mail, a WhatsApp
+    // message, a browser history on a shared machine. Wherever it got to,
+    // the file went with it, with no login in front of it.
+    //
+    // New uploads are not shared at all, and the link stored against an
+    // order is this app's own route, which checks the session first. The
+    // Drive round trip itself needs live Google credentials and is not
+    // exercised here; what is checked is the gate in front of it, the
+    // link that is now handed out, and that the sharing call is gone.
+    console.log(NL + 'The files on Drive');
+
+    const ANY_ID = 'abcdefghij1234567890';
+    const stranger = await go('/api/files/' + ANY_ID);
+    check('a stranger with the link is sent to the login page',
+      stranger.status === 401 || stranger.status === 302, stranger.status);
+    const strangerBody = await stranger.text();
+    check('and gets no bytes',
+      strangerBody.length < 400 && !/PDF|PNG/.test(strangerBody),
+      strangerBody.slice(0, 120));
+
+    // Signed in, the same id is looked up for real. There are no Google
+    // credentials in a test run, so the lookup fails - and the answer has
+    // to be the same 404 a file outside our folders gets, because the
+    // difference between the two would say what exists.
+    const inside = await go('/api/files/' + ANY_ID, { headers: { cookie } });
+    check('signed in, an id we cannot vouch for is a plain 404',
+      inside.status === 404, inside.status);
+
+    const junk = await go('/api/files/..%2Fsecret', { headers: { cookie } });
+    check('an id that is really a path is refused',
+      junk.status === 400 || junk.status === 404, junk.status);
+
+    // The link that now goes into the database and into sheet cells.
+    delete require.cache[require.resolve(path.join(ROOT, 'utils/drive.js'))];
+    const drive = require(path.join(ROOT, 'utils/drive.js'));
+    // Tolerant on purpose: run this block against the old helper and the
+    // checks below have to FAIL, not crash before they are reached.
+    const link = typeof drive.linkFor === 'function'
+      ? drive.linkFor({ id: ANY_ID })
+      : 'https://drive.google.com/file/d/' + ANY_ID + '/view';
+    check('an uploaded file is linked through this app',
+      /\/api\/files\/abcdefghij1234567890$/.test(link), link);
+    check('and not through drive.google.com',
+      !/drive\.google\.com/.test(link), link);
+    check('the link is absolute, because it is written into sheet cells',
+      /^https?:\/\//.test(link), link);
+
+    // And the call that made files public is gone, not merely unused.
+    const driveSrc = require('fs').readFileSync(
+      path.join(ROOT, 'utils/drive.js'), 'utf8');
+    check("nothing is shared with type: 'anyone' any more",
+      !/type:\s*'anyone'/.test(driveSrc));
+    check('and no permission is created at all',
+      !/permissions\.create/.test(driveSrc));
+
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {
     try { server.close(); } catch (e) {}

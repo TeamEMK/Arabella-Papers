@@ -315,6 +315,9 @@ app.use('/', indexRoutes);
 app.use('/views', viewsRoutes);
 app.use('/api/orders', ordersApi);
 app.use('/api/uploads', uploadsApi);
+// The files this app put on Drive, handed over after a session check
+// rather than by a public Drive link - see routes/api/files.js.
+app.use('/api/files', require('./routes/api/files'));
 app.use('/api/dashboards', dashboardsApi);
 app.use('/api/account', accountApi);
 app.use('/api/users', usersApi);
