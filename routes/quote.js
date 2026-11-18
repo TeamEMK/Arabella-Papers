@@ -1,7 +1,9 @@
 const express = require('express');
 const { callerIp } = require('../utils/callerIp');
 const router = express.Router();
-const db = require('../config/db');
+// The calculator is a customer screen. Its login may add a row to
+// pricing_quotes and read the catalogues; see config/clientDb.js.
+const db = require('../config/clientDb');
 const pricing = require('../utils/pricing');
 const { buildQuotePdf } = require('../utils/quotePdf');
 const { sendMail } = require('../utils/mailer');

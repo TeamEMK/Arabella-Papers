@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/db');
+// The liner book is a customer screen, so it reads through the customer's
+// restricted login - see config/clientDb.js.
+const db = require('../config/clientDb');
 const { matches, words, looksLikeCode, codeMatches } = require('../utils/linerTags');
 
 // ══════════════════════════════════════════════════════

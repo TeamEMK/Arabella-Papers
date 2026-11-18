@@ -1,7 +1,9 @@
 const express = require('express');
 const { callerIp } = require('../utils/callerIp');
 const router = express.Router();
-const db = require('../config/db');
+// A customer screen: the restricted login, which may read the catalogue and
+// nothing else - see config/clientDb.js.
+const db = require('../config/clientDb');
 const { checkFiles, sendHeaders } = require('../utils/fileKind');
 const { sendMail } = require('../utils/mailer');
 const { TRADING_NAME } = require('../utils/office');

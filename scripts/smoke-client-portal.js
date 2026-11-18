@@ -46,6 +46,16 @@ process.env.ADMIN_PASSWORD = 'probe-pass-123';
 process.env.PORTAL_MAX_PER_WINDOW = '500';
 process.env.PORT = '0';
 
+// ── THE PORTAL'S OWN DATABASE LOGIN ──
+// The whole suite runs through it, not only one check: the point of a
+// restricted login is that every screen the customer has still works under
+// it. A query this user is not granted would fail here, loudly, instead of
+// in front of a customer.
+const CLIENT_DB_USER = 'portal_suite_probe';
+const CLIENT_DB_PASSWORD = 'portal-suite-pw-123';
+process.env.CLIENT_DB_USER = CLIENT_DB_USER;
+process.env.CLIENT_DB_PASSWORD = CLIENT_DB_PASSWORD;
+
 // The post is caught, not sent - and the code is read out of it, which is
 // the only way this suite ever learns one. Exactly what a customer gets.
 const posted = [];
@@ -90,6 +100,19 @@ const NL = String.fromCharCode(10);
 
   const app = require(path.join(ROOT, 'server.js'));
   await require(path.join(ROOT, 'config/initDb.js')).ensureSchema();
+
+  // Exactly the grants the live user will have - see config/clientDb.js.
+  await admin.query("DROP USER IF EXISTS '" + CLIENT_DB_USER + "'@'%'");
+  await admin.query("CREATE USER '" + CLIENT_DB_USER + "'@'%' IDENTIFIED WITH "
+    + "mysql_native_password BY '" + CLIENT_DB_PASSWORD + "'");
+  for (const t of ['catalogue_items', 'envelope_linears', 'envelope_linear_items']) {
+    await admin.query("GRANT SELECT ON `" + TEST_DB + "`.`" + t + "` TO '"
+      + CLIENT_DB_USER + "'@'%'");
+  }
+  await admin.query("GRANT SELECT, INSERT, UPDATE ON `" + TEST_DB
+    + "`.`client_users` TO '" + CLIENT_DB_USER + "'@'%'");
+  await admin.query("GRANT INSERT ON `" + TEST_DB + "`.`pricing_quotes` TO '"
+    + CLIENT_DB_USER + "'@'%'");
   const db = require(path.join(ROOT, 'config/db.js'));
 
   const server = app.listen(0);

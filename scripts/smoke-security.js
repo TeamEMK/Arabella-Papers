@@ -28,6 +28,16 @@ process.env.PORT = '0';
 // seen on the next call rather than up to half a minute later.
 process.env.ROLE_RECHECK_MS = '0';
 
+// ── THE CUSTOMER'S OWN DATABASE LOGIN ──
+// The portal connects as a user that may touch three catalogues, the
+// client_users table and nothing else. It is created for real on the
+// throwaway server below, so block 14 is MySQL refusing the query rather
+// than this file asserting that it would.
+const CLIENT_DB_USER = 'portal_probe';
+const CLIENT_DB_PASSWORD = 'portal-probe-pw-123';
+process.env.CLIENT_DB_USER = CLIENT_DB_USER;
+process.env.CLIENT_DB_PASSWORD = CLIENT_DB_PASSWORD;
+
 // Counted, not just stubbed: "the office was not mailed twice" is the whole
 // point of the cron block below, and a count is the only honest way to say
 // it.
@@ -63,6 +73,22 @@ const NL = String.fromCharCode(10);
 
   const app = require(path.join(ROOT, 'server.js'));
   await require(path.join(ROOT, 'config/initDb.js')).ensureSchema();
+
+  // The grants the live server will be given, run once the tables exist, so the test is
+  // the real thing. mysql_native_password because this throwaway server is
+  // reached without TLS; the live user keeps the server's default.
+  await admin.query("DROP USER IF EXISTS '" + CLIENT_DB_USER + "'@'%'");
+  await admin.query("CREATE USER '" + CLIENT_DB_USER + "'@'%' IDENTIFIED WITH "
+    + "mysql_native_password BY '" + CLIENT_DB_PASSWORD + "'");
+  for (const t of ['catalogue_items', 'envelope_linears', 'envelope_linear_items']) {
+    await admin.query("GRANT SELECT ON `" + TEST_DB + "`.`" + t + "` TO '"
+      + CLIENT_DB_USER + "'@'%'");
+  }
+  await admin.query("GRANT SELECT, INSERT, UPDATE ON `" + TEST_DB
+    + "`.`client_users` TO '" + CLIENT_DB_USER + "'@'%'");
+  await admin.query("GRANT INSERT ON `" + TEST_DB + "`.`pricing_quotes` TO '"
+    + CLIENT_DB_USER + "'@'%'");
+
   const db = require(path.join(ROOT, 'config/db.js'));
 
   const server = app.listen(0);
@@ -1073,6 +1099,73 @@ const NL = String.fromCharCode(10);
     check('the page opens', rsPage.status === 200, rsPage.status);
     const rsLoginPage = await (await go('/login')).text();
     check('and the sign-in page offers it', /href="\/forgot"/.test(rsLoginPage));
+
+    // ══════════════════════════════════════════════════
+    // 14. THE CUSTOMER'S SIDE CANNOT REACH THE OFFICE'S DATA
+    //
+    // The client portal is the one part of this system a stranger can walk
+    // into and open an account on. It used the same database login as the
+    // office - the one that can read every table and drop any of them. The
+    // portal never asked for an order, but that is a promise the code
+    // makes, not a wall the database keeps: one injection or one careless
+    // route on the customer's side and the promise is the whole order book.
+    //
+    // Now it connects as its own user. What follows is MySQL refusing the
+    // query, not this file asserting that it would.
+    console.log(NL + "The customer's own database login");
+
+    const portalPool = require(path.join(ROOT, 'config/clientDb.js'));
+    check('the portal has a login of its own',
+      portalPool.isSeparateClientUser === true);
+    const [[portalWho]] = await portalPool.query('SELECT CURRENT_USER() AS u');
+    check('and it is not the office one',
+      /^portal_probe@/.test(String(portalWho.u)), portalWho);
+
+    // ── WHAT IT CANNOT DO ──
+    const denied = async (sql, params) => {
+      try { await portalPool.query(sql, params || []); return ''; }
+      catch (err) { return String(err.code || err.message); }
+    };
+    check('it cannot read the orders',
+      /ER_TABLEACCESS_DENIED|denied/i.test(await denied('SELECT * FROM orders LIMIT 1')),
+      await denied('SELECT * FROM orders LIMIT 1'));
+    check('nor the staff accounts and their password hashes',
+      /ER_TABLEACCESS_DENIED|denied/i.test(await denied('SELECT email, password FROM users LIMIT 1')));
+    check("nor the candidates' documents",
+      /ER_TABLEACCESS_DENIED|denied/i.test(await denied('SELECT * FROM recruit_files LIMIT 1')));
+    check('nor the activity log',
+      /ER_TABLEACCESS_DENIED|denied/i.test(await denied('SELECT * FROM activity_log LIMIT 1')));
+    check('it cannot delete a customer account either',
+      /ER_TABLEACCESS_DENIED|denied/i.test(await denied('DELETE FROM client_users WHERE id = 0')));
+    check('nor drop the table it is allowed to read',
+      /denied/i.test(await denied('DROP TABLE catalogue_items')));
+    check('nor read a quote back once it is written',
+      /ER_TABLEACCESS_DENIED|denied/i.test(await denied('SELECT * FROM pricing_quotes LIMIT 1')));
+
+    // ── WHAT IT MUST STILL DO ──
+    const [cats] = await portalPool.query('SELECT COUNT(*) c FROM catalogue_items');
+    check('it can still read the design catalogue', Array.isArray(cats), cats);
+    const [liners] = await portalPool.query(
+      'SELECT COUNT(*) c FROM envelope_linear_items');
+    check('and the liner book', Array.isArray(liners), liners);
+    await portalPool.query(
+      `INSERT INTO client_users (brand, email, password_hash, verified_at)
+       VALUES ('arabella','pool-probe@test.local','x', NOW())`);
+    await portalPool.query(
+      "UPDATE client_users SET last_login_at = NOW() WHERE email = 'pool-probe@test.local'");
+    const [[seated]] = await portalPool.query(
+      "SELECT email FROM client_users WHERE email = 'pool-probe@test.local'");
+    check('and it can make and read a customer account',
+      seated.email === 'pool-probe@test.local', seated);
+
+    // And the portal, end to end, still answers.
+    const portalDoor = await go('/client/arabella');
+    check('the customer page still opens', portalDoor.status === 200, portalDoor.status);
+
+    // The office is untouched by any of it.
+    const officeStill = await go('/api/orders', { headers: { cookie } });
+    check('and the office still reads its own orders',
+      officeStill.status === 200, officeStill.status);
 
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {

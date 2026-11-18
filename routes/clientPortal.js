@@ -26,7 +26,10 @@ const express = require('express');
 const { callerIp } = require('../utils/callerIp');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const db = require('../config/db');
+// The customer's own login to the database - see config/clientDb.js. It is
+// granted the three catalogues, their own account row and nothing else, so
+// an injection here cannot reach the order book.
+const db = require('../config/clientDb');
 const { sendMail } = require('../utils/mailer');
 const { TRADING_NAME } = require('../utils/office');
 const A = require('../utils/clientAuth');
