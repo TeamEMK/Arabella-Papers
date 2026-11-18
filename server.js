@@ -231,6 +231,12 @@ const tabClose = require('./middleware/tabClose');
 app.post('/api/session/closing', tabClose.closing);
 app.use(tabClose.enforce);
 
+// The role in the cookie was written at sign-in and never looked at again,
+// so a demotion took effect only when the person next signed in - eight
+// hours later. The account is re-read every half minute instead. Before
+// injectUser, so the screens are drawn from the same answer the routes use.
+app.use(require('./middleware/freshUser').freshUser);
+
 app.use(injectUser);
 
 // ── VIEW ENGINE ──

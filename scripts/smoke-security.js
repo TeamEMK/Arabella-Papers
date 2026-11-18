@@ -24,6 +24,9 @@ process.env.DB_NAME = TEST_DB;
 process.env.ADMIN_EMAIL = 'probe@test.local';
 process.env.ADMIN_PASSWORD = 'probe-pass-123';
 process.env.PORT = '0';
+// Every request re-reads the account, so a change made in the table is
+// seen on the next call rather than up to half a minute later.
+process.env.ROLE_RECHECK_MS = '0';
 
 {
   const p = require.resolve(path.join(ROOT, 'utils/mailer.js'));
@@ -610,6 +613,80 @@ const NL = String.fromCharCode(10);
     // A SuperAdmin works the whole floor and must notice nothing.
     const admins = await go('/api/dashboards/order-details/K-THEIRS-1', { headers: { cookie } });
     check('a SuperAdmin still reads any order', admins.status === 200, admins.status);
+
+    // ══════════════════════════════════════════════════
+    // 9. A ROLE TAKEN AWAY IS TAKEN AWAY NOW
+    //
+    // Every permission in the app was read from req.session.user.role,
+    // written once at sign-in and never looked at again for eight hours. So
+    // somebody taken off SuperAdmin at ten o'clock still deleted orders at
+    // five, and a deleted account kept its open tab working.
+    //
+    // The attack being refused is a session OUTLIVING the permission behind
+    // it; the normal flow is that nobody else is disturbed by the check.
+    console.log(NL + 'A role taken away');
+
+    await db.query(
+      `INSERT INTO users (emp_id, username, email, password, role, domain)
+       VALUES ('E-DEMO','Probe Demote','demote-probe@test.local',?,'SuperAdmin','Head')`,
+      [await bcrypt.hash('demote-probe-123', 10)]);
+    const demoteLogin = await go('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        email: 'demote-probe@test.local', password: 'demote-probe-123' }),
+    });
+    const demoteCookie = (demoteLogin.headers.get('set-cookie') || '').split(';')[0];
+    check('the probe SuperAdmin is signed in', !!demoteCookie);
+
+    await db.query(
+      `INSERT INTO orders (order_id, dealer_name, client_name, status_4)
+       VALUES ('K-DEMO-1','Dealer D','Client D','Ready'),
+              ('K-DEMO-2','Dealer D','Client D','Ready')`);
+
+    // While they still hold it, the SuperAdmin-only button works.
+    const whileAdmin = await go('/api/orders/K-DEMO-1',
+      { method: 'DELETE', headers: { cookie: demoteCookie } });
+    check('a SuperAdmin can delete an order', whileAdmin.status === 200, whileAdmin.status);
+
+    // Taken off the role in the table - the way it is really done, by
+    // somebody editing the account - with the session left alone.
+    await db.query(
+      "UPDATE users SET role = 'Designer', domain = 'Design' WHERE email = 'demote-probe@test.local'");
+
+    const afterDemote = await go('/api/orders/K-DEMO-2',
+      { method: 'DELETE', headers: { cookie: demoteCookie } });
+    check('after the demotion the same cookie is refused',
+      afterDemote.status === 403, afterDemote.status);
+    const [[survivor]] = await db.query(
+      "SELECT COUNT(*) c FROM orders WHERE order_id = 'K-DEMO-2'");
+    check('and the order is still there', survivor.c === 1, survivor);
+
+    // They are still signed in - this is a demotion, not a lock-out.
+    const whoami = await go('/api/orders', { headers: { cookie: demoteCookie } });
+    check('they are still signed in', whoami.status === 200, whoami.status);
+
+    // The window is a real one, not zero: this run sets it to zero so the
+    // demotion above is seen on the next request, but what ships is half a
+    // minute - a query per session per thirty seconds, not one per tile.
+    delete require.cache[require.resolve(path.join(ROOT, 'middleware/freshUser.js'))];
+    const savedWindow = process.env.ROLE_RECHECK_MS;
+    delete process.env.ROLE_RECHECK_MS;
+    const { RECHECK_MS } = require(path.join(ROOT, 'middleware/freshUser.js'));
+    process.env.ROLE_RECHECK_MS = savedWindow;
+    check('the shipped window is half a minute', RECHECK_MS === 30000, RECHECK_MS);
+
+    // A deleted account is a different answer: the session goes with it.
+    await db.query("DELETE FROM users WHERE email = 'demote-probe@test.local'");
+    const afterDelete = await go('/api/orders', { headers: { cookie: demoteCookie } });
+    check('a deleted account is turned away', afterDelete.status === 401, afterDelete.status);
+    const stillDead = await go('/api/orders', { headers: { cookie: demoteCookie } });
+    check('and stays turned away', stillDead.status === 401, stillDead.status);
+
+    // ── AND EVERYBODY ELSE ──
+    const adminStill = await go('/api/orders', { headers: { cookie } });
+    check('an untouched session carries on working',
+      adminStill.status === 200, adminStill.status);
 
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {
