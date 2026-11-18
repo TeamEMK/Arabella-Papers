@@ -88,30 +88,13 @@ document.getElementById('tillApprovalRoot').innerHTML = `
         <div class="form-check mb-1"><input class="form-check-input" type="radio" name="ta_approvalStatus" id="ta_st_sample" value="Sample"><label class="form-check-label text-secondary" for="ta_st_sample">Sample</label></div>
         <div class="form-check mb-1"><input class="form-check-input" type="radio" name="ta_approvalStatus" id="ta_st_cancel" value="Cancel Order"><label class="form-check-label text-danger" for="ta_st_cancel">Cancel Order</label></div>
       </div>
-      <!-- Only on a final approval. Every other answer is the client still
-           looking at the design: there is no run yet to be urgent about, and
-           asking would be asking about nothing. -->
-      <div class="mb-3 d-none" id="ta_typeWrap">
-        <label class="form-label text-dark fw-bold">Type of Order*</label>
-        <div class="d-flex flex-wrap gap-2">
-          <input type="radio" class="btn-check" name="ta_orderType" id="ta_ot_rush" value="RUSH Order" onchange="ta_syncOrderType()">
-          <label class="btn btn-outline-danger fw-bold" for="ta_ot_rush">RUSH Order</label>
-          <input type="radio" class="btn-check" name="ta_orderType" id="ta_ot_normal" value="Normal Order" onchange="ta_syncOrderType()">
-          <label class="btn btn-outline-secondary fw-bold" for="ta_ot_normal">Normal Order</label>
-        </div>
-      </div>
-      <!-- Waits for the type: it is the second half of one answer, and both
-           on screen at once reads as a form rather than a question. -->
-      <!-- The client's own date. Taken at the punch, shown here so a final
-           approval opens holding it, and compulsory on a RUSH: the boards
-           count the days left from this, so a rush without it says nothing.
-           Not the same thing as the dispatch days below - this is the day it
-           has to be WITH the client. -->
-      <div class="mb-3 d-none" id="ta_dueWrap">
-        <label class="form-label text-dark fw-bold">Delivery to client by*</label>
-        <input type="date" class="form-control" id="ta_deliveryDue">
-        <div class="form-text">The day the client has been promised it.</div>
-      </div>
+      <!-- RUSH OR NORMAL IS NOT ASKED HERE ANY MORE.
+           It is answered once, on the punch form, where the order is taken
+           and the person knows what the client was promised. Asking again at
+           the approval was a second place to answer the same question - and
+           a second place for the two answers to disagree. The board still
+           SHOWS which orders are a rush, and the Production edit box is
+           still where one can be changed. -->
       <div class="mb-3 d-none" id="ta_daysWrap">
         <label class="form-label text-dark fw-bold">Number of days for dispatch</label>
         <input type="number" class="form-control" id="ta_dispatchDays" min="0" max="365" step="1" placeholder="e.g. 7">
@@ -497,12 +480,8 @@ function ta_openEdit(id) {
   // Same reasoning as the remark above: opened showing what the order already
   // carries, so changing the status does not quietly blank an answer somebody
   // gave last week.
-  document.querySelectorAll('input[name="ta_orderType"]').forEach(r => {
-    r.checked = String((o && o.Order_Type) || '') === r.value;
-  });
   document.getElementById('ta_dispatchDays').value =
     (o && o.Dispatch_Days !== null && o.Dispatch_Days !== undefined && o.Dispatch_Days !== '') ? o.Dispatch_Days : '';
-  document.getElementById('ta_deliveryDue').value = (o && o.Delivery_Due) || '';
   document.querySelectorAll('input[name="ta_approvalStatus"]').forEach(r => {
     r.onchange = function () { ta_syncDispatchNotice(); ta_syncOrderType(); };
   });
@@ -658,20 +637,13 @@ function ta_vectorPicked() {
       + ' (' + (f.size / 1048576).toFixed(1) + ' MB)';
   }
 }
-function ta_orderType() {
-  return document.querySelector('input[name="ta_orderType"]:checked')?.value || '';
-}
-
-// Shows the pair, or hides them, for whatever status is ticked now.
+// The days for dispatch are still asked, and still only on a final
+// approval: every other answer is the client still looking at the design,
+// so there is no run yet to put a number of days against.
 function ta_syncOrderType() {
   const st = document.querySelector('input[name="ta_approvalStatus"]:checked')?.value || '';
   const on = st === 'Final Approval For Production';
-  document.getElementById('ta_typeWrap').classList.toggle('d-none', !on);
-  // The date is asked only of a rush. A normal order delivered "by" a day
-  // nobody promised is a number the boards would start counting down.
-  document.getElementById('ta_dueWrap').classList
-    .toggle('d-none', !on || ta_orderType() !== 'RUSH Order');
-  document.getElementById('ta_daysWrap').classList.toggle('d-none', !on || !ta_orderType());
+  document.getElementById('ta_daysWrap').classList.toggle('d-none', !on);
 }
 
 async function taHandleApprovalSubmit() {
@@ -683,15 +655,6 @@ async function taHandleApprovalSubmit() {
   formData.append('approvalStatus', approvalStatus);
   formData.append('remark', remark);
   if (approvalStatus === 'Final Approval For Production') {
-    if (!ta_orderType()) { showToast('warning', 'Say whether this is a RUSH or a Normal order.'); return; }
-    const due = document.getElementById('ta_deliveryDue').value;
-    if (ta_orderType() === 'RUSH Order' && !due) {
-      showToast('warning', 'A RUSH order needs the date it must reach the client.'); return;
-    }
-    formData.append('orderType', ta_orderType());
-    // A normal order sends a blank, which clears any date left over from a
-    // punch that said urgent and an approval that decided otherwise.
-    formData.append('deliveryDue', ta_orderType() === 'RUSH Order' ? due : '');
     // Sent even when empty, so clearing the days is possible once they have
     // been set. The server reads a blank as "not settled", not as zero.
     formData.append('dispatchDays', document.getElementById('ta_dispatchDays').value);

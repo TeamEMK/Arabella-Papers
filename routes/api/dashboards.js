@@ -401,18 +401,21 @@ function dispatchLine(row) {
 function orderTypeColumns(status, body) {
   if (String(status || '').trim() !== 'Final Approval For Production') return null;
   const cols = {};
-  const type = String(body.orderType || '').trim();
-  if (ORDER_TYPES.includes(type)) cols.order_type = type;
+  // RUSH OR NORMAL, AND THE CLIENT'S DATE, ARE NOT TAKEN HERE.
+  //
+  // They are answered on the punch form, which is where the order is taken
+  // and where the server refuses a rush with no date. This route used to
+  // accept both, and it accepted them loosely: a RUSH with an unparseable
+  // date wrote the type and set the date to NULL, which is exactly the row
+  // the punch form exists to prevent. Removing the fields from the screen
+  // would have left that door open to any older tab still posting them, so
+  // the route stops reading them too.
+  //
+  // The days for dispatch stay: they are a production number, not a promise
+  // to the client, and this is the first moment there is a run to count.
   if (body.dispatchDays !== undefined) {
     const n = parseInt(body.dispatchDays, 10);
     cols.dispatch_days = Number.isInteger(n) && n >= 0 ? n : null;
-  }
-  // The client's promised day, taken at the punch and changeable here. Only
-  // written when it is sent, so an approval box from an older tab cannot
-  // blank a date the punch set.
-  if (body.deliveryDue !== undefined) {
-    const d = String(body.deliveryDue || '').trim();
-    cols.delivery_due_date = /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
   }
   return Object.keys(cols).length ? cols : null;
 }
