@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Arabella Papers - Forgotten password</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"/>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap");
+    * { box-sizing: border-box; font-family: "Poppins", sans-serif; }
+    body { margin: 0; padding: 0; min-height: 100vh; background: #1a1a2e; display: flex; justify-content: center; align-items: center; }
+    .login-container {
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 30px;
+      width: 350px;
+      text-align: center;
+      box-shadow: 0 8px 32px 0 rgba(0,0,0,0.3);
+    }
+    h2 { font-size: 22px; color: white; margin-bottom: 8px; }
+    .lede { color: rgba(255,255,255,0.65); font-size: 13px; margin-bottom: 22px; line-height: 1.5; }
+    .input-group-custom { position: relative; margin-bottom: 24px; text-align: left; }
+    .input-group-custom input {
+      width: 100%; padding: 10px 0; outline: none;
+      background: transparent; color: white; font-size: 16px;
+      border: none; border-bottom: 1px solid rgba(255,255,255,0.3);
+      transition: border-color 0.3s;
+    }
+    .input-group-custom input:focus { border-bottom-color: #ffcc00; }
+    .input-group-custom input:-webkit-autofill,
+    .input-group-custom input:-webkit-autofill:hover,
+    .input-group-custom input:-webkit-autofill:focus {
+      -webkit-text-fill-color: #fff;
+      box-shadow: 0 0 0 1000px #0b0b14 inset;
+      caret-color: #fff;
+    }
+    .input-group-custom label {
+      position: absolute; left: 0; top: 10px; color: rgba(255,255,255,0.6);
+      font-size: 15px; pointer-events: none; transition: 0.25s;
+    }
+    .input-group-custom input:focus + label,
+    .input-group-custom input:not(:placeholder-shown) + label {
+      top: -14px; font-size: 12px; color: #ffcc00;
+    }
+    .login-btn {
+      width: 100%; padding: 11px; border: none; border-radius: 8px;
+      background: #ffcc00; color: #1a1a2e; font-size: 16px; font-weight: 600;
+      cursor: pointer; transition: 0.3s;
+    }
+    .login-btn:hover { background: #ffa500; }
+    .login-btn[disabled] { opacity: .6; cursor: default; }
+    /* The same plate the sign-in page gives it: the logo is dark ink on
+       white, and on this dark ground it needs its own background. */
+    .logo { width: 100%; max-width: 240px; height: auto; margin-bottom: 18px;
+            background: #fff; border-radius: 6px; padding: 9px 12px; }
+    .note { margin-top: 18px; font-size: 13px; line-height: 1.5; }
+    .note.ok { color: #9ae6b4; }
+    .note.bad { color: #ff8787; }
+    .back { display: inline-block; margin-top: 20px; color: rgba(255,255,255,0.65); font-size: 13px; text-decoration: none; }
+    .back:hover { color: #ffcc00; }
+    .code-input input { letter-spacing: 8px; font-size: 20px; }
+    @media (max-width: 420px) {
+      .login-container { width: 92vw; padding: 24px 20px; }
+      body { min-height: 100dvh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <img src="/logo.jpg" alt="Arabella Papers" class="logo" onerror="this.remove()"/>
+
+    <!-- STEP ONE: the address. -->
+    <div id="askStep">
+      <h2>Forgotten password</h2>
+      <p class="lede">Give the email address on your account and we will send a
+        six-digit code to it.</p>
+      <form id="askForm" autocomplete="on">
+        <div class="input-group-custom">
+          <input type="email" id="email" name="email" placeholder=" " required autocomplete="email"/>
+          <label for="email">Email</label>
+        </div>
+        <button type="submit" class="login-btn" id="askBtn">Send the code</button>
+      </form>
+    </div>
+
+    <!-- STEP TWO: the code, and the password it unlocks. Both on one screen,
+         because the code is only worth typing to set the password. -->
+    <div id="setStep" style="display:none">
+      <h2>Set a new password</h2>
+      <p class="lede">Type the code from your email and the password you want.
+        The code works for ten minutes.</p>
+      <form id="setForm">
+        <div class="input-group-custom code-input">
+          <input type="text" id="code" inputmode="numeric" maxlength="6" placeholder=" "
+                 autocomplete="one-time-code" required/>
+          <label for="code">Code</label>
+        </div>
+        <div class="input-group-custom">
+          <input type="password" id="password" placeholder=" " required
+                 autocomplete="new-password" minlength="8"/>
+          <label for="password">New password</label>
+        </div>
+        <button type="submit" class="login-btn" id="setBtn">Set the password</button>
+      </form>
+    </div>
+
+    <div class="note" id="note" style="display:none"></div>
+    <a class="back" href="/login"><i class="fas fa-arrow-left me-1"></i> Back to sign in</a>
+  </div>
+
+  <script>
+    var note = document.getElementById('note');
+    function say(text, good) {
+      note.textContent = text;
+      note.className = 'note ' + (good ? 'ok' : 'bad');
+      note.style.display = 'block';
+    }
+
+    // Step one. The answer is the same whether or not the address has an
+    // account, so the page moves on either way - see routes/auth.js.
+    document.getElementById('askForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var btn = document.getElementById('askBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Sending...';
+      try {
+        var r = await fetch('/forgot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: document.getElementById('email').value }),
+        });
+        var out = await r.json();
+        if (!out.success) { say(out.error || 'Something went wrong.', false); return; }
+        document.getElementById('askStep').style.display = 'none';
+        document.getElementById('setStep').style.display = 'block';
+        say(out.message || 'If that address has an account, a code is on its way to it.', true);
+        document.getElementById('code').focus();
+      } catch (err) {
+        say('Could not reach the server. Try again.', false);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send the code';
+      }
+    });
+
+    // Step two.
+    document.getElementById('setForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var btn = document.getElementById('setBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Setting...';
+      try {
+        var r = await fetch('/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('email').value,
+            code: document.getElementById('code').value,
+            password: document.getElementById('password').value,
+          }),
+        });
+        var out = await r.json();
+        if (!out.success) { say(out.error || 'Something went wrong.', false); return; }
+        say(out.message || 'Your password is set. Sign in with it.', true);
+        document.getElementById('setStep').style.display = 'none';
+        setTimeout(function () { window.location.href = '/login'; }, 1800);
+      } catch (err) {
+        say('Could not reach the server. Try again.', false);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Set the password';
+      }
+    });
+
+    // Nothing is left on screen for the next person at this desk.
+    window.addEventListener('pagehide', function () {
+      document.getElementById('password').value = '';
+      document.getElementById('code').value = '';
+    });
+  </script>
+</body>
+</html>

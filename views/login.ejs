@@ -72,6 +72,11 @@
       transition: 0.3s ease-in-out;
     }
     .login-btn:hover { background: #ffa500; transform: translateY(-2px); }
+    .forgot-link {
+      display: inline-block; margin-top: 16px; font-size: 13px;
+      color: rgba(255,255,255,0.6); text-decoration: none;
+    }
+    .forgot-link:hover { color: #ffcc00; }
     .login-btn:disabled { opacity: 0.7; cursor: not-allowed; }
     .error-msg { color: #ff6347; font-size: 14px; margin-top: 10px; }
     @keyframes fadeIn {
@@ -127,6 +132,10 @@
         </button>
       </div>
       <button type="submit" class="login-btn" id="loginBtn">Login</button>
+      <!-- Until now the only way back into an account was asking the
+           SuperAdmin to type a new password in, which meant it travelled
+           over WhatsApp and was known to two people. -->
+      <a href="/forgot" class="forgot-link">Forgotten your password?</a>
       <% if (error) { %>
         <div class="error-msg"><%= error %></div>
       <% } %>

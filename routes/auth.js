@@ -8,6 +8,11 @@ const { safeNext } = require('../middleware/auth');
 // Two limits in front of the one door a stranger can reach - see
 // utils/loginGuard.js for why there are two and why both fail open.
 const guard = require('../utils/loginGuard');
+// A six-digit code to the address on the account - see utils/staffReset.js
+// for why a code and not a link, and what stops it being guessed.
+const R = require('../utils/staffReset');
+const { callerIp } = require('../utils/callerIp');
+const { sendMail } = require('../utils/mailer');
 
 /**
  * The vector-file gate.
@@ -165,6 +170,157 @@ router.get('/logout', async (req, res) => {
   if (await vectorHold(req)) return res.redirect('/?vectors=due');
   await recordLogout(req);
   req.session.destroy(() => res.redirect('/login'));
+});
+
+// ══════════════════════════════════════════════════════
+// FORGOTTEN PASSWORDS
+//
+// Before this there was no way back into an account except asking the
+// SuperAdmin to type a new password in, which means the new password
+// travels over WhatsApp and is known to two people from the moment it
+// exists.
+//
+// THE ANSWER IS THE SAME WHETHER OR NOT THE ACCOUNT EXISTS. Anything else
+// and this form is a way to find out which of the office's addresses are
+// real - from outside, with no login. The one exception is a password that
+// is too short, which is about what was typed here and gives nothing away.
+// ══════════════════════════════════════════════════════
+
+// Per caller, against the address the platform saw - never a header they
+// write. Twelve goes in ten minutes is more than anybody resetting one
+// password needs, and far fewer than a script wants.
+const RESET_HITS = new Map();
+const RESET_MAX = 12;
+const RESET_WINDOW_MS = 10 * 60 * 1000;
+
+function resetFlooding(req) {
+  const ip = callerIp(req);
+  const now = Date.now();
+  const seen = (RESET_HITS.get(ip) || []).filter(t => now - t < RESET_WINDOW_MS);
+  seen.push(now);
+  RESET_HITS.set(ip, seen);
+  if (RESET_HITS.size > 5000) {
+    for (const [k, v] of RESET_HITS) {
+      if (!v.length || now - v[v.length - 1] > RESET_WINDOW_MS) RESET_HITS.delete(k);
+    }
+  }
+  return seen.length > RESET_MAX;
+}
+
+const VAGUE = 'If that address has an account, a code is on its way to it.';
+const BUSY = 'That is a lot of attempts in a short while. Please try again in a few minutes.';
+
+const staffBy = async (email) => (await db.query(
+  'SELECT id, username, email FROM users WHERE LOWER(email) = ? LIMIT 1', [email]))[0][0];
+
+const resetRow = async (email) => (await db.query(
+  'SELECT code_hash, expires_at, tries, sent_at FROM password_resets WHERE email = ?',
+  [email]))[0][0];
+
+// GET /forgot — the page itself.
+router.get('/forgot', (req, res) => {
+  if (req.session && req.session.user) return res.redirect('/');
+  res.render('forgot', { sent: false });
+});
+
+// POST /forgot — send a code, or pretend to.
+router.post('/forgot', express.json(), async (req, res) => {
+  if (resetFlooding(req)) return res.status(429).json({ success: false, error: BUSY });
+  try {
+    const email = R.emailOf(req.body && req.body.email);
+    const user = email ? await staffBy(email) : null;
+    if (!user) return res.json({ success: true, message: VAGUE });
+
+    // One code a minute per address, so somebody holding the form open
+    // cannot fill an inbox - or wear the code list down by asking for a new
+    // one every second.
+    const wait = R.resendWait(await resetRow(email));
+    if (wait) return res.json({ success: true, message: VAGUE, wait });
+
+    const code = R.newCode();
+    const hash = await bcrypt.hash(code, 10);
+    await db.query(
+      `INSERT INTO password_resets (email, code_hash, expires_at, tries, sent_at)
+       VALUES (?, ?, NOW() + INTERVAL ? SECOND, 0, NOW())
+       ON DUPLICATE KEY UPDATE code_hash = VALUES(code_hash),
+                               expires_at = VALUES(expires_at),
+                               tries = 0, sent_at = NOW()`,
+      [email, hash, Math.round(R.CODE_LIFE_MS / 1000)]);
+
+    const letter = R.mail(code, user.username);
+    await sendMail({ to: user.email, ...letter });
+    console.log('[reset] code sent to ' + user.email);
+    res.json({ success: true, message: VAGUE });
+  } catch (err) {
+    console.error('[reset] could not send a code:', err.message);
+    res.status(500).json({ success: false, error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// POST /reset — the code and the new password together.
+router.post('/reset', express.json(), async (req, res) => {
+  if (resetFlooding(req)) return res.status(429).json({ success: false, error: BUSY });
+  try {
+    const email = R.emailOf(req.body && req.body.email);
+    const code = String((req.body && req.body.code) || '').trim().slice(0, 12);
+    const password = String((req.body && req.body.password) || '');
+
+    // Checked before anything is looked up, because it is about what was
+    // typed on this page and says nothing about any account.
+    const fault = R.passwordFault(password);
+    if (fault) return res.status(400).json({ success: false, error: fault });
+
+    const row = email ? await resetRow(email) : null;
+    const state = R.codeState(row);
+    if (state !== 'live') {
+      return res.status(400).json({
+        success: false,
+        error: state === 'spent'
+          ? 'That code has been tried too many times. Ask for a new one.'
+          : 'That code has expired or was never sent. Ask for a new one.',
+      });
+    }
+
+    // Counted BEFORE it is compared, so a wrong answer costs a try even if
+    // the comparison throws or the connection drops.
+    await db.query('UPDATE password_resets SET tries = tries + 1 WHERE email = ?', [email]);
+    if (!await bcrypt.compare(code, row.code_hash)) {
+      return res.status(400).json({ success: false, error: 'That code is not right.' });
+    }
+
+    const user = await staffBy(email);
+    if (!user) return res.status(400).json({ success: false, error: 'That code is not right.' });
+
+    const hash = await bcrypt.hash(password, 10);
+    await db.query('UPDATE users SET password = ? WHERE id = ?', [hash, user.id]);
+    // Used once. The row goes rather than being marked, so there is nothing
+    // left to replay.
+    await db.query('DELETE FROM password_resets WHERE email = ?', [email]);
+    // Whoever was locked out by wrong guesses has just proved the address.
+    await guard.noteSuccess(email);
+
+    // EVERY OTHER SESSION OF THIS ACCOUNT ENDS HERE. A reset is what
+    // somebody does when they think another person has their password, and
+    // leaving that person's open tab signed in would make the reset
+    // pointless. The session store holds the user id inside its JSON.
+    try {
+      await db.query(
+        "DELETE FROM sessions WHERE data LIKE ?",
+        ['%"email":"' + user.email + '"%']);
+    } catch (err) {
+      console.error('[reset] could not clear the old sessions:', err.message);
+    }
+
+    await db.query(
+      'INSERT INTO activity_log (email, action, ip_address, location) VALUES (?,?,?,?)',
+      [user.email, 'Password Reset', ipOf(req), locationOf(req)]);
+    console.log('[reset] password set for ' + user.email);
+
+    res.json({ success: true, message: 'Your password is set. Sign in with it.' });
+  } catch (err) {
+    console.error('[reset] could not set a password:', err.message);
+    res.status(500).json({ success: false, error: 'Something went wrong. Please try again.' });
+  }
 });
 
 module.exports = router;

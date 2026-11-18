@@ -921,6 +921,159 @@ const NL = String.fromCharCode(10);
       mails.length === beforeNoTable, mails.length - beforeNoTable);
     await db.query('RENAME TABLE cron_runs_hidden TO cron_runs');
 
+    // ══════════════════════════════════════════════════
+    // 13. A PASSWORD THE OWNER CAN SET THEMSELVES
+    //
+    // There was no way back into an account except asking the SuperAdmin to
+    // type a new password in: it travelled over WhatsApp, it was chosen by
+    // somebody else, and two people knew it from the moment it existed.
+    //
+    // A reset form is a door, so what is checked here is the door as much
+    // as the convenience: it must not say which addresses have accounts, a
+    // code must not survive being guessed at, a used code must not work
+    // twice, and setting a password must end the sessions somebody else may
+    // be holding.
+    console.log(NL + 'A forgotten password');
+
+    const rsEmail = 'reset-probe@test.local';
+    await db.query(
+      `INSERT INTO users (emp_id, username, email, password, role, domain)
+       VALUES ('E-RESET','Probe Reset',?,?,'Designer','Design')`,
+      [rsEmail, await bcrypt.hash('reset-probe-123', 10)]);
+
+    const rsPost = (url, body) => go(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const rsRow = async () => (await db.query(
+      'SELECT code_hash, expires_at, tries FROM password_resets WHERE email = ?',
+      [rsEmail]))[0][0];
+    // The code exists in exactly one place a test may look: the mail. This
+    // suite keeps every mail the app sent, which is how it can know the
+    // code without the app ever putting it on screen.
+    const rsCodeFromMail = () => {
+      const last = mails[mails.length - 1] || {};
+      const m = String(last.subject || '').match(/\b(\d{6})\b/);
+      return { to: last.to, code: m ? m[1] : '' };
+    };
+
+    // ── IT DOES NOT SAY WHO HAS AN ACCOUNT ──
+    const rsAsk = await rsPost('/forgot', { email: rsEmail });
+    const rsAskBody = await rsAsk.json();
+    const rsAskNobody = await rsPost('/forgot', { email: 'nobody-here@test.local' });
+    const rsAskNobodyBody = await rsAskNobody.json();
+    check('asking for a code is accepted', rsAsk.status === 200, rsAsk.status);
+    check('and an address with no account reads exactly the same',
+      rsAskNobody.status === rsAsk.status && rsAskNobodyBody.message === rsAskBody.message,
+      [rsAskBody, rsAskNobodyBody]);
+    const [[rsNone]] = await db.query(
+      "SELECT COUNT(*) c FROM password_resets WHERE email = 'nobody-here@test.local'");
+    check('and nothing is written for an address nobody owns', rsNone.c === 0, rsNone);
+
+    const rsStored = await rsRow();
+    check('a code was stored for the real one', !!rsStored);
+    check('and what is stored is a hash, not the code itself',
+      !!rsStored && /^\$2[aby]\$/.test(rsStored.code_hash), rsStored && rsStored.code_hash);
+
+    const rsFirst = rsCodeFromMail();
+    check('the code went out by mail, to the address on the account',
+      rsFirst.to === rsEmail && !!rsFirst.code, rsFirst);
+    check('and the page answer does not contain it',
+      !!rsFirst.code && !new RegExp(rsFirst.code).test(JSON.stringify(rsAskBody)), rsAskBody);
+
+    // ── GUESSING ──
+    let rsRefused = 0;
+    for (let i = 0; i < 5; i++) {
+      const guess = String(100000 + i);   // a real six-digit guess, not a blank
+      if (guess === rsFirst.code) continue;
+      const bad = await rsPost('/reset',
+        { email: rsEmail, code: guess, password: 'a-new-password-1' });
+      if (bad.status === 400) rsRefused++;
+    }
+    check('five wrong codes are all refused', rsRefused === 5, rsRefused);
+    const rsDead = await rsPost('/reset',
+      { email: rsEmail, code: rsFirst.code, password: 'a-new-password-1' });
+    const rsDeadBody = await rsDead.json();
+    check('and after them even the RIGHT code is dead',
+      rsDead.status === 400 && /too many times/i.test(String(rsDeadBody.error || '')),
+      rsDeadBody);
+    const [[rsNotSet]] = await db.query(
+      'SELECT password FROM users WHERE email = ?', [rsEmail]);
+    check('so no password was set by guessing',
+      await bcrypt.compare('reset-probe-123', rsNotSet.password));
+
+    // A fresh code. The minute between codes is moved back the way a minute
+    // would move it.
+    await db.query(
+      'UPDATE password_resets SET sent_at = NOW() - INTERVAL 5 MINUTE WHERE email = ?',
+      [rsEmail]);
+    await rsPost('/forgot', { email: rsEmail });
+    const rsSecond = rsCodeFromMail();
+    check('a new code can be asked for',
+      !!rsSecond.code && rsSecond.code !== rsFirst.code, rsSecond);
+
+    const rsShort = await rsPost('/reset',
+      { email: rsEmail, code: rsSecond.code, password: 'abc' });
+    check('a password under eight characters is refused', rsShort.status === 400, rsShort.status);
+    const rsAfterShort = await rsRow();
+    check('and that did not cost one of the five tries',
+      Number(rsAfterShort.tries) === 0, rsAfterShort);
+
+    // ── THE NORMAL FLOW ──
+    // Somebody else is signed in as this person right now, which is the
+    // reason people reset passwords in the first place.
+    const rsOther = await go('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ email: rsEmail, password: 'reset-probe-123' }),
+    });
+    const rsOtherCookie = (rsOther.headers.get('set-cookie') || '').split(';')[0];
+    check('that other session works before the reset',
+      (await go('/api/orders', { headers: { cookie: rsOtherCookie } })).status === 200);
+
+    const rsSet = await rsPost('/reset',
+      { email: rsEmail, code: rsSecond.code, password: 'a-new-password-1' });
+    const rsSetBody = await rsSet.json();
+    check('the right code sets the password',
+      rsSet.status === 200 && rsSetBody.success === true, rsSetBody);
+
+    const rsNewLogin = await go('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ email: rsEmail, password: 'a-new-password-1' }),
+    });
+    check('and the new password signs them in',
+      /connect\.sid/.test(String(rsNewLogin.headers.get('set-cookie') || '')),
+      rsNewLogin.status);
+
+    const rsOldLogin = await go('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ email: rsEmail, password: 'reset-probe-123' }),
+    });
+    const rsOldBody = await rsOldLogin.text();
+    check('the old password no longer does',
+      !/Redirecting to \//.test(rsOldBody), rsOldBody.slice(0, 90));
+
+    check('the session somebody else was holding is gone',
+      (await go('/api/orders', { headers: { cookie: rsOtherCookie } })).status === 401);
+
+    const [[rsUsed]] = await db.query(
+      'SELECT COUNT(*) c FROM password_resets WHERE email = ?', [rsEmail]);
+    check('and the code cannot be used a second time', rsUsed.c === 0, rsUsed);
+
+    const [rsLog] = await db.query(
+      "SELECT action FROM activity_log WHERE email = ? AND action = 'Password Reset'",
+      [rsEmail]);
+    check('the reset is written in the activity log', rsLog.length === 1, rsLog.length);
+
+    // The page, and the way to it.
+    const rsPage = await go('/forgot');
+    check('the page opens', rsPage.status === 200, rsPage.status);
+    const rsLoginPage = await (await go('/login')).text();
+    check('and the sign-in page offers it', /href="\/forgot"/.test(rsLoginPage));
+
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {
     try { server.close(); } catch (e) {}

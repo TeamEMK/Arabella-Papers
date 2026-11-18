@@ -82,6 +82,20 @@ CREATE TABLE IF NOT EXISTS cron_runs (
   INDEX idx_cron_runs_when (started_at)
 );
 
+-- One live password-reset code per address. The code itself is never here:
+-- only its bcrypt hash, so a copy of this table is not a way into anybody's
+-- account. See utils/staffReset.js.
+CREATE TABLE IF NOT EXISTS password_resets (
+  email VARCHAR(150) NOT NULL PRIMARY KEY,
+  code_hash VARCHAR(255) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  -- Wrong answers. The code dies at five, so a million possibilities are
+  -- not something a script can walk through.
+  tries INT NOT NULL DEFAULT 0,
+  sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_password_resets_expiry (expires_at)
+);
+
 CREATE TABLE IF NOT EXISTS activity_log (
   id INT AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(150),
