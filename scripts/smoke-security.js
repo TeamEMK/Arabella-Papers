@@ -688,6 +688,83 @@ const NL = String.fromCharCode(10);
     check('an untouched session carries on working',
       adminStill.status === 200, adminStill.status);
 
+    // ══════════════════════════════════════════════════
+    // 10. A LIMIT A CALLER CANNOT KEY FOR THEMSELVES
+    //
+    // Four public endpoints - the client portal's register, verify, login
+    // and reset, the quote page, the catalogue's email box and the
+    // tracking page - counted attempts against the first entry of
+    // `x-forwarded-for`. The caller writes that header. One line of change
+    // per request and every attempt looked like the first visit of a new
+    // person, so twenty became as many as they liked.
+    //
+    // The attack is exactly that: the same caller, a new address each
+    // time. The normal flow is the one honest visitor, who must still get
+    // through.
+    console.log(NL + 'A limit that cannot be shrugged off');
+
+    const spoofed = async (n) => {
+      let refused = 0;
+      for (let i = 0; i < n; i++) {
+        const r = await go('/track/api?order=K-1&name=someone', {
+          headers: { 'X-Forwarded-For': '203.0.113.' + i },
+        });
+        if (r.status === 429) refused++;
+      }
+      return refused;
+    };
+
+    // Twelve a minute is the tracking page's limit; thirty tries with a new
+    // address each time must still run into it.
+    check('a new X-Forwarded-For every time does not buy more tries',
+      (await spoofed(30)) > 0);
+
+    // And the honest visitor, from an address that has not been spending
+    // the allowance, is still served. A fresh window is what the next
+    // minute gives them; here it is enough that the answer is not a 429
+    // for a caller the limiter has not seen - which is the socket, the
+    // same one the burst above was counted against, so this check is the
+    // one that would break if the fix were simply "refuse everybody".
+    const honest = await go('/track');
+    check('the tracking page itself still opens', honest.status === 200, honest.status);
+
+    // The portal's own limiter reads the same helper rather than keeping a
+    // second, spoofable copy - checked directly, because its window is ten
+    // minutes and a hundred requests is a slow way to prove a require.
+    const portalSrc = require('fs').readFileSync(
+      path.join(ROOT, 'routes/clientPortal.js'), 'utf8');
+    const quoteSrc = require('fs').readFileSync(
+      path.join(ROOT, 'routes/quote.js'), 'utf8');
+    const catSrc = require('fs').readFileSync(
+      path.join(ROOT, 'routes/catalogue.js'), 'utf8');
+    const trackSrc = require('fs').readFileSync(
+      path.join(ROOT, 'routes/track.js'), 'utf8');
+    for (const [name, src] of [['the client portal', portalSrc], ['the quote page', quoteSrc],
+      ['the catalogue', catSrc], ['the tracking page', trackSrc]]) {
+      check(name + ' reads the shared helper',
+        /require\('\.\.\/utils\/callerIp'\)/.test(src));
+      check('and ' + name + ' no longer reads the raw header',
+        !/headers\['x-forwarded-for'\]/.test(src));
+    }
+
+    // The helper itself: the header is ignored off the platform, and on it
+    // only what the platform wrote is read.
+    delete require.cache[require.resolve(path.join(ROOT, 'utils/callerIp.js'))];
+    const { callerIp } = require(path.join(ROOT, 'utils/callerIp.js'));
+    const pretend = {
+      headers: {
+        'x-forwarded-for': '1.2.3.4',
+        'x-vercel-forwarded-for': '9.9.9.9',
+      },
+      socket: { remoteAddress: '::ffff:127.0.0.1' },
+    };
+    check('off the platform, only the socket counts',
+      callerIp(pretend) === '127.0.0.1', callerIp(pretend));
+    process.env.VERCEL = '1';
+    check('on the platform, only what the platform wrote counts',
+      callerIp(pretend) === '9.9.9.9', callerIp(pretend));
+    delete process.env.VERCEL;
+
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {
     try { server.close(); } catch (e) {}

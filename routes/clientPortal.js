@@ -23,6 +23,7 @@
 // that key. A customer cannot become staff by any road through this file.
 // ══════════════════════════════════════════════════════
 const express = require('express');
+const { callerIp } = require('../utils/callerIp');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
@@ -65,14 +66,17 @@ const brandOf = (req) => BRANDS[String(req.params.brand || '').toLowerCase()];
 // page uses. It holds in memory: on Vercel each container keeps its own
 // count, so the real ceiling is this times however many are warm - still
 // three orders of magnitude below what a script wants.
-const MAX_PER_WINDOW = 20;
+// The override exists for the smoke suite only. Now that the key is the
+// address the PLATFORM saw rather than a header the caller writes, a test
+// can no longer pretend to be two hundred different people, and a suite
+// that walks the whole sign-up twice would otherwise run into this.
+const MAX_PER_WINDOW = Number(process.env.PORTAL_MAX_PER_WINDOW) || 20;
 const WINDOW_MS = 10 * 60 * 1000;
 const HITS = new Map();
 
-function callerIp(req) {
-  const chain = String(req.headers['x-forwarded-for'] || '').split(',');
-  return (chain[0] || '').trim() || (req.socket && req.socket.remoteAddress) || 'unknown';
-}
+// Never the caller's own x-forwarded-for, which they write themselves - see
+// utils/callerIp.js. A limiter keyed on a header the caller chooses counts
+// every attempt as a new person.
 function overLimit(req) {
   const ip = callerIp(req);
   const now = Date.now();

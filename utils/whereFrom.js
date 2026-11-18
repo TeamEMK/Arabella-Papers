@@ -16,17 +16,16 @@
 // is kept. A blank town is a true answer, so nothing is invented to fill it.
 // ══════════════════════════════════════════════════════
 
-/** The caller's address, as close to the real one as the proxies allow. */
-function ipOf(req) {
-  // x-forwarded-for is a chain, oldest first: the client is the first entry.
-  // Taking the last would record Vercel's own proxy on every single row.
-  const chain = String(req.headers['x-forwarded-for'] || '').split(',');
-  const first = chain[0].trim();
-  if (first) return first.slice(0, 64);
-  const direct = req.socket?.remoteAddress || '';
-  // ::ffff:1.2.3.4 is an IPv4 address wearing an IPv6 coat.
-  return String(direct).replace(/^::ffff:/, '').slice(0, 64);
-}
+const { callerIp } = require('./callerIp');
+
+/**
+ * The caller's address, as close to the real one as the proxies allow.
+ *
+ * Reads what the platform saw, not the caller's own x-forwarded-for - see
+ * utils/callerIp.js. A log row is evidence, and a header the person being
+ * logged can write is not evidence of where they were.
+ */
+const ipOf = (req) => callerIp(req);
 
 /** "Jaipur, RJ, IN" where the edge knows, '' where it does not. */
 function locationOf(req) {

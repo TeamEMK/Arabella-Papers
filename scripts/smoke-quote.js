@@ -307,10 +307,13 @@ const check = (name, ok, extra) => {
     if (x.status === 429) blocked++;
   }
   check('gets cut off', blocked > 0, { blocked });
-  check('and somebody else is not caught by it',
-    (await send('kpc', Object.assign({}, WHO, {
-      items: ITEMS, totals: { total: kpc.total, balance: kpc.balance },
-    }), '198.51.100.7')).json.success === true);
+  // "And somebody else is not caught by it" used to be checked here by
+  // sending a second burst under a different X-Forwarded-For. That header is
+  // no longer the key - the caller writes it, so a limiter keyed on it was
+  // no limiter at all - and over the wire this suite is one socket for all
+  // of it, so there is no second caller to be. The key itself is checked in
+  // scripts/smoke-security.js: the socket off the platform, and only what
+  // the platform wrote on it.
 
   console.log('\nThe buttons the customer is offered');
   for (const slug of ['arabella', 'kpc']) {

@@ -29,26 +29,11 @@ const LOCK_MIN = 15;
 const MAX_PER_IP = 30;
 const IP_WINDOW_MS = 15 * 60 * 1000;
 
-/**
- * Who is calling, as far as it can honestly be known.
- *
- * NEVER THE RAW X-Forwarded-For. A caller can send that header themselves,
- * with a different value each time, and a limiter keyed on it is a limiter
- * with no key at all - every attempt looks like a new person.
- *
- * On Vercel the platform overwrites x-vercel-forwarded-for and x-real-ip
- * with the address it saw, and those are the ones to read. Anywhere else -
- * a laptop, a smoke test, a box behind nothing - the socket address is the
- * only thing that is true.
- */
-function clientIp(req) {
-  if (process.env.VERCEL) {
-    const platform = String(req.headers['x-vercel-forwarded-for']
-      || req.headers['x-real-ip'] || '').split(',')[0].trim();
-    if (platform) return platform;
-  }
-  return (req.socket && req.socket.remoteAddress) || 'unknown';
-}
+// Who is calling, as far as it can honestly be known - NEVER the caller's
+// own x-forwarded-for. That lived here first and now lives in
+// utils/callerIp.js, because three other limiters needed the same answer
+// and each had its own, spoofable, version of it.
+const { callerIp: clientIp } = require('./callerIp');
 
 // Per address, in this instance's memory. On serverless each warm instance
 // keeps its own count, so this slows a burst rather than stopping a patient

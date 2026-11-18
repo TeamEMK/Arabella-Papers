@@ -38,6 +38,12 @@ const LIVE_DB = process.env.DB_NAME;
 process.env.DB_NAME = TEST_DB;
 process.env.ADMIN_EMAIL = 'probe@test.local';
 process.env.ADMIN_PASSWORD = 'probe-pass-123';
+// The portal's limiter no longer counts against a header the caller
+// writes - it counts against the address the platform saw, which for this
+// suite is one socket for all of it. So the limit is lifted for the run
+// rather than the suite pretending to be a new person every request;
+// scripts/smoke-security.js is where the limit itself is proved.
+process.env.PORTAL_MAX_PER_WINDOW = '500';
 process.env.PORT = '0';
 
 // The post is caught, not sent - and the code is read out of it, which is
@@ -102,7 +108,6 @@ const NL = String.fromCharCode(10);
   const post = async (brand, what, body, jar) => {
     const headers = {
       'Content-Type': 'application/json',
-      'X-Forwarded-For': '10.0.0.' + ((callers++ % 250) + 1),
     };
     if (jar) headers.cookie = jar;
     const r = await go('/client/' + brand + '/api/' + what,

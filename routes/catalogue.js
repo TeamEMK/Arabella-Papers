@@ -1,4 +1,5 @@
 const express = require('express');
+const { callerIp } = require('../utils/callerIp');
 const router = express.Router();
 const db = require('../config/db');
 const { checkFiles, sendHeaders } = require('../utils/fileKind');
@@ -184,8 +185,7 @@ function pickedHtml(rows, base) {
 // POST /catalogue/api/email
 router.post('/api/email', express.json(), async (req, res) => {
   try {
-    const chain = String(req.headers['x-forwarded-for'] || '').split(',');
-    const ip = (chain[0] || '').trim() || req.socket?.remoteAddress || 'unknown';
+    const ip = callerIp(req);
     if (overLimit(SENDS, ip, MAX_SENDS)) {
       return res.status(429).json({
         success: false,
@@ -300,8 +300,7 @@ const esc = (v) => String(v == null ? '' : v)
 // POST /catalogue/api/theirs
 router.post('/api/theirs', sendUpload.array('files', 3), async (req, res) => {
   try {
-    const chain = String(req.headers['x-forwarded-for'] || '').split(',');
-    const ip = (chain[0] || '').trim() || req.socket?.remoteAddress || 'unknown';
+    const ip = callerIp(req);
     if (overLimit(THEIRS, ip, THEIRS_MAX)) {
       return res.status(429).json({
         success: false,

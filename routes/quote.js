@@ -1,4 +1,5 @@
 const express = require('express');
+const { callerIp } = require('../utils/callerIp');
 const router = express.Router();
 const db = require('../config/db');
 const pricing = require('../utils/pricing');
@@ -73,7 +74,9 @@ const BRANDS = {
 
 // Enough for somebody pricing a real job several ways over, and nowhere near
 // enough to fill the table from a script.
-const MAX_PER_WINDOW = 10;
+// Overridable for the smoke suite - see the same note in
+// routes/clientPortal.js. Ten a window is what ships.
+const MAX_PER_WINDOW = Number(process.env.QUOTE_MAX_PER_WINDOW) || 10;
 const WINDOW_MS = 10 * 60 * 1000;
 const HITS = new Map();
 
@@ -91,10 +94,9 @@ function countSend(ip) {
   seen.push(Date.now());
   HITS.set(ip, seen);
 }
-function callerIp(req) {
-  const chain = String(req.headers['x-forwarded-for'] || '').split(',');
-  return (chain[0] || '').trim() || req.socket?.remoteAddress || 'unknown';
-}
+// Never the caller's own x-forwarded-for, which they write themselves - see
+// utils/callerIp.js. A limiter keyed on a header the caller chooses counts
+// every attempt as a new person.
 
 const text = (v, n) => {
   const s = String(v === null || v === undefined ? '' : v).trim();
