@@ -115,6 +115,12 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// What a failure is allowed to say - see middleware/apiErrors.js. Mounted
+// here, in front of every /api route, because those routes catch their own
+// errors and answer with them; nothing reaches an error handler at the end.
+const { apiErrors } = require('./middleware/apiErrors');
+app.use('/api', apiErrors);
+
 // 10mb rather than the 100kb default: an equipment photo is posted as a data
 // URL inside the JSON body. The browser shrinks it to roughly 1000px first, so
 // what actually arrives is a couple of hundred kilobytes - the headroom is for

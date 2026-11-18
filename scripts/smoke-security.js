@@ -286,6 +286,79 @@ const NL = String.fromCharCode(10);
     const fine = await tryLogin(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
     check('a normal sign-in is untouched', signedIn(fine));
 
+    // ══════════════════════════════════════════════════
+    // 5. WHAT AN ERROR IS ALLOWED TO SAY
+    //
+    // A hundred and thirteen routes answer a failure with `err.message` -
+    // the driver's own words, which name the table, the database user and
+    // the host. A stranger who can make a page fail gets a map of the
+    // system; the person reading it can do nothing with it either.
+    //
+    // The failure is REAL here: a table is renamed out from under a route,
+    // which is as close to a production fault as a test can honestly get.
+    console.log(NL + 'What an error says');
+    const bcrypt = require('bcryptjs');
+    await db.query(
+      `INSERT INTO users (emp_id, username, email, password, role, domain)
+       VALUES ('E-PROBE','Probe Designer','designer-probe@test.local',?,'Designer','Design')`,
+      [await bcrypt.hash('designer-probe-123', 10)]);
+    const asDesigner = await go('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        email: 'designer-probe@test.local', password: 'designer-probe-123',
+      }),
+    });
+    const deskCookie = (asDesigner.headers.get('set-cookie') || '').split(';')[0];
+    check('the probe designer is signed in', !!deskCookie);
+
+    await db.query('RENAME TABLE orders TO orders_hidden_for_test');
+    const broke = await go('/api/orders', { headers: { cookie: deskCookie } });
+    const brokeBody = await broke.json().catch(() => ({}));
+    check('a broken route answers 500', broke.status === 500, broke.status);
+    check('and tells a designer nothing about the database',
+      !/orders|table|sql|mysql/i.test(String(brokeBody.error || '')), brokeBody);
+    check('it says something a person can act on',
+      /try again/i.test(String(brokeBody.error || '')), brokeBody);
+
+    // The driver's words are taken off EVERYBODY, admin included: they name
+    // the database user and the host, and "busy" is what the sentence means.
+    const asAdmin = await go('/api/orders', { headers: { cookie } });
+    const adminBody = await asAdmin.json().catch(() => ({}));
+    check('and a SuperAdmin is not shown the database either',
+      !/orders_hidden_for_test|railway|doesn't exist/i.test(String(adminBody.error || '')),
+      adminBody);
+    await db.query('RENAME TABLE orders_hidden_for_test TO orders');
+
+    // The app's OWN sentences, which are 4xx, have to come through
+    // untouched - they are written for the person reading them.
+    const refused = await go('/api/orders', {
+      method: 'POST',
+      headers: { cookie: deskCookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ email: 'x@test.local', punchedBy: 'India Team',
+        dealer: 'D', client: 'C', remarks: 'r', designer: 'Rakesh', designTime: '1 Hour' }),
+    });
+    const refusedBody = await refused.json().catch(() => ({}));
+    check('a 4xx the app wrote is passed through word for word',
+      refused.status === 400 && /RUSH or a Normal/i.test(String(refusedBody.error || '')),
+      refusedBody);
+
+    // And the shapes the driver speaks in, checked directly.
+    const { fromTheDriver } = require(path.join(ROOT, 'middleware/apiErrors.js'));
+    for (const said of [
+      "Table 'railway.orders' doesn't exist",
+      "Access denied for user 'arabella'@'10.0.0.4'",
+      'User arabella already has more than max_user_connections active connections',
+      'connect ETIMEDOUT',
+      'ER_BAD_FIELD_ERROR: Unknown column x',
+    ]) check('recognised as the database talking: ' + said.slice(0, 34), fromTheDriver(said));
+    check('and an ordinary sentence is left alone',
+      !fromTheDriver('Order Quantity must be 1 or more.'));
+
+    // The normal flow, untouched.
+    const ok = await go('/api/orders', { headers: { cookie } });
+    check('a working route still answers normally', ok.status === 200, ok.status);
+
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {
     try { server.close(); } catch (e) {}
