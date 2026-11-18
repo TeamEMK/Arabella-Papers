@@ -201,6 +201,91 @@ const NL = String.fromCharCode(10);
     check('CSP is deliberately not on yet (inline handlers)',
       !h(page, 'content-security-policy'));
 
+    // ══════════════════════════════════════════════════
+    // 4. GUESSING PASSWORDS
+    //
+    // The office's staff emails are not a secret, and a login form with
+    // nothing in front of it lets a script try a thousand passwords against
+    // each of them in a minute. Two limits, because they stop two different
+    // attacks - a slow grind at one account, and a burst from one caller.
+    console.log(NL + 'Guessing passwords');
+    const tryLogin = (email, password) => go('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ email, password }),
+    });
+    const signedIn = (r) => !!(r.headers.get('set-cookie') || '').includes('connect.sid');
+
+    // ── per account ──
+    const victim = process.env.ADMIN_EMAIL;
+    for (let i = 0; i < 10; i++) await tryLogin(victim, 'not-the-password-' + i);
+    const locked = await tryLogin(victim, process.env.ADMIN_PASSWORD);
+    // THE POINT OF THE LOCK: the eleventh try is refused even though it is
+    // RIGHT. Without that, ten wrong guesses cost an attacker nothing.
+    check('after ten wrong answers even the right password is refused',
+      !signedIn(locked), 'signed in anyway');
+    const [[row]] = await db.query(
+      'SELECT tries, locked_until FROM login_attempts WHERE email = ?', [victim]);
+    check('and the account is written down as locked',
+      row && row.tries >= 10 && row.locked_until, row);
+    // It must not say WHICH of the two went wrong: "that account is locked"
+    // tells a guesser the address is real.
+    const lockedBody = await locked.text();
+    check('the page does not say whether the account exists',
+      !/locked|exists|no such/i.test(lockedBody), lockedBody.slice(0, 80));
+
+    // ── an address nobody owns is counted too ──
+    // Otherwise the throttle itself answers "does this email exist?" - the
+    // real ones get slower, the invented ones never do.
+    for (let i = 0; i < 10; i++) await tryLogin('nobody@example.com', 'x' + i);
+    const [[ghost]] = await db.query(
+      "SELECT tries FROM login_attempts WHERE email = 'nobody@example.com'");
+    check('an address nobody owns is counted the same way', ghost && ghost.tries >= 10, ghost);
+
+    // ── the lock lets go, and a success wipes the slate ──
+    await db.query('UPDATE login_attempts SET locked_until = NOW() - INTERVAL 1 MINUTE WHERE email = ?',
+      [victim]);
+    const back = await tryLogin(victim, process.env.ADMIN_PASSWORD);
+    check('when the lock expires the right password works again', signedIn(back));
+    const [[gone]] = await db.query(
+      'SELECT COUNT(*) AS n FROM login_attempts WHERE email = ?', [victim]);
+    check('and signing in clears the count', gone.n === 0, gone);
+
+    // ── the caller cannot hand itself a new identity ──
+    // A limiter keyed on a header the caller writes is a limiter with no
+    // key: every attempt looks like a new person. Off the platform the
+    // socket address is the only thing that is true, so these headers must
+    // change nothing at all.
+    const guardSrc = require('fs').readFileSync(path.join(ROOT, 'utils/loginGuard.js'), 'utf8');
+    check('the raw X-Forwarded-For is never used as the key',
+      !/headers\['x-forwarded-for'\]/.test(guardSrc));
+    // On an address that is NOT already locked - a locked one is refused
+    // before anything is counted, so it would prove nothing.
+    await go('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ email: 'fresh@example.com', password: 'x' }),
+    });
+    const [[one]] = await db.query(
+      "SELECT tries FROM login_attempts WHERE email = 'fresh@example.com'");
+    await go('/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Forwarded-For': '203.0.113.' + Math.floor(Math.random() * 250),
+      },
+      body: new URLSearchParams({ email: 'fresh@example.com', password: 'x' }),
+    });
+    const [[two]] = await db.query(
+      "SELECT tries FROM login_attempts WHERE email = 'fresh@example.com'");
+    check('and a made-up one does not buy a fresh count',
+      two.tries === one.tries + 1, { before: one.tries, after: two.tries });
+
+    // ── the normal flow, which all of this must not touch ──
+    await db.query('DELETE FROM login_attempts');
+    const fine = await tryLogin(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
+    check('a normal sign-in is untouched', signedIn(fine));
+
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {
     try { server.close(); } catch (e) {}

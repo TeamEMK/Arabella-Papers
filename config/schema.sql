@@ -26,6 +26,25 @@ CREATE TABLE IF NOT EXISTS users (
 -- =============================================
 -- ACTIVITY LOG
 -- =============================================
+-- =============================================
+-- WRONG PASSWORDS, COUNTED
+--
+-- One row per email that has got it wrong lately. The count and the lock
+-- are written in a single INSERT ... ON DUPLICATE KEY UPDATE, so two
+-- attempts arriving together cannot both read "nine so far" and both slip
+-- past as the tenth - see utils/loginGuard.js.
+--
+-- The row is deleted the moment that email signs in correctly, so this
+-- table holds only people currently getting it wrong, and is usually empty.
+-- =============================================
+CREATE TABLE IF NOT EXISTS login_attempts (
+  email VARCHAR(150) NOT NULL PRIMARY KEY,
+  tries INT NOT NULL DEFAULT 0,
+  first_try_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  locked_until DATETIME DEFAULT NULL,
+  INDEX idx_login_attempts_lock (locked_until)
+);
+
 CREATE TABLE IF NOT EXISTS activity_log (
   id INT AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(150),

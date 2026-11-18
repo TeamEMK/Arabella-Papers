@@ -5,6 +5,9 @@ const db = require('../config/db');
 const { ipOf, locationOf, fixFrom } = require('../utils/whereFrom');
 const vectorDuty = require('../utils/vectorDuty');
 const { safeNext } = require('../middleware/auth');
+// Two limits in front of the one door a stranger can reach - see
+// utils/loginGuard.js for why there are two and why both fail open.
+const guard = require('../utils/loginGuard');
 
 /**
  * The vector-file gate.
@@ -46,16 +49,40 @@ router.get('/login', (req, res) => {
 // POST /login
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
+  const ip = guard.clientIp(req);
   try {
+    // ── BEFORE THE PASSWORD IS EVEN LOOKED AT ──
+    //
+    // Both answers are deliberately the same sentence as a wrong password.
+    // "That account is locked" tells a guesser the address exists and that
+    // they are hitting a real one, which is half of what they came for.
+    if (guard.ipBlocked(ip) || await guard.emailLocked(email)) {
+      return res.render('login', {
+        error: 'Too many attempts. Please wait a few minutes and try again.',
+        next: keepNext(req),
+      });
+    }
+
     const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
     if (!rows.length) {
+      // An address nobody owns is counted too. Skipping it would make the
+      // throttle itself the answer to "does this email exist?" - the known
+      // ones get slower, the invented ones never do.
+      await guard.noteFailure(email);
+      guard.ipFailed(ip);
       return res.render('login', { error: 'Invalid credentials', next: keepNext(req) });
     }
     const user = rows[0];
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
+      await guard.noteFailure(email);
+      guard.ipFailed(ip);
       return res.render('login', { error: 'Invalid credentials', next: keepNext(req) });
     }
+
+    // A right answer wipes the count, so a morning of fat-fingered attempts
+    // does not follow somebody around for the next quarter of an hour.
+    await guard.noteSuccess(email);
 
     // Update last login
     await db.query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
