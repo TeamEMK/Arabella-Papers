@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
+const { visibleOrders, refuseUnlessAllowed } = require('../../utils/orderAccess');
 const { archiveThenDelete } = require('../../utils/archive');
 // No uploadToDrive here any more. The design files do not come through this
 // server at all - the browser puts them in Drive itself and sends back a
@@ -32,36 +33,9 @@ const upload = multer({
   limits: { fileSize: 4 * 1024 * 1024, files: 10 },
 });
 
-/**
- * Which orders this user is allowed to see. SuperAdmin, Head and the
- * production managers work the whole floor; everybody else sees the orders
- * assigned to them by name, and the ones they punched themselves.
- *
- * The list and the View modal both ask this one question, so the modal cannot
- * quietly hand over an order the list would have hidden.
- *
- * The name must match exactly. It used to also match LIKE '%name%', which put
- * all 352 of Kanu Priya's orders in front of Riya - "riya" sits inside
- * "priya". A designer seeing nothing of their own is a complaint; a designer
- * seeing another designer's work is a breach.
- */
-function visibleOrders(user) {
-  const role = user.role || '';
-  const isAdmin = role === 'SuperAdmin' || role === 'Head' || user.domain === 'Head' ||
-    role.includes('Production Manager');
-  if (isAdmin) return { isAdmin, where: '', params: [] };
-
-  const name = user.username || '';
-  return {
-    isAdmin,
-    where: ` AND (
-      LOWER(TRIM(IFNULL(india_designer, ''))) = LOWER(TRIM(?)) OR
-      LOWER(TRIM(IFNULL(overseas_designer, ''))) = LOWER(TRIM(?)) OR
-      LOWER(IFNULL(email_address, '')) = LOWER(?)
-    )`,
-    params: [name, name, user.email || ''],
-  };
-}
+// Which orders this user may see - and now also which ones they may CHANGE.
+// Both answers live in utils/orderAccess.js, because six routes in three
+// files needed the same one and had none.
 
 // ─────────────────────────────────────────────
 // GET /api/orders — Orders Dashboard Data
@@ -363,6 +337,12 @@ router.post('/', requireLogin, upload.array('files', 10), async (req, res) => {
 // ─────────────────────────────────────────────
 router.put('/:id/status', requireLogin, upload.single('file'), async (req, res) => {
   try {
+    // Yours, or you work the whole floor. No sections are passed here: the
+    // Orders Dashboard is granted to nearly everybody, and what each person
+    // is shown on it is their own orders - so the gate is ownership.
+    // Without this, changing the number in the address let one designer
+    // cancel another designer's order. Measured on a throwaway copy: 200.
+    if (await refuseUnlessAllowed(req, res, req.params.id, [])) return;
     const { designStatus, remark, userEmail } = req.body;
     const orderId = req.params.id;
 
@@ -476,6 +456,10 @@ router.put('/:id/status', requireLogin, upload.single('file'), async (req, res) 
 // ─────────────────────────────────────────────
 router.put('/:id/edit', requireLogin, upload.single('file'), async (req, res) => {
   try {
+    // The same gate as the status box above: this route rewrites the dealer,
+    // the client and the remarks, and it answered 200 for an order belonging
+    // to somebody else.
+    if (await refuseUnlessAllowed(req, res, req.params.id, [])) return;
     const { dealerName, clientName, designerName, designTime, remark } = req.body;
     const orderId = req.params.id;
 

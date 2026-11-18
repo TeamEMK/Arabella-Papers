@@ -513,6 +513,104 @@ const NL = String.fromCharCode(10);
       /^attachment/.test(String(oldOne.headers.get('content-disposition'))),
       oldOne.headers.get('content-disposition'));
 
+    // ══════════════════════════════════════════════════
+    // 8. ONE DESIGNER, ANOTHER DESIGNER'S ORDER
+    //
+    // The Orders Dashboard was always careful - a designer's list holds the
+    // orders carrying their name, and the View box asks the same question.
+    // Every other route taking an order id in its address asked nothing,
+    // and ids run in sequence, so changing the number WAS the attack.
+    // Measured before the fix, signed in as a designer with no board
+    // access: order-details handed back the whole order, and status, edit,
+    // production and till-approval all answered 200 - one designer could
+    // cancel another's order and overwrite its dealer.
+    //
+    // The refusal is 404 with the same sentence as a missing order: ids are
+    // sequential, and "not allowed" would confirm which ones exist.
+    console.log(NL + "Another designer's order");
+
+    await db.query(
+      `INSERT INTO users (emp_id, username, email, password, role, domain)
+       VALUES ('E-MINE','Designer Mine','mine-probe@test.local',?,'Designer','Design')`,
+      [await bcrypt.hash('mine-probe-123', 10)]);
+    await db.query(
+      `INSERT INTO orders (order_id, dealer_name, client_name, india_designer, remarks)
+       VALUES ('K-MINE-1','Dealer M','Client Mine','Designer Mine','my remark'),
+              ('K-THEIRS-1','Dealer T','Client Theirs','Designer Other','their remark')`);
+
+    const asMine = await go('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        email: 'mine-probe@test.local', password: 'mine-probe-123' }),
+    });
+    const mineCookie = (asMine.headers.get('set-cookie') || '').split(';')[0];
+    check('the probe designer is signed in', !!mineCookie);
+
+    const asDesignerGo = (url, opts) => go(url, Object.assign(
+      { headers: { cookie: mineCookie } }, opts || {}));
+    const form = (fields) => ({
+      method: 'PUT',
+      headers: { cookie: mineCookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(fields),
+    });
+    const jsonPut = (body) => ({
+      method: 'PUT',
+      headers: { cookie: mineCookie, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    // ── THE ATTACK ──
+    const peek = await asDesignerGo('/api/dashboards/order-details/K-THEIRS-1');
+    const peekBody = await peek.text();
+    check('the full order of somebody else is refused', peek.status === 404, peek.status);
+    check('and none of it came back',
+      !/Client Theirs|their remark/.test(peekBody), peekBody.slice(0, 140));
+    check('the refusal reads like a missing order',
+      /Order not found/.test(peekBody), peekBody.slice(0, 140));
+
+    const cancel = await asDesignerGo('/api/orders/K-THEIRS-1/status',
+      form({ designStatus: 'Cancelled', remark: 'taken over', userEmail: 'mine-probe@test.local' }));
+    check('their order cannot be cancelled', cancel.status === 404, cancel.status);
+
+    const rewrite = await asDesignerGo('/api/orders/K-THEIRS-1/edit',
+      form({ dealer: 'Dealer M', client: 'Client Mine', remarks: 'mine now' }));
+    check('their order cannot be rewritten', rewrite.status === 404, rewrite.status);
+
+    const stage = await asDesignerGo('/api/dashboards/production/K-THEIRS-1',
+      jsonPut({ Paper_Cutting: 'Done', userEmail: 'mine-probe@test.local' }));
+    check('their stages cannot be marked done', stage.status === 404, stage.status);
+
+    const approve = await asDesignerGo('/api/dashboards/till-approval/K-THEIRS-1',
+      jsonPut({ approvalStatus: 'Final Approval For Production', remark: 'x' }));
+    check('their approval cannot be set', approve.status === 404, approve.status);
+
+    const [[untouched]] = await db.query(
+      "SELECT design_status, dealer_name, remarks FROM orders WHERE order_id = 'K-THEIRS-1'");
+    // 'Fresh Design' is the column's own default, never written here - what
+    // matters is that Cancelled, the dealer and the remark are untouched.
+    check('and their order is exactly as it was',
+      untouched.dealer_name === 'Dealer T' && untouched.remarks === 'their remark'
+      && untouched.design_status === 'Fresh Design', untouched);
+
+    // ── AND THE NORMAL FLOW, WHICH IS THE POINT ──
+    const own = await asDesignerGo('/api/dashboards/order-details/K-MINE-1');
+    const ownBody = await own.text();
+    check('their OWN order still opens', own.status === 200, own.status);
+    check('with its details in it', /Client Mine/.test(ownBody), ownBody.slice(0, 140));
+
+    const ownStatus = await asDesignerGo('/api/orders/K-MINE-1/status',
+      form({ designStatus: 'Fresh Design', remark: 'working on it',
+             userEmail: 'mine-probe@test.local' }));
+    check('and they can still set a status on it', ownStatus.status === 200, ownStatus.status);
+    const [[mineNow]] = await db.query(
+      "SELECT design_status FROM orders WHERE order_id = 'K-MINE-1'");
+    check('which is written', mineNow.design_status === 'Fresh Design', mineNow);
+
+    // A SuperAdmin works the whole floor and must notice nothing.
+    const admins = await go('/api/dashboards/order-details/K-THEIRS-1', { headers: { cookie } });
+    check('a SuperAdmin still reads any order', admins.status === 200, admins.status);
+
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {
     try { server.close(); } catch (e) {}

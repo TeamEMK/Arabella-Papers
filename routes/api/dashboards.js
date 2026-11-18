@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
+const { refuseUnlessAllowed } = require('../../utils/orderAccess');
+// The boards whose View button asks for a whole order.
+const VIEW_BOARDS = ['productionBD', 'oldProduction', 'dispatchBD',
+  'oldDispatch', 'tillApproval'];
 const { archiveThenDelete } = require('../../utils/archive');
 const { startResumableUpload, claimUpload, vectorFolder } = require('../../utils/drive');
 const { resolveOne } = require('../../utils/uploadSession');
@@ -428,6 +432,7 @@ function orderTypeColumns(status, body) {
 // because the same answer is what "go back to version 7" will need.
 router.get('/till-approval/:id/vectors', requireLogin, async (req, res) => {
   try {
+    if (await refuseUnlessAllowed(req, res, req.params.id, ['tillApproval'])) return;
     const [rows] = await db.query(
       `SELECT version, file_url, file_name, uploaded_by,
               DATE_FORMAT(uploaded_at, '%d %b %Y %h:%i %p') AS uploaded_at
@@ -464,6 +469,8 @@ const extensionOf = (name) => {
 // POST /api/dashboards/till-approval/:id/vector-session
 router.post('/till-approval/:id/vector-session', requireLogin, express.json(), async (req, res) => {
   try {
+    // A ticket to upload artwork onto an order.
+    if (await refuseUnlessAllowed(req, res, req.params.id, ['tillApproval'])) return;
     const orderId = req.params.id;
     const fileName = String((req.body && req.body.fileName) || '').trim().slice(0, 255);
     const mimeType = String((req.body && req.body.mimeType) || '').trim().slice(0, 150);
@@ -523,6 +530,8 @@ router.post('/till-approval/:id/vector-session', requireLogin, express.json(), a
 // POST /api/dashboards/till-approval/:id/vector-claim
 router.post('/till-approval/:id/vector-claim', requireLogin, express.json(), async (req, res) => {
   try {
+    // Attaching that artwork to the order.
+    if (await refuseUnlessAllowed(req, res, req.params.id, ['tillApproval'])) return;
     const orderId = req.params.id;
     const token = String((req.body && req.body.token) || '').trim();
     const fileId = String((req.body && req.body.fileId) || '').trim();
@@ -586,6 +595,9 @@ router.put('/till-approval/:id',
   upload.fields([{ name: 'file', maxCount: 1 }]),
   async (req, res) => {
   try {
+    // The approval status and the remark, on any order id typed into the
+    // address. 200, measured.
+    if (await refuseUnlessAllowed(req, res, req.params.id, ['tillApproval'])) return;
     const { approvalStatus, remark, userEmail } = req.body;
     const orderId = req.params.id;
 
@@ -990,6 +1002,11 @@ router.post('/production/archive', requireLogin, async (req, res) => {
 // PUT /api/dashboards/production/:id
 router.put('/production/:id', requireLogin, async (req, res) => {
   try {
+    // The board's own grant, or the order is theirs. Production marks stages
+    // on orders nobody assigned to them - that is the job - but somebody
+    // with neither had no business writing here, and used to be able to.
+    if (await refuseUnlessAllowed(req, res, req.params.id,
+      ['productionBD', 'oldProduction'])) return;
     const orderId = req.params.id;
     const u = req.body;
     const now = new Date();
@@ -1471,6 +1488,12 @@ router.put('/dispatch/:id/revert', requireLogin, async (req, res) => {
 // fill a modal opened one at a time. They fetch it from here instead.
 router.get('/order-details/:id', requireLogin, async (req, res) => {
   try {
+    // THE WIDEST OPENING THERE WAS. This hands back every column of an
+    // order and asked nothing at all: a designer with no board access read
+    // another designer's client and remarks by changing K-B-1 in the
+    // address. The boards whose View button calls this are named, so
+    // whoever works one of them still sees what their board shows.
+    if (await refuseUnlessAllowed(req, res, req.params.id, VIEW_BOARDS)) return;
     const [rows] = await db.query('SELECT * FROM orders WHERE order_id = ? AND is_deleted = 0', [req.params.id]);
     if (!rows.length) return res.status(404).json({ success: false, error: 'Order not found.' });
     res.json({ success: true, rowData: buildFullRowData(rows[0]) });

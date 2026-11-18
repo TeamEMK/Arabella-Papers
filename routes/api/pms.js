@@ -13,6 +13,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../config/db');
+const { refuseUnlessAllowed } = require('../../utils/orderAccess');
 const { archiveThenDelete } = require('../../utils/archive');
 const { requireLogin } = require('../../middleware/auth');
 const urgency = require('../../utils/urgency');
@@ -477,6 +478,11 @@ router.get('/board', requireLogin, async (req, res) => {
 /** One order, every step, in order — done, skipped and still to come. */
 router.get('/order/:orderId', requireLogin, async (req, res) => {
   try {
+    // Who is doing what on this order, and when it is due. Not secret to
+    // the office, but not something to hand to anybody who neither owns the
+    // order nor works the PMS.
+    if (await refuseUnlessAllowed(req, res, req.params.orderId,
+      ['pms', 'pmsOrders', 'pmsTasks'])) return;
     const today = clock.nowIst();
     const [rows] = await db.query(
       `SELECT os.id, os.step_id, os.step_order, os.step_name, os.status,
