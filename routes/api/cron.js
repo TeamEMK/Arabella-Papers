@@ -1,9 +1,10 @@
 // ══════════════════════════════════════════════════════
 // SCHEDULED WORK
 //
-// Vercel's scheduler calls these; nobody else should be able to. It sends a
-// bearer token taken from CRON_SECRET, and a request without it is refused -
-// these are public URLs on a public domain, and a nightly mail anybody can
+// Vercel's scheduler calls these; nobody else can. It sends a bearer token
+// taken from CRON_SECRET and that token is the only way in - no secret
+// configured means every request is refused, including the platform's own.
+// These are public URLs on a public domain, and a nightly mail anybody can
 // trigger is a nightly mail anybody can trigger a hundred times.
 //
 // Vercel's cron runs on UTC, so the schedule in vercel.json is written in UTC
@@ -16,13 +17,35 @@ const router = express.Router();
 const { sendVectorReport } = require('../../utils/vectorReport');
 const { sendStageReport } = require('../../utils/stageReport');
 
+const crypto = require('crypto');
+
+/**
+ * Only the scheduler, and only with the secret.
+ *
+ * WHAT THIS STOPS. These are plain GET URLs on a public domain. Before
+ * this, two things opened them to anybody: with CRON_SECRET unset the only
+ * test was `x-vercel-cron: 1`, which is a header any caller can type, and
+ * even with the secret set that header still let them through. Either way a
+ * stranger could fire the nightly mail to the whole office, a hundred times
+ * if they liked.
+ *
+ * So the bearer token is the ONLY way in, and there is no fallback: with no
+ * secret configured every request is refused. Vercel sends exactly this
+ * header on scheduled runs when CRON_SECRET is set in the project, so the
+ * platform's own scheduler is the one caller that passes.
+ *
+ * Compared byte by byte in constant time. A plain === returns as soon as
+ * two characters differ, and the time it takes is a measurement somebody
+ * can use to learn the secret one character at a time.
+ */
 function authorised(req) {
-  const want = process.env.CRON_SECRET;
-  // With no secret set, only Vercel's own scheduler header gets through -
-  // which is what runs on the deployment - rather than everything.
-  if (!want) return req.headers['x-vercel-cron'] === '1';
+  const want = String(process.env.CRON_SECRET || '');
+  if (!want) return false;
   const got = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  return got === want || req.headers['x-vercel-cron'] === '1';
+  // Lengths first: timingSafeEqual throws on a mismatch, and a throw is
+  // itself a signal about the secret's length.
+  if (got.length !== want.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want));
 }
 
 // GET /api/cron/vector-report — the evening list of who still owes files.

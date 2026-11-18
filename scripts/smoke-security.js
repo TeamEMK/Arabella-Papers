@@ -115,6 +115,46 @@ const NL = String.fromCharCode(10);
     const who = await go('/api/orders', { headers: { cookie } });
     check('and the cookie opens the app', who.status === 200, who.status);
 
+    // ══════════════════════════════════════════════════
+    // 2. THE SCHEDULED JOBS ARE NOT PUBLIC URLs
+    //
+    // /api/cron/* are plain GETs on a public domain, and each one mails the
+    // whole office. Before this, two doors stood open: with CRON_SECRET
+    // unset the only test was an `x-vercel-cron: 1` header, which any
+    // caller can type, and with the secret set that header STILL let them
+    // through. The attack is somebody firing the nightly report a hundred
+    // times, from anywhere.
+    console.log(NL + 'The scheduled jobs');
+    const cron = (headers) => go('/api/cron/stage-report', { headers: headers || {} });
+
+    process.env.CRON_SECRET = 'a-secret-only-the-scheduler-has';
+    check('a stranger with nothing is refused', (await cron()).status === 401);
+    // The one that used to work.
+    check('and a stranger typing the platform header is refused too',
+      (await cron({ 'x-vercel-cron': '1' })).status === 401);
+    check('a wrong token is refused',
+      (await cron({ authorization: 'Bearer not-the-secret-but-same-len' })).status === 401);
+    check('a token of the right length but wrong bytes is refused',
+      (await cron({ authorization: 'Bearer ' + 'x'.repeat(process.env.CRON_SECRET.length) })).status === 401);
+
+    const ran = await cron({ authorization: 'Bearer ' + process.env.CRON_SECRET });
+    check('and the scheduler itself gets through', ran.status === 200, ran.status);
+
+    // No secret configured: nothing runs at all, including anything waving
+    // the platform header. A job that can be triggered by a stranger is
+    // worse than a job that does not run.
+    const had = process.env.CRON_SECRET;
+    process.env.CRON_SECRET = '';
+    check('with no secret set, even the platform header is refused',
+      (await cron({ 'x-vercel-cron': '1' })).status === 401);
+    check('and so is an empty bearer',
+      (await cron({ authorization: 'Bearer ' })).status === 401);
+    process.env.CRON_SECRET = had;
+
+    const cronSrc = require('fs').readFileSync(path.join(ROOT, 'routes/api/cron.js'), 'utf8');
+    check('the comparison is constant time, not ===',
+      /timingSafeEqual/.test(cronSrc) && !/got === want/.test(cronSrc));
+
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {
     try { server.close(); } catch (e) {}
