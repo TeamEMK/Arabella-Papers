@@ -67,6 +67,54 @@ const sessionStore = new MySQLStore({
 // refuses to set the secure session cookie.
 if (isServerless) app.set('trust proxy', 1);
 
+// ── THE HEADERS EVERY ANSWER CARRIES ──
+//
+// Before the static files, deliberately: a header middleware mounted after
+// express.static covers the pages and none of the files, and the files are
+// most of what a browser actually loads.
+//
+// What each one stops:
+//   frameguard      - the app inside somebody else's <iframe>, with their
+//                     buttons drawn over ours (clickjacking).
+//   noSniff         - a browser deciding an upload "looks like" HTML or a
+//                     script and running it instead of downloading it.
+//   HSTS            - the first http request, where a network in between
+//                     can read the session cookie or rewrite the page.
+//   Referrer-Policy - order numbers and tokens in our URLs being posted to
+//                     whatever site somebody clicks through to.
+//   x-powered-by    - the free hint about what to look up exploits for.
+//
+// CSP IS OFF, AND THAT IS A DECISION, NOT AN OVERSIGHT. Every screen in
+// this app is drawn with inline onclick handlers - some two thousand of
+// them - and a content policy strict enough to be worth having would stop
+// every one from firing. Turning it on is a separate piece of work: move
+// the handlers to addEventListener first, screen by screen, then switch it
+// on. Same for COEP, which would block the CDN that serves Bootstrap and
+// Font Awesome.
+const helmet = require('helmet');
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  // Both the app and the customer pages pull fonts and icons from CDNs, and
+  // the liner book draws its pictures from our own origin into canvases.
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  referrerPolicy: { policy: 'no-referrer' },
+  hsts: { maxAge: 15552000, includeSubDomains: true },
+}));
+
+// ── AND NOTHING UNDER /api IS KEPT ──
+//
+// Every one of these answers is about one person: their orders, their
+// board, their activity log. Without this a browser - or a CDN sitting in
+// front of us - may hold one and hand it to the next person on that
+// machine, or hand back a 304 for a board that has moved on since.
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 // 10mb rather than the 100kb default: an equipment photo is posted as a data
 // URL inside the JSON body. The browser shrinks it to roughly 1000px first, so
 // what actually arrives is a couple of hundred kilobytes - the headroom is for

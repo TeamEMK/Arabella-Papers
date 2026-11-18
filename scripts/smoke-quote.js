@@ -73,9 +73,10 @@ const check = (name, ok, extra) => {
   let ipSeed = 0;
   const send = async (slug, body, sameIp) => {
     const ip = sameIp || ('10.0.0.' + (++ipSeed % 250));
-    const res = await fetch(BASE + '/quote/' + slug + '/api/send', {
+    const res = await fetch(BASE + '/client/' + slug + '/quote/api/send', {
       method: 'POST', redirect: 'manual',
-      headers: Object.assign({ 'Content-Type': 'application/json', 'X-Forwarded-For': ip }, H),
+      headers: Object.assign(
+        { 'Content-Type': 'application/json', 'X-Forwarded-For': ip, cookie: jar[slug] }, H),
       body: JSON.stringify(body),
     });
     return { status: res.status, json: await res.json().catch(() => null) };
@@ -203,14 +204,33 @@ const check = (name, ok, extra) => {
   check('and the KPC link has its own build too', /\/pricing-kpc\/js\//.test(html));
   check('with nothing of the Arabella one on it', !/\/pricing-arabella\//.test(html));
 
+  // WHO IS ASKING IS THE ACCOUNT, NOT THE BODY.
+  //
+  // Out on the old public address these three fields were all the office
+  // had, so the route refused a quote without them. Inside the portal the
+  // person is signed in, and the server takes the name and the address off
+  // the session - a box somebody can type anything into is a worse answer
+  // than the seat they are sitting in. So the checks here are the other way
+  // round: a body with nothing in it still works, and a body naming
+  // somebody else does not get their name onto the quote.
   console.log('\nWho is asking');
-  check('no name is refused',
-    (await send('arabella', { email: WHO.email, items: ITEMS })).json.success === false);
-  check('no email is refused',
-    (await send('arabella', { name: WHO.name, items: ITEMS })).json.success === false);
-  check('and something that is not an address is refused',
-    (await send('arabella', { name: WHO.name, email: 'not-an-address', items: ITEMS })).json.success === false);
-  check('an empty basket is refused',
+  const bare = await send('arabella', { items: ITEMS });
+  check('a quote with no name or email in the body still works',
+    bare.json && bare.json.success === true, bare.json);
+  let [[seated]] = await db.query(
+    'SELECT customer_name, customer_email FROM pricing_quotes ORDER BY id DESC LIMIT 1');
+  check('and it is recorded against the account that asked',
+    seated.customer_email === 'room-arabella@test.local', seated);
+
+  const liar = await send('arabella', Object.assign({}, WHO, { items: ITEMS }));
+  check('a body claiming somebody else is accepted', liar.json.success === true, liar.json);
+  [[seated]] = await db.query(
+    'SELECT customer_name, customer_email FROM pricing_quotes ORDER BY id DESC LIMIT 1');
+  check('but the quote still carries the account, not the name it claimed',
+    seated.customer_email === 'room-arabella@test.local'
+    && seated.customer_email !== WHO.email, seated);
+
+  check('an empty basket is still refused',
     (await send('arabella', Object.assign({}, WHO, { items: [] }))).json.success === false);
 
   console.log('\nThe figures are still the server’s');
@@ -239,7 +259,8 @@ const check = (name, ok, extra) => {
     /ARABELLA PAPERS/.test(words) && !/PVT|Private Limited/i.test(words), words.slice(0, 80));
   check('and the price list it was quoted from, in the customer\'s words',
     words.indexOf('ARABELLA PAPERS price list') >= 0, words.slice(0, 160));
-  check('it carries who it is for', words.indexOf(WHO.name) >= 0 && words.indexOf(WHO.email) >= 0);
+  check('it carries who it is for - the account that asked',
+    words.indexOf('room-arabella@test.local') >= 0, words.slice(0, 200));
   check('every line of the quote', (r.json.summary.match(/^d+./gm) || []).length
     === (words.match(/^d+.s/gm) || []).length);
   // The Arabella customer build quotes list price, so there is no discount
@@ -255,9 +276,13 @@ const check = (name, ok, extra) => {
 
   console.log('\nThe email');
   const mail = SENT[SENT.length - 1];
-  check('it went to the customer', mail && mail.to === WHO.email, mail && mail.to);
-  check('and to nobody else',
-    SENT.every(m => m.to === WHO.email), SENT.map(m => m.to));
+  // Posted to the signed-in account, never to an address typed into the
+   // body - that is what stops a quote being sent to anybody a stranger
+   // names.
+  check('it went to the account that asked',
+    mail && mail.to === 'room-arabella@test.local', mail && mail.to);
+  check('and never to an address from the body',
+    SENT.every(m => m.to !== WHO.email), SENT.map(m => m.to));
   check('with the PDF attached', mail && (mail.attachments || []).length === 1);
   check('and the figures in the body',
     mail && mail.html.indexOf(ara.balance.toFixed(2)) >= 0, ara.balance);
@@ -268,7 +293,8 @@ const check = (name, ok, extra) => {
   [[row]] = await db.query(
     'SELECT source, customer_name, customer_email, balance FROM pricing_quotes ORDER BY id DESC LIMIT 1');
   check('the quote is marked as coming from the public page', row.source === 'public', row.source);
-  check('with who asked for it', row.customer_name === WHO.name && row.customer_email === WHO.email, row);
+  check('with who asked for it - the account, not the body',
+    row.customer_email === 'room-arabella@test.local', row);
   check('and the balance the server worked out',
     Math.abs(Number(row.balance) - ara.balance) < 0.01, row.balance);
 

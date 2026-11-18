@@ -155,6 +155,52 @@ const NL = String.fromCharCode(10);
     check('the comparison is constant time, not ===',
       /timingSafeEqual/.test(cronSrc) && !/got === want/.test(cronSrc));
 
+    // ══════════════════════════════════════════════════
+    // 3. THE HEADERS, AND WHAT /api IS ALLOWED TO KEEP
+    console.log(NL + 'The headers every answer carries');
+    const page = await go('/login');
+    const h = (r, k) => (r.headers.get(k) || '');
+
+    // The app inside somebody else's iframe, with their buttons drawn over
+    // ours.
+    check('a page cannot be framed by another site',
+      /SAMEORIGIN|DENY/i.test(h(page, 'x-frame-options')), h(page, 'x-frame-options'));
+    // A browser deciding an upload "looks like" a script and running it.
+    check('nothing is sniffed into another type',
+      h(page, 'x-content-type-options') === 'nosniff');
+    // Order numbers and tokens in our URLs, posted to whatever site
+    // somebody clicks through to.
+    check('our URLs do not travel to other sites',
+      /no-referrer/.test(h(page, 'referrer-policy')), h(page, 'referrer-policy'));
+    check('the first http request is refused by the browser afterwards',
+      /max-age=\d+/.test(h(page, 'strict-transport-security')), h(page, 'strict-transport-security'));
+    check('and the server stops naming itself', !h(page, 'x-powered-by'), h(page, 'x-powered-by'));
+
+    // MOUNTED BEFORE THE STATIC FILES. After them, the pages carry the
+    // headers and the files - most of what a browser loads - carry none.
+    const asset = await go('/js/orderId.js');
+    check('a static file carries them too',
+      h(asset, 'x-content-type-options') === 'nosniff' && !h(asset, 'x-powered-by'),
+      { nosniff: h(asset, 'x-content-type-options'), powered: h(asset, 'x-powered-by') });
+
+    // Every /api answer is about one person. A browser or a CDN holding one
+    // can hand it to the next person at that machine.
+    const api = await go('/api/orders', { headers: { cookie } });
+    check('nothing under /api is kept by the browser',
+      /no-store/.test(h(api, 'cache-control')), h(api, 'cache-control'));
+    check('and it is not revalidated into a 304 either',
+      /must-revalidate|no-cache/.test(h(api, 'cache-control')), h(api, 'cache-control'));
+
+    // The three shared scripts are public and unchanging, and they are
+    // deliberately NOT no-store: they are the same file for everybody.
+    check('the shared browser scripts may still be cached',
+      /max-age/.test(h(asset, 'cache-control')), h(asset, 'cache-control'));
+
+    // CSP stays off until the inline handlers are gone. Said here so the
+    // next person reads it as a decision rather than a miss.
+    check('CSP is deliberately not on yet (inline handlers)',
+      !h(page, 'content-security-policy'));
+
     console.log(NL + pass + ' passed, ' + fail + ' failed');
   } finally {
     try { server.close(); } catch (e) {}
