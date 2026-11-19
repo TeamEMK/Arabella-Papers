@@ -306,6 +306,27 @@ function freePort() {
     check('and it is pricing for the person who signed in', await ev(
       "(document.getElementById('q_whoEmail')||{}).textContent") === 'rosa@example.com');
 
+    // ── IT HAS TO FIT THE WINDOW ──
+    //
+    // The module keeps two columns until the VIEWPORT is 1000px, and each
+    // column cannot go below about 420px of fields. With the rail at 286
+    // and the room's padding that wants ~1240px of window, so on a 1200px
+    // laptop the calculate button and the add-ons panel were cut off the
+    // right-hand edge and the whole page scrolled sideways. Measured at the
+    // widths the office actually uses rather than asserted in CSS.
+    for (const width of [1024, 1100, 1200, 1366, 1920]) {
+      await send('Emulation.setDeviceMetricsOverride',
+        { width: width, height: 900, deviceScaleFactor: 1, mobile: false });
+      await send('Page.navigate', { url: BASE + '/client/arabella/quote' });
+      await sleep(1800);
+      const over = await ev(
+        'document.documentElement.scrollWidth - document.documentElement.clientWidth');
+      check('the calculator fits a ' + width + 'px window', Number(over) <= 0, over);
+    }
+    await send('Emulation.clearDeviceMetricsOverride');
+    await send('Page.navigate', { url: BASE + '/client/arabella/quote' });
+    await sleep(1500);
+
     // ── WHAT A PAGE INSIDE THE PORTAL ASKS FOR ──
     // Each room fetches off its own address, so the same file serves at
     // both mounts. If that broke, the room would draw empty and say

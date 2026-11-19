@@ -261,6 +261,21 @@
   #pricing [data-n="brand"] { display: none; }
   #pricing .apc-brand-hidden { display: none !important; }
 
+  /* THE PAGE RAN OFF THE RIGHT-HAND EDGE.
+     The module keeps two columns until the VIEWPORT is 1000px wide, and
+     each column cannot go below about 420px of fields. With the rail at
+     286 and the room's own padding, that needs around 1240px of window -
+     so at 1200 the calculate button and the add-ons panel were cut off
+     the side and the whole page scrolled sideways. The columns are
+     stacked here while the room is narrow; the module is untouched.
+
+     Also a floor on the whole thing: nothing may be wider than the room
+     it is in, whatever a panel asks for. */
+  #pricing, #pricing * { max-width: 100%; }
+  @media (max-width: 1300px) {
+    #pricing .apc-cols { grid-template-columns: minmax(0, 1fr); }
+  }
+
   /* ── the two buttons under it ──────────────────── */
   .q-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
   .q-actions button {
@@ -341,7 +356,7 @@
   <ol class="rail-steps">
     <li><span class="n">I</span><span>Choose your pieces</span></li>
     <li><span class="n">II</span><span>Calculate the estimate</span></li>
-    <li><span class="n">III</span><span>Take it away by email</span></li>
+    <li><span class="n">III</span><span>Emailed to you, with a PDF</span></li>
   </ol>
 
   <div class="creed">
@@ -401,7 +416,9 @@
             screen. %>
         <button type="button" class="solid" id="q_copy" onclick="q_send('copy', this)">Copy the quote</button>
       </div>
-      <div class="q-note" id="q_note">Fill in your quantities, choose <b>Calculate quote</b>, then take it away.</div>
+      <div class="q-note" id="q_note">Fill in your quantities, choose <b>Calculate estimate</b>,
+        then press <b>Copy the quote</b> &mdash; it is copied for you and emailed
+        with a PDF.</div>
     </div>
 
   </div>
