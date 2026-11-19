@@ -105,7 +105,8 @@ const NL = String.fromCharCode(10);
   await admin.query("DROP USER IF EXISTS '" + CLIENT_DB_USER + "'@'%'");
   await admin.query("CREATE USER '" + CLIENT_DB_USER + "'@'%' IDENTIFIED WITH "
     + "mysql_native_password BY '" + CLIENT_DB_PASSWORD + "'");
-  for (const t of ['catalogue_items', 'envelope_linears', 'envelope_linear_items']) {
+  for (const t of ['catalogue_items', 'envelope_linears', 'envelope_linear_items',
+    'stock_items']) {
     await admin.query("GRANT SELECT ON `" + TEST_DB + "`.`" + t + "` TO '"
       + CLIENT_DB_USER + "'@'%'");
   }
@@ -279,6 +280,41 @@ const NL = String.fromCharCode(10);
     check('and all three open in the same tab',
       !/class="door"[^>]*target=/.test(homeHtml));
     check('and the sign-in is no longer on the page', !/Forgotten your password/.test(homeHtml));
+
+    // ── THE FOURTH DOOR: WHAT IS ON THE SHELF ──
+    //
+    // The office's own Stock screen, read only, so "have you got Colorplan
+    // Ebony in 540?" stops being a phone call. What matters as much as the
+    // list being there: the office's note column, which carries supplier
+    // names and buying prices, must never reach this page.
+    await db.query(
+      `INSERT INTO stock_items (category, code, name, thickness, status, note)
+       VALUES ('Colorplan','CP-540','Ebony','540 gsm','In Stock','bought from Khanna, 212/sheet'),
+              ('Colorplan','CP-270','Pristine White','270 gsm','Out of Stock','reorder placed'),
+              ('Handmade','HM-01','Cotton Rag','300 gsm','Please confirm before placing an order','')`);
+
+    const shelf = await go('/client/arabella/stock', { headers: { cookie: jar } });
+    const shelfHtml = await shelf.text();
+    check('the stock room opens', shelf.status === 200, shelf.status);
+    check('and it lists what the office is holding',
+      /CP-540/.test(shelfHtml) && /Ebony/.test(shelfHtml) && /Colorplan/.test(shelfHtml));
+    check('with the thickness and the state beside it',
+      /540 gsm/.test(shelfHtml) && /In Stock/.test(shelfHtml)
+      && /Out of Stock/.test(shelfHtml));
+    check('the third state is kept as the sentence the office wrote',
+      /Please confirm before placing an order/.test(shelfHtml));
+    // THE ONE THAT MATTERS.
+    check("the office's own notes never leave the office",
+      !/Khanna/.test(shelfHtml) && !/212\/sheet/.test(shelfHtml)
+      && !/reorder placed/.test(shelfHtml));
+    const shelfOut = await go('/client/arabella/stock');
+    check('and a stranger is sent to the sign-in',
+      [302, 401, 403].includes(shelfOut.status), shelfOut.status);
+
+    const doors = await go('/client/arabella', { headers: { cookie: jar } });
+    const doorsHtml = await doors.text();
+    check('the account page offers it as a fourth door',
+      /\/client\/arabella\/stock/.test(doorsHtml) && /Paper Stock/.test(doorsHtml));
 
     // ── THE PICTURES IN THE ROOM ──
     //

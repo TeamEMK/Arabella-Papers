@@ -215,6 +215,36 @@ function requireClient(req, res, next) {
   res.redirect('/client/' + brand.slug);
 }
 
+// ── THE FOURTH DOOR: WHAT IS ON THE SHELF ──
+//
+// The office keeps this list on its own Stock screen. A customer asking
+// "have you got Colorplan Ebony in 540?" was a phone call; this is that
+// list, read only, in the same room as the other three.
+//
+// The note column is NOT read. It carries supplier names and buying
+// prices, and the portal's database login cannot see any other table at
+// all - so this route can only ever hand over what is on this page.
+router.get('/:brand/stock', requireClient, async (req, res) => {
+  const brand = brandOf(req);
+  try {
+    const [rows] = await db.query(
+      `SELECT category, code, name, thickness, status
+         FROM stock_items
+        WHERE is_deleted = 0
+        ORDER BY category ASC, code ASC, name ASC`);
+    res.render('stock-room', {
+      wordmark: brand.wordmark,
+      items: rows,
+    });
+  } catch (err) {
+    console.error('[client] stock room failed:', err.message);
+    // An empty shelf rather than an error page: the customer came for a
+    // list, and "we cannot show it just now" is a better answer than a
+    // stack trace in their browser.
+    res.render('stock-room', { wordmark: brand.wordmark, items: [] });
+  }
+});
+
 router.use('/:brand/liners', requireClient, linearsRoutes);
 router.use('/:brand/catalogue', requireClient, catalogueRoutes);
 

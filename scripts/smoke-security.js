@@ -80,7 +80,8 @@ const NL = String.fromCharCode(10);
   await admin.query("DROP USER IF EXISTS '" + CLIENT_DB_USER + "'@'%'");
   await admin.query("CREATE USER '" + CLIENT_DB_USER + "'@'%' IDENTIFIED WITH "
     + "mysql_native_password BY '" + CLIENT_DB_PASSWORD + "'");
-  for (const t of ['catalogue_items', 'envelope_linears', 'envelope_linear_items']) {
+  for (const t of ['catalogue_items', 'envelope_linears', 'envelope_linear_items',
+    'stock_items']) {
     await admin.query("GRANT SELECT ON `" + TEST_DB + "`.`" + t + "` TO '"
       + CLIENT_DB_USER + "'@'%'");
   }

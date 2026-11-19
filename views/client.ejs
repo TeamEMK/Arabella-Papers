@@ -410,7 +410,7 @@
     .panel { display: none; }
     .panel.on { display: block; }
 
-    /* ── the three doors ──────────────────────── */
+    /* ── the four doors ───────────────────────── */
     /* THE SAME ROOM AS THE SIGN-IN, NOT A DIFFERENT ONE.
        The photograph is behind this page too, veiled almost to black -
        enough that the page has a floor and a corner, not enough to make a
@@ -421,9 +421,13 @@
         url('/portal/hero-wide.jpg') center/cover no-repeat fixed,
         var(--void);
     }
+    /* Four doors, two by two. Four across made each one a column of
+       words on a laptop; two rows of two keeps a door the shape of a
+       door. Three across is still right where there is room for it. */
     .doors { display: grid; gap: clamp(20px, 1.6vw, 108px); width: 100%;
              max-width: clamp(960px, 72vw, 6900px);
-             grid-template-columns: repeat(3, 1fr); }
+             grid-template-columns: repeat(2, 1fr); }
+    @media (min-width: 1500px) { .doors { grid-template-columns: repeat(4, 1fr); } }
     .door {
       position: relative; background: rgba(23,26,30,.94);
       border: 1px solid rgba(201,162,39,.34);
@@ -505,6 +509,13 @@
         <p>Borders, fonts, monograms, motifs and patterns — everything that
            can go on a card, in one book.</p>
         <div class="go">Open the catalogue &nbsp;&rsaquo;</div>
+      </a>
+      <a class="door" href="/client/<%= brand %>/stock">
+        <i class="fa-solid fa-layer-group"></i>
+        <h2>Paper Stock</h2>
+        <p>What is on the shelf right now, by series — codes, thicknesses
+           and whether it is in.</p>
+        <div class="go">See the stock &nbsp;&rsaquo;</div>
       </a>
       <a class="door" href="/client/<%= brand %>/quote">
         <i class="fa-solid fa-calculator"></i>

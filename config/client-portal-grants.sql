@@ -33,6 +33,11 @@ GRANT SELECT ON railway.catalogue_items       TO 'arabella_portal'@'%';
 GRANT SELECT ON railway.envelope_linears      TO 'arabella_portal'@'%';
 GRANT SELECT ON railway.envelope_linear_items TO 'arabella_portal'@'%';
 
+-- The paper stock, for the customer's fourth door. Read only, and the
+-- `note` column is never read by the route - it carries supplier names and
+-- buying prices.
+GRANT SELECT ON railway.stock_items TO 'arabella_portal'@'%';
+
 -- Their own account: made at sign-up, read at sign-in, updated for the
 -- code and the password. No DELETE - an account going missing should be a
 -- decision somebody made in the office, not something this code can do.
