@@ -606,7 +606,11 @@ function c_render() {
   grid.innerHTML = rows.map(function (i) {
     return '<article class="tile' + (c_pick.has(i.id) ? ' picked' : '') + '" id="t' + i.id + '">'
       + '<div class="sheet-img" onclick="c_zoom(' + i.id + ')">'
-      + '<img loading="lazy" src="/catalogue/thumb/' + i.id + '" alt="' + esc(i.name || i.category) + '">'
+      // BASE, not a path at the root: this page is opened inside
+      // /client/<brand>/catalogue, and the root address was shut when the
+      // customer's links became one link. Hard-coded, every thumbnail on
+      // this page 404'd - the grid drew 141 broken pictures.
+      + '<img loading="lazy" src="' + BASE + '/thumb/' + i.id + '" alt="' + esc(i.name || i.category) + '">'
       + '</div>'
       + '<div class="cap">'
       + '<div class="who">'

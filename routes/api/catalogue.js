@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const db = require('../../config/db');
-const { checkFile } = require('../../utils/fileKind');
+const { checkFile, sendHeaders } = require('../../utils/fileKind');
 const { archiveThenDelete } = require('../../utils/archive');
 const { requireLogin, requireRole } = require('../../middleware/auth');
 
@@ -51,6 +51,31 @@ router.get('/', requireLogin, canManage, async (req, res) => {
   } catch (err) {
     console.error('Catalogue list failed:', err);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/catalogue/thumb/:id — the grid picture, for the office screen.
+//
+// The admin page used to point at /catalogue/thumb/:id, which belongs to the
+// customer's router. That address was shut when the customer's links became
+// one link, so every thumbnail on this screen became a broken picture. It
+// has its own route now, behind the same login as the rest of the screen -
+// the office's catalogue is not a public page.
+router.get('/thumb/:id', requireLogin, canManage, async (req, res) => {
+  try {
+    const [[item]] = await db.query(
+      'SELECT file_name, mime_type, IFNULL(thumb, bytes) AS bytes FROM catalogue_items WHERE id = ?',
+      [parseInt(req.params.id, 10)]);
+    if (!item || !item.bytes) return res.status(404).send('Not found.');
+    sendHeaders(res, item.bytes, item.mime_type, item.file_name || ('design-' + req.params.id));
+    // A design's picture never changes under its id - a new upload is a new
+    // row - but this one is behind a login, so it is the browser's to keep
+    // and nobody else's.
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.send(item.bytes);
+  } catch (err) {
+    console.error('Catalogue thumb failed:', err);
+    res.status(500).send('Could not load that image.');
   }
 });
 

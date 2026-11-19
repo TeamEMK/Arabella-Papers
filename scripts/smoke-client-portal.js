@@ -114,6 +114,11 @@ const NL = String.fromCharCode(10);
   await admin.query("GRANT INSERT ON `" + TEST_DB + "`.`pricing_quotes` TO '"
     + CLIENT_DB_USER + "'@'%'");
   const db = require(path.join(ROOT, 'config/db.js'));
+  // A one-pixel JPEG-sized stand-in, so the suite carries its own picture
+  // rather than reaching for a file that may not be there.
+  const PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+    'base64');
 
   const server = app.listen(0);
   await new Promise(done => server.once('listening', done));
@@ -274,6 +279,33 @@ const NL = String.fromCharCode(10);
     check('and all three open in the same tab',
       !/class="door"[^>]*target=/.test(homeHtml));
     check('and the sign-in is no longer on the page', !/Forgotten your password/.test(homeHtml));
+
+    // ── THE PICTURES IN THE ROOM ──
+    //
+    // The grid used to ask for /catalogue/thumb/<id> - a path at the root,
+    // which was shut when these links became one link. It drew 141 broken
+    // pictures and no test said a word, because every test here asked for
+    // pages and never for an image.
+    await db.query(
+      `INSERT INTO catalogue_items (category, name, code, file_name, mime_type, bytes, thumb)
+       VALUES ('Borders','Vol 1 Page 1','B-1','vol1-1.jpg','image/jpeg', ?, ?)`,
+      [PNG, PNG]);
+    const [[shown]] = await db.query(
+      "SELECT id FROM catalogue_items WHERE code = 'B-1'");
+    const pic = await go('/client/arabella/catalogue/thumb/' + shown.id,
+      { headers: { cookie: jar } });
+    check('a design in the catalogue draws its picture', pic.status === 200, pic.status);
+    check('and it comes back as a picture',
+      /^image\//.test(pic.headers.get('content-type') || ''),
+      pic.headers.get('content-type'));
+    const strangerPic = await go('/client/arabella/catalogue/thumb/' + shown.id);
+    check('a stranger gets no picture',
+      [302, 401, 403].includes(strangerPic.status), strangerPic.status);
+
+    const room = await go('/client/arabella/catalogue', { headers: { cookie: jar } });
+    const roomHtml = await room.text();
+    check('the grid asks the room it was opened in, not the root',
+      /BASE \+ '\/thumb\/'/.test(roomHtml) && !/src="\/catalogue\/thumb\//.test(roomHtml));
 
     // A room is not kept by the browser: it would come back from the cache
     // for whoever opens that laptop next, and a copy cached before somebody

@@ -115,7 +115,10 @@ function cmRender() {
     return '<div class="col-6 col-md-3 col-lg-2">'
       + '<div class="card h-100 ' + (i.is_active ? '' : 'opacity-50') + '">'
       + '<div style="height:150px;background:#fbfbfc;display:flex;align-items:center;justify-content:center">'
-      + '<img loading="lazy" src="/catalogue/thumb/' + i.id + '" alt="" style="max-width:100%;max-height:100%;object-fit:contain">'
+      // The office's own route, behind the office login - see
+      // routes/api/catalogue.js. The customer's /catalogue/... addresses
+      // were shut when their links became one link.
+      + '<img loading="lazy" src="/api/catalogue/thumb/' + i.id + '" alt="" style="max-width:100%;max-height:100%;object-fit:contain">'
       + '</div>'
       + '<div class="card-body p-2">'
       + '<div class="fw-bold small text-truncate" title="' + cm_esc(i.name) + '">' + (cm_esc(i.name) || '&nbsp;') + '</div>'

@@ -186,6 +186,39 @@ const PNG = Buffer.from(
   check('and a missing one answers the same way, so ids cannot be fished for',
     r.status === 404, r.status);
 
+  // ── THE OFFICE'S OWN SCREEN ──
+  //
+  // It used to point at /catalogue/thumb/:id, which belongs to the
+  // customer's router, and that address was shut when the customer's links
+  // became one link - so every thumbnail on the admin page became a broken
+  // picture and nobody noticed. It has its own route now.
+  console.log('\nThe office screen\'s pictures');
+  const thumbRes = await fetch(BASE + '/api/catalogue/thumb/' + liveId,
+    { headers: { Cookie: COOKIE, 'X-Forwarded-Proto': 'https' }, redirect: 'manual' });
+  check('the office screen gets its thumbnail', thumbRes.status === 200, thumbRes.status);
+  check('and it is served as a picture',
+    /^image\//.test(String(thumbRes.headers.get('content-type') || '')),
+    thumbRes.headers.get('content-type'));
+  const noSession = await get('/api/catalogue/thumb/' + liveId);
+  check('a stranger does not', noSession.status === 401 || noSession.status === 302,
+    noSession.status);
+
+  // The addresses the two screens actually use, read out of the files. This
+  // is the exact thing that regressed: the pages were pointing at a path
+  // that had been shut, and nothing checked.
+  const officeView = require('fs').readFileSync(
+    path.join(ROOT, 'views/views/catalogue.ejs'), 'utf8');
+  check('the office screen asks its own route for pictures',
+    /src="\/api\/catalogue\/thumb\//.test(officeView));
+  check('and not the customer address that was shut',
+    !/src="\/catalogue\/thumb\//.test(officeView));
+  const customerView = require('fs').readFileSync(
+    path.join(ROOT, 'views/catalogue.ejs'), 'utf8');
+  check("the customer's page asks the room it was opened in",
+    /BASE \+ '\/thumb\/'/.test(customerView));
+  check('and not a path at the root',
+    !/src="\/catalogue\/thumb\//.test(customerView));
+
   console.log('\nShowing it again');
   await asAdmin('PUT', '/api/catalogue/' + hiddenId, { isActive: true });
   r = await get(ROOM + '/api/items', jar);
