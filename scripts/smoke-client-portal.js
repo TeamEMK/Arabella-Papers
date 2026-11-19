@@ -315,6 +315,12 @@ const NL = String.fromCharCode(10);
     const doorsHtml = await doors.text();
     check('the account page offers it as a fourth door',
       /\/client\/arabella\/stock/.test(doorsHtml) && /Paper Stock/.test(doorsHtml));
+    // And the link is sent cold, so the page says what is behind the door
+    // before it asks anybody to sign in.
+    const coldHtml = await (await go('/client/arabella')).text();
+    check('the sign-in page names all four things',
+      /Envelope Liners/.test(coldHtml) && /Design Catalogue/.test(coldHtml)
+      && /Paper Stock/.test(coldHtml) && /Price Calculator/.test(coldHtml));
 
     // ── THE PICTURES IN THE ROOM ──
     //
