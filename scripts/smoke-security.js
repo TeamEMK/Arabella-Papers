@@ -1116,6 +1116,12 @@ const NL = String.fromCharCode(10);
     // The page, and the way to it.
     const rsPage = await go('/forgot');
     check('the page opens', rsPage.status === 200, rsPage.status);
+    const rsPageHtml = await rsPage.text();
+    // Typed once and set for good: reading it back before pressing the
+    // button is the difference between a password that works and a locked
+    // account at eight in the morning.
+    check('and the new password can be read back before it is set',
+      /class="pw-eye"/.test(rsPageHtml) && /fa-eye-slash/.test(rsPageHtml));
     const rsLoginPage = await (await go('/login')).text();
     check('and the sign-in page offers it', /href="\/forgot"/.test(rsLoginPage));
 

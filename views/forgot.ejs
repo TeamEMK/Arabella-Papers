@@ -61,6 +61,17 @@
     .back { display: inline-block; margin-top: 20px; color: rgba(255,255,255,0.65); font-size: 13px; text-decoration: none; }
     .back:hover { color: #ffcc00; }
     .code-input input { letter-spacing: 8px; font-size: 20px; }
+    /* The eye, the same one the sign-in page has. A password typed on a
+       phone with one thumb is a password typed twice. */
+    .pw-wrap { position: relative; }
+    .pw-wrap input { padding-right: 44px; }
+    .pw-eye {
+      position: absolute; right: 0; top: 0; height: 40px; width: 44px;
+      display: flex; align-items: center; justify-content: center;
+      background: none; border: 0; color: rgba(255,255,255,.6);
+      cursor: pointer; padding: 0;
+    }
+    .pw-eye:hover, .pw-eye:focus-visible { color: #ffcc00; }
     @media (max-width: 420px) {
       .login-container { width: 92vw; padding: 24px 20px; }
       body { min-height: 100dvh; }
@@ -97,10 +108,14 @@
                  autocomplete="one-time-code" required/>
           <label for="code">Code</label>
         </div>
-        <div class="input-group-custom">
+        <div class="input-group-custom pw-wrap">
           <input type="password" id="password" placeholder=" " required
                  autocomplete="new-password" minlength="8"/>
           <label for="password">New password</label>
+          <button type="button" class="pw-eye" id="pwEye"
+                  aria-label="Show password" aria-pressed="false">
+            <i class="fas fa-eye" id="pwIcon" aria-hidden="true"></i>
+          </button>
         </div>
         <button type="submit" class="login-btn" id="setBtn">Set the password</button>
       </form>
@@ -172,6 +187,19 @@
         btn.disabled = false;
         btn.textContent = 'Set the password';
       }
+    });
+
+    // The eye. Typed once and set for good, so being able to read it back
+    // before pressing the button is the difference between a password that
+    // works and a locked account.
+    document.getElementById('pwEye').addEventListener('click', function () {
+      var input = document.getElementById('password');
+      var show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      this.setAttribute('aria-pressed', show ? 'true' : 'false');
+      this.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      document.getElementById('pwIcon').className = show ? 'fas fa-eye-slash' : 'fas fa-eye';
+      input.focus();
     });
 
     // Nothing is left on screen for the next person at this desk.

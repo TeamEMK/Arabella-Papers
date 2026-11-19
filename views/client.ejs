@@ -347,6 +347,32 @@
     }
     input:focus { outline: none; border-color: var(--gold-lit);
                   box-shadow: 0 0 0 1px rgba(201,162,39,.25); }
+
+    /* ── SHOWING THE PASSWORD ──
+       Typed on a phone, in a hall, with one thumb: a password nobody can
+       read back is a password typed twice. The eye is wired in script
+       rather than written into each form, so the three password fields on
+       this page - sign in, register, new password - all get it and a
+       fourth one added later does too.
+
+       The box is relative only where there is a toggle, so the ordinary
+       fields keep their own layout. The input is given room on the right
+       so the longest password does not run under the eye. */
+    .pw-wrap { position: relative; }
+    .pw-wrap input { padding-right: clamp(46px, 3.4vw, 210px); }
+    .pw-eye {
+      position: absolute; top: 0; right: 0;
+      /* As tall as the field itself, so the target is the whole right-hand
+         end of it rather than a small circle somebody has to aim at. */
+      height: calc(100% - clamp(16px, 1.1vw, 102px));
+      display: flex; align-items: center; justify-content: center;
+      width: clamp(44px, 3.2vw, 200px);
+      background: none; border: 0; cursor: pointer; padding: 0;
+      color: var(--gold); opacity: .72; transition: opacity .15s, color .15s;
+      font-size: clamp(.85rem, .9vw, 5rem);
+    }
+    .pw-eye:hover, .pw-eye:focus-visible { opacity: 1; color: var(--gold-lit); }
+    .pw-eye:focus-visible { outline: 1px solid var(--gold-lit); outline-offset: -2px; }
     /* The six digits are read off a phone and typed one at a time. Wide and
        spaced so a 6 and an 8 are not the same shape at a glance. */
     input.code {
@@ -793,6 +819,70 @@
     if (go) { e.preventDefault(); go.click(); }
   });
 }());
+</script>
+<script>
+// ── THE EYE ON EVERY PASSWORD FIELD ──
+//
+// Done here rather than in the markup so all three forms on this card -
+// sign in, register, set a new password - get it from one place, and so
+// does a fourth one added later. Nothing else on the page has to know.
+//
+// The field goes back to hidden when the card changes panel: a password
+// left readable on a shared screen is the reason the dots are there.
+(function () {
+  function wrap(input) {
+    if (input.closest('.pw-wrap')) return;
+    var box = document.createElement('div');
+    box.className = 'pw-wrap';
+    input.parentNode.insertBefore(box, input);
+    box.appendChild(input);
+
+    var eye = document.createElement('button');
+    eye.type = 'button';
+    eye.className = 'pw-eye';
+    eye.setAttribute('aria-label', 'Show password');
+    eye.setAttribute('aria-pressed', 'false');
+    eye.innerHTML = '<i class="fa-regular fa-eye" aria-hidden="true"></i>';
+    box.appendChild(eye);
+
+    eye.addEventListener('click', function () {
+      var show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      eye.setAttribute('aria-pressed', show ? 'true' : 'false');
+      eye.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      eye.innerHTML = '<i class="fa-regular fa-eye' + (show ? '-slash' : '')
+        + '" aria-hidden="true"></i>';
+      // The caret goes back where it was: on a phone the keyboard is up
+      // and losing the place is worse than not seeing the word.
+      var at = input.value.length;
+      input.focus();
+      try { input.setSelectionRange(at, at); } catch (e) {}
+    });
+  }
+
+  function hideAll() {
+    document.querySelectorAll('.pw-wrap input[type="text"]').forEach(function (i) {
+      var eye = i.parentNode.querySelector('.pw-eye');
+      i.type = 'password';
+      if (eye) {
+        eye.setAttribute('aria-pressed', 'false');
+        eye.setAttribute('aria-label', 'Show password');
+        eye.innerHTML = '<i class="fa-regular fa-eye" aria-hidden="true"></i>';
+      }
+    });
+  }
+
+  document.querySelectorAll('input[type="password"]').forEach(wrap);
+
+  // show() moves the card from one panel to another. Wrapped rather than
+  // edited, so the panels keep knowing nothing about this.
+  if (typeof window.show === 'function') {
+    var theirs = window.show;
+    window.show = function () { hideAll(); return theirs.apply(this, arguments); };
+  }
+  // And nothing is left readable for whoever opens this laptop next.
+  window.addEventListener('pagehide', hideAll);
+})();
 </script>
 </body>
 </html>

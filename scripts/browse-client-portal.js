@@ -347,6 +347,40 @@ function freePort() {
     await sleep(1200);
     check('signing out puts the card back', await ev("!!document.querySelector('.card')"));
 
+    // ── READING BACK WHAT YOU TYPED ──
+    //
+    // A password typed on a phone, in a hall, with one thumb is a password
+    // typed twice. The eye is wired in script for every password field on
+    // the card, so this checks the wiring rather than one form's markup -
+    // and checks it goes back to dots when the card changes panel, because
+    // a password left readable on a shared screen is the reason the dots
+    // are there.
+    console.log(NL + 'Showing the password');
+    check('the sign-in password has an eye on it',
+      await ev("!!document.querySelector('#in-pass') && "
+        + "!!document.querySelector('#in-pass').closest('.pw-wrap') && "
+        + "!!document.querySelector('#in-pass').closest('.pw-wrap').querySelector('.pw-eye')"));
+    await ev("document.getElementById('in-pass').value = 'liner-book-2026';");
+    check('it starts as dots',
+      (await ev("document.getElementById('in-pass').type")) === 'password');
+    await ev("document.querySelector('#in-pass').closest('.pw-wrap').querySelector('.pw-eye').click()");
+    await sleep(300);
+    check('one press shows the word',
+      (await ev("document.getElementById('in-pass').type")) === 'text');
+    check('and the eye says it can be hidden again',
+      (await ev("document.querySelector('#in-pass').closest('.pw-wrap')"
+        + ".querySelector('.pw-eye').getAttribute('aria-label')")) === 'Hide password');
+    check('the word itself is still what was typed',
+      (await ev("document.getElementById('in-pass').value")) === 'liner-book-2026');
+    await ev("show('p-up')"); await sleep(250);
+    await ev("show('p-in')"); await sleep(250);
+    check('changing panel puts the dots back',
+      (await ev("document.getElementById('in-pass').type")) === 'password');
+    // Every password field on the card, not only the one on the first panel.
+    check('register and the new-password form have one too',
+      (await ev("document.querySelectorAll('.pw-wrap .pw-eye').length")) >= 3,
+      await ev("document.querySelectorAll('.pw-wrap .pw-eye').length"));
+
     console.log(NL + 'The other link');
     await send('Page.navigate', { url: BASE + '/client/kpc' });
     await sleep(1200);
