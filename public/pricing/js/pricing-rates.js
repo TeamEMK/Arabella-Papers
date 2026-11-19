@@ -23,8 +23,8 @@ var ArabellaPricingRates = (typeof window !== "undefined" ? window : (typeof glo
     "INVITE":         ["Invitation", [90,100,110,120,1.2], [80,85,90,100,1]],
     "ENV-VF":         ["Envelope (V flap)", [200,210,220,250,2.5]],
     "ENV-SF":         ["Envelope (square flap)", [150,160,170,190,1.9]],
-    "LIN-ENV-VF-PL":  ["Printed liner (V flap)", [200,210,220,250,2.5]],
-    "LIN-ENV-SF-PL":  ["Printed liner (square flap)", [150,160,170,190,1.9]],
+    "LIN-ENV-VF-PL":  ["Printed liner (V flap)", [0,0,0,0,0]],        // printed liner: printing cost only, no paper cost
+    "LIN-ENV-SF-PL":  ["Printed liner (square flap)", [0,0,0,0,0]],        // printed liner: printing cost only, no paper cost
     "LIN-ENV-VF-PFL": ["Paper full liner (V flap)", [200,210,220,250,2.5]],
     "LIN-ENV-SF-PFL": ["Paper full liner (square flap)", [150,160,170,190,1.9]],
     "LIN-ENV-VF-PHL": ["Paper half liner (V flap)", [90,95,105,120,1.2]],
@@ -91,7 +91,7 @@ var ArabellaPricingRates = (typeof window !== "undefined" ? window : (typeof glo
   },
   edges: {
     "EDGE-GILDED":         ["Gilded Edges", [null,null,null,null,2]],
-    "EDGE-PAINTED":        ["Painted Edges", [null,null,null,null,0.5]],
+    "EDGE-PAINTED":        ["Painted Edges", [null,null,null,50,0.5]],   // up to 100: charged as 100 pieces (100 x 0.50); above 100: 0.50 each
     "EDGE-BEVELED":        ["Beveled Edges", [null,null,null,null,2]],
     "EDGE-DECKLED":        ["Deckled Edge", [null,null,null,null,2]],
     "EDGE-BEVELED-GILDED": ["Beveled Edges with Gilded Foil", [null,null,null,null,4]],

@@ -189,4 +189,7 @@ html, body { margin: 0; background: #eef1f5; }
 .apc.apc-caps .apc-sumlines li { font-size: .92rem; }
 .apc.apc-caps .apc-balance dt { letter-spacing: .14em; font-size: 1rem; }
 .apc.apc-caps .apc-lede { font-size: .82rem; letter-spacing: .1em; line-height: 1.8; }
+.apc.apc-premium .apc-balance dt, .apc.apc-premium .apc-balance dd { white-space: nowrap; }
+.apc.apc-caps .apc-balance dd { font-size: 1.8rem; }
+.apc.apc-premium .apc-quote-grid { grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); }
 

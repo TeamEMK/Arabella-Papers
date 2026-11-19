@@ -261,6 +261,7 @@
           var t1 = el(p + "-t1").value;
           if (!t1) return;
           if (!envType || envQty <= 0) { errors.push("Liners are priced per envelope. Enter an envelope quantity and flap first."); return; }
+          if (t1 === "PL" && !inks(p, INKS).length && !inks(p, BACK).length) { errors.push("Printed liner: choose at least one ink colour (a printed liner is charged for printing only)."); return; }
           items.push({ code: "LIN-" + envType + "-" + t1, qty: envQty, printing: inks(p, INKS), printingBack: inks(p, BACK) });
           return;
         }
@@ -319,12 +320,13 @@
       catch (err) { showErrors([err && err.name === "PricingError" ? err.message : "Something went wrong while pricing this quote."]); return; }
       part("errors").hidden = true;
       var cur = r.currency;
+      var totalLabel = isCustomer ? "Retail price" : "Total", balanceLabel = isCustomer ? "Wholesale price" : "Balance";
       part("totals").innerHTML =
-        "<div><dt>Total</dt><dd>" + cur + " " + moneyGrouped(r.total) + "</dd></div>" +
+        "<div><dt>" + totalLabel + "</dt><dd>" + cur + " " + moneyGrouped(r.total) + "</dd></div>" +
         (r.baseDiscountPercent > 0 ? "<div><dt>Less " + n(r.baseDiscountPercent) + "%</dt><dd>− " + cur + " " + moneyGrouped(r.baseDiscountAmount) + "</dd></div>" : "") +
         (r.additionalDiscountPercent > 0 ? "<div><dt>Less " + n(r.additionalDiscountPercent) + "%</dt><dd>− " + cur + " " + moneyGrouped(r.additionalDiscountAmount) + "</dd></div>" : "") +
         (r.rushFeePercent > 0 ? "<div><dt>Rush fee " + n(r.rushFeePercent) + "%</dt><dd>+ " + cur + " " + moneyGrouped(r.rushFeeAmount) + "</dd></div>" : "") +
-        '<div class="apc-balance"><dt>Balance</dt><dd>' + cur + " " + moneyGrouped(r.balance) + "</dd></div>";
+        '<div class="apc-balance"><dt>' + balanceLabel + '</dt><dd>' + cur + " " + moneyGrouped(r.balance) + "</dd></div>";
       var noAdjustments = !r.baseDiscountPercent && !r.additionalDiscountPercent && !r.rushFeePercent;
       if (isCustomer && noAdjustments) {
         // Retail-only customer copy: just the total.
@@ -347,6 +349,7 @@
       }
       var summary = engine.summaryText(r, who);
       if (isCustomer && noAdjustments) summary = summary.replace(/\n\nBalance= .*$/, "");
+      if (isCustomer && !noAdjustments) summary = summary.replace("\nTotal= ", "\nRetail Price= ").replace("\nBalance= ", "\nWholesale Price= ");
       if (isCustomer) summary = summary.toUpperCase();
       part("summary").value = summary;
       part("result").hidden = false; part("saved").hidden = true;

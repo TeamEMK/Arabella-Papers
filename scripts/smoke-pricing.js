@@ -249,14 +249,46 @@ const check = (name, ok, extra) => {
     both.internal !== both.forArabella);
   check('and the Arabella customer build is a third, again separate',
     both.forKpc !== both.internal && both.forKpc !== both.forArabella);
-  // They are deliberately NOT the same price list any more: the customer
-  // build shows list price and the staff one takes half off.
-  check('the staff copy still discounts',
-    both.internal.price(basket).baseDiscountPercent === 50,
-    both.internal.price(basket).baseDiscountPercent);
-  check('and the customer build does not',
-    both.forArabella.price(basket).baseDiscountPercent === 0,
-    both.forArabella.price(basket).baseDiscountPercent);
+  // ONE RULE ON ALL THREE, AS OF THE NOVEMBER LIST.
+  //
+  // The customer build used to carry baseDiscount 0 - list price, no
+  // discount - while the staff one took half off. The office's new files
+  // put all three on the same footing: the total is the RETAIL price and
+  // the balance is the WHOLESALE one, half of it, and the customer's page
+  // says so in those words. Checked on every build rather than one,
+  // because three copies of a price list is three chances to update two.
+  for (const [name, build] of [['the staff copy', both.internal],
+    ['the Arabella link', both.forArabella], ['the KPC link', both.forKpc]]) {
+    // Each copy knows its own brand and refuses the other's, which is the
+    // whole reason there are three of them.
+    const priced = build.price(Object.assign({}, basket, { brand: build.BRANDS[0] }));
+    check(name + ' takes half off', priced.baseDiscountPercent === 50,
+      priced.baseDiscountPercent);
+    check('and ' + name + "'s balance is half its total",
+      Math.abs(priced.balance - priced.total / 2) < 0.01,
+      { total: priced.total, balance: priced.balance });
+  }
+
+  // The words the customer reads for those two numbers. They are the
+  // office's, and they are the difference between a trade customer
+  // understanding the second figure and ringing up about it.
+  const uiSrc = fs.readFileSync(
+    path.join(ROOT, 'public/pricing-arabella/js/pricing-ui.js'), 'utf8');
+  check('the customer sees them as Retail and Wholesale',
+    /"Retail price"/.test(uiSrc) && /"Wholesale price"/.test(uiSrc));
+  check('and the staff copy still says Total and Balance',
+    /isCustomer \? "Retail price" : "Total"/.test(uiSrc));
+
+  // ── THE PRINTED LINER, AS OF THE SAME LIST ──
+  // A printed liner is charged for the printing only, so its paper rate is
+  // zero and the screen refuses one with no ink chosen - without that it
+  // would quote a liner at nothing at all.
+  const ratesSrc = fs.readFileSync(
+    path.join(ROOT, 'public/pricing-arabella/js/pricing-rates.js'), 'utf8');
+  check('a printed liner carries no paper cost',
+    /"LIN-ENV-VF-PL"[\s\S]{0,120}0,\s*0,\s*0,\s*0,\s*0/.test(ratesSrc));
+  check('and the screen will not price one without an ink',
+    /Printed liner: choose at least one ink colour/.test(uiSrc));
 
   const staffPage = fs.readFileSync(path.join(ROOT, 'views/views/pricing.ejs'), 'utf8');
   const publicPage = fs.readFileSync(path.join(ROOT, 'views/quote.ejs'), 'utf8');

@@ -1,3 +1,5 @@
+html, body { margin: 0; background: #eef1f5; }
+#pricing { max-width: 1320px; margin: 0 auto; }
 /* Arabella Papers pricing calculator. Every rule is scoped to .apc so it won't affect your MIS pages. */
 .apc {
   --apc-ink: #1d2433; --apc-muted: #5a6375; --apc-page: #eef1f5; --apc-sheet: #fff; --apc-rule: #d6dce5;
@@ -169,3 +171,25 @@
 .apc.apc-premium .apc-sum-item { line-height: 1.5; }
 .apc.apc-premium .apc-sum-amt { float: right; margin-left: 1.5rem; color: var(--apc-ink); font-weight: 600; white-space: nowrap; }
 .apc.apc-premium .apc-sumlines li::after { content: ""; display: table; clear: both; }
+
+/* Customer copies: everything in capital letters, with a little extra spacing so it stays easy to read */
+.apc.apc-caps, .apc.apc-caps input, .apc.apc-caps select, .apc.apc-caps button, .apc.apc-caps textarea { text-transform: uppercase; }
+.apc.apc-caps { letter-spacing: .03em; }
+.apc.apc-caps input::placeholder { text-transform: none; }
+.apc.apc-caps h3, .apc.apc-caps .apc-head-title, .apc.apc-caps .apc-name { letter-spacing: .1em; }
+.apc.apc-caps h3, .apc.apc-caps .apc-head-title { font-size: 1.2rem; }
+.apc.apc-caps .apc-name { font-size: .98rem; }
+.apc.apc-caps .apc-mast .apc-h1 { font-style: normal; letter-spacing: .22em; font-size: 1.05rem; }
+.apc.apc-caps .apc-estimate-for { font-style: normal; letter-spacing: .12em; font-size: .95rem; }
+.apc.apc-caps .apc-f-back > span { font-style: normal; }
+.apc.apc-caps .apc-f > span, .apc.apc-caps .apc-field > span { font-size: .72rem; letter-spacing: .08em; }
+.apc.apc-caps .apc-btn1 { letter-spacing: .2em; font-size: 1.1rem; }
+.apc.apc-caps .apc-btn2 { letter-spacing: .1em; font-size: .85rem; }
+.apc.apc-caps .apc-estimate-title { font-size: 1.4rem; letter-spacing: .14em; }
+.apc.apc-caps .apc-sumlines li { font-size: .92rem; }
+.apc.apc-caps .apc-balance dt { letter-spacing: .14em; font-size: 1rem; }
+.apc.apc-caps .apc-lede { font-size: .82rem; letter-spacing: .1em; line-height: 1.8; }
+.apc.apc-premium .apc-balance dt, .apc.apc-premium .apc-balance dd { white-space: nowrap; }
+.apc.apc-caps .apc-balance dd { font-size: 1.8rem; }
+.apc.apc-premium .apc-quote-grid { grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); }
+

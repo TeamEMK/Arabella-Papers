@@ -4,7 +4,7 @@
 var ArabellaPricingRates = (typeof window !== "undefined" ? window : (typeof globalThis !== "undefined" ? globalThis : this)).ArabellaPricingRates = {
  "version": "2025-07",
  "currency": "US$",
- "baseDiscount": 0,
+ "baseDiscount": 50,
  "brands": [
   [
    "ARA",
@@ -45,21 +45,21 @@ var ArabellaPricingRates = (typeof window !== "undefined" ? window : (typeof glo
   "LIN-ENV-VF-PL": [
    "Printed liner (V flap)",
    [
-    200,
-    210,
-    220,
-    250,
-    2.5
+    0,
+    0,
+    0,
+    0,
+    0
    ]
   ],
   "LIN-ENV-SF-PL": [
    "Printed liner (square flap)",
    [
-    150,
-    160,
-    170,
-    190,
-    1.9
+    0,
+    0,
+    0,
+    0,
+    0
    ]
   ],
   "LIN-ENV-VF-PFL": [
@@ -672,7 +672,7 @@ var ArabellaPricingRates = (typeof window !== "undefined" ? window : (typeof glo
     null,
     null,
     null,
-    null,
+    50,
     0.5
    ]
   ],
