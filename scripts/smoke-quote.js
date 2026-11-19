@@ -350,7 +350,7 @@ const check = (name, ok, extra) => {
   // the one somebody adds without the role is exactly the one that then
   // gets text put on it. Every decorative panel on this page must be an
   // EMPTY element marked as presentation.
-  const decorative = ['q-band', 'q-bandfoot', 'gate-art'];
+  const decorative = ['band', 'gate-art'];
   for (const cls of decorative) {
     check(cls + ' is an empty panel marked as decoration',
       new RegExp('<div class="' + cls + '" role="presentation"></div>').test(qview));
@@ -362,16 +362,56 @@ const check = (name, ok, extra) => {
   check('the gate is a composed sheet, not a box floating in cream',
     qview.includes('class="gate-art"') && qview.includes('.gate-art {'));
   check('and the picture gets out of the way on a phone',
-    /@media \(max-width:760px\)[\s\S]{0,900}\.gate-art \{ display:none/.test(qview));
-  check('they are bands above and below, not a field behind the form',
-    qview.includes('.q-band {') && qview.includes('.q-bandfoot {'));
+    /@media \(max-width: 900px\)[\s\S]{0,1200}\.gate-art \{ display: none/.test(qview));
+  // One strip at the head, faded into the dark - not a photograph behind
+  // the form, and not a second one at the foot repeating it.
+  check('the photograph is a strip at the head, faded into the page',
+    qview.includes('.band {') && qview.includes('.band::after')
+    && !qview.includes('.q-bandfoot'));
+
+  // ── THE SAME ROOM AS THE OTHER TWO DOORS ──
+  //
+  // This page sits beside the liner book and the design catalogue inside
+  // one account. It was cream and blush while they were dark and gold, so
+  // walking from one to the other read as leaving the shop. The tokens are
+  // copied into each page because each is served on its own; that they are
+  // the SAME tokens is what this checks.
+  const liners = require('fs').readFileSync(path.join(ROOT, 'views/linears.ejs'), 'utf8');
+  for (const token of ['--void: #15171a', '--gold: #c99a3b',
+    '--dim: #8a8578', '--rail: 286px']) {
+    check('the calculator is dressed like the liner book: ' + token,
+      qview.includes(token) && liners.includes(token));
+  }
+  check('it has the same rail down the side',
+    /<aside class="rail">/.test(qview) && /<aside class="rail">/.test(liners));
+  check('and the same wordmark in it',
+    /class="mark serif"/.test(qview) && /class="mark serif"/.test(liners));
   // The module's own CALCULATE ESTIMATE is the loudest control on the page.
   // Our buttons take its colour, so the wrapper and the calculator do not
   // read as two different companies.
-  check('our buttons use the module\'s own primary', qview.includes('--slate:#3e5576'));
+  // The module is tokenised, so it wears this room's colours rather than
+  // bringing its own: its primary becomes the gold the rest of the page
+  // uses, and the wrapper's buttons are that same gold. The module itself
+  // is never edited - an updated one keeps working.
+  // The module puts `apc apc-premium` on #pricing ITSELF, so the obvious
+  // `#pricing .apc` selector matches nothing and the skin silently does
+  // not apply - which is exactly what happened the first time. The
+  // variables go on #pricing, where they are both set and inherited.
+  check('the module is re-skinned rather than edited',
+    /#pricing \{[\s\S]{0,900}--apc-sheet: #1b1e22/.test(qview)
+    && /--apc-plum: #c99a3b/.test(qview));
+  check('and the skin is put where the module actually puts its class',
+    /#pricing\.apc\.apc-premium/.test(qview) && !/#pricing \.apc \{/.test(qview));
   const modcss = require('fs').readFileSync(
     path.join(ROOT, 'public/pricing-arabella/css/pricing-calculator.css'), 'utf8');
-  check('and that is still the colour the module uses', modcss.includes('--apc-plum: #3e5576'));
+  check('and the module still ships its own light palette, untouched',
+    modcss.includes('--apc-plum: #3e5576'));
+  // THE EMPTY COLUMNS EITHER SIDE. The module caps itself at 1320px and
+  // this page used to add its own 1320 wrapper on top, so on an office
+  // screen the form sat in a narrow column with dark either side of it.
+  check('the module\'s own width cap is lifted', /#pricing \{[\s\S]{0,400}max-width: none/.test(qview));
+  check('and the room has a measure of its own',
+    /\.measure \{[\s\S]{0,120}max-width: 1560px/.test(qview));
   check('the error state is a class, not a colour written into the script',
     qview.includes("classList.toggle('bad'") && !qview.includes('#b02a37'));
   for (const img of ['suite-band.jpg', 'suite-tall.jpg']) {
