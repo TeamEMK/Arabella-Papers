@@ -28,6 +28,17 @@ process.env.ADMIN_PASSWORD = 'probe-pass-123';
 // server.js listens on PORT by itself off Vercel, and the dev server may
 // already hold 3500. This suite brings its own listener.
 process.env.PORT = '0';
+// The portal's restricted login belongs to the LIVE server, and a developer's
+// .env carries it. This suite builds its own throwaway database where that
+// user does not exist, so the variables are cleared and the portal falls back
+// to the pool this suite did set up - see config/clientDb.js.
+// Emptied rather than deleted: dotenv fills in a variable that is MISSING
+// from the environment, and a helper that calls dotenv.config() again would
+// hand the live login straight back - which is exactly what happened the
+// first time this was written.
+process.env.CLIENT_DB_USER = '';
+process.env.CLIENT_DB_PASSWORD = '';
+
 
 {
   const p = require.resolve(path.join(ROOT, 'utils/mailer.js'));

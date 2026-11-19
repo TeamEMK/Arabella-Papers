@@ -92,8 +92,68 @@ if (isServerless) app.set('trust proxy', 1);
 // on. Same for COEP, which would block the CDN that serves Bootstrap and
 // Font Awesome.
 const helmet = require('helmet');
+// ══════════════════════════════════════════════════════
+// WHAT A PAGE MAY LOAD, AND WHERE IT MAY SEND THINGS
+//
+// A Content-Security-Policy is the browser's own copy of the rule. If a
+// script ever does get into one of these pages - and this app builds HTML
+// with innerHTML in 336 places across 38 screens, of which only the
+// dispatch board has been gone through line by line - the policy is what
+// stops it being useful.
+//
+// SCRIPT IS THE HALF THAT IS NOT DONE YET, and it is deliberate rather than
+// forgotten. There are 549 inline handlers in these views - onclick="..." on
+// every button - and a policy without 'unsafe-inline' turns every one of
+// them off. Moving them to addEventListener is a change to every screen in
+// the system, which is its own piece of work with its own testing; doing it
+// badly would break buttons the office uses all day. So 'unsafe-inline'
+// stays for now and this comment is the note that it is a debt.
+//
+// WHAT IS ALREADY WORTH HAVING, without touching a single handler:
+//
+//   connect-src 'self'   A script that does run cannot post the order book
+//                        to somebody else's server. This is the one that
+//                        turns a stolen page into a dead end.
+//   object-src 'none'    No Flash-era plugin objects, ever.
+//   base-uri 'self'      An injected <base> can repoint every relative URL
+//                        on the page - including the ones that load our own
+//                        scripts - at another host. Nothing here needs it.
+//   form-action 'self'   The login form cannot be made to post the password
+//                        to another site.
+//   frame-ancestors      Nobody frames our pages to trick a click out of
+//     'none'             somebody. X-Frame-Options says the same thing to
+//                        older browsers; this is the one browsers read now.
+//   frame-src 'none'     There are no iframes in this app at all.
+//
+// The lists below are the hosts these pages actually use, counted rather
+// than guessed: Bootstrap and Font Awesome from two CDNs, Google Fonts, and
+// pictures from ourselves, from data: URLs (the employee photographs are
+// stored that way) and from blob: (a file being previewed before upload).
+// Anything not on these lists does not load, which is the point.
+// ══════════════════════════════════════════════════════
+const CSP = {
+  useDefaults: false,
+  directives: {
+    'default-src': ["'self'"],
+    'script-src': ["'self'", "'unsafe-inline'",
+      'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+    'style-src': ["'self'", "'unsafe-inline'",
+      'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com',
+      'https://fonts.googleapis.com'],
+    'font-src': ["'self'", 'data:',
+      'https://cdnjs.cloudflare.com', 'https://fonts.gstatic.com'],
+    'img-src': ["'self'", 'data:', 'blob:'],
+    'connect-src': ["'self'"],
+    'object-src': ["'none'"],
+    'base-uri': ["'self'"],
+    'form-action': ["'self'"],
+    'frame-ancestors': ["'none'"],
+    'frame-src': ["'none'"],
+  },
+};
+
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: CSP,
   crossOriginEmbedderPolicy: false,
   // Both the app and the customer pages pull fonts and icons from CDNs, and
   // the liner book draws its pictures from our own origin into canvases.

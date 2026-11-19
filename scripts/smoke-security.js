@@ -229,10 +229,27 @@ const NL = String.fromCharCode(10);
     check('the shared browser scripts may still be cached',
       /max-age/.test(h(asset, 'cache-control')), h(asset, 'cache-control'));
 
-    // CSP stays off until the inline handlers are gone. Said here so the
-    // next person reads it as a decision rather than a miss.
-    check('CSP is deliberately not on yet (inline handlers)',
-      !h(page, 'content-security-policy'));
+    // ── THE POLICY, AND THE HALF OF IT THAT IS NOT DONE ──
+    //
+    // What a page may load and where it may send things. The script half
+    // still carries 'unsafe-inline', because 549 onclick= handlers across
+    // these views would all stop working without it - that is its own piece
+    // of work. The rest is on, and the rest is what turns a script that does
+    // get in from a theft into a dead end. scripts/browse-csp.js opens every
+    // screen in a real browser to prove none of it refuses the office's own
+    // pages.
+    const csp = h(page, 'content-security-policy');
+    check('every page carries a policy', !!csp, csp);
+    check('a script cannot send anything to another host',
+      /connect-src 'self'/.test(csp), csp);
+    check('no plugin objects at all', /object-src 'none'/.test(csp));
+    check('an injected <base> cannot repoint our own URLs',
+      /base-uri 'self'/.test(csp));
+    check('a form cannot be made to post somewhere else',
+      /form-action 'self'/.test(csp));
+    check('and nobody may frame us', /frame-ancestors 'none'/.test(csp));
+    check('the inline-script debt is still named in the policy',
+      /script-src [^;]*'unsafe-inline'/.test(csp), csp);
 
     // ══════════════════════════════════════════════════
     // 4. GUESSING PASSWORDS
@@ -1055,8 +1072,10 @@ const NL = String.fromCharCode(10);
       body: new URLSearchParams({ email: rsEmail, password: 'reset-probe-123' }),
     });
     const rsOtherCookie = (rsOther.headers.get('set-cookie') || '').split(';')[0];
+    const rsOtherBefore = await go('/api/orders', { headers: { cookie: rsOtherCookie } });
     check('that other session works before the reset',
-      (await go('/api/orders', { headers: { cookie: rsOtherCookie } })).status === 200);
+      rsOtherBefore.status === 200,
+      { status: rsOtherBefore.status, gotCookie: !!rsOtherCookie });
 
     const rsSet = await rsPost('/reset',
       { email: rsEmail, code: rsSecond.code, password: 'a-new-password-1' });
