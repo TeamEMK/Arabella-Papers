@@ -228,7 +228,7 @@ router.get('/:brand/stock', requireClient, async (req, res) => {
   const brand = brandOf(req);
   try {
     const [rows] = await db.query(
-      `SELECT category, code, name, thickness, status
+      `SELECT category, code, name, status
          FROM stock_items
         WHERE is_deleted = 0
         ORDER BY category ASC, code ASC, name ASC`);

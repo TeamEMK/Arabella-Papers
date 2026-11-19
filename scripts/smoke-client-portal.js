@@ -298,9 +298,12 @@ const NL = String.fromCharCode(10);
     check('the stock room opens', shelf.status === 200, shelf.status);
     check('and it lists what the office is holding',
       /CP-540/.test(shelfHtml) && /Ebony/.test(shelfHtml) && /Colorplan/.test(shelfHtml));
-    check('with the thickness and the state beside it',
-      /540 gsm/.test(shelfHtml) && /In Stock/.test(shelfHtml)
-      && /Out of Stock/.test(shelfHtml));
+    check('with the state beside it',
+      /In Stock/.test(shelfHtml) && /Out of Stock/.test(shelfHtml));
+    // The office asked for the thickness to come off this page. It is not
+    // read from the table at all, so there is no version of it that shows.
+    check('and no thickness column, nor the figures behind it',
+      !/Thickness/i.test(shelfHtml) && !/540 gsm/.test(shelfHtml));
     check('the third state is kept as the sentence the office wrote',
       /Please confirm before placing an order/.test(shelfHtml));
     // THE ONE THAT MATTERS.

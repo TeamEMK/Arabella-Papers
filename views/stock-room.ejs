@@ -8,7 +8,7 @@
   THE FOURTH DOOR: WHAT IS ON THE SHELF
 
   The office keeps this list on its own Stock screen - series, code,
-  thickness and whether it is in. A customer asking "do you have Colorplan
+  and whether it is in. A customer asking "do you have Colorplan
   Ebony in 540?" was a phone call; this is that list, read-only, in the
   same room as the liner book and the catalogue.
 
@@ -135,7 +135,6 @@
     font-size: .92rem; color: #e2ded4; vertical-align: top;
   }
   td.code { font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; color: var(--gold-lit); white-space: nowrap; }
-  td.thick { color: var(--dim); white-space: nowrap; }
 
   /* In, out, or ask. Said in words as well as colour - the office's own
      third state is a sentence, not a state. */
@@ -165,10 +164,11 @@
     .creed { display: none; }
     .main, .foot { margin-left: 0; }
     .masthead, .sheets, .foot, .empty { padding-left: 18px; padding-right: 18px; }
-    /* A table of five columns does not fit a phone, and a scrollbar under
-       it is easier to use than four columns squeezed to nothing. */
+    /* Three columns, and the status is a whole sentence on one of the
+       three states, so it still wants more room than a phone has. A
+       scrollbar under the shelf is easier than squeezing it. */
     .shelf { overflow-x: auto; }
-    table { min-width: 560px; }
+    table { min-width: 460px; }
   }
 </style>
 </head>
@@ -192,7 +192,7 @@
   <div class="seek-label">Search the stock</div>
   <div class="seek">
     <i class="fas fa-search"></i>
-    <input type="text" id="q" autocomplete="off" placeholder="colorplan, 540, ebony…">
+    <input type="text" id="q" autocomplete="off" placeholder="colorplan, ebony, vellum…">
   </div>
 
   <div class="cats" id="cats"></div>
@@ -249,7 +249,7 @@ var open = '';   // which series is showing; '' is all of them
 
 function matches(i, needle) {
   if (!needle) return true;
-  return [i.category, i.code, i.name, i.thickness, i.status]
+  return [i.category, i.code, i.name, i.status]
     .join(' ').toLowerCase().indexOf(needle) > -1;
 }
 
@@ -276,7 +276,7 @@ function draw() {
 
   if (!rows.length) {
     document.getElementById('sheets').innerHTML =
-      '<div class="empty">Nothing here by that name. Try the series, the code, or a thickness.</div>';
+      '<div class="empty">Nothing here by that name. Try the series or the code.</div>';
     return;
   }
 
@@ -285,12 +285,11 @@ function draw() {
   rows.forEach(function (i) { (by[i.category] = by[i.category] || []).push(i); });
   document.getElementById('sheets').innerHTML = Object.keys(by).sort().map(function (c) {
     return '<section class="shelf"><h2>' + esc(c) + '</h2>'
-      + '<table><thead><tr><th>Code</th><th>Paper</th><th>Thickness</th><th>Status</th></tr></thead><tbody>'
+      + '<table><thead><tr><th>Code</th><th>Paper</th><th>Status</th></tr></thead><tbody>'
       + by[c].map(function (i) {
         return '<tr>'
           + '<td class="code">' + (esc(i.code) || '—') + '</td>'
           + '<td>' + (esc(i.name) || '—') + '</td>'
-          + '<td class="thick">' + (esc(i.thickness) || '—') + '</td>'
           + '<td>' + pill(i.status) + '</td>'
           + '</tr>';
       }).join('')
