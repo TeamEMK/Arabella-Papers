@@ -714,6 +714,12 @@
 
     table.mcard td {
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      /* Wrap only when it has to. A cell that fits is laid out exactly as
+         before; one that does not puts the overflow on a second line instead
+         of off the side of the card. The Orders Dashboard has four buttons in
+         its action cell - view, edit, delete, update - and at 44px each they
+         needed 372px of a 330px card, so Update Status was simply cut off. */
+      flex-wrap: wrap; row-gap: 6px;
       border: 0; border-bottom: 1px solid #f1f3f5;
       padding: 9px 12px; text-align: right; white-space: normal; word-break: break-word;
     }
@@ -724,6 +730,16 @@
       font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
       color: #6c757d;
     }
+    /* THREE OR MORE BUTTONS GET THE LINE TO THEMSELVES.
+       Wrapping alone stopped the Orders Dashboard cutting its fourth button
+       off, but left it stranded under the other three on a line of its own,
+       pushed to the far side by the space-between that holds a label and its
+       value apart. With the label given the full width instead, all four sit
+       together on the next line, where 4 x 44px and their gaps fit easily.
+       Cells with one or two buttons are untouched and still read as a row. */
+    table.mcard td:has(> .btn:nth-of-type(3)) { justify-content: flex-end; }
+    table.mcard td:has(> .btn:nth-of-type(3))::before { flex: 0 0 100%; }
+
     /* A cell with no heading - the checkbox, the row number - would show an
        empty label and a lot of empty space. */
     table.mcard td[data-label=""]::before { display: none; }
