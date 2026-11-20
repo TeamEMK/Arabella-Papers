@@ -1,6 +1,6 @@
 {
-  "name": "Arabella Papers FMS",
-  "short_name": "Arabella",
+  "name": "Arabella Papers",
+  "short_name": "Arabella Papers",
   "description": "Orders, production, dispatch and the rest of the floor, on a phone.",
   "start_url": "/app",
   "scope": "/",
