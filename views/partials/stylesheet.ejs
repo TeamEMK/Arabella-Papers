@@ -25,7 +25,22 @@
   .bg-light-glass { background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.1); }
   .bg-light-glass .card-header { background: transparent !important; }
   .smooth-ui { transition: all 0.3s cubic-bezier(0.25,0.8,0.25,1); }
-  .card.smooth-ui:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.15) !important; }
+  /* ONLY WHERE THERE IS A POINTER TO HOVER WITH.
+     A touch screen has no hover, so it fakes one: the card you tapped keeps
+     :hover until you tap somewhere else. That lifted the card by 3px - and a
+     transformed element becomes the containing block for everything fixed
+     inside it, so every modal written inside one of these cards was yanked
+     out of the screen's coordinates and into the card's.
+
+     What that looked like: tap Cancel on the SCOT note box, the sheet drops
+     392px in the 60ms before the click is delivered, the click lands on the
+     backdrop where the button used to be, and the box never closes. The
+     finger was in the right place; the button had moved.
+
+     (hover: hover) keeps the lift on a desktop exactly as it was. */
+  @media (hover: hover) {
+    .card.smooth-ui:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.15) !important; }
+  }
 
   /* COMBO INPUT
      These fields are <input list="..."> datalists, not <select>s, so the
@@ -534,7 +549,9 @@
      screen, which is what the punch form did. */
   @media (max-width: 768px) {
     .modal-dialog {
-      margin: 0; position: absolute; bottom: 0; left: 0; right: 0;
+      /* fixed, not absolute: the sheet is pinned to the screen itself rather
+         than to the scrolling box around it, so nothing can carry it away. */
+      margin: 0; position: fixed; bottom: 0; left: 0; right: 0;
       max-width: 100%; width: 100%;
     }
     /* A centred dialog holds its box in the middle of the screen, which is
@@ -557,7 +574,19 @@
     }
     .modal-content {
       border-radius: 14px 14px 0 0; border: 0;
-      max-height: 92dvh; display: flex; flex-direction: column;
+      /* svh, NOT dvh. dvh is the height the screen has AT THIS MOMENT, and
+         on a phone that changes the instant the address bar slides away -
+         which is exactly what a tap near the bottom of the screen does.
+
+         The sheet sits on the bottom edge, so when the viewport grew from
+         633px to 720px the whole sheet dropped with it: Cancel moved from
+         y=599 to y=969 in the 60ms between the finger landing and the click
+         being delivered, the click fell on the backdrop instead of the
+         button, and the box appeared not to close at all.
+
+         svh is the height with the browser's bars SHOWING - the smallest it
+         gets - so it does not move when they hide. */
+      max-height: 92svh; display: flex; flex-direction: column;
       padding-bottom: env(safe-area-inset-bottom);
     }
     /* A bar to say it can be dragged away, the way a phone sheet looks. */
