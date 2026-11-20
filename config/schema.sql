@@ -45,27 +45,37 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   INDEX idx_login_attempts_lock (locked_until)
 );
 
--- Every row a delete button has ever removed, kept before it went.
--- See utils/archive.js for why: without this, a mistaken delete and a
--- deliberate one leave exactly the same trace, which is none.
+-- ── THE ARCHIVE OF DELETED ROWS ──
+--
+-- This table BELONGS TO THE TASKS MODULE (modules/tasks/schema.sql), which
+-- has been copying deleted tasks, comments and users into it since the 5th
+-- of November. utils/archive.js writes the app's own deleted rows into the
+-- same one, in the same columns.
+--
+-- It is repeated here, identically, for one reason: the module builds its
+-- tables on the first /api/tasks request, and a delete may well come first.
+-- The two definitions MUST stay the same - scripts/smoke-security.js checks
+-- that they do, because the day they differed the office could not delete
+-- anything at all: the test database got this file's table, every test
+-- passed, and live - which had the module's - refused every INSERT.
 CREATE TABLE IF NOT EXISTS deleted_records (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  table_name VARCHAR(64) NOT NULL,
-  -- The order_id, the numeric id, or the email - whichever that table calls
-  -- a record. Kept beside the payload so a row can be found without
-  -- reading every JSON blob.
-  record_key VARCHAR(191) DEFAULT '',
-  -- The whole row as it was. LONGTEXT because an order is 130 columns, and
-  -- image bytes are deliberately NOT in here.
-  payload LONGTEXT,
-  deleted_by VARCHAR(191) DEFAULT '',
-  deleted_by_email VARCHAR(191) DEFAULT '',
-  route VARCHAR(255) DEFAULT '',
-  reason VARCHAR(255) DEFAULT '',
-  deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_deleted_table (table_name, record_key),
-  INDEX idx_deleted_when (deleted_at)
-);
+  source_table VARCHAR(64) NOT NULL,
+  record_id INT DEFAULT NULL,
+  record_data LONGTEXT NOT NULL,
+  summary VARCHAR(255) DEFAULT '',
+  deleted_by INT DEFAULT NULL,
+  deleted_by_name VARCHAR(255) DEFAULT '',
+  deleted_by_role VARCHAR(20) DEFAULT '',
+  deleted_via VARCHAR(120) DEFAULT '',
+  delete_reason TEXT,
+  restored_at TIMESTAMP NULL DEFAULT NULL,
+  restored_by INT DEFAULT NULL,
+  deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_source (source_table, record_id),
+  INDEX idx_deleted_by (deleted_by),
+  INDEX idx_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- One row per scheduled job per day, written BEFORE the job does anything.
 -- A retry's insert collides with it and the job is skipped rather than

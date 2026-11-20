@@ -143,7 +143,24 @@ const CSP = {
     'font-src': ["'self'", 'data:',
       'https://cdnjs.cloudflare.com', 'https://fonts.gstatic.com'],
     'img-src': ["'self'", 'data:', 'blob:'],
-    'connect-src': ["'self'"],
+    // ── THE ONE PLACE A PAGE TALKS TO SOMEBODY ELSE ──
+    //
+    // The vector and design files go from the designer's own machine
+    // straight to Google Drive: this server asks Google for a resumable
+    // upload session and the BROWSER then PUTs fifty megabytes to the
+    // address Google hands back. Vercel refuses a body over 4.5MB, so
+    // there is no version of this that goes through us.
+    //
+    // connect-src 'self' alone blocked that PUT - the office could not
+    // upload a file at all, and the browser's only report of it is a CORS
+    // failure with no status code, which reads as "the upload could not
+    // reach Drive". Google's upload host is named here and nothing else
+    // is; a script that does get in still cannot post the order book
+    // anywhere of its own choosing.
+    // The wildcard is deliberate and narrow: Google hands the browser a
+    // session address of its own choosing, and it is not always on
+    // www.googleapis.com. Still Google, still only for this.
+    'connect-src': ["'self'", 'https://www.googleapis.com', 'https://*.googleapis.com'],
     'object-src': ["'none'"],
     'base-uri': ["'self'"],
     'form-action': ["'self'"],

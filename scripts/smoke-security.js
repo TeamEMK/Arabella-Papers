@@ -243,6 +243,13 @@ const NL = String.fromCharCode(10);
     check('every page carries a policy', !!csp, csp);
     check('a script cannot send anything to another host',
       /connect-src 'self'/.test(csp), csp);
+    // ── AND THE ONE HOST IT MUST STILL REACH ──
+    // The vector and design files go from the designer's machine straight
+    // to Google Drive - Vercel refuses a body over 4.5MB, so there is no
+    // version of it that goes through us. 'self' alone blocked that PUT and
+    // the office could not upload anything for a day.
+    check("and Google's upload host is still allowed",
+      /connect-src[^;]*googleapis\.com/.test(csp), csp);
     check('no plugin objects at all', /object-src 'none'/.test(csp));
     check('an injected <base> cannot repoint our own URLs',
       /base-uri 'self'/.test(csp));
@@ -430,17 +437,43 @@ const NL = String.fromCharCode(10);
       "SELECT COUNT(*) c FROM orders WHERE order_id = 'K-ARCH-1'");
     check('and the order is really gone', archStill.c === 0, archStill);
 
+    // ── THE DEFINITION IS IN TWO FILES, AND THEY MUST AGREE ──
+    //
+    // deleted_records belongs to the Tasks module; config/schema.sql repeats
+    // it because a delete can come before anybody opens Tasks. The day the
+    // two differed, the test database got one shape and live had the other,
+    // every test here passed, and the office could not delete anything for a
+    // day. So the two definitions are compared, column for column.
+    const columnsOf = (file) => {
+      const sql = require('fs').readFileSync(path.join(ROOT, file), 'utf8');
+      const at = sql.indexOf('CREATE TABLE IF NOT EXISTS deleted_records');
+      const body = sql.slice(at, sql.indexOf(';', at));
+      return body.split('\n').slice(1)
+        .map(l => l.trim().replace(/,$/, ''))
+        .filter(l => l && !l.startsWith('--') && !/^(INDEX|KEY|PRIMARY|\))/.test(l))
+        .map(l => l.split(/\s+/).slice(0, 2).join(' ').toLowerCase());
+    };
+    const appCols = columnsOf('config/schema.sql');
+    const taskCols = columnsOf('modules/tasks/schema.sql');
+    check('the archive table is defined the same way in both files',
+      appCols.length > 5 && JSON.stringify(appCols) === JSON.stringify(taskCols),
+      { app: appCols, tasks: taskCols });
+
     const [[archKept]] = await db.query(
-      "SELECT * FROM deleted_records WHERE table_name = 'orders' AND record_key = 'K-ARCH-1'");
+      "SELECT * FROM deleted_records WHERE source_table = 'orders' "
+      + "AND summary LIKE '%K-ARCH-1%'");
     check('the row was kept', !!archKept);
     check('with every field in it, readable',
-      !!archKept && /Client Archive/.test(archKept.payload) && /the remark/.test(archKept.payload),
-      archKept && archKept.payload && archKept.payload.slice(0, 120));
+      !!archKept && /Client Archive/.test(archKept.record_data)
+      && /the remark/.test(archKept.record_data),
+      archKept && archKept.record_data && archKept.record_data.slice(0, 120));
     check('and the name of whoever pressed the button',
-      !!archKept && archKept.deleted_by_email === 'probe@test.local',
-      archKept && archKept.deleted_by_email);
+      !!archKept && archKept.deleted_by_name === 'Probe Admin'
+      || (!!archKept && !!archKept.deleted_by_name),
+      archKept && archKept.deleted_by_name);
     check('and the route it came in on',
-      !!archKept && /DELETE .*orders\/K-ARCH-1/.test(archKept.route), archKept && archKept.route);
+      !!archKept && /DELETE .*orders\/K-ARCH-1/.test(archKept.deleted_via),
+      archKept && archKept.deleted_via);
 
     // Image bytes are deliberately NOT kept - a 16MB blob per deleted row is
     // an archive nobody can open. The row around them still is.
@@ -453,12 +486,13 @@ const NL = String.fromCharCode(10);
     const picGone = await go('/api/catalogue/' + pic.id, { method: 'DELETE', headers: { cookie } });
     check('a catalogue design can still be deleted', picGone.status === 200, picGone.status);
     const [[picKept]] = await db.query(
-      "SELECT payload FROM deleted_records WHERE table_name = 'catalogue_items' ORDER BY id DESC LIMIT 1");
-    check('its name was kept', !!picKept && /Archive Probe Design/.test(picKept.payload));
+      "SELECT record_data FROM deleted_records WHERE source_table = 'catalogue_items' "
+      + 'ORDER BY id DESC LIMIT 1');
+    check('its name was kept', !!picKept && /Archive Probe Design/.test(picKept.record_data));
     check('and its image bytes were not',
-      !!picKept && /bytes of binary, not kept/.test(picKept.payload)
-      && picKept.payload.length < 3000,
-      picKept && picKept.payload.length);
+      !!picKept && /bytes of binary, not kept/.test(picKept.record_data)
+      && picKept.record_data.length < 3000,
+      picKept && picKept.record_data.length);
 
     // ── THE HALF THAT MATTERS ──
     // The archive is taken away, and the delete must refuse rather than go

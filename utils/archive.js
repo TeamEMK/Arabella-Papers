@@ -20,6 +20,22 @@
 // table is missing is an archive nobody can rely on, which is worse than
 // none - the office would believe the copy exists. The route answers with
 // its ordinary 500 and the record is still there to try again.
+//
+// ── ONE ARCHIVE TABLE, NOT TWO ──
+//
+// `deleted_records` is NOT this file's table. It belongs to the Tasks
+// module (modules/tasks/schema.sql), which has been copying deleted tasks,
+// comments and users into it since the 5th of November. This file writes
+// into the same one, in the same columns.
+//
+// Said plainly because getting it wrong cost the office a day: this file
+// first shipped with columns of its own invention (table_name, payload,
+// route...) and a CREATE TABLE in config/schema.sql to match. On a fresh
+// test database that CREATE won, so every test passed; on live the Tasks
+// module's table already existed, CREATE IF NOT EXISTS did nothing, and
+// every INSERT died on "Unknown column 'table_name'". Deletes failed
+// closed - correctly - and the office saw "the server is busy" four times
+// in a row with the order still sitting there.
 // ══════════════════════════════════════════════════════
 const db = require('../config/db');
 
@@ -53,25 +69,45 @@ function tidy(row) {
  * @param req    the request, for who pressed the button
  * @param reason a short note, e.g. 'order deleted by SuperAdmin'
  */
+/** What a person would call this row: an order number, an email, a name. */
+function summaryOf(row) {
+  const bits = [row.order_id, row.code, row.name, row.email, row.username,
+    row.client_name, row.dealer_name].filter(Boolean);
+  return String(bits.join(' · ') || ('#' + (row.id || '?'))).slice(0, 255);
+}
+
 async function keepCopy(table, where, params, req, reason) {
   const [rows] = await db.query(
     'SELECT * FROM `' + table + '` WHERE ' + where, params);
   if (!rows.length) return 0;
 
   const user = (req && req.session && req.session.user) || {};
+  // The office's own id space, not the Tasks module's - they share this
+  // column and nothing joins on it, which is why the name and the role are
+  // written beside it rather than left to be looked up later.
+  const actorId = Number.isInteger(user.id) ? user.id : null;
+  const via = String((req && (req.method + ' ' + req.originalUrl)) || '').slice(0, 120);
+
   for (const row of rows) {
     await db.query(
       `INSERT INTO deleted_records
-         (table_name, record_key, payload, deleted_by, deleted_by_email, route, reason)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (source_table, record_id, record_data, summary,
+          deleted_by, deleted_by_name, deleted_by_role, deleted_via, delete_reason)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         table,
-        String(row.order_id || row.id || row.email || '') .slice(0, 191),
+        // Only a numeric key goes in this column; an order is K-160697, and
+        // the number it would be mangled into is worse than nothing. The id
+        // it is known by is in `summary`, which the Tasks module uses the
+        // same way.
+        Number.isInteger(row.id) ? row.id : null,
         JSON.stringify(tidy(row)),
-        String(user.username || 'unknown').slice(0, 191),
-        String(user.email || '').slice(0, 191),
-        String((req && (req.method + ' ' + req.originalUrl)) || '').slice(0, 255),
-        String(reason || '').slice(0, 255),
+        summaryOf(row),
+        actorId,
+        String(user.username || 'unknown').slice(0, 255),
+        String(user.role || '').slice(0, 20),
+        via,
+        String(reason || '') || null,
       ]);
   }
   return rows.length;
