@@ -1199,6 +1199,9 @@
 </script>
 
 <script src="/js/install-app.js" defer></script>
+<!-- Tells the person when the tab they have had open all week is running an
+     old build, and offers to reload it. See the note in the file. -->
+<script src="/js/version-watch.js" defer></script>
 <script>
   // Registered after load so it never competes with the page's own requests.
   if ('serviceWorker' in navigator) {

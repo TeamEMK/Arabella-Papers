@@ -46,6 +46,7 @@ const pmsApi = require('./routes/api/pms');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const BUILD_ID = require('./utils/buildId');
 const isServerless = !!process.env.VERCEL;
 
 // ── SESSION STORE (MySQL) ──
@@ -417,6 +418,22 @@ app.use('/api/recruitment', recruitmentApi);
 // the login. A new hire has no account here - the token in the emailed link is
 // what says whose form this is, and it is checked on both of them. Everything
 // an employee of Arabella does with that form is in /api/recruitment instead.
+// ── WHICH BUILD IS RUNNING ──
+//
+// Every page of this app is one shell whose CSS and most of whose JS are
+// written inside it, and the sections are swapped in by fetch - so a tab
+// left open, or the app installed on a phone, goes on running the build it
+// was opened with no matter how many times it is deployed. Nothing in the
+// browser notices, and the symptoms look like bugs that were fixed days ago.
+//
+// The page asks here now and then and reloads itself when the answer stops
+// matching what it saw at load. No store: a cached answer is the one thing
+// that would make this useless.
+app.get('/api/version', (req, res) => {
+  res.set('Cache-Control', 'no-store, must-revalidate');
+  res.json({ build: BUILD_ID });
+});
+
 app.use('/api/joining', joiningApi);
 app.use('/api/scot', scotApi);
 app.use('/api/cron', cronApi);
