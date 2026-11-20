@@ -250,6 +250,14 @@ async function scot_saveNote(btn) {
 // at this width, so the row has to open the box as well.
 document.getElementById('scot_tbody').addEventListener('click', function (e) {
   if (e.target.closest('a, button, input, label')) return;
+  // NOT ON A PHONE. Below 768px the list is drawn as cards, so a "row" is a
+  // 400px block holding every field of one client - and the pen is inside it
+  // where it can be seen, rather than off the edge of a wide table. Opening
+  // the box from the row there means reading a long remark, or just steadying
+  // a scroll with a thumb, puts the editor on the screen uninvited.
+  //
+  // 768 is the width the cards start at; see table.mcard in the stylesheet.
+  if (window.innerWidth <= 768) return;
   var tr = e.target.closest('tr.scot-row');
   if (tr) scot_edit(tr);
 });
