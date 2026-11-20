@@ -122,10 +122,52 @@
       <i class="fas <%= tab.icon %>"></i><span><%= tab.name %></span>
     </button>
   <% }); %>
-  <button type="button" class="bnav-link" id="bnavMore" onclick="sideOpenDrawer()">
+  <button type="button" class="bnav-link" id="bnavMore" onclick="moreOpen()">
     <i class="fas fa-ellipsis"></i><span>More</span>
   </button>
 </nav>
+
+<%# EVERYTHING ELSE, FROM THE BOTTOM.
+    More used to pull the side drawer in from the left - the panel built for a
+    desktop, read one line at a time, with the thumb reaching across the screen
+    to it. The rest of the sections come up from the bottom instead, beside the
+    bar they were tapped from, as tiles big enough to hit.
+
+    Every section this person has is here, not only the ones the bar had no
+    room for: somebody looking for a page should not have to work out whether
+    it was one of the first four. %>
+<div class="more-backdrop d-lg-none" onclick="moreClose()"></div>
+<div class="more-sheet d-lg-none" id="moreSheet" role="dialog" aria-modal="true" aria-label="All sections">
+  <div class="more-grip" aria-hidden="true"></div>
+  <div class="more-head">
+    <span class="more-title">All sections</span>
+    <button type="button" class="more-close" onclick="moreClose()" aria-label="Close">&times;</button>
+  </div>
+
+  <div class="more-body">
+    <% let moreGroup = null; %>
+    <% navMenu.forEach(function(tab) { %>
+      <% if (tab.group && tab.group !== moreGroup) { moreGroup = tab.group; %>
+        <div class="more-group"><%= tab.group %></div>
+      <% } %>
+      <button type="button" class="more-tile" id="<%= tab.id %>MTab" onclick="loadPage('<%= tab.id %>')">
+        <i class="fas <%= tab.icon %>"></i>
+        <span><%= tab.name %></span>
+        <span class="more-count" id="<%= tab.id %>MCount" hidden></span>
+      </button>
+    <% }); %>
+  </div>
+
+  <div class="more-foot">
+    <div class="more-who">
+      <i class="fas fa-user-circle"></i>
+      <span><strong><%= user.username %></strong><small><%= user.role %></small></span>
+    </div>
+    <form method="POST" action="/logout" class="more-out">
+      <button type="submit" class="btn btn-danger w-100"><i class="fas fa-right-from-bracket me-2"></i>Logout</button>
+    </form>
+  </div>
+</div>
 
 <!-- MAIN CONTENT -->
 <div id="mainContent">
@@ -372,6 +414,18 @@
 
   function sideOpenDrawer() { document.body.classList.add('side-open'); }
   function sideCloseDrawer() { document.body.classList.remove('side-open'); }
+
+  // The sheet of every section, opened from More on the bottom bar. Scroll is
+  // held still behind it, the way the drawer already does it, or the list
+  // underneath slides about while somebody is reading this one.
+  function moreOpen() {
+    document.body.classList.add('more-open');
+    var cur = document.querySelector('.side-nav .side-link.active');
+    var id = cur ? cur.id.replace(/Tab$/, '') : null;
+    document.querySelectorAll('.more-tile').forEach(function (t) { t.classList.remove('active'); });
+    if (id) { var t = document.getElementById(id + 'MTab'); if (t) t.classList.add('active'); }
+  }
+  function moreClose() { document.body.classList.remove('more-open'); }
 
   // The logo is served from /public. Until someone drops the file in, and if it
   // is ever renamed, fall back to a wordmark rather than leaving a broken image
@@ -649,6 +703,7 @@
     // On mobile the panel is a drawer sitting over the content — picking a page
     // is the moment to get it out of the way.
     sideCloseDrawer();
+    moreClose();
 
     // Show inline spinner
     document.getElementById('contentArea').innerHTML =
