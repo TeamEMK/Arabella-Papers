@@ -8,6 +8,17 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"/>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <%- include('partials/stylesheet') %>
+
+  <!-- INSTALLABLE ON A PHONE. The manifest is what lets a browser offer to
+       add this to a home screen; sw.js only exists because a browser will
+       not make that offer without one, and it caches nothing - see the note
+       at the top of that file. -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#212529">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Arabella">
 </head>
 <body>
 <script>
@@ -1185,6 +1196,16 @@
       if (!document.hidden) vd_refresh();
     });
   })();
+</script>
+
+<script src="/js/install-app.js" defer></script>
+<script>
+  // Registered after load so it never competes with the page's own requests.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () { /* http, or blocked - the app works the same */ });
+    });
+  }
 </script>
 </body>
 </html>
