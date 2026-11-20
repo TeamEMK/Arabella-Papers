@@ -27,7 +27,7 @@
     <div class="card-header bg-transparent border-0"><h5 class="mb-0 text-dark fw-bold"><i class="fas fa-users me-2"></i>Staff Records</h5></div>
     <div class="card-body p-0">
       <div class="table-responsive" data-fill-height style="overflow-y:auto;position:relative;">
-        <table class="table table-hover table-striped mb-0 text-nowrap">
+        <table class="mcard table table-hover table-striped mb-0 text-nowrap">
           <thead class="table-dark">
             <tr>
               <th style="position:sticky;top:0;z-index:1020;background:#212529;color:white;border-top:0;">#</th>
@@ -193,8 +193,10 @@ function hr_render() {
       <td class="fw-bold">${hr_esc(e.name)}</td>
       <td>${hr_esc(e.designation) || '-'}</td>
       <td>${hr_esc(e.department) || '-'}</td>
-      <td>${hr_esc(e.mobile) || '-'}</td>
-      <td>${hr_esc(e.email) || '-'}</td>
+      <!-- Tappable on a phone: this is the staff directory, and a number
+           that is only text has to be copied out by hand to ring it. -->
+      <td>${e.mobile ? `<a class="contact-link" href="tel:${hr_esc(e.mobile)}">${hr_esc(e.mobile)}</a>` : '-'}</td>
+      <td>${e.email ? `<a class="contact-link" href="mailto:${hr_esc(e.email)}">${hr_esc(e.email)}</a>` : '-'}</td>
       <td>${hr_esc(e.reporting_manager) || '-'}</td>
       <td>${hr_esc(e.date_of_joining) || '-'}</td>
       <td>${hr_esc(e.working_status) || '-'}</td>

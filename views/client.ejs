@@ -32,6 +32,13 @@
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
+    /* The engraved oval behind the card is centred on the gate, and the gate
+       is narrower than the window - so on a wide screen the ornament hung
+       about 52px past the right edge and gave the page a horizontal
+       scrollbar over empty space. It is decorative and already runs off the
+       side by design; clipping it at the edge of the page takes the
+       scrollbar away without moving anything that can be seen. */
+    html, body { overflow-x: hidden; }
     /* The whole window, so the card sits in the middle of the screen and the
        sign-off sits on the bottom of it. Without this the page is only as
        tall as the card and leaves a band of dead black underneath, which
@@ -473,6 +480,7 @@
 
     @media (max-width: 860px) { .doors { grid-template-columns: 1fr; max-width: 430px; } }
   </style>
+  <link rel="stylesheet" href="/css/public-mobile.css">
 </head>
 <body class="<%= signedIn ? 'inside-page' : '' %>">
 

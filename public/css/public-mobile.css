@@ -1,0 +1,59 @@
+/* ══════════════════════════════════════════════════════
+   THE PAGES WITH NO LOGIN BEHIND THEM, ON A PHONE
+
+   The sign-in screen, the forgotten-password screen, the order tracker, and
+   the customer's own gate in front of the catalogue, the liner book and the
+   quote calculator.
+
+   These pages are not inside the app shell, so none of the mobile work in
+   views/partials/stylesheet.ejs reaches them - each carries its own <style>
+   block and its own look, which is deliberate and is left alone. What is
+   here is touch sizing and nothing else: no colour, no type, no spacing that
+   would change how any of these pages reads.
+
+   The links are named one at a time rather than caught by a rule over every
+   anchor. A blanket rule would also have hit the links wrapping the pictures
+   on the catalogue and the tabs across the customer's portal, and given a
+   line's height to things that are not lines.
+
+   Everything is inside a media query, so a desktop sees none of it.
+   ══════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  /* 16px or iOS zooms the whole page in the moment a field is focused, and
+     leaves it zoomed - so the button under the field ends up off the side of
+     the screen, on the screens everybody has to get through before they can
+     do anything. The tracker was at 14px and the customer's gate at 14.72px.
+
+     Only the size is set; the border, ground and radius each page gives its
+     own fields are untouched. */
+  /* `:not([type="hidden"])` is not a filter here so much as a weight. These
+     pages style their fields through a parent - `.fld input` on the tracker -
+     which outranks a bare `input` however late it is loaded. The :not()
+     carries its argument's weight, so this matches that and wins on being
+     loaded last, without this file having to know any page's class names. */
+  input:not([type="hidden"]),
+  select:not([multiple]),
+  textarea:not([readonly]) { font-size: 16px; }
+
+  /* The way out of a dead end. Somebody who cannot remember their password
+     has no other route, and these were 15 to 20px of target:
+
+       .forgot-link   "Forgotten your password?"  on the staff sign-in
+       .back          "Back to sign in"           on the forgotten screen
+       .linkline a    "Forgotten your password?" and "Register"
+                                                  on the customer's gate  */
+  .forgot-link,
+  .back,
+  .linkline a,
+  /* "Trouble getting in? Write to info@arabellapapers.com" - the last way
+     out of the customer's gate, and the only one that reaches a person. */
+  .help a {
+    display: inline-block;
+    min-height: 44px;
+    line-height: 44px;
+  }
+
+  /* One pixel short, which is the sort of thing only a measurement finds. */
+  .btn { min-height: 44px; }
+}

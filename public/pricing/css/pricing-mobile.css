@@ -1,0 +1,50 @@
+/* ══════════════════════════════════════════════════════
+   THE CALCULATOR ON A PHONE
+
+   The calculator is the one screen in the app whose styling lives out here
+   rather than in views/partials/stylesheet.ejs, so none of the mobile work
+   done there reaches it: .apc input is a stronger selector than the bare
+   input the shared sheet uses, and wins wherever the two meet.
+
+   This file holds only what the phone needs. It is loaded after
+   pricing-calculator.css and changes nothing above 768px, so the calculator
+   on a desktop is byte for byte the screen it has always been.
+
+   One file, not three. The three copies of pricing-calculator.css under
+   /pricing, /pricing-arabella and /pricing-kpc are identical to each other;
+   this is linked alongside whichever of them a page already loads, so a fix
+   here reaches the office's calculator and both brands' public quote pages
+   without being pasted into three files that then drift.
+   ══════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  /* 2.25rem is 36px. Every field on the longest form in the app was eight
+     pixels under the size a thumb hits. */
+  .apc input,
+  .apc select,
+  .apc textarea {
+    min-height: 44px;
+    /* `font: inherit` on the rule this overrides takes the 15px set on .apc,
+       and anything under 16px makes iOS zoom the page in the moment the
+       field is focused - and leave it zoomed, so the next field is off the
+       side of the screen. This is the whole reason the quote form was
+       awkward to fill in on a phone. */
+    font-size: 16px;
+  }
+
+  /* "Start a new quote" and the other plain-text buttons. */
+  .apc .apc-link {
+    min-height: 44px;
+    padding-left: .5rem;
+    padding-right: .5rem;
+  }
+
+  /* "Add another item" and "Add another add-on" - 2.5rem is 40px, and these
+     are the two buttons pressed most while a quote is being built. The
+     primary button is already 3rem and is left alone. */
+  .apc .apc-btn2 { min-height: 44px; }
+
+  /* A number field is read right to left - 1,250 - so it keeps its
+     alignment while it grows. */
+  .apc input[type="number"] { text-align: right; }
+}

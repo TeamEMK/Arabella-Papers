@@ -59,7 +59,7 @@
   <div class="card bg-light-glass shadow-sm smooth-ui p-2">
     <div class="card-body p-2">
       <div class="table-responsive" style="max-height:62vh;overflow:auto;">
-        <table class="table table-hover table-striped mb-0 text-nowrap align-middle">
+        <table class="mcard table table-hover table-striped mb-0 text-nowrap align-middle">
           <thead class="table-dark">
             <tr>
               <th style="position:sticky;top:0;background:#212529;color:#fff;">Company</th>
@@ -220,7 +220,10 @@
           + '</td>'
           + '<td>' + esc(r.contact_person || '—') + '</td>'
           + '<td class="small">' + esc(where || '—') + '</td>'
-          + '<td class="small">' + esc(r.phone || '—') + '</td>'
+          // Tappable, the way the other two prospect lists already have it.
+          // Ringing the business is what this page is for, and on a phone a
+          // number that is only text has to be copied out by hand.
+          + '<td class="small">' + (r.phone ? '<a class="contact-link" href="tel:' + esc(r.phone) + '">' + esc(r.phone) + '</a>' : '—') + '</td>'
           + '<td class="small">' + mail + '</td>'
           + '<td class="small">' + esc(r.status || '—') + '</td>'
           + '<td class="small">' + esc(r.pricing || '—') + '</td>'

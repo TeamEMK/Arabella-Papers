@@ -332,6 +332,32 @@
     .btn, .form-control, .form-select, .input-group-text,
     .side-link, .side-logout, .side-user, .page-link, .nav-link { min-height: 44px; }
     .btn { display: inline-flex; align-items: center; justify-content: center; }
+    /* Height alone is only half a target. The four buttons along the top of
+       the Orders Dashboard wrap their label onto a second line on a phone,
+       which left them 44 tall and 36 wide. */
+    .btn { min-width: 44px; }
+
+    /* ── WHY A SHEET CAME UP INSIDE A CARD ──
+       backdrop-filter makes an element the containing block for everything
+       fixed inside it, so a modal written inside one of these cards stops
+       being positioned against the screen and is positioned against the card
+       instead. The note box on SCOT came up 324px wide, 41px of it below the
+       bottom of the screen, with its Save button on the far side of that
+       edge - and every other box written inside one of these cards is in the
+       same position.
+
+       The blur goes on a phone and the sheets come back to the screen. The
+       card is 95% opaque white already, so what the blur contributes is
+       about a pixel of colour at the edges; on a desktop it is untouched. */
+    .bg-light-glass { backdrop-filter: none; }
+
+    /* A slider is dragged with a thumb    /* A slider is dragged with a thumb, and this one was 16px tall - the
+       speed control on the FMS train. The track stays as it looks; the
+       element around it is what the finger has to land on. */
+    input[type="range"] { min-height: 44px; width: 100%; }
+
+    /* The arrow back out of a category on Envelope Linears was 31x27. */
+    .el-back { min-width: 44px; min-height: 44px; }
 
     /* The X on a modal was 16px of actual target. */
     .btn-close { width: 44px; height: 44px; background-size: 14px; margin: -0.5rem -0.5rem -0.5rem auto; }
@@ -376,59 +402,121 @@
   @media (max-width: 768px) {
     /* ── BATCH 2: THE BOARDS ── */
 
-    /* Dispatch board: the order number is the third cell with only a checkbox
-       and a row number in front of it, so it is the one board where pinning
-       is cheap - 110px held back out of 390. Everywhere else the number sits
-       behind 350px or more of cells and pinning it would eat the screen; see
-       the note in the batch report. */
-    #dispRoot table thead th:nth-child(1),
-    #dispRoot table tbody td:nth-child(1) {
-      position: sticky; left: 0; z-index: 3; width: 30px; min-width: 30px; padding-left: 6px; padding-right: 2px;
-    }
-    #dispRoot table thead th:nth-child(3),
-    #dispRoot table tbody td:nth-child(3) {
-      position: sticky; left: 30px; z-index: 3; min-width: 80px;
-      box-shadow: 2px 0 4px -2px rgba(0,0,0,.22);
-    }
-    /* A sticky cell slides over the ones behind it, so it needs its own
-       ground - a transparent one would show the scrolling row through it. */
-    #dispRoot table tbody td:nth-child(1),
-    #dispRoot table tbody td:nth-child(3) { background: #fff; }
-    #dispRoot table tbody tr:nth-of-type(odd) td:nth-child(1),
-    #dispRoot table tbody tr:nth-of-type(odd) td:nth-child(3) { background: #f2f2f2; }
-    #dispRoot table thead th:nth-child(1),
-    #dispRoot table thead th:nth-child(3) { background: #212529; }
+    /* Dispatch used to pin its checkbox and order number and scroll the other
+       sixteen columns past them. It is cards now, for the same reason
+       Production next door is: the two are the same board at two stages of
+       the same job, and one of them scrolling sideways while the other
+       stacked was the odd thing. Eighteen columns - courier, docket, invoice,
+       three weights - is a parcel's paperwork, which is read one parcel at a
+       time.
+
+       Selecting several at once still works; Production has had a checkbox in
+       a card since it was converted. */
 
     /* The same number is printed twice on this board, once where it has
        always been and once beside Status. That was asked for on a wide screen
-       where both are in view at once; on a phone the second one is 92px of a
-       number already pinned to the left edge. */
+       where both are in view at once; as a card it is the title line repeated
+       halfway down. Held by position rather than by label, because both
+       columns are headed "ID" and matching on the name would take out the
+       one that matters too. */
     #dispRoot table thead th:nth-child(15),
     #dispRoot table tbody td:nth-child(15) { display: none; }
 
     /* Two 30px buttons in a cell are two 30px targets. Give the action cells
        room and let the buttons breathe. */
     td .btn-sm + .btn-sm, td .d-flex > .btn + .btn { margin-left: 4px; }
-    td .btn-sm { min-height: 38px; min-width: 38px; }
+    td .btn-sm { min-height: 44px; min-width: 44px; }
 
     /* The filter header is a button; it was 30px tall. */
     .filter-toggle-btn { min-height: 44px; }
 
-    /* Corrections: the order number is the second cell with only the row
-       number in front of it, so hiding that one number pulls it to the edge
-       and it can be pinned for nothing. The row number is not the order
-       number, is not searchable, and changes the moment a filter does - it is
-       the one column on this page a phone can do without. */
-    #crRoot table thead th:nth-child(1),
-    #crRoot table tbody td:nth-child(1) { display: none; }
-    #crRoot table thead th:nth-child(2),
-    #crRoot table tbody td:nth-child(2) {
-      position: sticky; left: 0; z-index: 3; min-width: 84px;
-      box-shadow: 2px 0 4px -2px rgba(0,0,0,.22);
+    /* Corrections used to be pinned-column-and-scroll: the row number hidden
+       and the order number stuck to the left edge. That has been replaced by
+       cards, because of what the page is for - a correction is read one at a
+       time, like a message, not compared against the nine beside it. Sideways
+       across eleven columns to find out what a client asked for is the wrong
+       shape for the one page in the app that is pure reading.
+
+       The table's own `#` column still goes, for the reason it always did:
+       it is not the order number, it is not searchable, and it changes the
+       moment a filter does. As a line in a card it is pure noise. */
+    #crRoot table.mcard td[data-label="#"],
+    #crRoot table.mcard th:nth-child(1) { display: none; }
+  }
+
+  /* ── BATCH 3: THE CONTROLS EVERY PAGE SHARES ──
+     Three things batch 1 missed, each of which shows up on all 33 pages
+     rather than on one board. Both widths match what the panel already uses. */
+
+  @media (max-width: 991.98px) {
+    /* The two most-pressed buttons in the app were the two that never got the
+       44px treatment: the burger was 34x38 and the drawer's close was 32x32.
+       Both only exist below this width - the markup carries d-lg-none - so a
+       desktop never draws either one. */
+    .topbar-burger {
+      min-width: 44px; min-height: 44px; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
     }
-    #crRoot table tbody td:nth-child(2) { background: #fff; }
-    #crRoot table tbody tr:nth-of-type(odd) td:nth-child(2) { background: #f2f2f2; }
-    #crRoot table thead th:nth-child(2) { background: #212529; }
+    .side-close { width: 44px; height: 44px; flex: 0 0 44px; }
+  }
+
+  @media (max-width: 768px) {
+    /* A select-all in a heading row sits in a th, and the only rule that
+       reached checkboxes in a table was written for td - so the one checkbox
+       that acts on every row at once stayed 16px while the rows below it grew.
+
+       24px rather than 44: a 44px native checkbox draws a 44px square, which
+       on a dark heading row reads as a button. The row around it is 44px tall
+       and the cell has room either side, so the area a thumb can land on is
+       the standard even though the box is not. */
+    th input[type="checkbox"], th .form-check-input,
+    thead input[type="checkbox"], thead .form-check-input {
+      width: 24px; height: 24px; transform: none; margin: 0;
+    }
+    th:has(input[type="checkbox"]), thead td:has(input[type="checkbox"]) {
+      padding-left: 10px; padding-right: 10px;
+    }
+
+    /* ── A CHOICE IN A FORM IS A ROW, NOT A DOT ──
+       Picking the status of an order is the most-used control in the app
+       after the menu, and it was a 22px dot with a label beside it. The label
+       is wired to the input, so the target was always bigger than the dot -
+       but only as big as the words, and "SCOT" is four characters.
+
+       The whole row becomes the target instead: 44px tall, the label filling
+       what is left after the dot. Bootstrap builds .form-check out of a
+       padding-left and a negative margin on the input, so both have to be
+       undone to lay it out as a row. Mobile only - a desktop keeps the dots
+       exactly as they are. */
+    .form-check {
+      display: flex; align-items: center; gap: 10px;
+      min-height: 44px; padding-left: 0; margin-bottom: 0;
+    }
+    .form-check .form-check-input {
+      float: none; margin: 0; flex: 0 0 24px;
+      width: 24px; height: 24px; transform: none;
+    }
+    .form-check .form-check-label { flex: 1; padding: 10px 0; }
+    /* A switch is not a checkbox and must not be squared off into one - the
+       shape is what says it flips rather than ticks. The rule above sized
+       every .form-check-input alike and turned the three switches in the app
+       into 24px squares. Wider than Bootstrap's 2em as well, since this is
+       the width a thumb slides. */
+    .form-check.form-switch .form-check-input {
+      flex: 0 0 48px; width: 48px; height: 26px; border-radius: 26px;
+    }
+    /* Inline groups are meant to sit side by side, so they keep their height
+       but not the full width. */
+    .form-check.form-check-inline { display: inline-flex; width: auto; margin-right: 14px; }
+
+    /* The checkbox on each row of the three boards that pick orders in bulk.
+       scale(1.25) on a 13px box is 16px, which is the smallest target left in
+       the app and sits directly beside the next row's. Same 24px as the
+       heading one, so a column of them lines up. */
+    td input[type="checkbox"], td .form-check-input,
+    .ta_checkbox, .dsp_checkbox, .prod_checkbox {
+      width: 24px; height: 24px; transform: none; margin: 0;
+    }
   }
 
   /* ── MODALS ON A PHONE ──
@@ -441,6 +529,24 @@
     .modal-dialog {
       margin: 0; position: absolute; bottom: 0; left: 0; right: 0;
       max-width: 100%; width: 100%;
+    }
+    /* A centred dialog holds its box in the middle of the screen, which is
+       nothing a sheet already pinned to the bottom needs. */
+    .modal-dialog.modal-dialog-centered { display: block; min-height: 0; }
+
+    /* THE ONE THAT ACTUALLY HELD SAVE OFF THE SCREEN.
+
+       Several boxes wrap their body and footer in a <form>, so the column
+       the sheet lays out is header + form, and the body is a grandchild.
+       A block form has no reason to shrink, so a long form simply ran past
+       the bottom of the sheet carrying its buttons with it - on the Add User
+       box, Save sat 38px below the screen and nothing scrolled to reach it.
+
+       The form becomes the column instead, and the body inside it is what
+       gives way. */
+    .modal-content > form {
+      display: flex; flex-direction: column;
+      flex: 1 1 auto; min-height: 0;
     }
     .modal-content {
       border-radius: 14px 14px 0 0; border: 0;
@@ -456,7 +562,13 @@
     .modal-header.bg-primary::before, .modal-header.bg-dark::before,
     .modal-header.bg-success::before, .modal-header.bg-danger::before,
     .modal-header.bg-warning::before { background: rgba(255,255,255,0.45); }
-    .modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1 1 auto; }
+    /* min-height: 0 is what actually lets the body scroll. A flex item will
+       not shrink below the height of its own content unless it is told it
+       may, so on a form longer than the sheet the body kept its full height
+       and pushed the footer off the bottom of the screen instead - which is
+       what happened to Save and Cancel on the Add User form: header 79 plus
+       body 614 plus footer 121 in a sheet 776 tall. */
+    .modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1 1 auto; min-height: 0; }
     .modal-footer { flex: 0 0 auto; gap: 8px; }
     /* Footer buttons full width, stacked, the primary one on top where the
        thumb lands first. Bootstrap puts them in reverse order on a row, which
@@ -581,6 +693,31 @@
     table.mcard td[data-label=""]::before { display: none; }
     table.mcard td[data-label=""] { justify-content: flex-start; text-align: left; }
 
+    /* The phone number and the email address on the three prospect lists are
+       the point of those pages - the whole reason somebody opens one on a
+       phone is to ring or write to the business they are looking at. Both are
+       links, and both were two pixels under the size a thumb hits. */
+    table.mcard td a {
+      display: inline-flex; align-items: center; min-height: 44px;
+    }
+    /* On a phone these are the two things the page is for, so they look like
+       what they are. `a.contact-link` rather than `.contact-link`: the rule
+       that holds the desktop look is written later in this file, so an even
+       match on weight would let that one win here too. */
+    a.contact-link { color: #0d6efd; text-decoration: underline; }
+
+    /* A cell that holds a field rather than a value - the Manage Data lists
+       are editable in place - kept the width the table gave it, which as a
+       card is wider than the card. An email ran off the right edge with no
+       way to scroll to the rest of it. Flex items do not shrink below their
+       content without min-width, which is what actually does the work here.
+       Checkboxes and radios are excluded: they are a fixed 24px by design. */
+    table.mcard td input:not([type="checkbox"]):not([type="radio"]),
+    table.mcard td select,
+    table.mcard td textarea {
+      min-width: 0; width: 100%; max-width: 100%;
+    }
+
     /* The "nothing matches" row is one cell across the whole table. */
     table.mcard tr[data-mcard-skip] td { display: block; text-align: center; }
     table.mcard tr[data-mcard-skip] td::before { display: none; }
@@ -590,14 +727,23 @@
     table.mcard td[data-label="#"] { display: none; }
 
     /* The order number is what the card IS, so it reads as the card's title
-       rather than as one more field. */
+       rather than as one more field. The three prospect lists are named after
+       the business rather than numbered, so their first column is the title
+       on those - a card headed "95 design" is found by eye the way an order
+       is found by its number. */
     table.mcard td[data-label="ID"],
-    table.mcard td[data-label="Order"] {
+    table.mcard td[data-label="Order"],
+    table.mcard td[data-label="Company"],
+    table.mcard td[data-label="Retailer"],
+    table.mcard td[data-label="Dealer"] {
       background-color: #f1f3f5; border-bottom: 1px solid #e6e8eb;
       font-weight: 700; font-size: 15px;
     }
     table.mcard td[data-label="ID"]::before,
-    table.mcard td[data-label="Order"]::before { color: #868e96; }
+    table.mcard td[data-label="Order"]::before,
+    table.mcard td[data-label="Company"]::before,
+    table.mcard td[data-label="Retailer"]::before,
+    table.mcard td[data-label="Dealer"]::before { color: #868e96; }
 
     /* Eighteen fields make a tall card whatever is done, so every row is kept
        as short as it can be read at. */
@@ -612,21 +758,52 @@
     [data-fill-height]:has(table.mcard) { max-height: none; }
   }
 
+  /* ── A NUMBER YOU CAN RING, WITHOUT CHANGING THE DESKTOP ──
+     The staff directory's mobile and email, and the phone number on the
+     Prospects list, were plain text: on a phone the only way to ring one was
+     to copy it out by hand. They are links now.
+
+     A link is blue and underlined, and on a desktop those cells were black
+     text - so left alone this would have been a visible change to a screen
+     that is not supposed to change. Here they inherit the cell's own colour,
+     which is exactly how they looked before; the mobile block below gives
+     them the link's appearance, where being tappable is the point.
+
+     They are clickable at every width either way. Only the look is held
+     back. The other two prospect lists are untouched: their numbers were
+     already links and already blue.
+     ══════════════════════════════════════════════════════ */
+  .contact-link { color: inherit; text-decoration: none; }
+
+  /* ── A BUTTON GROUP THAT HAS TO STAY ON ONE LINE ──
+     A group is meant to read as one control, so it does not wrap - four of
+     them across the Leave filter, four across Tasks. When they do not fit,
+     the only thing left to give is the padding, which is why these used to
+     shrink. That was set at 480px and it was too wide a net: on a 390px
+     phone the four Leave buttons need about 335px with their padding intact,
+     so they fitted all along and "All" was squeezed to 27px for nothing.
+
+     360px is where the four of them genuinely stop fitting. Above it they
+     keep the full target; at or below it they shrink rather than push the
+     page sideways. */
+  @media (max-width: 360px) {
+    .btn-group > .btn { min-width: 0; padding-left: .4rem; padding-right: .4rem; }
+  }
+
+  /* The buttons that act on a row are never a filter bar: there are two of
+     them, and by this width the cell is a full-width line of a card. They
+     keep the whole target at every size - shrinking them is how Step
+     Settings ended up with 25px arrows. */
+  @media (max-width: 768px) {
+    td .btn-group > .btn { min-width: 44px; padding-left: .5rem; padding-right: .5rem; }
+  }
+
   @media (max-width: 480px) {
     /* The tightest phones. Padding is the first thing to go: on a 320px screen
        24px of it either side is 15% of the width. */
     .container-fluid { padding-left: 12px; padding-right: 12px; }
     .card-body { padding: 12px; }
     .modal-body { padding: 14px; }
-
-    /* Two rows were still tipping a 320px screen over by a few pixels, and
-       both for the same reason: the wider padding that made buttons tappable
-       also made them wider, and these two do not wrap.
-
-       A button group is meant to stay on one line - four of them across the
-       Leave filter - so its buttons give the padding back and shrink instead
-       of breaking the group apart. */
-    .btn-group > .btn { min-width: 0; padding-left: .4rem; padding-right: .4rem; }
 
     /* The speed row on FMS puts its Pause button at the far end with ms-auto
        and never wraps; so do a few other control rows. They wrap here rather

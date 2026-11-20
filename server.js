@@ -413,8 +413,20 @@ app.use('/api/envelope-linears', envelopeLinearsApi);
 require('./modules/tasks/arabella')(app);
 
 // ── 404 FALLBACK ──
+//
+// The viewport meta is what stops a phone rendering this at desktop width
+// and then shrinking it, which left the one link on the page too small to
+// read, never mind hit. The link is given a target to match the rest of the
+// app rather than the 92x17 it was.
 app.use((req, res) => {
-  res.status(404).send('<h2>404 - Page Not Found</h2><a href="/">Back to Home</a>');
+  res.status(404).send(
+    '<!doctype html><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    + '<title>404 - Page Not Found</title>'
+    + '<style>body{font-family:system-ui,Segoe UI,sans-serif;margin:0;padding:40px 20px;text-align:center}'
+    + 'a{display:inline-block;min-height:44px;line-height:44px;padding:0 16px}</style>'
+    + '<h2>404 - Page Not Found</h2><a href="/">Back to Home</a>'
+  );
 });
 
 // ── ERROR HANDLER ──
