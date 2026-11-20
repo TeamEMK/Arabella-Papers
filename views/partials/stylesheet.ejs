@@ -42,6 +42,27 @@
     .card.smooth-ui:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.15) !important; }
   }
 
+  /* ── A BUTTON THAT DISAPPEARED WHEN YOU TOUCHED IT ──
+     Twenty-seven buttons in this app carry .text-dark beside
+     .btn-outline-dark - "Categories", "Refresh", "Manage" and the rest.
+     .text-dark is an !important, so it also wins on hover, where the button
+     fills with #212529 and Bootstrap's white label loses: dark text on a
+     dark ground, which reads as a solid black box with nothing in it.
+
+     A mouse passes over and it comes back. A touch screen has no hover so it
+     fakes one and leaves it stuck on the last thing tapped, so on a phone the
+     button somebody just pressed is the one that vanishes - which is exactly
+     how this was found, on Envelope Linears.
+
+     The label goes white when the button fills, which is what Bootstrap
+     intended before the utility class overrode it. */
+  .btn-outline-dark.text-dark:hover,
+  .btn-outline-dark.text-dark:focus,
+  .btn-outline-dark.text-dark:active,
+  .btn-outline-dark.text-dark:hover i,
+  .btn-outline-dark.text-dark:focus i,
+  .btn-outline-dark.text-dark:active i { color: #fff !important; }
+
   /* COMBO INPUT
      These fields are <input list="..."> datalists, not <select>s, so the
      browser draws no arrow on them — sitting beside a real select they looked
