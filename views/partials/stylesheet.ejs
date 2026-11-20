@@ -349,7 +349,14 @@
        The blur goes on a phone and the sheets come back to the screen. The
        card is 95% opaque white already, so what the blur contributes is
        about a pixel of colour at the edges; on a desktop it is untouched. */
-    .bg-light-glass { backdrop-filter: none; }
+    /* !important, and it is needed. The Orders Dashboard redefines
+       .bg-light-glass in its own <style>, blur and all, and that block is
+       injected into the page - after this file, which is in the head. Same
+       weight, later wins, so the blur came back and with it the trap: the
+       sheet measured 324px inside a 390px screen with Save and Cancel below
+       the bottom edge. Any page that redefines this class would do the same,
+       so the phone's copy is made to win outright. */
+    .bg-light-glass { backdrop-filter: none !important; }
 
     /* A slider is dragged with a thumb    /* A slider is dragged with a thumb, and this one was 16px tall - the
        speed control on the FMS train. The track stays as it looks; the
