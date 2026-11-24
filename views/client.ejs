@@ -13,12 +13,18 @@
   <%# THREE FACES, EACH WITH ONE JOB.
       Bodoni Moda is a Didone - hairline thins against heavy stems, the cut
       the fashion books have been set in for two hundred years - and it
-      carries every heading. Italiana is its opposite number in capitals,
-      wide and thin, for the wordmark, the buttons and the field labels.
-      Tenor Sans reads the small print without arguing with either.
-      The liner book and the catalogue keep Cormorant; this page is the
-      front door and is allowed to be dressed better than the rooms. %>
-  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;1,6..96,400&family=Italiana&family=Tenor+Sans&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,400&display=swap" rel="stylesheet">
+      carries every heading. Cormorant Garamond SemiBold does the capitals:
+      the wordmark, the buttons and the field labels. Tenor Sans reads the
+      small print without arguing with either.
+
+      IT USED TO BE ITALIANA, and the office could not read it. Italiana is
+      one weight, very thin, and at label size under half an em of tracking
+      the strokes all but vanished on a dark panel - "COMPANY (OPTIONAL)"
+      and "FINE STATIONERY" were the two Ojaswini circled. She sent
+      CormorantGaramond-SemiBold.ttf; this is that face, at weight 600,
+      from the family the liner book and the catalogue already use - so the
+      three doors now agree, and nothing new is downloaded. %>
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;1,6..96,400&family=Tenor+Sans&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
   <style>
     :root {
@@ -65,7 +71,7 @@
     /* ── the mark ─────────────────────────────── */
     header { padding: 42px 22px 0; text-align: center; }
     .mark {
-      font-family: Italiana, Georgia, serif; font-weight: 400;
+      font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600;
       font-size: 1.44rem; letter-spacing: .26em; text-transform: uppercase;
       color: var(--gold-lit); line-height: 1.5;
     }
@@ -155,7 +161,7 @@
     }
     .crest-mark .trade {
       display: flex; align-items: center; gap: 14px; margin-top: 14px;
-      font-family: Italiana, Georgia, serif;
+      font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600;
       font-size: clamp(.6rem, .6vw, 4.5rem);
       letter-spacing: .42em; text-transform: uppercase; color: var(--gold);
     }
@@ -257,7 +263,7 @@
       display: flex; justify-content: space-between; gap: 0;
     }
     .inside span {
-      flex: 1; text-align: center; font-family: Italiana, Georgia, serif;
+      flex: 1; text-align: center; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600;
       font-size: clamp(.58rem, .62vw, 4.05rem); letter-spacing: .18em;
       text-transform: uppercase;
       color: #a9a294; line-height: 1.7;
@@ -283,7 +289,7 @@
        the first thing read and it never collides with anything. */
     .whisper {
       margin-bottom: 24px; text-align: center;
-      font-family: Italiana, Georgia, serif;
+      font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600;
       font-size: .62rem; letter-spacing: .34em; text-transform: uppercase;
       color: var(--gold); line-height: 2; opacity: .85;
     }
@@ -340,7 +346,7 @@
                   font-size: clamp(1rem, 1.05vw, 6.6rem); font-style: italic;
                   font-family: 'Cormorant Garamond', Georgia, serif; line-height: 1.5; }
 
-    label { display: block; font-family: Italiana, Georgia, serif;
+    label { display: block; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600;
             font-size: clamp(.62rem, .66vw, 4.2rem);
             letter-spacing: .26em; text-transform: uppercase; color: var(--gold);
             margin: 0 0 8px; text-align: left; }
@@ -390,7 +396,7 @@
       width: 100%; color: #15171a; border: 0;
       background: linear-gradient(176deg, #e0b65c 0%, var(--gold) 46%, #b9872f 100%);
       padding: clamp(14px, 1.05vw, 72px) 14px;
-      font-family: Italiana, Georgia, serif; font-weight: 400;
+      font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600;
       font-size: clamp(.84rem, .9vw, 5.7rem); letter-spacing: .24em;
       text-transform: uppercase;
       cursor: pointer; transition: background .15s;
@@ -463,7 +469,7 @@
     }
     .door p { margin: 0; font-size: clamp(.84rem, .9vw, 5.4rem);
               color: var(--dim); line-height: 1.6; }
-    .door .go { margin-top: 18px; font-family: Italiana, Georgia, serif;
+    .door .go { margin-top: 18px; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600;
                 font-size: .56rem; letter-spacing: .28em;
                 text-transform: uppercase; color: var(--gold); }
     .welcome { text-align: center; margin-bottom: 34px; }
@@ -521,7 +527,7 @@
       <a class="door" href="/client/<%= brand %>/stock">
         <i class="fa-solid fa-layer-group"></i>
         <h2>Paper Stock</h2>
-        <p>What is on the shelf right now, by series — codes, thicknesses
+        <p>What is on the shelf right now, by series — the code, the paper
            and whether it is in.</p>
         <div class="go">See the stock &nbsp;&rsaquo;</div>
       </a>
@@ -587,8 +593,8 @@
           <i class="fa-solid fa-layer-group"></i>
           <div>
             <b>Paper Stock</b>
-            <span>What is on the shelf right now, by series — codes,
-                  thicknesses and whether it is in.</span>
+            <span>What is on the shelf right now, by series — the code,
+                  the paper and whether it is in.</span>
           </div>
         </li>
         <li>

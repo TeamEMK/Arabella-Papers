@@ -324,6 +324,14 @@ const NL = String.fromCharCode(10);
     check('the sign-in page names all four things',
       /Envelope Liners/.test(coldHtml) && /Design Catalogue/.test(coldHtml)
       && /Paper Stock/.test(coldHtml) && /Price Calculator/.test(coldHtml));
+    // The card describes the rooms, so it has to describe the ones that
+    // exist: the thickness came off the stock page and the promise of it
+    // stayed on this one until somebody looked at a screenshot.
+    check('and promises nothing the stock page no longer shows',
+      !/thickness/i.test(coldHtml), (coldHtml.match(/.{0,40}thickness.{0,40}/i) || [])[0]);
+    // The face the office could not read is gone from the whole card.
+    check('the labels are not set in the thin face any more',
+      !/Italiana/.test(coldHtml.replace(/<%[\s\S]*?%>/g, '')));
 
     // ── THE PICTURES IN THE ROOM ──
     //
