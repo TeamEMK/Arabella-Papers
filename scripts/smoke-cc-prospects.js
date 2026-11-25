@@ -422,6 +422,26 @@ const check = (name, ok, extra) => {
 
   console.log('\nThe screen');
   const view = require('fs').readFileSync(path.join(ROOT, 'views/views/ccProspects.ejs'), 'utf8');
+  const nav = require('fs').readFileSync(path.join(ROOT, 'utils/nav.js'), 'utf8');
+  // ── THE ROOM IT LIVES IN ──
+  //
+  // The office calls this Bella Papers now, and CC Prospects is one line
+  // inside it - the first of several they mean to add. The section id stays
+  // ccProspects on purpose: the address and every saved grant are keyed on
+  // it, and renaming it would sign people out of a screen they already have.
+  check('the sidebar calls it Bella Papers',
+    /id: 'ccProspects'[\s\S]{0,400}name: 'Bella Papers'/.test(nav));
+  check('and the id it is granted by has not moved',
+    /id: 'ccProspects'/.test(nav) && !/id: 'bellaPapers'/.test(nav));
+  check('the room opens on an index, not on seven thousand shops',
+    /id="bp_home"/.test(view) && /<div id="cc_board" hidden>/.test(view));
+  check('with CC Prospects as a line in it',
+    /ROOMS = \[/.test(view) && /name: 'CC Prospects'/.test(view));
+  // The board counts every shop in the country; opening the room should not
+  // pay for that, so it is fetched on the click and nowhere else.
+  check('and the shops are only fetched once that line is pressed',
+    /open: function \(\) \{ cc_boot\(\); \}/.test(view)
+    && !/\n  cc_boot\(\);\n\}\)\(\);/.test(view));
   check('the "by state" subtitle is gone', !/Carlson Craft retailers, by state/.test(view));
   // AS MANY CELLS AS THERE ARE HEADINGS.
   //

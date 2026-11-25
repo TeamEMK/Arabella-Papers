@@ -11,15 +11,41 @@
  ══════════════════════════════════════════════════════ %>
 <div class="container-fluid py-3">
 
+  <%# ── THE ROOM ──
+      Bella Papers opens on its own index rather than on a list of seven
+      thousand shops: the office means to keep more of Bella's work in
+      here, and a screen that opens on one of its parts has nowhere to put
+      the second. One line today; another is one entry in ROOMS below. %>
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-    <h4 class="mb-0 fw-bold">
-      <i class="fas fa-store me-2 text-primary"></i>CC Prospects
+    <h4 class="mb-0 fw-bold" id="bp_heading">
+      <i class="fas fa-store me-2 text-primary"></i><span id="bp_title">Bella Papers</span>
     </h4>
-    <button class="btn btn-sm btn-outline-dark" onclick="cc_boot()">
-      <i class="fas fa-sync-alt me-1"></i>Refresh
-    </button>
+    <div class="d-flex gap-2" id="bp_tools" hidden>
+      <button class="btn btn-sm btn-outline-secondary" onclick="bp_home()">
+        <i class="fas fa-arrow-left me-1"></i>Bella Papers
+      </button>
+      <button class="btn btn-sm btn-outline-dark" onclick="cc_boot()">
+        <i class="fas fa-sync-alt me-1"></i>Refresh
+      </button>
+    </div>
   </div>
 
+  <%# The index itself. Rows, not tiles: a tile says "this is everything
+      there is", and this list is meant to grow. %>
+  <div id="bp_home">
+    <div class="card bg-light-glass shadow-sm smooth-ui p-2">
+      <div class="card-body p-0">
+        <table class="table table-hover align-middle mb-0">
+          <tbody id="bp_rows"></tbody>
+        </table>
+      </div>
+    </div>
+    <p class="text-muted small mt-2 mb-0">
+      More of Bella's work will sit here. Ask for it and it becomes another line.
+    </p>
+  </div>
+
+<div id="cc_board" hidden>
   <div class="row g-2 mb-3" id="cc_tiles"></div>
 
   <%# ── The fifty states ── %>
@@ -177,6 +203,7 @@
       </div>
     </div>
   </div>
+</div>
 </div>
 
 <style>
@@ -585,6 +612,51 @@
     downloadXlsx('CC Prospects' + (PICKED ? ' - ' + PICKED : ''), cols, rows, btn);
   };
 
-  cc_boot();
+  // ── THE ROOM'S OWN INDEX ──
+  //
+  // One entry per thing Bella Papers holds. Adding the next one is a line
+  // here and nothing else: the row, the title and the back button all read
+  // from this.
+  var ROOMS = [
+    {
+      id: 'cc',
+      name: 'CC Prospects',
+      icon: 'fa-store',
+      note: 'Carlson Craft retailers — the fifty states, their regions and every shop in them.',
+      open: function () { cc_boot(); },
+    },
+  ];
+
+  function drawRooms() {
+    document.getElementById('bp_rows').innerHTML = ROOMS.map(function (r) {
+      return '<tr class="cc-row" onclick="bp_open(\'' + r.id + '\')">'
+        + '<td style="width:3rem"><i class="fas ' + r.icon + ' text-primary"></i></td>'
+        + '<td><div class="fw-bold">' + esc(r.name) + '</div>'
+        + '<div class="text-muted small">' + esc(r.note) + '</div></td>'
+        + '<td class="text-end text-muted"><i class="fas fa-chevron-right"></i></td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  window.bp_open = function (id) {
+    var room = ROOMS.filter(function (r) { return r.id === id; })[0];
+    if (!room) return;
+    document.getElementById('bp_home').hidden = true;
+    document.getElementById('cc_board').hidden = false;
+    document.getElementById('bp_tools').hidden = false;
+    document.getElementById('bp_title').textContent = 'Bella Papers · ' + room.name;
+    // Loaded on the click, not on the way in: the board counts seven
+    // thousand rows, and opening the room should not pay for that.
+    room.open();
+  };
+
+  window.bp_home = function () {
+    document.getElementById('cc_board').hidden = true;
+    document.getElementById('bp_home').hidden = false;
+    document.getElementById('bp_tools').hidden = true;
+    document.getElementById('bp_title').textContent = 'Bella Papers';
+  };
+
+  drawRooms();
 })();
 </script>

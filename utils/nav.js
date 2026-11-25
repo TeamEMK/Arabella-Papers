@@ -95,8 +95,16 @@ const SECTIONS = [
   // is the same job one step earlier: these are names nobody has touched yet.
   //
   // Contact details for seven thousand businesses, so not on offer to the floor.
+  // BELLA PAPERS IS A ROOM, NOT A LIST.
+  //
+  // It opens on its own small index - one line today, "CC Prospects", with
+  // the Carlson Craft retailers behind it - because the office means to put
+  // more of Bella's work in here later. The id stays ccProspects on
+  // purpose: it is what the address (/app/cc-prospects) and every saved
+  // section grant are keyed on, and renaming it would sign people out of a
+  // screen they already have.
   {
-    id: 'ccProspects', group: 'ASMP', name: 'CC Prospects', icon: 'fa-store',
+    id: 'ccProspects', group: 'ASMP', name: 'Bella Papers', icon: 'fa-store',
     rule: (role) => role === 'SuperAdmin',
   },
   // Bella Figura's dealer list - 395 of them, read off their public find-us
