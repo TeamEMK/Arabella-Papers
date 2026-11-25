@@ -151,12 +151,18 @@
       </div>
       <div class="modal-body">
         <div class="text-muted small mb-3" id="cc_editWhere"></div>
-        <!-- THE ADDRESS IS CORRECTABLE, the rest of the row is not. These
-             were read off somebody else's find-a-retailer page, so some of
-             them are wrong, and that sheet never carried a flat number at
-             all. The retailer's own name, the region and the source row
-             still come from the workbook. -->
+        <!-- THE WHOLE ROW IS CORRECTABLE NOW. It began as the status and the
+             remark, then the address; the office asked for the rest, and the
+             reason is the one that opened the address up - seven thousand
+             rows read off somebody else's find-a-retailer page have wrong
+             phone numbers and dead emails in them, and a list you cannot
+             correct is a list people keep in a spreadsheet instead.
+             source_row still says where the row started. -->
         <div class="row g-2 mb-3">
+          <div class="col-12">
+            <label class="form-label fw-bold small">Shop Name</label>
+            <input class="form-control form-control-sm" id="cc_editRetailer" maxlength="255">
+          </div>
           <div class="col-12">
             <label class="form-label fw-bold small">Street Name</label>
             <input class="form-control form-control-sm" id="cc_editAddress" maxlength="400">
@@ -181,6 +187,38 @@
             <datalist id="cc_stateList"></datalist>
             <div class="form-text">The board is grouped by this.</div>
           </div>
+          <div class="col-12">
+            <label class="form-label fw-bold small">Region</label>
+            <input class="form-control form-control-sm" id="cc_editRegion" maxlength="160"
+                   list="cc_regionList">
+            <datalist id="cc_regionList"></datalist>
+            <div class="form-text">The states open into these.</div>
+          </div>
+        </div>
+
+        <!-- How to reach them. The three the board counts on its tiles and
+             filters by, so a correction here moves those numbers too. -->
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label fw-bold small">Phone</label>
+            <input class="form-control form-control-sm" id="cc_editPhone" maxlength="60">
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">Email</label>
+            <input class="form-control form-control-sm" id="cc_editEmail" maxlength="255">
+          </div>
+          <div class="col-8">
+            <label class="form-label fw-bold small">Website</label>
+            <input class="form-control form-control-sm" id="cc_editWebsite" maxlength="400">
+          </div>
+          <div class="col-4">
+            <label class="form-label fw-bold small">Kind</label>
+            <select class="form-select form-select-sm" id="cc_editType">
+              <option value="">Not said</option>
+              <option value="store">A shop</option>
+              <option value="online">Online only</option>
+            </select>
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label fw-bold">Status</label>
@@ -190,10 +228,16 @@
             <option value="inactive">Inactive</option>
           </select>
         </div>
-        <div class="mb-1">
+        <div class="mb-3">
           <label class="form-label fw-bold">Remark</label>
-          <textarea class="form-control" id="cc_editRemark" rows="4"
+          <textarea class="form-control" id="cc_editRemark" rows="3"
                     placeholder="Whatever is worth remembering about this one."></textarea>
+        </div>
+        <!-- What the workbook carried in its own notes column. Editable like
+             the rest now, and still the longest field on the row. -->
+        <div class="mb-1">
+          <label class="form-label fw-bold">Notes</label>
+          <textarea class="form-control" id="cc_editNotes" rows="3"></textarea>
         </div>
         <div class="form-text" id="cc_editWho"></div>
       </div>
@@ -549,6 +593,7 @@
     document.getElementById('cc_editName').textContent = EDITING.retailer;
     document.getElementById('cc_editWhere').textContent =
       [EDITING.city, EDITING.state, EDITING.region].filter(Boolean).join(' · ');
+    document.getElementById('cc_editRetailer').value = EDITING.retailer || '';
     document.getElementById('cc_editAddress').value = EDITING.address || '';
     document.getElementById('cc_editSuite').value = EDITING.suite || '';
     document.getElementById('cc_editCity').value = EDITING.city || '';
@@ -559,11 +604,25 @@
     // nobody meant to create, with one shop under it.
     document.getElementById('cc_stateList').innerHTML =
       STATES.map(function (st) { return '<option value="' + esc(st.state) + '">'; }).join('');
+    document.getElementById('cc_editRegion').value = EDITING.region || '';
+    // The regions this state already has, for the same reason as the states
+    // above: a region typed a new way opens a heading nobody meant to make.
+    document.getElementById('cc_regionList').innerHTML = [...new Set(ROWS
+      .filter(function (r) { return r.state === EDITING.state; })
+      .map(function (r) { return r.region; }).filter(Boolean))]
+      .map(function (rg) { return '<option value="' + esc(rg) + '">'; }).join('');
+    document.getElementById('cc_editPhone').value = EDITING.phone || '';
+    document.getElementById('cc_editEmail').value = EDITING.email || '';
+    document.getElementById('cc_editWebsite').value = EDITING.website || '';
+    document.getElementById('cc_editType').value = String(EDITING.store_type || '').toLowerCase();
+    document.getElementById('cc_editNotes').value = EDITING.notes || '';
     document.getElementById('cc_editStatus').value = String(EDITING.status || '').toLowerCase();
     document.getElementById('cc_editRemark').value = EDITING.remark || '';
     var said = [];
     if (EDITING.status_updated_by) said.push('Status last changed by ' + EDITING.status_updated_by);
-    if (EDITING.address_edited_by) said.push('Address last corrected by ' + EDITING.address_edited_by);
+    // One column records any correction to the row - see writeRow in
+    // routes/api/ccProspects.js for why it kept its old name.
+    if (EDITING.address_edited_by) said.push('Last corrected by ' + EDITING.address_edited_by);
     document.getElementById('cc_editWho').textContent = said.join(' \u00b7 ');
     new bootstrap.Modal(document.getElementById('cc_editModal')).show();
   };
@@ -583,11 +642,22 @@
           city: document.getElementById('cc_editCity').value,
           state: document.getElementById('cc_editState').value,
           zip: document.getElementById('cc_editZip').value,
+          retailer: document.getElementById('cc_editRetailer').value,
+          region: document.getElementById('cc_editRegion').value,
+          phone: document.getElementById('cc_editPhone').value,
+          email: document.getElementById('cc_editEmail').value,
+          website: document.getElementById('cc_editWebsite').value,
+          store_type: document.getElementById('cc_editType').value,
+          notes: document.getElementById('cc_editNotes').value,
         }),
       })).json();
       if (!j.success) throw new Error(j.error || 'Could not save it.');
       bootstrap.Modal.getInstance(document.getElementById('cc_editModal')).hide();
-      await cc_list();
+      // The tiles count shops with an email and with a phone, and the state
+      // cards count regions - all three can move on one save, so the board
+      // is read again rather than the row being patched in place.
+      await cc_boot();
+      if (PICKED) await cc_list();
       if (window.showToast) {
         showToast('success', j.openedProspects
           ? 'Saved. Opened on the Prospects list.' : 'Saved.');

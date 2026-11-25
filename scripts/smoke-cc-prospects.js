@@ -268,6 +268,67 @@ const check = (name, ok, extra) => {
     a.state === 'Nowhere' && a.state_code === null, a);
   await put('/api/cc-prospects/' + one.id, { state: 'New York' });
 
+  // ── THE REST OF THE ROW ──
+  //
+  // It was the status and the remark, then the address, and the office
+  // asked for all of it: a list of seven thousand shops read off somebody
+  // else's page has wrong phone numbers and dead emails in it, and a list
+  // nobody can correct is a list people keep in a spreadsheet instead.
+  console.log('\nCorrecting the rest of the row');
+  const rowNow = async (id) => (await db.query(
+    `SELECT retailer, region, phone, email, website, store_type, notes,
+            address, address_edited_by
+       FROM cc_prospects WHERE id = ?`, [id]))[0][0];
+
+  w = await put('/api/cc-prospects/' + one.id, {
+    retailer: 'Dan Printing Co.', region: 'Huntsville & North Alabama',
+    phone: '205-555-0137', email: 'hello@danprinting.test',
+    website: 'https://danprinting.test', store_type: 'online',
+    notes: 'Called 25 Nov, asked for samples.',
+  });
+  check('the rest of the row saves', w.json && w.json.success === true, w.json);
+  let b = await rowNow(one.id);
+  for (const [col, want] of [
+    ['retailer', 'Dan Printing Co.'], ['region', 'Huntsville & North Alabama'],
+    ['phone', '205-555-0137'], ['email', 'hello@danprinting.test'],
+    ['website', 'https://danprinting.test'], ['store_type', 'online'],
+    ['notes', 'Called 25 Nov, asked for samples.'],
+  ]) check('  ' + col + ' is written', b[col] === want, { got: b[col], want });
+  check('and the row says who corrected it',
+    b.address_edited_by === process.env.ADMIN_EMAIL, b.address_edited_by);
+
+  // The board filters on the kind, and counts shops with a phone and with
+  // an email - so a kind it does not know would drop the row out of both
+  // "A shop" and "Online only" and nobody would see it again.
+  w = await put('/api/cc-prospects/' + one.id, { store_type: 'warehouse' });
+  check('a kind the board cannot filter on is refused',
+    w.json && w.json.success === false, w.json);
+  check('and the kind it had is still there',
+    (await rowNow(one.id)).store_type === 'online');
+
+  // The name is what the board, the editor and the Excel are keyed to a
+  // human by. A row with no name is a row nobody can find again.
+  w = await put('/api/cc-prospects/' + one.id, { retailer: '   ' });
+  check('a shop cannot be left without a name',
+    w.json && w.json.success === false, w.json);
+  check('and it keeps the name it had',
+    (await rowNow(one.id)).retailer === 'Dan Printing Co.');
+
+  // ONLY WHAT WAS SENT IS WRITTEN, still. The bulk screen sends a status
+  // and nothing else, and it must not empty seven thousand phone numbers.
+  w = await put('/api/cc-prospects/' + one.id, { status: 'inactive' });
+  b = await rowNow(one.id);
+  check('a status on its own leaves the rest of the row alone',
+    b.phone === '205-555-0137' && b.email === 'hello@danprinting.test'
+    && b.address === '228 N Broad St', b);
+
+  // The other prospect list is NOT opened up by this: it shares the reader
+  // but keeps its own list of what may be written.
+  const bfRoute = require('fs').readFileSync(
+    path.join(ROOT, 'routes/api/bfProspects.js'), 'utf8');
+  check('the Bella Figura list still writes only its address fields',
+    !/REST_OF_THE_ROW/.test(bfRoute));
+
   // An empty box is a real answer - "no suite" - and has to be writable, or
   // a mistake could never be taken back out.
   w = await put('/api/cc-prospects/' + one.id, { suite: '' });
@@ -281,17 +342,23 @@ const check = (name, ok, extra) => {
   check('something too long for the column is refused, not cut in half',
     w.json && w.json.success === false, w.json);
 
-  // Nothing else on the row may be reached through the same door.
-  const beforeName = (await db.query(
-    'SELECT retailer, region FROM cc_prospects WHERE id = ?', [one.id]))[0][0];
+  // The name and the region ARE editable now - the office asked for the
+  // whole row. What is still out of reach is where the row came from:
+  // source_row is the line in the workbook this was read off, and it is the
+  // only thing that lets anybody check a value against the original.
+  const beforeSource = (await db.query(
+    'SELECT source_row FROM cc_prospects WHERE id = ?', [one.id]))[0][0];
   await put('/api/cc-prospects/' + one.id, {
     retailer: 'Somebody Else', region: 'Made Up', source_row: 9999,
   });
-  const afterName = (await db.query(
-    'SELECT retailer, region FROM cc_prospects WHERE id = ?', [one.id]))[0][0];
-  check('the retailer name and region are still the workbook\'s',
-    afterName.retailer === beforeName.retailer && afterName.region === beforeName.region,
-    afterName);
+  const afterSource = (await db.query(
+    'SELECT retailer, region, source_row FROM cc_prospects WHERE id = ?', [one.id]))[0][0];
+  check("the name and the region are the office's to correct",
+    afterSource.retailer === 'Somebody Else' && afterSource.region === 'Made Up',
+    afterSource);
+  check('but where the row came from is not editable',
+    afterSource.source_row === beforeSource.source_row,
+    { was: beforeSource.source_row, now: afterSource.source_row });
 
   // A request about the status alone must not blank an address, because the
   // two go through the same route.

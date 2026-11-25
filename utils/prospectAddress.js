@@ -36,9 +36,13 @@ const FIELDS = {
  * of these rows genuinely say, and a box that cannot be emptied again is a
  * box nobody can correct a mistake in.
  */
-function fromBody(body) {
+function fromBody(body, fields) {
   const set = {};
-  for (const [col, max] of Object.entries(FIELDS)) {
+  // The caller may hand in its own list. The two prospect lists do not hold
+  // the same columns - Bella's rows carry a phone, an email and a kind of
+  // shop that Bella Figura's do not - so the rule about HOW a value is read
+  // is shared and the list of WHAT may be written stays with the route.
+  for (const [col, max] of Object.entries(fields || FIELDS)) {
     if (!body || body[col] === undefined) continue;
     const v = body[col];
     if (v !== null && typeof v !== 'string' && typeof v !== 'number') {

@@ -163,8 +163,11 @@ router.put('/:id', requireLogin, allowed, express.json(), async (req, res) => {
     }
     const where = address.fromBody(req.body);
     if (where.error) return res.status(400).json({ success: false, error: where.error });
-    if (Object.keys(where.set).length) {
-      const saved = await writeAddress(id, where.set, req.session.user);
+    const rest = address.fromBody(req.body, REST_OF_THE_ROW);
+    if (rest.error) return res.status(400).json({ success: false, error: rest.error });
+    const set = Object.assign({}, where.set, rest.set);
+    if (Object.keys(set).length) {
+      const saved = await writeRow(id, set, req.session.user);
       if (saved.error) return res.status(400).json({ success: false, error: saved.error });
     }
 
@@ -275,7 +278,50 @@ async function writeStatus(ids, body, user, statusOnly) {
  * the list already holds all fifty - and cleared when the state is one the
  * list has never seen, which is honest where a stale code would not be.
  */
-async function writeAddress(id, set, user) {
+/**
+ * The rest of the row, which the office may now correct too.
+ *
+ * It began as the status and the remark, then the address: everything else
+ * was the workbook and was left alone so a row could be traced back to it.
+ * The office asked for all of it, and the reason is the same one that got
+ * the address opened up - seven thousand rows read off somebody else's
+ * find-a-retailer page have wrong phone numbers and dead emails in them,
+ * and a list you cannot correct is a list people keep in a spreadsheet
+ * instead.
+ *
+ * source_row still points at where the row started, which is what the old
+ * restriction was really protecting.
+ *
+ * No format check on the email or the website on purpose: the source file
+ * is full of odd ones, and refusing to save a shop because the address it
+ * came with has no @ in it would stop somebody fixing the phone number.
+ * column -> how long the column is.
+ */
+const REST_OF_THE_ROW = {
+  retailer: 255,
+  region: 160,
+  phone: 60,
+  email: 255,
+  website: 400,
+  store_type: 40,
+  notes: 5000,
+};
+
+// What the board filters on. Anything else would quietly drop the row out
+// of "A shop" and "Online only" both.
+const STORE_TYPES = ['store', 'online'];
+
+async function writeRow(id, set, user) {
+  if (set.retailer !== undefined && !set.retailer) {
+    return { error: 'The shop needs a name.' };
+  }
+  if (set.store_type) {
+    const kind = String(set.store_type).trim().toLowerCase();
+    if (!STORE_TYPES.includes(kind)) {
+      return { error: 'The kind has to be a shop or online only.' };
+    }
+    set.store_type = kind;
+  }
   if (set.state !== undefined) {
     if (!set.state) {
       return { error: 'A shop has to be in a state.' };
@@ -286,6 +332,10 @@ async function writeAddress(id, set, user) {
     set.state_code = known ? known.state_code : null;
   }
   const cols = Object.keys(set);
+  // address_edited_by keeps its name although it now records a correction
+  // to any part of the row: it is on both prospect tables and renaming a
+  // column two lists share buys nothing a comment cannot say. The screen
+  // reads it out as "last corrected by".
   await db.query(
     `UPDATE cc_prospects SET ${cols.map(c => `\`${c}\` = ?`).join(', ')},
             address_edited_by = ?, address_edited_at = NOW()
