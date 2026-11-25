@@ -111,7 +111,7 @@ const check = (name, ok, extra) => {
   // naming them by hand is how that gets missed.
   const { defaultSectionIds, SECTIONS } = require(path.join(ROOT, 'utils/nav.js'));
   const asmp = SECTIONS.filter(s => s.group === 'ASMP').map(s => s.id);
-  check('ccProspects sits in ASMP', asmp.includes('ccProspects'));
+  check('bellaPapers sits in ASMP', asmp.includes('bellaPapers'));
   for (const role of ['India Designer', 'Designer', 'Accounts', 'Production Manager']) {
     for (const domain of ['', 'Head', 'Designer']) {
       const seen = defaultSectionIds(role, domain).filter(id => asmp.includes(id));
@@ -421,7 +421,7 @@ const check = (name, ok, extra) => {
     (await get('/api/cc-prospects?status=inactive')).rows.every(r => 'status' in r && 'remark' in r));
 
   console.log('\nThe screen');
-  const view = require('fs').readFileSync(path.join(ROOT, 'views/views/ccProspects.ejs'), 'utf8');
+  const view = require('fs').readFileSync(path.join(ROOT, 'views/views/bellaPapers.ejs'), 'utf8');
   const nav = require('fs').readFileSync(path.join(ROOT, 'utils/nav.js'), 'utf8');
   // ── THE ROOM IT LIVES IN ──
   //
@@ -430,9 +430,47 @@ const check = (name, ok, extra) => {
   // ccProspects on purpose: the address and every saved grant are keyed on
   // it, and renaming it would sign people out of a screen they already have.
   check('the sidebar calls it Bella Papers',
-    /id: 'ccProspects'[\s\S]{0,400}name: 'Bella Papers'/.test(nav));
-  check('and the id it is granted by has not moved',
-    /id: 'ccProspects'/.test(nav) && !/id: 'bellaPapers'/.test(nav));
+    /id: 'bellaPapers'[\s\S]{0,400}name: 'Bella Papers'/.test(nav));
+  check('and the address is built from that name',
+    require(path.join(ROOT, 'utils/sectionSlug.js')).slugFor('bellaPapers') === 'bella-papers');
+  // RENAMING AN ID MOVES TWO THINGS WITH IT. Without the first, everybody
+  // who was GIVEN this page loses it and only SuperAdmins notice nothing;
+  // without the second, a bookmark lands on the dashboard saying nothing.
+  const initDb = require('fs').readFileSync(path.join(ROOT, 'config/initDb.js'), 'utf8');
+  check('the grants that were given are moved to the new id',
+    /SECTION_RENAMES = \[[\s\S]{0,300}from: 'ccProspects', to: 'bellaPapers'/.test(initDb)
+    && /UPDATE user_sections SET section = \? WHERE section = \?/.test(initDb));
+  check('and the build cannot skip that work',
+    /SECTION_RENAMES,[\s\S]{0,40}digest/.test(initDb));
+  // ── AND THE MIGRATION, RUN FOR REAL ──
+  //
+  // Reading the source only proves somebody wrote it. This gives a user the
+  // grant under the OLD id, makes the build run again, and looks at where
+  // the row ended up - which is the thing that decides whether the office
+  // can still open the page on Monday morning.
+  const [who] = await db.query('SELECT id FROM users LIMIT 1');
+  await db.query(
+    `INSERT INTO user_sections (user_id, section, allowed, updated_by)
+     VALUES (?, 'ccProspects', 1, 'probe')
+     ON DUPLICATE KEY UPDATE allowed = 1`, [who[0].id]);
+  // ensureSchema keeps one promise per process, so asking the module this
+  // suite already booted would hand back the finished one. A fresh copy of
+  // it is what a deployment actually is.
+  process.env.FORCE_SCHEMA_CHECK = '1';
+  delete require.cache[require.resolve(path.join(ROOT, 'config/initDb.js'))];
+  await require(path.join(ROOT, 'config/initDb.js')).ensureSchema();
+  delete process.env.FORCE_SCHEMA_CHECK;
+  const [[stillOld]] = await db.query(
+    "SELECT COUNT(*) c FROM user_sections WHERE section = 'ccProspects'");
+  const [[nowNew]] = await db.query(
+    "SELECT COUNT(*) c FROM user_sections WHERE section = 'bellaPapers' AND user_id = ?",
+    [who[0].id]);
+  check('a grant given under the old id is moved, not lost',
+    nowNew.c === 1 && stillOld.c === 0, { old: stillOld.c, new: nowNew.c });
+
+  const indexRoute = require('fs').readFileSync(path.join(ROOT, 'routes/index.js'), 'utf8');
+  check('the old address is sent to the new one',
+    /'cc-prospects': 'bella-papers'/.test(indexRoute) && /redirect\(301/.test(indexRoute));
   check('the room opens on an index, not on seven thousand shops',
     /id="bp_home"/.test(view) && /<div id="cc_board" hidden>/.test(view));
   check('with CC Prospects as a line in it',

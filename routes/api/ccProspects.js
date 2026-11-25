@@ -21,7 +21,7 @@ const toProspect = require('../../utils/toProspect');
 
 async function allowed(req, res, next) {
   try {
-    if (await canSee(req.session.user, 'ccProspects')) return next();
+    if (await canSee(req.session.user, 'bellaPapers')) return next();
     return res.status(403).json({ success: false, error: 'Unauthorized' });
   } catch (err) {
     console.error('CC prospect access check failed:', err.message);

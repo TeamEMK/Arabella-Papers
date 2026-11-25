@@ -99,12 +99,17 @@ const SECTIONS = [
   //
   // It opens on its own small index - one line today, "CC Prospects", with
   // the Carlson Craft retailers behind it - because the office means to put
-  // more of Bella's work in here later. The id stays ccProspects on
-  // purpose: it is what the address (/app/cc-prospects) and every saved
-  // section grant are keyed on, and renaming it would sign people out of a
-  // screen they already have.
+  // more of Bella's work in here later.
+  //
+  // The id is what the address is built from (/app/bella-papers) and what
+  // every saved section grant is keyed on, so renaming it from ccProspects
+  // took two other things with it: config/initDb.js moves the existing
+  // grants across on the next boot, and routes/index.js sends the old
+  // address to the new one. Neither is optional - without the first, every
+  // SuperAdmin keeps their grant and nobody else does; without the second,
+  // a bookmark lands on the dashboard with no idea why.
   {
-    id: 'ccProspects', group: 'ASMP', name: 'Bella Papers', icon: 'fa-store',
+    id: 'bellaPapers', group: 'ASMP', name: 'Bella Papers', icon: 'fa-store',
     rule: (role) => role === 'SuperAdmin',
   },
   // Bella Figura's dealer list - 395 of them, read off their public find-us

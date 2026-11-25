@@ -497,6 +497,7 @@ if (!isServerless) {
         }
         console.log(`   Database: ${r.created ? 'schema created' : 'schema already present'}`);
         if (r.columns && r.columns.length) console.log(`   Migrated: ${r.columns.join(', ')}`);
+        if (r.renamed && r.renamed.length) console.log(`   Grants:   ${r.renamed.join(', ')}`);
         if (r.admin) {
           console.log(r.admin.seeded
             ? `   Admin:    created ${r.admin.email}`

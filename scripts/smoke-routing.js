@@ -119,7 +119,7 @@ const NL = String.fromCharCode(10);
 
   // ──────────────────────────────────────────────
   console.log(NL + 'The server answers for the new addresses');
-  for (const url of ['/', '/app', '/app/till-approval', '/app/cc-prospects', '/app/production-bd']) {
+  for (const url of ['/', '/app', '/app/till-approval', '/app/bella-papers', '/app/production-bd']) {
     const r = await get(url);
     const html = r.status === 200 ? await r.text() : '';
     check(url + ' serves the app shell',
@@ -154,26 +154,35 @@ const NL = String.fromCharCode(10);
 
   // ──────────────────────────────────────────────
   console.log(NL + 'Signed out, and sent back where they were going');
-  const out = await go('/app/cc-prospects');
+  // ── AN ADDRESS THAT MOVED ──
+  // CC Prospects became Bella Papers on 25 November. Somebody's bookmark
+  // must not land on the dashboard with no explanation, so the old name is
+  // sent on, once, permanently.
+  const moved = await go('/app/cc-prospects');
+  check('the old address is moved, not lost', moved.status === 301, moved.status);
+  check('and it points at the new one',
+    moved.headers.get('location') === '/app/bella-papers', moved.headers.get('location'));
+
+  const out = await go('/app/bella-papers');
   const loc = out.headers.get('location') || '';
   check('a signed-out visit goes to login', out.status === 302 && /^\/login/.test(loc), loc);
   check('carrying where they were headed',
-    decodeURIComponent((loc.split('next=')[1] || '')) === '/app/cc-prospects', loc);
+    decodeURIComponent((loc.split('next=')[1] || '')) === '/app/bella-papers', loc);
 
   const form = await fetch(BASE + loc, { headers: { 'X-Forwarded-Proto': 'https' } }).then(r => r.text());
   check('and the login form holds on to it through the post',
-    /name="next"\s+value="\/app\/cc-prospects"/.test(form));
+    /name="next"\s+value="\/app\/bella-papers"/.test(form));
 
   const back = await go('/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Sec-Fetch-Dest': 'document' },
     body: new URLSearchParams({
       email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD,
-      next: '/app/cc-prospects',
+      next: '/app/bella-papers',
     }),
   });
   check('signing in lands on the page that was asked for',
-    back.headers.get('location') === '/app/cc-prospects', back.headers.get('location'));
+    back.headers.get('location') === '/app/bella-papers', back.headers.get('location'));
 
   // A fetch is not a navigation: answering it with a redirect to the login
   // page is how an expired session used to paint a login form inside the
@@ -192,7 +201,7 @@ const NL = String.fromCharCode(10);
   for (const v of evil) {
     check('refused: ' + JSON.stringify(v), safeNext(v) === '', safeNext(v));
   }
-  check('our own page is allowed', safeNext('/app/cc-prospects') === '/app/cc-prospects');
+  check('our own page is allowed', safeNext('/app/bella-papers') === '/app/bella-papers');
   check('the base itself is allowed', safeNext('/app') === '/app');
   check('and a query on it is kept', safeNext('/app/dashboard?vectors=due') === '/app/dashboard?vectors=due',
     safeNext('/app/dashboard?vectors=due'));

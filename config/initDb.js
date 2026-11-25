@@ -222,6 +222,44 @@ async function addMissingColumns() {
 }
 
 /**
+ * Sections that were renamed, and the grants that have to follow them.
+ *
+ * A section's id is what `user_sections` keys a grant on. Rename the id and
+ * every grant quietly points at a section that no longer exists: the role
+ * rule still lets a SuperAdmin in, so the screen looks fine to whoever
+ * checks it, and everybody who had been GIVEN the page loses it without a
+ * word. That is the worst shape a bug can take - invisible to the person
+ * who would notice.
+ *
+ * So each rename is written here once and the rows are moved on the next
+ * boot. It runs every time and costs one UPDATE that matches nothing after
+ * the first; cheaper than remembering to run it by hand on live.
+ */
+const SECTION_RENAMES = [
+  // 25 November: CC Prospects became Bella Papers, a room with the Carlson
+  // Craft list as its first line.
+  { from: 'ccProspects', to: 'bellaPapers' },
+];
+
+async function moveRenamedGrants() {
+  const moved = [];
+  for (const r of SECTION_RENAMES) {
+    // A person could already hold both - granted the new name since the
+    // rename, say - and the table has one row per user per section. The
+    // delete clears that collision first, then the rest move across.
+    await db.query(
+      `DELETE old FROM user_sections old
+         JOIN user_sections kept
+           ON kept.user_id = old.user_id AND kept.section = ?
+        WHERE old.section = ?`, [r.to, r.from]);
+    const [res] = await db.query(
+      'UPDATE user_sections SET section = ? WHERE section = ?', [r.to, r.from]);
+    if (res.affectedRows) moved.push(r.from + ' -> ' + r.to + ' (' + res.affectedRows + ')');
+  }
+  return moved;
+}
+
+/**
  * The three names the office gave for the GNA list, put in once.
  *
  * Only when the table is empty. Seeding on every boot would undo a deletion
@@ -399,6 +437,12 @@ function fingerprint(sql) {
   return crypto.createHash('sha1').update(JSON.stringify([
     statementsFrom(sql), COLUMN_MIGRATIONS, GNA_SEED, ADD_ON_SEED, SETTING_SEED,
     ENVELOPE_LINEAR_SEED,
+    // A rename moves rows in user_sections and touches nothing in
+    // schema.sql, so without it here the build would decide it had already
+    // been done and skip the one thing that had not: every grant would
+    // still point at the old id and the people who had been given the page
+    // would quietly lose it.
+    SECTION_RENAMES,
   ])).digest('hex').slice(0, 16);
 }
 
@@ -433,6 +477,9 @@ async function build() {
   }
 
   const columns = await addMissingColumns();
+  // Before the seeds: a grant that points at an id nobody uses any more is
+  // an access check that silently says no.
+  const renamed = await moveRenamedGrants();
 
   // Checked even when the tables already exist, so a database that lost its
   // users can still be recovered by setting ADMIN_PASSWORD and restarting.
@@ -450,8 +497,8 @@ async function build() {
   // The five Envelope Linears sections and their categories, onto an empty
   // table only - see seedEnvelopeLinears.
   const envelopeLinears = await seedEnvelopeLinears();
-  return { created, admin, columns, gna, addOns, settings, approvals, pmsSteps,
-           envelopeLinears };
+  return { created, admin, columns, renamed, gna, addOns, settings, approvals,
+           pmsSteps, envelopeLinears };
 }
 
 /**
